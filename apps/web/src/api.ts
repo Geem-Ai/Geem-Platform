@@ -47,6 +47,9 @@ export type QueryResponse = {
   insufficient_context: boolean;
   citations: Citation[];
   model: string;
+  general_answer?: string | null;
+  used_general_knowledge?: boolean;
+  general_model?: string | null;
 };
 
 async function handle<T>(res: Response): Promise<T> {
@@ -114,6 +117,8 @@ export type QueryStreamHandlers = {
   onStatus?: (stage: string) => void;
   onToken?: (text: string) => void;
   onReplace?: (text: string) => void;
+  onGeneralToken?: (text: string) => void;
+  onGeneralReplace?: (text: string) => void;
   onFinal?: (res: QueryResponse) => void;
   onError?: (message: string) => void;
 };
@@ -195,6 +200,10 @@ export async function queryDocumentsStream(
         handlers.onToken?.(String(payload.text || ""));
       } else if (parsed.event === "replace") {
         handlers.onReplace?.(String(payload.text || ""));
+      } else if (parsed.event === "general_token") {
+        handlers.onGeneralToken?.(String(payload.text || ""));
+      } else if (parsed.event === "general_replace") {
+        handlers.onGeneralReplace?.(String(payload.text || ""));
       } else if (parsed.event === "final") {
         sawFinal = true;
         handlers.onFinal?.(payload as unknown as QueryResponse);

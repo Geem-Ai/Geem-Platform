@@ -64,6 +64,9 @@ class QueryResponse(BaseModel):
     insufficient_context: bool
     citations: list[Citation]
     model: str
+    general_answer: str | None = None
+    used_general_knowledge: bool = False
+    general_model: str | None = None
 
 
 class JobResponse(BaseModel):

@@ -11,6 +11,7 @@ const STATUS_LABELS: Record<string, string> = {
   retrieving: "Retrieving…",
   generating: "Generating…",
   retrying: "Refining answer…",
+  general: "Adding general knowledge…",
 };
 
 export default function AskPage() {
@@ -21,9 +22,12 @@ export default function AskPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
+  const [generalAnswer, setGeneralAnswer] = useState<string | null>(null);
   const [insufficient, setInsufficient] = useState(false);
+  const [usedGeneral, setUsedGeneral] = useState(false);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [model, setModel] = useState<string | null>(null);
+  const [generalModel, setGeneralModel] = useState<string | null>(null);
 
   useEffect(() => {
     void listDocuments().then((d) => setDocs(d.filter((x) => x.status === "ready")));
@@ -36,19 +40,33 @@ export default function AskPage() {
     setStatus("retrieving");
     setError(null);
     setAnswer("");
+    setGeneralAnswer(null);
     setInsufficient(false);
+    setUsedGeneral(false);
     setCitations([]);
     setModel(null);
+    setGeneralModel(null);
     try {
       await queryDocumentsStream(question, selected, {
-        onStatus: (stage) => setStatus(stage),
+        onStatus: (stage) => {
+          setStatus(stage);
+          if (stage === "general") {
+            setGeneralAnswer("");
+            setUsedGeneral(true);
+          }
+        },
         onToken: (text) => setAnswer((prev) => (prev || "") + text),
         onReplace: (text) => setAnswer(text),
+        onGeneralToken: (text) => setGeneralAnswer((prev) => (prev || "") + text),
+        onGeneralReplace: (text) => setGeneralAnswer(text),
         onFinal: (res) => {
           setAnswer(res.answer);
           setInsufficient(res.insufficient_context);
           setCitations(res.citations);
           setModel(res.model);
+          setGeneralAnswer(res.general_answer ?? null);
+          setUsedGeneral(Boolean(res.used_general_knowledge));
+          setGeneralModel(res.general_model ?? null);
           setStatus(null);
         },
       });
@@ -63,7 +81,10 @@ export default function AskPage() {
   return (
     <div className="stack">
       <h1>Ask</h1>
-      <p className="muted">Ask in Arabic or English. Answers cite exact document pages.</p>
+      <p className="muted">
+        Ask in Arabic or English. Document answers cite exact pages. If nothing is found in your
+        documents, a clearly labeled general-knowledge follow-up may be added.
+      </p>
 
       <form className="panel stack" onSubmit={onSubmit}>
         <label>
@@ -102,22 +123,41 @@ export default function AskPage() {
 
       {(answer !== null || loading) && (
         <div className="panel stack">
-          <h2>Answer</h2>
-          {loading && status && (
+          <h2>From your documents</h2>
+          {loading && status && status !== "general" && (
             <p className="muted">{STATUS_LABELS[status] || status}</p>
           )}
           {insufficient && (
-            <p className="muted">Insufficient context in the available documents.</p>
+            <p className="muted">
+              We could not find enough information in your uploaded documents.
+            </p>
           )}
           <div className="answer" dir="auto">
             {answer || (loading ? "…" : "")}
           </div>
           {model && <p className="muted">Model: {model}</p>}
+
+          {(usedGeneral || generalAnswer) && (
+            <>
+              <h2>General knowledge</h2>
+              {loading && status === "general" && (
+                <p className="muted">{STATUS_LABELS.general}</p>
+              )}
+              <p className="muted">
+                Not from your documents — based on general AI knowledge. Verify important facts.
+              </p>
+              <div className="answer" dir="auto">
+                {generalAnswer || (loading ? "…" : "")}
+              </div>
+              {generalModel && <p className="muted">Model: {generalModel}</p>}
+            </>
+          )}
+
           <h2>Citations</h2>
           <div className="citations">
             {!loading && citations.length === 0 && <p className="muted">No citations.</p>}
             {loading && citations.length === 0 && (
-              <p className="muted">Citations appear when the answer finishes.</p>
+              <p className="muted">Citations appear when the document answer finishes.</p>
             )}
             {citations.map((c) => (
               <div className="citation" key={c.chunk_id}>

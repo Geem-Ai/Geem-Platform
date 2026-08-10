@@ -27,10 +27,15 @@ from app.storage.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "rag_answer_v1.txt"
+GENERAL_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "general_fallback_v1.txt"
 
 
 def load_system_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def load_general_prompt() -> str:
+    return GENERAL_PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def build_source_xml(chunks: list[dict]) -> str:
@@ -76,6 +81,11 @@ class RagService:
         self.chunker = PageChunker(self.settings)
         prompt = load_system_prompt()
         self.chat = chat or OpenRouterChatProvider(settings=self.settings, system_prompt=prompt)
+        self.general_chat = OpenRouterChatProvider(
+            settings=self.settings,
+            system_prompt=load_general_prompt(),
+            client=self.chat.client,
+        )
 
     def query(
         self,
@@ -103,6 +113,7 @@ class RagService:
                 validated["insufficient_context"] = True
 
         self._record_generation_usage(validated, result)
+        self._maybe_attach_general_answer(prepared["question"], validated)
         return validated
 
     def query_stream(
@@ -111,7 +122,7 @@ class RagService:
         document_ids: list[uuid.UUID] | None = None,
         top_k: int | None = None,
     ) -> Iterator[dict[str, Any]]:
-        """Yield SSE-oriented events: status, token, replace, final."""
+        """Yield SSE-oriented events: status, token, replace, general_token, final."""
         yield {"event": "status", "data": {"stage": "retrieving"}}
         prepared = self._prepare_context(question, document_ids=document_ids, top_k=top_k)
         yield {"event": "status", "data": {"stage": "generating"}}
@@ -158,6 +169,7 @@ class RagService:
                 validated["insufficient_context"] = True
 
         self._record_generation_usage(validated, result)
+        yield from self._stream_general_fallback(prepared["question"], validated)
         yield {
             "event": "final",
             "data": {
@@ -165,8 +177,72 @@ class RagService:
                 "insufficient_context": validated["insufficient_context"],
                 "citations": validated["citations"],
                 "model": validated["model"],
+                "general_answer": validated.get("general_answer"),
+                "used_general_knowledge": bool(validated.get("used_general_knowledge")),
+                "general_model": validated.get("general_model"),
             },
         }
+
+    def _maybe_attach_general_answer(self, question: str, validated: dict) -> None:
+        validated.setdefault("general_answer", None)
+        validated.setdefault("used_general_knowledge", False)
+        validated.setdefault("general_model", None)
+        if not self.settings.general_fallback_enabled:
+            return
+        if not validated.get("insufficient_context"):
+            return
+        try:
+            general = self.general_chat.answer_general(question)
+        except AppError:
+            logger.exception("general_fallback_failed", extra={"stage": "general"})
+            return
+        validated["general_answer"] = general.get("answer_markdown") or ""
+        validated["used_general_knowledge"] = bool(validated["general_answer"])
+        validated["general_model"] = general.get("model")
+        self._record_generation_usage(
+            {"model": general.get("model")},
+            general,
+            operation_type="general_fallback",
+        )
+
+    def _stream_general_fallback(
+        self,
+        question: str,
+        validated: dict,
+    ) -> Iterator[dict[str, Any]]:
+        validated.setdefault("general_answer", None)
+        validated.setdefault("used_general_knowledge", False)
+        validated.setdefault("general_model", None)
+        if not self.settings.general_fallback_enabled:
+            return
+        if not validated.get("insufficient_context"):
+            return
+
+        yield {"event": "status", "data": {"stage": "general"}}
+        general_result: dict | None = None
+        try:
+            for event in self.general_chat.answer_general_stream(question):
+                etype = event.get("type")
+                if etype == "delta":
+                    yield {"event": "general_token", "data": {"text": event.get("text") or ""}}
+                elif etype == "replace":
+                    yield {"event": "general_replace", "data": {"text": event.get("text") or ""}}
+                elif etype == "done":
+                    general_result = event.get("result")
+        except AppError:
+            logger.exception("general_fallback_stream_failed", extra={"stage": "general"})
+            return
+
+        if not general_result:
+            return
+        validated["general_answer"] = general_result.get("answer_markdown") or ""
+        validated["used_general_knowledge"] = bool(validated["general_answer"])
+        validated["general_model"] = general_result.get("model")
+        self._record_generation_usage(
+            {"model": general_result.get("model")},
+            general_result,
+            operation_type="general_fallback",
+        )
 
     def _prepare_context(
         self,
@@ -253,13 +329,25 @@ class RagService:
             and (validated.get("answer") or "").strip()
         )
 
-    def _record_generation_usage(self, validated: dict, result: dict) -> None:
+    def _record_generation_usage(
+        self,
+        validated: dict,
+        result: dict,
+        *,
+        operation_type: str = "generation",
+    ) -> None:
         self.db.add(
             UsageEvent(
                 id=uuid.uuid4(),
-                operation_type="generation",
+                operation_type=operation_type,
                 model=validated.get("model"),
-                cost_metadata={"prompt_version": self.settings.prompt_version},
+                cost_metadata={
+                    "prompt_version": (
+                        self.settings.general_prompt_version
+                        if operation_type == "general_fallback"
+                        else self.settings.prompt_version
+                    )
+                },
                 request_id=(result.get("_meta") or {}).get("request_id"),
             )
         )
@@ -438,4 +526,7 @@ class RagService:
             "model": result.get("model") or self.settings.openrouter_chat_model,
             "prompt_version": result.get("prompt_version") or self.settings.prompt_version,
             "_invalid_citation_ids": invalid,
+            "general_answer": None,
+            "used_general_knowledge": False,
+            "general_model": None,
         }

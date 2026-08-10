@@ -31,6 +31,9 @@ def query(body: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
         insufficient_context=result["insufficient_context"],
         citations=[Citation(**c) for c in result["citations"]],
         model=result["model"],
+        general_answer=result.get("general_answer"),
+        used_general_knowledge=bool(result.get("used_general_knowledge")),
+        general_model=result.get("general_model"),
     )
 
 
