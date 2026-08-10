@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -81,6 +83,97 @@ class RagService:
         document_ids: list[uuid.UUID] | None = None,
         top_k: int | None = None,
     ) -> dict:
+        prepared = self._prepare_context(question, document_ids=document_ids, top_k=top_k)
+        result = self.chat.answer(prepared["question"], prepared["context"])
+        validated = self._validate_citations(
+            result, prepared["allowed_ids"], prepared["context_chunks"]
+        )
+
+        if self._needs_citation_retry(validated):
+            stricter = (
+                load_system_prompt()
+                + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
+            )
+            retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
+            result = retry_chat.answer(prepared["question"], prepared["context"])
+            validated = self._validate_citations(
+                result, prepared["allowed_ids"], prepared["context_chunks"]
+            )
+            if not validated["citations"]:
+                validated["insufficient_context"] = True
+
+        self._record_generation_usage(validated, result)
+        return validated
+
+    def query_stream(
+        self,
+        question: str,
+        document_ids: list[uuid.UUID] | None = None,
+        top_k: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield SSE-oriented events: status, token, replace, final."""
+        yield {"event": "status", "data": {"stage": "retrieving"}}
+        prepared = self._prepare_context(question, document_ids=document_ids, top_k=top_k)
+        yield {"event": "status", "data": {"stage": "generating"}}
+
+        result: dict | None = None
+        for event in self.chat.answer_stream(prepared["question"], prepared["context"]):
+            etype = event.get("type")
+            if etype == "delta":
+                yield {"event": "token", "data": {"text": event.get("text") or ""}}
+            elif etype == "replace":
+                yield {"event": "replace", "data": {"text": event.get("text") or ""}}
+            elif etype == "done":
+                result = event.get("result")
+
+        if not result:
+            raise AppError(ErrorCategory.GENERATION_FAILED, "Stream ended without a result")
+
+        validated = self._validate_citations(
+            result, prepared["allowed_ids"], prepared["context_chunks"]
+        )
+        if self._needs_citation_retry(validated):
+            yield {"event": "status", "data": {"stage": "retrying"}}
+            yield {"event": "replace", "data": {"text": ""}}
+            stricter = (
+                load_system_prompt()
+                + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
+            )
+            retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
+            result = None
+            for event in retry_chat.answer_stream(prepared["question"], prepared["context"]):
+                etype = event.get("type")
+                if etype == "delta":
+                    yield {"event": "token", "data": {"text": event.get("text") or ""}}
+                elif etype == "replace":
+                    yield {"event": "replace", "data": {"text": event.get("text") or ""}}
+                elif etype == "done":
+                    result = event.get("result")
+            if not result:
+                raise AppError(ErrorCategory.GENERATION_FAILED, "Retry stream ended without a result")
+            validated = self._validate_citations(
+                result, prepared["allowed_ids"], prepared["context_chunks"]
+            )
+            if not validated["citations"]:
+                validated["insufficient_context"] = True
+
+        self._record_generation_usage(validated, result)
+        yield {
+            "event": "final",
+            "data": {
+                "answer": validated["answer"],
+                "insufficient_context": validated["insufficient_context"],
+                "citations": validated["citations"],
+                "model": validated["model"],
+            },
+        }
+
+    def _prepare_context(
+        self,
+        question: str,
+        document_ids: list[uuid.UUID] | None = None,
+        top_k: int | None = None,
+    ) -> dict[str, Any]:
         question = (question or "").strip()
         if not question:
             raise AppError(ErrorCategory.VALIDATION, "question is required")
@@ -146,26 +239,21 @@ class RagService:
         context_chunks = self._apply_token_budget(expanded)
         context = build_source_xml(context_chunks)
         allowed_ids = {c["chunk_id"] for c in context_chunks}
+        return {
+            "question": question,
+            "context": context,
+            "allowed_ids": allowed_ids,
+            "context_chunks": context_chunks,
+        }
 
-        result = self.chat.answer(question, context)
-        validated = self._validate_citations(result, allowed_ids, context_chunks)
-
-        # Retry once with stricter prompt if factual answer lacks citations
-        if (
+    def _needs_citation_retry(self, validated: dict) -> bool:
+        return bool(
             not validated["insufficient_context"]
             and not validated["citations"]
             and (validated.get("answer") or "").strip()
-        ):
-            stricter = (
-                load_system_prompt()
-                + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
-            )
-            retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
-            result = retry_chat.answer(question, context)
-            validated = self._validate_citations(result, allowed_ids, context_chunks)
-            if not validated["citations"]:
-                validated["insufficient_context"] = True
+        )
 
+    def _record_generation_usage(self, validated: dict, result: dict) -> None:
         self.db.add(
             UsageEvent(
                 id=uuid.uuid4(),
@@ -176,7 +264,6 @@ class RagService:
             )
         )
         self.db.commit()
-        return validated
 
     def _lexical_article_chunks(
         self,

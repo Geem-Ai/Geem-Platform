@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
 import uuid
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -37,6 +39,68 @@ class OpenRouterClient:
             "allow_fallbacks": self.settings.openrouter_allow_fallbacks,
             "data_collection": self.settings.openrouter_data_collection,
         }
+
+    def stream(
+        self,
+        method: str,
+        path: str,
+        json_body: dict[str, Any] | None = None,
+        timeout: float = 180.0,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield parsed OpenRouter SSE chunk objects from a streaming chat request."""
+        if not self.api_key:
+            raise AppError(ErrorCategory.VALIDATION, "OPENROUTER_API_KEY is not configured")
+
+        request_id = str(uuid.uuid4())
+        url = f"{self.base_url}{path}"
+        started = time.perf_counter()
+        with httpx.Client(timeout=timeout) as client:
+            with client.stream(
+                method,
+                url,
+                headers=self._headers(request_id),
+                json=json_body,
+            ) as response:
+                if response.status_code >= 400:
+                    try:
+                        err_body = response.read().decode("utf-8", errors="replace")
+                    except Exception:
+                        err_body = ""
+                    raise AppError(
+                        ErrorCategory.GENERATION_FAILED,
+                        f"OpenRouter stream failed with status {response.status_code}",
+                        details={"body": err_body[:500], "request_id": request_id},
+                        retryable=response.status_code in RETRYABLE_STATUS,
+                    )
+
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    if line.startswith(":"):
+                        continue
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(chunk, dict):
+                        chunk["_request_id"] = request_id
+                        yield chunk
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "openrouter_stream",
+            extra={
+                "request_id": request_id,
+                "provider": "openrouter",
+                "latency_ms": latency_ms,
+                "stage": path,
+            },
+        )
 
     def request(
         self,

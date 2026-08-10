@@ -110,6 +110,106 @@ export async function queryDocuments(
   return handle(res);
 }
 
+export type QueryStreamHandlers = {
+  onStatus?: (stage: string) => void;
+  onToken?: (text: string) => void;
+  onReplace?: (text: string) => void;
+  onFinal?: (res: QueryResponse) => void;
+  onError?: (message: string) => void;
+};
+
+function parseSseBlock(block: string): { event: string; data: string } | null {
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+  if (!dataLines.length) return null;
+  return { event, data: dataLines.join("\n") };
+}
+
+export async function queryDocumentsStream(
+  question: string,
+  documentIds: string[] | undefined,
+  handlers: QueryStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/api/query/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({
+      question,
+      document_ids: documentIds?.length ? documentIds : undefined,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = body.message || body.error || message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  if (!res.body) {
+    throw new Error("Streaming is not supported in this browser");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let sawFinal = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const parsed = parseSseBlock(block);
+      if (!parsed) continue;
+
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = JSON.parse(parsed.data) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      if (parsed.event === "status") {
+        handlers.onStatus?.(String(payload.stage || ""));
+      } else if (parsed.event === "token") {
+        handlers.onToken?.(String(payload.text || ""));
+      } else if (parsed.event === "replace") {
+        handlers.onReplace?.(String(payload.text || ""));
+      } else if (parsed.event === "final") {
+        sawFinal = true;
+        handlers.onFinal?.(payload as unknown as QueryResponse);
+      } else if (parsed.event === "error") {
+        throw new Error(String(payload.message || payload.error || "Query failed"));
+      }
+    }
+  }
+
+  if (!sawFinal) {
+    handlers.onError?.("Stream ended before a final answer");
+    throw new Error("Stream ended before a final answer");
+  }
+}
+
 export function documentFileUrl(id: string, page?: number): string {
   const base = `${API_URL}/api/documents/${id}/file`;
   return page ? `${base}#page=${page}` : base;

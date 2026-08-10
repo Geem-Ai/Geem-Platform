@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
@@ -22,6 +23,20 @@ from app.documents.service import DocumentService
 from app.worker.tasks import enqueue_ingest
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+
+def content_disposition_inline(filename: str) -> str:
+    """Build a latin-1-safe Content-Disposition header for inline PDF viewing.
+
+    Starlette encodes header values as latin-1; Arabic/other Unicode filenames
+    must use RFC 5987 ``filename*`` with an ASCII ``filename`` fallback.
+    """
+    raw = (filename or "document.pdf").replace("\r", "").replace("\n", "")
+    ascii_name = raw.encode("ascii", "ignore").decode("ascii").strip().strip(".")
+    if not ascii_name or ascii_name in {'"', "'"}:
+        ascii_name = "document.pdf"
+    ascii_name = ascii_name.replace("\\", "_").replace('"', "'")
+    return f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(raw)}"
 
 
 def _summary(svc: DocumentService, doc) -> DocumentSummary:
@@ -129,7 +144,7 @@ def download_file(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Resp
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        headers={"Content-Disposition": content_disposition_inline(filename)},
     )
 
 

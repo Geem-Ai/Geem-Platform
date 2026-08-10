@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import iterate_in_threadpool
 
 from app.api.schemas import JobResponse, QueryRequest, QueryResponse, Citation
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import IngestionJob
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.rag.service import RagService
 
 router = APIRouter(prefix="/api", tags=["query"])
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -23,6 +31,43 @@ def query(body: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
         insufficient_context=result["insufficient_context"],
         citations=[Citation(**c) for c in result["citations"]],
         model=result["model"],
+    )
+
+
+@router.post("/query/stream")
+async def query_stream(body: QueryRequest) -> StreamingResponse:
+    def generate() -> Iterator[str]:
+        db = SessionLocal()
+        try:
+            svc = RagService(db)
+            for item in svc.query_stream(
+                body.question,
+                document_ids=body.document_ids,
+                top_k=body.top_k,
+            ):
+                yield _sse(item["event"], item["data"])
+        except AppError as exc:
+            yield _sse(
+                "error",
+                {
+                    "error": exc.category.value,
+                    "message": exc.message,
+                    "details": exc.details,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — surface to client SSE
+            yield _sse("error", {"error": "generation_failed", "message": str(exc)})
+        finally:
+            db.close()
+
+    return StreamingResponse(
+        iterate_in_threadpool(generate()),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

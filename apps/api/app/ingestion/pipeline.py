@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -20,6 +21,13 @@ from app.storage.minio_storage import MinioObjectStorage
 from app.storage.qdrant_store import QdrantVectorStore, deterministic_point_id
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_file_wrappers(text: str | None) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"</?file\b[^>]*>", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 
 def _utcnow() -> datetime:
@@ -85,17 +93,22 @@ class IngestionPipeline:
             self._ensure_page_rows(document)
             self._ocr_pages(document, job, failed_only=(mode == "failed_pages"))
             self.db.refresh(document)
-            failed = (
-                self.db.scalar(
-                    select(DocumentPage).where(
-                        DocumentPage.document_id == document.id,
-                        DocumentPage.status == "failed",
-                    ).limit(1)
-                )
-                is not None
+            pages = list(
+                self.db.scalars(select(DocumentPage).where(DocumentPage.document_id == document.id))
             )
-            if failed:
-                raise AppError(ErrorCategory.PARSER_FAILED, "One or more pages failed OCR")
+            hard_failed = [p for p in pages if p.status == "failed"]
+            usable = [p for p in pages if p.status == "parsed" and (p.text_length or 0) > 0]
+            if hard_failed and not usable:
+                raise AppError(ErrorCategory.PARSER_FAILED, "All pages failed OCR")
+            if hard_failed and usable:
+                # Soft-fail: continue indexing usable pages; surface count in job
+                job.failed_pages = len(hard_failed)
+                job.last_error = (
+                    f"{len(hard_failed)} page(s) failed OCR; continuing with "
+                    f"{len(usable)} usable page(s)"
+                )
+            if not usable:
+                raise AppError(ErrorCategory.EMPTY_PAGE, "No usable text extracted from any page")
 
             job.current_stage = "chunking"
             self.db.commit()
@@ -183,22 +196,33 @@ class IngestionPipeline:
                     filename=f"{document.id}-p{page_number}.pdf",
                     page_number=page_number,
                 )
-                diagnostics = page_quality_diagnostics(parsed.plain_text or parsed.raw_markdown)
-                # Strip file-wrapper noise when judging emptiness
-                meaningful = (parsed.plain_text or "").strip(" .\t\n")
-                if (
+                # Drop file-parser wrapper tags before quality checks / storage
+                cleaned_md = _strip_file_wrappers(parsed.raw_markdown)
+                plain = _strip_file_wrappers(parsed.plain_text)
+                diagnostics = page_quality_diagnostics(plain or cleaned_md)
+                meaningful = (plain or "").strip(" .\t\n•·-_")
+                empty = (
                     diagnostics["empty_output"]
                     or diagnostics["replacement_char_count"] > 20
                     or len(meaningful) < 8
-                ):
-                    raise AppError(
-                        ErrorCategory.EMPTY_PAGE,
-                        f"Empty/corrupt OCR for page {page_number}",
-                    )
-                canonical = normalize_canonical(parsed.raw_markdown)
+                )
+                if empty:
+                    # Blank / graphics-only page: keep provenance, skip indexing text
+                    return page_id, {
+                        "raw_markdown": cleaned_md or "",
+                        "canonical_text": "",
+                        "search_text": "",
+                        "parser": parsed.parser,
+                        "parser_hash": parsed.parser_hash,
+                        "text_length": 0,
+                        "arabic_ratio": 0.0,
+                        "metadata": parsed.metadata,
+                        "empty_page": True,
+                    }
+                canonical = normalize_canonical(cleaned_md)
                 search = normalize_search(canonical)
                 return page_id, {
-                    "raw_markdown": parsed.raw_markdown,
+                    "raw_markdown": cleaned_md,
                     "canonical_text": canonical,
                     "search_text": search,
                     "parser": parsed.parser,
@@ -206,6 +230,7 @@ class IngestionPipeline:
                     "text_length": diagnostics["text_length"],
                     "arabic_ratio": diagnostics["arabic_ratio"],
                     "metadata": parsed.metadata,
+                    "empty_page": False,
                 }
             except Exception as exc:
                 return page_id, exc
@@ -234,7 +259,9 @@ class IngestionPipeline:
                     db_page.parser_hash = result["parser_hash"]
                     db_page.text_length = result["text_length"]
                     db_page.arabic_ratio = result["arabic_ratio"]
-                    db_page.last_error = None
+                    db_page.last_error = (
+                        "empty_page_skipped" if result.get("empty_page") else None
+                    )
                     db_page.completed_at = _utcnow()
                     usage = result["metadata"].get("usage") or {}
                     self.db.add(
@@ -279,6 +306,8 @@ class IngestionPipeline:
 
         new_chunk_rows: list[Chunk] = []
         for page in pages:
+            if not (page.canonical_text or "").strip():
+                continue
             drafts = self.chunker.chunk_page(page.page_number, page.raw_markdown or "", skip_headers=skip)
             for draft in drafts:
                 key = (page.id, draft.ordinal, self.settings.embedding_version)
