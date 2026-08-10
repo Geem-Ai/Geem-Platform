@@ -287,3 +287,29 @@ def test_chat_stream_fallback_after_partial_deltas(settings: Settings):
     assert done["result"]["answer_markdown"] == "fallback ok"
     assert done["result"]["model"] == "test/fallback"
 
+
+@respx.mock
+def test_answer_general_stream(settings: Settings):
+    sse = (
+        'data: {"choices":[{"delta":{"content":"Not in docs. "}}]}\n\n'
+        'data: {"model":"test/chat","choices":[{"delta":{"content":"General answer."}}]}\n\n'
+        "data: [DONE]\n\n"
+    )
+    respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            content=sse.encode("utf-8"),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+    chat = OpenRouterChatProvider(
+        client=OpenRouterClient(settings),
+        settings=settings,
+        system_prompt="general sys",
+    )
+    events = list(chat.answer_general_stream("what is X?"))
+    text = "".join(e["text"] for e in events if e["type"] == "delta")
+    assert text == "Not in docs. General answer."
+    done = next(e for e in events if e["type"] == "done")
+    assert done["result"]["answer_markdown"] == "Not in docs. General answer."
+

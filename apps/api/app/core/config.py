@@ -33,8 +33,11 @@ class Settings(BaseSettings):
     openrouter_rerank_model: str = "cohere/rerank-v3.5"
     openrouter_chat_model: str = "qwen/qwen3.8-max"
     openrouter_chat_fallback_model: str = "openai/gpt-5.6-terra"
+    openrouter_general_model: str = ""
     openrouter_allow_fallbacks: bool = True
     openrouter_data_collection: str = "deny"
+
+    general_fallback_enabled: bool = True
 
     max_upload_mb: int = 100
     max_pdf_pages: int = 1000
@@ -55,6 +58,7 @@ class Settings(BaseSettings):
     normalizer_version: str = "arabic-v1"
     chunker_version: str = "page-structure-v1"
     prompt_version: str = "rag_answer_v1"
+    general_prompt_version: str = "general_fallback_v1"
     embedding_version: str = "v1"
 
     @property
