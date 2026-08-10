@@ -6,6 +6,7 @@ import {
   listDocuments,
   queryDocumentsStream,
 } from "../api";
+import MarkdownAnswer from "../components/MarkdownAnswer";
 
 const STATUS_LABELS: Record<string, string> = {
   retrieving: "Retrieving…",
@@ -132,9 +133,11 @@ export default function AskPage() {
               We could not find enough information in your uploaded documents.
             </p>
           )}
-          <div className="answer" dir="auto">
-            {answer || (loading ? "…" : "")}
-          </div>
+          <MarkdownAnswer
+            className="answer"
+            content={answer || ""}
+            placeholder={loading ? "…" : ""}
+          />
           {model && <p className="muted">Model: {model}</p>}
 
           {(usedGeneral || generalAnswer) && (
@@ -146,9 +149,11 @@ export default function AskPage() {
               <p className="muted">
                 Not from your documents — based on general AI knowledge. Verify important facts.
               </p>
-              <div className="answer" dir="auto">
-                {generalAnswer || (loading ? "…" : "")}
-              </div>
+              <MarkdownAnswer
+                className="answer answer-general"
+                content={generalAnswer || ""}
+                placeholder={loading ? "…" : ""}
+              />
               {generalModel && <p className="muted">Model: {generalModel}</p>}
             </>
           )}
@@ -164,7 +169,7 @@ export default function AskPage() {
                 <a href={documentFileUrl(c.document_id, c.page)} target="_blank" rel="noreferrer">
                   {c.document_title} — page {c.page}
                 </a>
-                <div dir="auto" className="muted">
+                <div dir="auto" className="muted citation-snippet">
                   {c.snippet}
                 </div>
               </div>
