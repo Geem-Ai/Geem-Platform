@@ -1,0 +1,122 @@
+[
+  {
+    "question": "ما مدة العقد؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "كم قيمة العقد؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "ما مدة الإشعار قبل الإنهاء؟",
+    "document": "fixture-scanned-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "What is the termination notice period?",
+    "document": "fixture-mixed-ar-en.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "ما القانون الواجب التطبيق؟",
+    "document": "fixture-mixed-ar-en.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "كم مبلغ الاشتراك في جدول الرسوم؟",
+    "document": "fixture-table.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "متى يبدأ الالتزام المالي ومتى ينتهي؟",
+    "document": "fixture-two-page.pdf",
+    "expected_pages": [1, 2],
+    "answerable": true
+  },
+  {
+    "question": "ما لون شعار الشركة في الصفحة الثالثة؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [],
+    "answerable": false
+  },
+  {
+    "question": "هل مدة العقد سنتان؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "ما مقدار الدعم في الجدول؟",
+    "document": "fixture-table.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "كم يوماً يجب أن يكون الإشعار كتابياً؟",
+    "document": "fixture-scanned-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "What is the governing law?",
+    "document": "fixture-mixed-ar-en.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "ما عنوان الوثيقة؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "هل العقد يجدد تلقائياً لعشر سنوات؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [],
+    "answerable": false
+  },
+  {
+    "question": "في أي يوم يبدأ الالتزام المالي؟",
+    "document": "fixture-two-page.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "كم مدة العقد المذكورة في المادة الأولى؟",
+    "document": "fixture-two-page.pdf",
+    "expected_pages": [2],
+    "answerable": true
+  },
+  {
+    "question": "ما قيمة الدعم الفني؟",
+    "document": "fixture-table.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "هل الإشعار يجب أن يكون كتابياً؟",
+    "document": "fixture-scanned-arabic.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "How many days is the notice period?",
+    "document": "fixture-mixed-ar-en.pdf",
+    "expected_pages": [1],
+    "answerable": true
+  },
+  {
+    "question": "ما اسم المدير التنفيذي للطرف الثاني؟",
+    "document": "fixture-native-arabic.pdf",
+    "expected_pages": [],
+    "answerable": false
+  }
+]
