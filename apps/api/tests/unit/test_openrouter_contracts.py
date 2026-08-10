@@ -154,3 +154,136 @@ def test_chat_fallback(settings: Settings):
     out = chat.answer("سؤال", "<SOURCE id='c1'>x</SOURCE>")
     assert out["answer_markdown"] == "جواب"
     assert out["model"] == "test/fallback"
+
+
+def test_extract_partial_json_string_incremental():
+    from app.openrouter.chat import extract_partial_json_string
+
+    assert extract_partial_json_string('{"answer_markdown": "', "answer_markdown") == ""
+    assert (
+        extract_partial_json_string('{"answer_markdown": "مرحبا', "answer_markdown") == "مرحبا"
+    )
+    assert (
+        extract_partial_json_string(
+            '{"answer_markdown": "line1\\nline2", "citation_chunk_ids": []}',
+            "answer_markdown",
+        )
+        == "line1\nline2"
+    )
+
+
+@respx.mock
+def test_chat_answer_stream(settings: Settings):
+    payload = {
+        "answer_markdown": "Hello world",
+        "citation_chunk_ids": ["c1"],
+        "insufficient_context": False,
+    }
+    raw = json.dumps(payload, ensure_ascii=False)
+    # Simulate OpenRouter SSE chunks splitting the JSON mid-string
+    mid = raw.index("Hello") + 3
+    part1 = raw[:mid]
+    part2 = raw[mid:]
+    sse = (
+        f'data: {json.dumps({"choices": [{"delta": {"content": part1}}]})}\n\n'
+        f'data: {json.dumps({"model": "test/chat", "choices": [{"delta": {"content": part2}}]})}\n\n'
+        "data: [DONE]\n\n"
+    )
+    respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            content=sse.encode("utf-8"),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+    chat = OpenRouterChatProvider(
+        client=OpenRouterClient(settings),
+        settings=settings,
+        system_prompt="sys",
+    )
+    events = list(chat.answer_stream("q", "<SOURCE id='c1'>x</SOURCE>"))
+    deltas = [e["text"] for e in events if e["type"] == "delta"]
+    assert "".join(deltas) == "Hello world"
+    done = next(e for e in events if e["type"] == "done")
+    assert done["result"]["answer_markdown"] == "Hello world"
+    assert done["result"]["citation_chunk_ids"] == ["c1"]
+
+
+@respx.mock
+def test_chat_stream_ignores_trailing_full_message(settings: Settings):
+    """Final chunk with full message.content must not double-append after deltas."""
+    raw = json.dumps(
+        {
+            "answer_markdown": "Hi",
+            "citation_chunk_ids": [],
+            "insufficient_context": False,
+        },
+        ensure_ascii=False,
+    )
+    sse = (
+        f'data: {json.dumps({"choices": [{"delta": {"content": raw}}]})}\n\n'
+        f'data: {json.dumps({"choices": [{"delta": {}, "message": {"content": raw}, "finish_reason": "stop"}]})}\n\n'
+        "data: [DONE]\n\n"
+    )
+    respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            content=sse.encode("utf-8"),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+    chat = OpenRouterChatProvider(
+        client=OpenRouterClient(settings),
+        settings=settings,
+        system_prompt="sys",
+    )
+    events = list(chat.answer_stream("q", "ctx"))
+    done = next(e for e in events if e["type"] == "done")
+    assert done["result"]["answer_markdown"] == "Hi"
+
+
+@respx.mock
+def test_chat_stream_fallback_after_partial_deltas(settings: Settings):
+    """Primary may emit tokens then fail; fallback should clear and complete."""
+    # Truncated JSON: answer_markdown is extractable, but final parse fails.
+    bad = '{"answer_markdown": "partial", "citation_chunk_ids": '
+    primary_sse = (
+        f'data: {json.dumps({"choices": [{"delta": {"content": bad}}]})}\n\n'
+        "data: [DONE]\n\n"
+    )
+    good = json.dumps(
+        {
+            "answer_markdown": "fallback ok",
+            "citation_chunk_ids": ["c1"],
+            "insufficient_context": False,
+        },
+        ensure_ascii=False,
+    )
+    fallback_sse = (
+        f'data: {json.dumps({"model": "test/fallback", "choices": [{"delta": {"content": good}}]})}\n\n'
+        "data: [DONE]\n\n"
+    )
+    route = respx.post("https://openrouter.ai/api/v1/chat/completions")
+    route.side_effect = [
+        httpx.Response(
+            200,
+            content=primary_sse.encode("utf-8"),
+            headers={"Content-Type": "text/event-stream"},
+        ),
+        httpx.Response(
+            200,
+            content=fallback_sse.encode("utf-8"),
+            headers={"Content-Type": "text/event-stream"},
+        ),
+    ]
+    chat = OpenRouterChatProvider(
+        client=OpenRouterClient(settings),
+        settings=settings,
+        system_prompt="sys",
+    )
+    events = list(chat.answer_stream("q", "ctx"))
+    assert any(e.get("type") == "replace" and e.get("text") == "" for e in events)
+    done = next(e for e in events if e["type"] == "done")
+    assert done["result"]["answer_markdown"] == "fallback ok"
+    assert done["result"]["model"] == "test/fallback"
+

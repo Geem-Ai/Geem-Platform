@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from app.core.config import Settings, get_settings
@@ -17,6 +18,48 @@ Return ONLY valid JSON with this schema:
   "insufficient_context": boolean
 }
 """
+
+
+def extract_partial_json_string(text: str, field: str) -> str | None:
+    """Return the (possibly incomplete) JSON string value for `field`, or None."""
+    pattern = f'"{field}"'
+    idx = text.find(pattern)
+    if idx < 0:
+        return None
+    colon = text.find(":", idx + len(pattern))
+    if colon < 0:
+        return None
+    i = colon + 1
+    while i < len(text) and text[i] in " \t\n\r":
+        i += 1
+    if i >= len(text) or text[i] != '"':
+        return None
+    i += 1
+    out: list[str] = []
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\":
+            if i + 1 >= len(text):
+                break
+            nxt = text[i + 1]
+            if nxt == "u":
+                if i + 5 >= len(text):
+                    break
+                try:
+                    out.append(chr(int(text[i + 2 : i + 6], 16)))
+                except ValueError:
+                    break
+                i += 6
+                continue
+            escapes = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "/": "/"}
+            out.append(escapes.get(nxt, nxt))
+            i += 2
+            continue
+        if ch == '"':
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 class OpenRouterChatProvider:
@@ -36,8 +79,31 @@ class OpenRouterChatProvider:
         except AppError:
             return self._call(self.settings.openrouter_chat_fallback_model, question, context)
 
-    def _call(self, model: str, question: str, context: str) -> dict:
-        payload: dict[str, Any] = {
+    def answer_stream(self, question: str, context: str) -> Iterator[dict[str, Any]]:
+        """Yield stream events: {"type":"delta"|"replace"|"done", ...}.
+
+        Falls back to the secondary model if the primary stream fails before a
+        completed ``done`` event (including after partial deltas were shown).
+        """
+        completed = False
+        try:
+            for event in self._call_stream(
+                self.settings.openrouter_chat_model, question, context
+            ):
+                if event.get("type") == "done":
+                    completed = True
+                yield event
+        except AppError:
+            if completed:
+                raise
+            # Clear any partial primary tokens before streaming the fallback.
+            yield {"type": "replace", "text": ""}
+            yield from self._call_stream(
+                self.settings.openrouter_chat_fallback_model, question, context
+            )
+
+    def _payload(self, model: str, question: str, context: str, *, stream: bool) -> dict[str, Any]:
+        return {
             "model": model,
             "messages": [
                 {"role": "system", "content": self.system_prompt},
@@ -51,8 +117,14 @@ class OpenRouterChatProvider:
                 },
             ],
             "response_format": {"type": "json_object"},
+            "stream": stream,
             "provider": self.client.provider_preferences(),
         }
+
+    def _call(self, model: str, question: str, context: str) -> dict:
+        payload = self._payload(model, question, context, stream=False)
+        # Non-stream OpenRouter rejects stream=false being explicit on some providers; omit key
+        payload.pop("stream", None)
         body, meta, status = self.client.request(
             "POST",
             "/chat/completions",
@@ -79,6 +151,68 @@ class OpenRouterChatProvider:
             "request_id": meta.get("request_id"),
         }
         return parsed
+
+    def _call_stream(self, model: str, question: str, context: str) -> Iterator[dict[str, Any]]:
+        payload = self._payload(model, question, context, stream=True)
+        buffer = ""
+        emitted = ""
+        resolved_model = model
+        request_id: str | None = None
+        openrouter_id: str | None = None
+        usage: Any = None
+        for chunk in self.client.stream(
+            "POST",
+            "/chat/completions",
+            json_body=payload,
+            timeout=180.0,
+        ):
+            request_id = chunk.get("_request_id") or request_id
+            if chunk.get("model"):
+                resolved_model = chunk["model"]
+            if chunk.get("id"):
+                openrouter_id = chunk["id"]
+            if chunk.get("usage"):
+                usage = chunk["usage"]
+
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            piece = delta.get("content") or ""
+            # Only accept non-delta message.content when we have not streamed yet.
+            # Appending a full message after deltas doubles the buffer and breaks JSON.
+            if not piece and not buffer:
+                message = choices[0].get("message") or {}
+                piece = message.get("content") or ""
+            if not piece:
+                continue
+            buffer += piece
+            partial = extract_partial_json_string(buffer, "answer_markdown")
+            if partial is None:
+                continue
+            if len(partial) > len(emitted):
+                delta_text = partial[len(emitted) :]
+                emitted = partial
+                yield {"type": "delta", "text": delta_text}
+
+        if not buffer.strip():
+            raise AppError(ErrorCategory.GENERATION_FAILED, "Empty streamed chat response")
+
+        parsed = self._parse_json_content(buffer)
+        parsed["model"] = resolved_model
+        parsed["prompt_version"] = self.settings.prompt_version
+        parsed["_meta"] = {
+            "openrouter_id": openrouter_id,
+            "usage": usage,
+            "request_id": request_id,
+        }
+        # Ensure UI has the full answer if partial extraction missed escapes/edge cases
+        final_answer = parsed.get("answer_markdown") or ""
+        if final_answer.startswith(emitted) and len(final_answer) > len(emitted):
+            yield {"type": "delta", "text": final_answer[len(emitted) :]}
+        elif final_answer != emitted and final_answer:
+            yield {"type": "replace", "text": final_answer}
+        yield {"type": "done", "result": parsed}
 
     def _parse_json_content(self, content: str) -> dict:
         text = content.strip()

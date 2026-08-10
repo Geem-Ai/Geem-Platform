@@ -4,14 +4,21 @@ import {
   DocumentSummary,
   documentFileUrl,
   listDocuments,
-  queryDocuments,
+  queryDocumentsStream,
 } from "../api";
+
+const STATUS_LABELS: Record<string, string> = {
+  retrieving: "Retrieving…",
+  generating: "Generating…",
+  retrying: "Refining answer…",
+};
 
 export default function AskPage() {
   const [docs, setDocs] = useState<DocumentSummary[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
   const [insufficient, setInsufficient] = useState(false);
@@ -26,17 +33,28 @@ export default function AskPage() {
     e.preventDefault();
     if (!question.trim()) return;
     setLoading(true);
+    setStatus("retrieving");
     setError(null);
-    setAnswer(null);
+    setAnswer("");
+    setInsufficient(false);
     setCitations([]);
+    setModel(null);
     try {
-      const res = await queryDocuments(question, selected);
-      setAnswer(res.answer);
-      setInsufficient(res.insufficient_context);
-      setCitations(res.citations);
-      setModel(res.model);
+      await queryDocumentsStream(question, selected, {
+        onStatus: (stage) => setStatus(stage),
+        onToken: (text) => setAnswer((prev) => (prev || "") + text),
+        onReplace: (text) => setAnswer(text),
+        onFinal: (res) => {
+          setAnswer(res.answer);
+          setInsufficient(res.insufficient_context);
+          setCitations(res.citations);
+          setModel(res.model);
+          setStatus(null);
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Query failed");
+      setStatus(null);
     } finally {
       setLoading(false);
     }
@@ -76,25 +94,31 @@ export default function AskPage() {
           />
         </label>
         <button type="submit" disabled={loading || !question.trim()}>
-          {loading ? "Searching…" : "Ask"}
+          {loading ? STATUS_LABELS[status || ""] || "Searching…" : "Ask"}
         </button>
       </form>
 
       {error && <div className="error">{error}</div>}
 
-      {answer !== null && (
+      {(answer !== null || loading) && (
         <div className="panel stack">
           <h2>Answer</h2>
+          {loading && status && (
+            <p className="muted">{STATUS_LABELS[status] || status}</p>
+          )}
           {insufficient && (
             <p className="muted">Insufficient context in the available documents.</p>
           )}
           <div className="answer" dir="auto">
-            {answer}
+            {answer || (loading ? "…" : "")}
           </div>
           {model && <p className="muted">Model: {model}</p>}
           <h2>Citations</h2>
           <div className="citations">
-            {citations.length === 0 && <p className="muted">No citations.</p>}
+            {!loading && citations.length === 0 && <p className="muted">No citations.</p>}
+            {loading && citations.length === 0 && (
+              <p className="muted">Citations appear when the answer finishes.</p>
+            )}
             {citations.map((c) => (
               <div className="citation" key={c.chunk_id}>
                 <a href={documentFileUrl(c.document_id, c.page)} target="_blank" rel="noreferrer">
