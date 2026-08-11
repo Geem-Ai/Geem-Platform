@@ -53,6 +53,7 @@ def clean_tables() -> Generator[None, None, None]:
         conn.execute(
             text(
                 "TRUNCATE TABLE "
+                "messages, conversations, "
                 "expert_documents, expert_sources, workspace_expert_grants, experts, "
                 "usage_events, chunks, document_pages, ingestion_jobs, documents, "
                 "sessions, workspace_memberships, workspaces, users "

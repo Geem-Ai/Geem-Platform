@@ -13,6 +13,8 @@
 - Phase 2C: `0004_docs_workspace_nn.py` — `workspace_id NOT NULL`, drop legacy sha256 unique; run `python -m app.maintenance.phase2c_migrate_legacy --apply` **before** this revision
 - Phase 3A: `0005_experts_domain.py` — `workspaces.kind`, experts / expert_sources / expert_documents / workspace_expert_grants; Platform Knowledge system Workspace via bootstrap (not Alembic seed)
 - Phase 3B: no Alembic for Qdrant `expert_ids` — payload index via `QdrantVectorStore._ensure_payload_indexes`; maintenance: `python -m app.maintenance.sync_expert_vector_memberships`, `python -m app.maintenance.phase3b_legacy_library`
+- Phase 4A: `0006_conversations_messages.py` — `conversations` (consumer workspace + user + expert, soft-delete) + `messages` (role/content/citations/status, optional `usage_event_id`)
+- Phase 4B: no Alembic — `ChatOrchestrator` + `POST .../messages/stream` + retry SSE; bounded chat history via settings; generation lock (Redis/memory)
 
 ### Document tenancy (Phase 2C final)
 
@@ -38,7 +40,7 @@
 |-------------|----------|
 | `/api/auth/login`, `/register`, `/refresh` | Public |
 | `/api/auth/*` (authenticated) + `/api/workspaces/*` | Always authenticated |
-| `/api/documents/*`, `/api/query*`, `/api/jobs/*` | Authenticated Workspace required |
+| `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*` | Authenticated Workspace required |
 | `/api/health/*` | Public |
 
 Production / SaaS default: `AUTH_REQUIRED=true`, `LEGACY_MVP_WRITES_ENABLED=false`.

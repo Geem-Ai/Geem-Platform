@@ -32,6 +32,7 @@ from app.experts.models import (  # noqa: E402
     ExpertSource,
     WorkspaceExpertGrant,
 )
+from app.conversations.models import Conversation, Message  # noqa: E402
 
 __all__ = [
     "Document",
@@ -47,6 +48,8 @@ __all__ = [
     "ExpertSource",
     "ExpertDocument",
     "WorkspaceExpertGrant",
+    "Conversation",
+    "Message",
 ]
 
 

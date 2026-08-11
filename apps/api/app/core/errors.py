@@ -60,6 +60,12 @@ class ErrorCategory(StrEnum):
     EXPERT_HAS_NO_KNOWLEDGE = "expert_has_no_knowledge"
     EXPERT_KNOWLEDGE_UNAVAILABLE = "expert_knowledge_unavailable"
 
+    # Conversations (Phase 4A) — cross-tenant / cross-user misses use 404
+    CONVERSATION_NOT_FOUND = "conversation_not_found"
+    MESSAGE_NOT_FOUND = "message_not_found"
+    # Conversations (Phase 4B) — overlapping generation
+    CONVERSATION_BUSY = "conversation_busy"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -99,6 +105,11 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "expert_disabled": 403,
     "expert_has_no_knowledge": 422,
     "expert_knowledge_unavailable": 422,
+    # Phase 4A — Conversations
+    "conversation_not_found": 404,
+    "message_not_found": 404,
+    # Phase 4B
+    "conversation_busy": 409,
 }
 
 

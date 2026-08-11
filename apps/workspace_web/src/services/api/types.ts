@@ -182,3 +182,48 @@ export type ExpertSource = {
   created_at: string;
   updated_at: string;
 };
+
+/** Phase 4A — Conversation persistence (Chat UX wiring is Phase 4B). */
+export type ConversationExpertSummary = {
+  id: string;
+  type: string;
+  ownership: string;
+  name: string;
+  description: string | null;
+  icon_url: string | null;
+  status: string;
+  visibility: string;
+};
+
+export type MessagePreview = {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  workspace_id: string;
+  expert_id: string;
+  user_id: string;
+  title: string | null;
+  is_pinned: boolean;
+  pinned_at: string | null;
+  created_at: string;
+  updated_at: string;
+  expert: ConversationExpertSummary | null;
+  last_message: MessagePreview | null;
+};
+
+export type ConversationMessage = {
+  id: string;
+  conversation_id: string;
+  role: string;
+  content: string;
+  citations: Citation[];
+  status: string;
+  usage_event_id: string | null;
+  created_at: string;
+  updated_at: string;
+};

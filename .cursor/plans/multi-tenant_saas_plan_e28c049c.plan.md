@@ -15,8 +15,8 @@ todos:
     content: "Phase 3: Experts — 3A domain PASS + 3B Expert-scoped RAG PASS + 3C Experts UX PASS; Phase 3 complete. Do not start Phase 4 until requested."
     status: completed
   - id: phase-4
-    content: "Phase 4: Conversations + full Metronic AI Chat UX wired to SSE/RAG"
-    status: pending
+    content: "Phase 4: 4A persistence PASS + 4B ChatOrchestrator/SSE PASS; 4C Metronic Chat UX remaining. Do not start 4C until requested."
+    status: in_progress
   - id: phase-5
     content: "Phase 5: Entitlements/ledger/quotas + AI-style usage surfaces"
     status: pending
@@ -839,9 +839,13 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 4 — Conversations + full Metronic AI Chat
 
-**Status:** pending
+**Status:** in_progress — **4A + 4B complete**; 4C Metronic Chat UX not started
 
 **Goal:** Persisted threads; Metronic AI Chat is the production Chat experience.
+
+**4A (done):** `conversations` / `messages` schema; scoped Conversation APIs; Expert access via `ExpertAccessService`; soft-delete; tenant+user isolation tests; citation JSONB using Phase 3 safe contract. `/api/query` unchanged.
+
+**4B (done):** `ChatOrchestrator` persists user/assistant Messages, revalidates Expert per turn, streams via ExpertQueryService→RagService SSE (extended with `message_start` / `message_complete` + IDs), retry without duplicate user message, deterministic titles, generation lock, bounded multi-turn history. `/api/query` kept.
 
 **DB:** conversations, messages.
 

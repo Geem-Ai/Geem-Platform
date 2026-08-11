@@ -73,13 +73,35 @@ class OpenRouterChatProvider:
         self.client = client or OpenRouterClient(self.settings)
         self.system_prompt = system_prompt or ""
 
-    def answer(self, question: str, context: str) -> dict:
+    def answer(
+        self,
+        question: str,
+        context: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
         try:
-            return self._call(self.settings.openrouter_chat_model, question, context)
+            return self._call(
+                self.settings.openrouter_chat_model,
+                question,
+                context,
+                history=history,
+            )
         except AppError:
-            return self._call(self.settings.openrouter_chat_fallback_model, question, context)
+            return self._call(
+                self.settings.openrouter_chat_fallback_model,
+                question,
+                context,
+                history=history,
+            )
 
-    def answer_stream(self, question: str, context: str) -> Iterator[dict[str, Any]]:
+    def answer_stream(
+        self,
+        question: str,
+        context: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
         """Yield stream events: {"type":"delta"|"replace"|"done", ...}.
 
         Falls back to the secondary model if the primary stream fails before a
@@ -88,7 +110,10 @@ class OpenRouterChatProvider:
         completed = False
         try:
             for event in self._call_stream(
-                self.settings.openrouter_chat_model, question, context
+                self.settings.openrouter_chat_model,
+                question,
+                context,
+                history=history,
             ):
                 if event.get("type") == "done":
                     completed = True
@@ -99,7 +124,10 @@ class OpenRouterChatProvider:
             # Clear any partial primary tokens before streaming the fallback.
             yield {"type": "replace", "text": ""}
             yield from self._call_stream(
-                self.settings.openrouter_chat_fallback_model, question, context
+                self.settings.openrouter_chat_fallback_model,
+                question,
+                context,
+                history=history,
             )
 
     def answer_general(self, question: str) -> dict:
@@ -130,20 +158,34 @@ class OpenRouterChatProvider:
     def _general_model(self) -> str:
         return (self.settings.openrouter_general_model or "").strip() or self.settings.openrouter_chat_model
 
-    def _payload(self, model: str, question: str, context: str, *, stream: bool) -> dict[str, Any]:
+    def _payload(
+        self,
+        model: str,
+        question: str,
+        context: str,
+        *,
+        stream: bool,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        messages: list[dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
+        for turn in history or []:
+            role = (turn.get("role") or "").strip()
+            content = turn.get("content") or ""
+            if role in {"user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"{ANSWER_SCHEMA_HINT}\n\n"
+                    f"SOURCES:\n{context}\n\n"
+                    f"QUESTION:\n{question}"
+                ),
+            }
+        )
         return {
             "model": model,
-            "messages": [
-                {"role": "system", "content": self.system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        f"{ANSWER_SCHEMA_HINT}\n\n"
-                        f"SOURCES:\n{context}\n\n"
-                        f"QUESTION:\n{question}"
-                    ),
-                },
-            ],
+            "messages": messages,
             "response_format": {"type": "json_object"},
             "stream": stream,
             "provider": self.client.provider_preferences(),
@@ -160,8 +202,15 @@ class OpenRouterChatProvider:
             "provider": self.client.provider_preferences(),
         }
 
-    def _call(self, model: str, question: str, context: str) -> dict:
-        payload = self._payload(model, question, context, stream=False)
+    def _call(
+        self,
+        model: str,
+        question: str,
+        context: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
+        payload = self._payload(model, question, context, stream=False, history=history)
         # Non-stream OpenRouter rejects stream=false being explicit on some providers; omit key
         payload.pop("stream", None)
         body, meta, status = self.client.request(
@@ -191,8 +240,15 @@ class OpenRouterChatProvider:
         }
         return parsed
 
-    def _call_stream(self, model: str, question: str, context: str) -> Iterator[dict[str, Any]]:
-        payload = self._payload(model, question, context, stream=True)
+    def _call_stream(
+        self,
+        model: str,
+        question: str,
+        context: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        payload = self._payload(model, question, context, stream=True, history=history)
         buffer = ""
         emitted = ""
         resolved_model = model

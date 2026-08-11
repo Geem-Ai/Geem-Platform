@@ -7,6 +7,7 @@ export * from './auth';
 export * from './workspaces';
 export * from './documents';
 export * from './experts';
+export * from './conversations';
 export * from './query';
 export { streamSse } from './sse';
 export { apiRequest };
