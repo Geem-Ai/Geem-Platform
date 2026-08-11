@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
 import { canAskExpert } from '../lib/capabilities';
-import { ExpertAvatar } from './ExpertAvatar';
+import { AiStarsMark } from './AiStarsMark';
 import { ExpertStatusBadge } from './ExpertStatusBadge';
 
 interface ExpertCardProps {
@@ -50,11 +50,7 @@ export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
           aria-label={expert.name}
         >
           <div className="flex items-start gap-3">
-            <ExpertAvatar
-              name={expert.name}
-              iconUrl={expert.icon_url}
-              ownership={expert.ownership}
-            />
+            <AiStarsMark />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-semibold tracking-tight truncate leading-5">
