@@ -4,17 +4,26 @@ import hashlib
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import Document, DocumentPage, IngestionJob
+from app.documents.repository import DocumentRepository
+from app.ingestion.parsers import (
+    DocumentFormat,
+    DocumentFormatDescriptor,
+    detect_document_format,
+)
 from app.ingestion.pdf_utils import validate_pdf_bytes
-from app.storage.minio_storage import MinioObjectStorage, document_storage_key
+from app.storage.document_keys import resolve_document_storage_key
+from app.storage.minio_storage import MinioObjectStorage
 from app.storage.qdrant_store import QdrantVectorStore
+from app.workspaces.models import Workspace, WorkspaceStatus
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +32,29 @@ def sanitize_filename(name: str) -> str:
     base = PurePosixPath(name).name
     base = re.sub(r"[^\w.\-()\u0600-\u06FF ]+", "_", base)
     return base[:200] or "document.pdf"
+
+
+@dataclass(frozen=True, slots=True)
+class UploadInspection:
+    """Post-validation inspection details for a Workspace upload."""
+
+    safe_name: str
+    descriptor: DocumentFormatDescriptor
+    page_count: int
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceUploadResult:
+    """Result of ``upload_for_workspace_or_link_existing``.
+
+    ``reused`` is True when a Document with the same sha256 already existed in
+    the Workspace and the upload was linked to that Document instead of
+    creating a new one.
+    """
+
+    document: Document
+    reused: bool
 
 
 class DocumentService:
@@ -37,74 +69,216 @@ class DocumentService:
         self.settings = settings or get_settings()
         self.storage = storage or MinioObjectStorage(self.settings)
         self.vectors = vectors or QdrantVectorStore(self.settings)
+        self.repo = DocumentRepository(db)
 
-    def upload(self, file_bytes: bytes, filename: str, title: str | None = None) -> Document:
-        safe_name = sanitize_filename(filename)
-        if not safe_name.lower().endswith(".pdf") and not file_bytes.startswith(b"%PDF"):
-            raise AppError(ErrorCategory.INVALID_PDF, "Only PDF uploads are supported")
+    # ------------------------------------------------------------------
+    # Workspace-scoped (SaaS) — workspace comes from trusted RequestContext
+    # ------------------------------------------------------------------
 
-        info = validate_pdf_bytes(
-            file_bytes,
-            max_bytes=self.settings.max_upload_bytes,
-            max_pages=self.settings.max_pdf_pages,
+    def upload_for_workspace(
+        self,
+        workspace: Workspace,
+        file_bytes: bytes,
+        filename: str,
+        title: str | None = None,
+        declared_mime_type: str | None = None,
+    ) -> Document:
+        self._require_active_workspace(workspace)
+        inspection = self._validate_upload(
+            file_bytes, filename, declared_mime_type=declared_mime_type
         )
-        digest = hashlib.sha256(file_bytes).hexdigest()
-        existing = self.db.scalar(select(Document).where(Document.sha256 == digest))
+
+        existing = self.repo.find_active_by_sha256_for_workspace(workspace.id, inspection.sha256)
         if existing and existing.status != "deleting":
             raise AppError(
-                ErrorCategory.CONFLICT,
-                "Duplicate PDF already uploaded",
+                ErrorCategory.DOCUMENT_ALREADY_EXISTS,
+                "Duplicate document already uploaded in this workspace",
                 details={"id": str(existing.id), "status": existing.status},
             )
 
-        doc_id = uuid.uuid4()
-        storage_key = document_storage_key(str(doc_id))
-        self.storage.ensure_bucket()
-        self.storage.put_bytes(storage_key, file_bytes, "application/pdf")
+        document = self._persist_new_document(
+            file_bytes=file_bytes,
+            inspection=inspection,
+            title=title,
+            workspace_id=workspace.id,
+        )
+        security_log(
+            "document.uploaded",
+            workspace_id=str(workspace.id),
+            document_id=str(document.id),
+            action="upload",
+            byte_size=document.byte_size,
+            mime_type=document.mime_type,
+        )
+        return document
 
-        document = Document(
-            id=doc_id,
-            title=title or safe_name,
-            original_filename=safe_name,
-            storage_key=storage_key,
-            sha256=digest,
-            mime_type="application/pdf",
-            page_count=info.page_count,
-            status="queued",
+    def upload_for_workspace_or_link_existing(
+        self,
+        workspace: Workspace,
+        file_bytes: bytes,
+        filename: str,
+        title: str | None = None,
+        declared_mime_type: str | None = None,
+    ) -> WorkspaceUploadResult:
+        """Idempotent Workspace upload: re-use an existing Document on hash hit.
+
+        Used by the Expert upload endpoints (Phase 3B) so a member can re-upload
+        the same file to link it to another Expert without hitting the
+        DOCUMENT_ALREADY_EXISTS error the strict ``upload_for_workspace``
+        raises.
+        """
+        self._require_active_workspace(workspace)
+        inspection = self._validate_upload(
+            file_bytes, filename, declared_mime_type=declared_mime_type
         )
-        job = IngestionJob(
-            id=uuid.uuid4(),
-            document_id=doc_id,
-            status="queued",
-            total_pages=info.page_count,
-            processed_pages=0,
-            failed_pages=0,
-            current_stage="queued",
+
+        existing = self.repo.find_active_by_sha256_for_workspace(workspace.id, inspection.sha256)
+        if existing and existing.status != "deleting":
+            security_log(
+                "document.upload_reused",
+                workspace_id=str(workspace.id),
+                document_id=str(existing.id),
+                action="upload_reuse",
+                mime_type=existing.mime_type,
+            )
+            return WorkspaceUploadResult(document=existing, reused=True)
+
+        document = self._persist_new_document(
+            file_bytes=file_bytes,
+            inspection=inspection,
+            title=title,
+            workspace_id=workspace.id,
         )
-        self.db.add(document)
-        self.db.add(job)
+        security_log(
+            "document.uploaded",
+            workspace_id=str(workspace.id),
+            document_id=str(document.id),
+            action="upload",
+            byte_size=document.byte_size,
+            mime_type=document.mime_type,
+        )
+        return WorkspaceUploadResult(document=document, reused=False)
+
+    def list_for_workspace(self, workspace: Workspace) -> list[Document]:
+        self._require_active_workspace(workspace)
+        return self.repo.list_for_workspace(workspace.id)
+
+    def get_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> Document:
+        self._require_active_workspace(workspace)
+        document = self.repo.get_for_workspace(workspace.id, document_id)
+        if document is None:
+            raise AppError(ErrorCategory.DOCUMENT_NOT_FOUND, "Document not found")
+        return document
+
+    def get_file_for_workspace(
+        self, workspace: Workspace, document_id: uuid.UUID
+    ) -> tuple[bytes, str]:
+        document = self.get_for_workspace(workspace, document_id)
+        data, used_key = self.storage.get_document_bytes(
+            document_id=document.id,
+            workspace_id=document.workspace_id,
+            stored_key=document.storage_key,
+        )
+        security_log(
+            "document.download",
+            workspace_id=str(workspace.id),
+            document_id=str(document.id),
+            action="download",
+            storage_key=used_key,
+        )
+        return data, document.original_filename
+
+    def delete_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> None:
+        """Soft-delete workspace document. MinIO/Qdrant purge deferred to Phase 2B/2C."""
+        document = self.get_for_workspace(workspace, document_id)
+        if document.deleted_at is not None:
+            raise AppError(ErrorCategory.DOCUMENT_DELETED, "Document is already deleted")
+        document.soft_delete()
         self.db.commit()
-        self.db.refresh(document)
-        return document
-
-    def list_documents(self) -> list[Document]:
-        return list(
-            self.db.scalars(select(Document).order_by(Document.created_at.desc()))
+        security_log(
+            "document.soft_deleted",
+            workspace_id=str(workspace.id),
+            document_id=str(document_id),
+            action="delete",
         )
 
-    def get(self, document_id: uuid.UUID) -> Document:
-        document = self.db.get(Document, document_id)
-        if not document:
-            raise AppError(ErrorCategory.NOT_FOUND, "Document not found")
+    def reprocess_for_workspace(
+        self, workspace: Workspace, document_id: uuid.UUID, mode: str = "failed_pages"
+    ) -> IngestionJob:
+        if mode not in {"failed_pages", "full"}:
+            raise AppError(ErrorCategory.VALIDATION, "mode must be failed_pages or full")
+        document = self.get_for_workspace(workspace, document_id)
+        if document.status == "deleting":
+            raise AppError(ErrorCategory.DOCUMENT_DELETED, "Document is being deleted")
+        job = self._enqueue_reprocess_job(document)
+        security_log(
+            "document.reprocess",
+            workspace_id=str(workspace.id),
+            document_id=str(document_id),
+            action="reprocess",
+            mode=mode,
+        )
+        return job
+
+    def failed_pages_for_workspace(
+        self, workspace: Workspace, document_id: uuid.UUID
+    ) -> list[DocumentPage]:
+        self.get_for_workspace(workspace, document_id)
+        return self.repo.failed_pages(document_id)
+
+    # ------------------------------------------------------------------
+    # Legacy MVP helpers — maintenance / tests only (not production HTTP)
+    # ------------------------------------------------------------------
+
+    def upload_legacy(
+        self, file_bytes: bytes, filename: str, title: str | None = None
+    ) -> Document:
+        raise AppError(
+            ErrorCategory.UNAUTHORIZED,
+            "Legacy unauthenticated document population is retired (Phase 2C).",
+        )
+
+    def list_legacy(self) -> list[Document]:
+        return self.repo.list_legacy()
+
+    def get_legacy(self, document_id: uuid.UUID) -> Document:
+        document = self.repo.get_legacy(document_id)
+        if document is None:
+            raise AppError(ErrorCategory.DOCUMENT_NOT_FOUND, "Document not found")
         return document
+
+    def get_file_legacy(self, document_id: uuid.UUID) -> tuple[bytes, str]:
+        raise AppError(
+            ErrorCategory.UNAUTHORIZED,
+            "Legacy document file access is retired (Phase 2C).",
+        )
+
+    def delete_legacy(self, document_id: uuid.UUID) -> None:
+        raise AppError(
+            ErrorCategory.UNAUTHORIZED,
+            "Legacy hard-delete path is retired; use Workspace soft-delete.",
+        )
+
+    def reprocess_legacy(
+        self, document_id: uuid.UUID, mode: str = "failed_pages"
+    ) -> IngestionJob:
+        raise AppError(
+            ErrorCategory.UNAUTHORIZED,
+            "Legacy reprocess path is retired (Phase 2C).",
+        )
+
+    def failed_pages_legacy(self, document_id: uuid.UUID) -> list[DocumentPage]:
+        raise AppError(
+            ErrorCategory.UNAUTHORIZED,
+            "Legacy document access is retired (Phase 2C).",
+        )
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
 
     def progress(self, document: Document) -> dict:
-        job = self.db.scalar(
-            select(IngestionJob)
-            .where(IngestionJob.document_id == document.id)
-            .order_by(IngestionJob.created_at.desc())
-            .limit(1)
-        )
+        job = self.repo.latest_job(document.id)
         processed = job.processed_pages if job else 0
         failed = job.failed_pages if job else 0
         total = document.page_count or 1
@@ -119,32 +293,131 @@ class DocumentService:
             "job_id": str(job.id) if job else None,
         }
 
+    def pages_for_document(self, document_id: uuid.UUID) -> list[DocumentPage]:
+        return self.repo.pages_for_document(document_id)
+
+    # Retired aliases — keep names so callers fail closed instead of silently creating NULL rows.
+    def upload(self, file_bytes: bytes, filename: str, title: str | None = None) -> Document:
+        return self.upload_legacy(file_bytes, filename, title=title)
+
+    def list_documents(self) -> list[Document]:
+        return self.list_legacy()
+
+    def get(self, document_id: uuid.UUID) -> Document:
+        return self.get_legacy(document_id)
+
     def get_file(self, document_id: uuid.UUID) -> tuple[bytes, str]:
-        document = self.get(document_id)
-        data = self.storage.get_bytes(document.storage_key)
-        return data, document.original_filename
+        return self.get_file_legacy(document_id)
 
     def delete(self, document_id: uuid.UUID) -> None:
-        document = self.get(document_id)
-        document.status = "deleting"
-        self.db.commit()
-        try:
-            self.vectors.delete_by_document(str(document.id))
-        except AppError:
-            logger.exception("qdrant_delete_failed", extra={"document_id": str(document_id)})
-        try:
-            self.storage.delete(document.storage_key)
-        except AppError:
-            logger.exception("minio_delete_failed", extra={"document_id": str(document_id)})
-        self.db.delete(document)
-        self.db.commit()
+        return self.delete_legacy(document_id)
 
     def reprocess(self, document_id: uuid.UUID, mode: str = "failed_pages") -> IngestionJob:
-        if mode not in {"failed_pages", "full"}:
-            raise AppError(ErrorCategory.VALIDATION, "mode must be failed_pages or full")
-        document = self.get(document_id)
-        if document.status == "deleting":
-            raise AppError(ErrorCategory.CONFLICT, "Document is being deleted")
+        return self.reprocess_legacy(document_id, mode=mode)
+
+    def failed_pages(self, document_id: uuid.UUID) -> list[DocumentPage]:
+        return self.failed_pages_legacy(document_id)
+
+    def _require_active_workspace(self, workspace: Workspace) -> None:
+        if workspace.deleted_at is not None:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.status != WorkspaceStatus.ACTIVE.value:
+            raise AppError(
+                ErrorCategory.WORKSPACE_ACCESS_DENIED,
+                "Workspace is not active.",
+                details={"status": workspace.status},
+            )
+
+    def _validate_upload(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        *,
+        declared_mime_type: str | None = None,
+    ) -> UploadInspection:
+        if len(file_bytes) > self.settings.max_upload_bytes:
+            raise AppError(
+                ErrorCategory.INVALID_DOCUMENT,
+                f"Upload exceeds maximum size of {self.settings.max_upload_bytes} bytes",
+            )
+        safe_name = sanitize_filename(filename)
+        descriptor = detect_document_format(
+            file_bytes, safe_name, declared_mime_type=declared_mime_type
+        )
+
+        page_count = 1
+        if descriptor.format == DocumentFormat.PDF:
+            info = validate_pdf_bytes(
+                file_bytes,
+                max_bytes=self.settings.max_upload_bytes,
+                max_pages=self.settings.max_pdf_pages,
+            )
+            page_count = info.page_count
+        else:
+            # Non-PDF formats parse into a single page — invoke the parser
+            # eagerly so unsupported encodings / binary payloads fail closed
+            # at upload time (not later inside the Celery pipeline).
+            parsed = descriptor.parser.parse(file_bytes, safe_name)
+            page_count = parsed.page_count or 1
+
+        digest = hashlib.sha256(file_bytes).hexdigest()
+        return UploadInspection(
+            safe_name=safe_name,
+            descriptor=descriptor,
+            page_count=page_count,
+            sha256=digest,
+        )
+
+    def _persist_new_document(
+        self,
+        *,
+        file_bytes: bytes,
+        inspection: UploadInspection,
+        title: str | None,
+        workspace_id: uuid.UUID,
+    ) -> Document:
+        if workspace_id is None:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "workspace_id is required for all Documents (Phase 2C).",
+            )
+        doc_id = uuid.uuid4()
+        mime_type = inspection.descriptor.mime_type
+        resolved = self.storage.put_document_bytes(
+            document_id=doc_id,
+            workspace_id=workspace_id,
+            data=file_bytes,
+            content_type=mime_type,
+        )
+
+        document = Document(
+            id=doc_id,
+            workspace_id=workspace_id,
+            title=title or inspection.safe_name,
+            original_filename=inspection.safe_name,
+            storage_key=resolved.canonical,
+            sha256=inspection.sha256,
+            mime_type=mime_type,
+            byte_size=len(file_bytes),
+            page_count=inspection.page_count,
+            status="queued",
+        )
+        job = IngestionJob(
+            id=uuid.uuid4(),
+            document_id=doc_id,
+            status="queued",
+            total_pages=inspection.page_count,
+            processed_pages=0,
+            failed_pages=0,
+            current_stage="queued",
+        )
+        self.repo.create(document)
+        self.db.add(job)
+        self.db.commit()
+        self.db.refresh(document)
+        return document
+
+    def _enqueue_reprocess_job(self, document: Document) -> IngestionJob:
         job = IngestionJob(
             id=uuid.uuid4(),
             document_id=document.id,
@@ -159,12 +432,3 @@ class DocumentService:
         self.db.add(job)
         self.db.commit()
         return job
-
-    def failed_pages(self, document_id: uuid.UUID) -> list[DocumentPage]:
-        return list(
-            self.db.scalars(
-                select(DocumentPage)
-                .where(DocumentPage.document_id == document_id, DocumentPage.status == "failed")
-                .order_by(DocumentPage.page_number)
-            )
-        )

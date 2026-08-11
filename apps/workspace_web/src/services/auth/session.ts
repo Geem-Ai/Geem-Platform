@@ -1,6 +1,6 @@
 /**
- * Auth session accessors for the API client.
- * Phase 1 will wire JWT/session refresh here.
+ * In-memory access-token store only.
+ * Refresh credentials live in HttpOnly cookies — never localStorage/sessionStorage.
  */
 
 export type AuthSession = {

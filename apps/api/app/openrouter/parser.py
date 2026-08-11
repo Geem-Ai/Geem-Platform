@@ -72,7 +72,12 @@ class OpenRouterDocumentParser:
             # Try error metadata for successful parse + failed generation
             annotations = self._extract_annotations_from_error(body)
 
-        if not annotations:
+        raw_markdown = self._annotations_to_markdown(annotations) if annotations else ""
+        if not raw_markdown:
+            # Some models/engines return page text in message.content without file annotations.
+            raw_markdown = self._message_content_markdown(body)
+
+        if not raw_markdown:
             category = ErrorCategory.PARSER_RATE_LIMITED if status == 429 else ErrorCategory.PARSER_FAILED
             raise AppError(
                 category,
@@ -81,7 +86,6 @@ class OpenRouterDocumentParser:
                 retryable=status in {429, 500, 502, 503, 504, 529},
             )
 
-        raw_markdown = self._annotations_to_markdown(annotations)
         plain_text = self._markdown_to_plain(raw_markdown)
         parser = f"openrouter:{self.settings.openrouter_pdf_engine}"
         parser_hash = hashlib.sha256(raw_markdown.encode("utf-8")).hexdigest()
@@ -100,6 +104,17 @@ class OpenRouterDocumentParser:
                 "latency_ms": meta.get("latency_ms"),
             },
         )
+
+    def _message_content_markdown(self, body: dict[str, Any] | None) -> str:
+        if not body:
+            return ""
+        for choice in body.get("choices") or []:
+            message = choice.get("message") or {}
+            content = message.get("content")
+            text = self._content_to_text(content)
+            if text.strip():
+                return text.strip()
+        return ""
 
     def _extract_annotations(self, body: dict[str, Any] | None) -> list[Any]:
         if not body:
@@ -191,6 +206,7 @@ class OpenRouterDocumentParser:
     def _markdown_to_plain(self, markdown: str) -> str:
         text = re.sub(r"</?file\b[^>]*>", " ", markdown, flags=re.IGNORECASE)
         text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
-        text = re.sub(r"[#*_>`\[\]()]", " ", text)
+        # Do not strip '_' — identifiers like GEEM_WORKSPACE_ALPHA_918273 must survive.
+        text = re.sub(r"[#*>`\[\]()]", " ", text)
         text = re.sub(r"\s+", " ", text)
         return text.strip()

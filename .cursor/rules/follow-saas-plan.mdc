@@ -1,0 +1,25 @@
+---
+description: Always follow the Geem multi-tenant SaaS plan and keep phase status current
+alwaysApply: true
+---
+
+# Follow the multi-tenant SaaS plan
+
+Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](../plans/multi-tenant_saas_plan_e28c049c.plan.md)
+
+## Required behavior
+
+- Treat that plan as the **source of truth** for scope, phase order, acceptance criteria, and locked decisions.
+- Work the current open phase; do not skip ahead unless the user explicitly asks.
+- Before implementing, read the plan frontmatter todos and the matching phase section.
+- Prefer locked plan choices over inventing alternate architecture (Expert as RAG unit, Metronic AI Concept only, keep `apps/web`, separate `dashboard_web` / `landpage_web`, shared-DB row tenancy, etc.).
+
+## Keep status current
+
+When work finishes (or a clear sub-slice like Phase 2A), **update the plan file** in the same session:
+
+1. Frontmatter todo `status`: `pending` | `in_progress` | `completed`
+2. Matching `### Phase N` section status line in the plan body
+3. Keep todo `content` descriptive (what the phase is / what remains), not empty
+
+Do not mark a phase `completed` until its acceptance criteria are met.

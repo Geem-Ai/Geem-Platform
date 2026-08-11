@@ -46,7 +46,7 @@ Reuse patterns from `apps/web` by **copying/adapting**, not runtime imports acro
 
 - Package boundaries under `apps/api/app/` (`common`, `identity`, `workspaces`, …) — implement domains per phase
 - `RequestContext` + middleware in `app.common`
-- `AUTH_REQUIRED=false` by default until identity bootstrap
+- `AUTH_REQUIRED=true` for SaaS Document/Query/Jobs after Phase 2C cutover (login/register/refresh/health remain public)
 - OpenAPI / product title: **Geem**
 - Alembic notes: `apps/api/migrations/README.md`
 

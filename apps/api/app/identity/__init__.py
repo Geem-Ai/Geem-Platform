@@ -1,1 +1,1 @@
-"""Identity domain (users, sessions, platform roles) — implemented in Phase 1."""
+"""Identity domain (users, sessions, platform roles, auth APIs)."""

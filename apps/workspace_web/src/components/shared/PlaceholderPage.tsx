@@ -13,7 +13,7 @@ export function PlaceholderPage({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col gap-3 p-6 md:p-8 max-w-3xl">
+    <div className="flex flex-col gap-3 p-6 md:p-8 w-full max-w-3xl ms-auto me-auto">
       <Helmet>
         <title>
           {t(titleKey)} · {t('app.name')}

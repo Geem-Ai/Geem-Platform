@@ -5,30 +5,88 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.common.soft_delete import SoftDeleteMixin
 from app.db.session import Base
 
+# Domain models registered on the same Base metadata (Phase 1A+).
+from app.identity.models import Session, User  # noqa: E402
+from app.workspaces.models import Workspace, WorkspaceMembership  # noqa: E402
+from app.experts.models import (  # noqa: E402
+    Expert,
+    ExpertDocument,
+    ExpertSource,
+    WorkspaceExpertGrant,
+)
 
-class Document(Base):
+__all__ = [
+    "Document",
+    "DocumentPage",
+    "Chunk",
+    "IngestionJob",
+    "UsageEvent",
+    "User",
+    "Session",
+    "Workspace",
+    "WorkspaceMembership",
+    "Expert",
+    "ExpertSource",
+    "ExpertDocument",
+    "WorkspaceExpertGrant",
+]
+
+
+class Document(Base, SoftDeleteMixin):
+    """Document ownership (Phase 2C — Workspace required).
+
+    - Every Document belongs to a Workspace (``workspace_id`` NOT NULL).
+    - Hash uniqueness is workspace-scoped for active rows.
+    - Soft-deleted rows (``deleted_at`` set) release the uniqueness slot.
+    - FK uses RESTRICT (not CASCADE) so workspace hard-delete cannot silently
+      wipe document history; workspace deletion/retention is a later phase.
+    - Soft-delete is the production lifecycle; MinIO/Qdrant purge is deferred.
+    """
+
     __tablename__ = "documents"
+    __table_args__ = (
+        Index(
+            "uq_documents_workspace_sha256_active",
+            "workspace_id",
+            "sha256",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_documents_workspace_created_at", "workspace_id", "created_at"),
+        Index("ix_documents_workspace_status", "workspace_id", "status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
-    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/pdf")
+    byte_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
@@ -40,6 +98,7 @@ class Document(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    workspace: Mapped[Workspace] = relationship()
     pages: Mapped[list[DocumentPage]] = relationship(back_populates="document", cascade="all, delete-orphan")
     chunks: Mapped[list[Chunk]] = relationship(back_populates="document", cascade="all, delete-orphan")
     jobs: Mapped[list[IngestionJob]] = relationship(back_populates="document", cascade="all, delete-orphan")

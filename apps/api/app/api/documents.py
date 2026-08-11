@@ -5,7 +5,6 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
@@ -16,11 +15,11 @@ from app.api.schemas import (
     JobResponse,
     ReprocessRequest,
 )
-from app.core.errors import AppError, ErrorCategory
-from app.db.models import DocumentPage, IngestionJob
 from app.db.session import get_db
+from app.documents.dependencies import DocumentAccess, get_document_access
 from app.documents.service import DocumentService
 from app.worker.tasks import enqueue_ingest
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -47,12 +46,15 @@ def _summary(svc: DocumentService, doc) -> DocumentSummary:
         original_filename=doc.original_filename,
         status=doc.status,
         page_count=doc.page_count,
+        byte_size=doc.byte_size,
+        mime_type=doc.mime_type,
         processed_pages=prog["processed_pages"],
         failed_pages=prog["failed_pages"],
         current_stage=prog["current_stage"],
         progress=prog["progress"],
         failure_reason=doc.failure_reason,
         created_at=doc.created_at,
+        updated_at=doc.updated_at,
         completed_at=doc.completed_at,
     )
 
@@ -61,42 +63,57 @@ def _summary(svc: DocumentService, doc) -> DocumentSummary:
 async def upload_document(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
+    access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> DocumentCreateResponse:
-    if file.content_type and file.content_type not in {
-        "application/pdf",
-        "application/x-pdf",
-        "binary/octet-stream",
-        "application/octet-stream",
-    }:
-        # Still allow if magic validates
-        pass
+    # Client-submitted workspace_id is ignored; ownership comes from RequestContext.
     data = await file.read()
     svc = DocumentService(db)
-    try:
-        doc = svc.upload(data, file.filename or "document.pdf", title=title)
-    except AppError as exc:
-        if exc.category == ErrorCategory.CONFLICT:
-            raise
-        raise
-    enqueue_ingest(str(doc.id), mode="full")
-    return DocumentCreateResponse(id=doc.id, status=doc.status, page_count=doc.page_count)
+    access.require_action(WorkspaceAction.UPLOAD_DOCUMENT)
+    doc = svc.upload_for_workspace(
+        access.workspace,
+        data,
+        file.filename or "document.pdf",
+        title=title,
+        declared_mime_type=file.content_type,
+    )
+    enqueue_ingest(
+        str(doc.id),
+        mode="full",
+        workspace_id=str(access.workspace.id),
+        actor_id=str(access.user.id),
+    )
+    return DocumentCreateResponse(
+        id=doc.id,
+        status=doc.status,
+        page_count=doc.page_count,
+        byte_size=doc.byte_size,
+    )
 
 
 @router.get("", response_model=list[DocumentSummary])
-def list_documents(db: Session = Depends(get_db)) -> list[DocumentSummary]:
+def list_documents(
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> list[DocumentSummary]:
     svc = DocumentService(db)
-    return [_summary(svc, d) for d in svc.list_documents()]
+    access.require_action(WorkspaceAction.LIST_DOCUMENTS)
+    docs = svc.list_for_workspace(access.workspace)
+    return [_summary(svc, d) for d in docs]
 
 
 @router.get("/{document_id}", response_model=DocumentDetail)
 def get_document(
     document_id: uuid.UUID,
     debug: bool = Query(default=False),
+    access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> DocumentDetail:
     svc = DocumentService(db)
-    doc = svc.get(document_id)
+    access.require_action(WorkspaceAction.READ_DOCUMENT)
+    doc = svc.get_for_workspace(access.workspace, document_id)
+    failed_pages = svc.failed_pages_for_workspace(access.workspace, document_id)
+
     prog = svc.progress(doc)
     failed = [
         FailedPageInfo(
@@ -104,17 +121,11 @@ def get_document(
             last_error=p.last_error,
             attempt_count=p.attempt_count,
         )
-        for p in svc.failed_pages(document_id)
+        for p in failed_pages
     ]
     debug_pages = None
     if debug:
-        pages = list(
-            db.scalars(
-                select(DocumentPage)
-                .where(DocumentPage.document_id == document_id)
-                .order_by(DocumentPage.page_number)
-            )
-        )
+        pages = svc.pages_for_document(document_id)
         debug_pages = [
             {
                 "page_number": p.page_number,
@@ -130,7 +141,6 @@ def get_document(
     return DocumentDetail(
         **base.model_dump(),
         sha256=doc.sha256,
-        mime_type=doc.mime_type,
         job_id=prog.get("job_id"),
         failed_page_details=failed,
         debug_pages=debug_pages,
@@ -138,9 +148,14 @@ def get_document(
 
 
 @router.get("/{document_id}/file")
-def download_file(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
+def download_file(
+    document_id: uuid.UUID,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> Response:
     svc = DocumentService(db)
-    data, filename = svc.get_file(document_id)
+    access.require_action(WorkspaceAction.READ_DOCUMENT)
+    data, filename = svc.get_file_for_workspace(access.workspace, document_id)
     return Response(
         content=data,
         media_type="application/pdf",
@@ -152,11 +167,18 @@ def download_file(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Resp
 def reprocess_document(
     document_id: uuid.UUID,
     body: ReprocessRequest,
+    access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> JobResponse:
     svc = DocumentService(db)
-    job = svc.reprocess(document_id, mode=body.mode)
-    enqueue_ingest(str(document_id), mode=body.mode)
+    access.require_action(WorkspaceAction.REPROCESS_DOCUMENT)
+    job = svc.reprocess_for_workspace(access.workspace, document_id, mode=body.mode)
+    enqueue_ingest(
+        str(document_id),
+        mode=body.mode,
+        workspace_id=str(access.workspace.id),
+        actor_id=str(access.user.id),
+    )
     return JobResponse(
         id=job.id,
         document_id=job.document_id,
@@ -170,7 +192,12 @@ def reprocess_document(
 
 
 @router.delete("/{document_id}")
-def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+def delete_document(
+    document_id: uuid.UUID,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> dict:
     svc = DocumentService(db)
-    svc.delete(document_id)
+    access.require_action(WorkspaceAction.DELETE_DOCUMENT)
+    svc.delete_for_workspace(access.workspace, document_id)
     return {"status": "deleted", "id": str(document_id)}

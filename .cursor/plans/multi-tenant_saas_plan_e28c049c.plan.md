@@ -1,19 +1,19 @@
 ---
 name: Multi-Tenant SaaS Plan
-overview: Evolve the ArabicRag MVP into Geem — a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; future siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp.
+overview: "Evolve the ArabicRag MVP into Geem — a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; future siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp."
 todos:
   - id: phase-0
     content: "Phase 0: Create apps/workspace_web (keep apps/web); Geem branding assets; backend foundations + Metronic prep"
-    status: pending
+    status: completed
   - id: phase-1
     content: "Phase 1: Identity/workspaces backend + Metronic AI shell (auth screens, sidebar, workspace switcher)"
-    status: pending
+    status: completed
   - id: phase-2
-    content: "Phase 2: Tenant-scoped documents/storage; light upload UI reuse (Experts remain primary)"
-    status: pending
+    content: "Phase 2: Tenant-scoped documents/storage complete (2A PG tenancy, 2B MinIO/Qdrant/Celery/RAG, 2C legacy migrate + AUTH_REQUIRED cutover + isolation gate PASS)."
+    status: completed
   - id: phase-3
-    content: "Phase 3: Experts domain + Experts UI (AI Concept design language) + Expert-scoped RAG"
-    status: pending
+    content: "Phase 3: Experts — 3A domain PASS + 3B Expert-scoped RAG PASS + 3C Experts UX PASS; Phase 3 complete. Do not start Phase 4 until requested."
+    status: completed
   - id: phase-4
     content: "Phase 4: Conversations + full Metronic AI Chat UX wired to SSE/RAG"
     status: pending
@@ -705,7 +705,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 2. Attach existing documents; create Expert “Legacy Library”
 3. Backfill Qdrant payloads / MinIO rekey (dual-read window)
 4. Composite sha256 uniqueness
-5. Enable `AUTH_REQUIRED` after bootstrap
+5. Enable `AUTH_REQUIRED` after bootstrap — **done in Phase 2C** (`AUTH_REQUIRED=true`; Document/Query/Jobs require Workspace auth)
 6. Frontend: create new `apps/workspace_web` alongside kept `apps/web`; build SaaS UI there (Phases 0→4)
 
 ---
@@ -713,6 +713,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 ## 26. Implementation phases (app stays functional after each)
 
 ### Phase 0 — Foundations + new `workspace_web` + Metronic preparation
+
+**Status:** completed
 
 **Goal:** Backend module layout / RequestContext / feature flags; scaffold new Workspace frontend; Metronic prep. Existing MVP at `apps/web` keeps working unchanged.
 
@@ -742,6 +744,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 1 — Identity + Workspaces + Metronic Workspace shell
 
+**Status:** completed
+
 **Goal:** Users, memberships, subdomain resolution; authenticated AI Concept–derived shell.
 
 **DB:** users, workspaces, memberships, sessions.
@@ -770,6 +774,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 2 — Tenant-scoped Documents + light upload UI
 
+**Status:** completed — Phase 2A/2B/2C done. Final knowledge isolation gate: **PASS**. `documents.workspace_id` NOT NULL; MinIO canonical Workspace keys; Qdrant `workspace_id` filter mandatory; Celery tenant context; legacy HTTP Document/Query/Jobs removed; `AUTH_REQUIRED=true`; legacy population migrated into `DEFAULT_WORKSPACE_SLUG` (`default`). Do **not** start Phase 3 until explicitly requested.
+
 **Goal:** Documents belong to workspaces; MinIO/Qdrant scoped.
 
 **DB:** `documents.workspace_id`, composite sha256, soft-delete; migrate rows.
@@ -783,6 +789,32 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 ---
 
 ### Phase 3 — Experts (major frontend milestone) + Expert-scoped RAG
+
+**Status:** completed — **Phase 3A PASS** + **Phase 3B PASS** + **Phase 3C PASS** (Experts UX + Knowledge Sources + Stateless Ask Expert). Do **not** start Phase 4 until explicitly requested.
+
+**Phase 3C delivered:**
+- `features/experts/` list/create/edit/detail + Knowledge Sources upload (PDF/TXT/MD)
+- Role-aware Owner/Admin mutate vs Member view/use; Platform Experts read-only ask
+- Workspace-facing Platform Expert DTO redacts `system_instructions` / `rag_config`; knowledge list empty for platform
+- Enriched Expert knowledge items + `knowledge_document_count`
+- Stateless `/chat?expert=` SSE Ask Expert (no Conversations); Expert selector; citations metadata-safe
+- EN/AR + workspace-scoped React Query keys; vitest coverage for capabilities/polling/file validation/query body
+
+**Phase 3B delivered:**
+- Product `/api/query` requires `expert_id` (extra fields including `document_ids` forbidden)
+- `ExpertRagScope(consumer_workspace_id, knowledge_workspace_id, expert_id, expert_type)`
+- Qdrant payload `expert_ids` keyword array + index; `search_expert` mandatory dual filter
+- PostgreSQL `expert_documents` remains SoT; membership synchronizer + reconciliation CLI
+- Candidate DB validation before rerank/LLM; stale payload drop
+- Expert upload (Workspace + Platform) with TXT/MD/PDF; reuse-on-hash linking
+- Live Docker E2E: TXT upload → Celery → Qdrant expert_ids → query answer + citation
+
+**Phase 3A delivered:**
+- Explicit Expert `type` (`workspace` | `platform`) with DB ownership check
+- `experts`, `expert_sources`, `expert_documents`, `workspace_expert_grants`
+- `workspaces.kind` (`tenant` | `system`) + Platform Knowledge system Workspace (`PLATFORM_KNOWLEDGE_WORKSPACE_SLUG`)
+- ExpertPolicy + ExpertAccessService; Workspace Expert APIs; minimal `/api/platform/...` admin scaffolding
+- Cross-Workspace / Platform Document isolation tests green
 
 **Goal:** Experts replace file multi-select as the product unit.
 
@@ -807,6 +839,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 4 — Conversations + full Metronic AI Chat
 
+**Status:** pending
+
 **Goal:** Persisted threads; Metronic AI Chat is the production Chat experience.
 
 **DB:** conversations, messages.
@@ -825,6 +859,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 5 — Entitlements + Usage ledger + Storage quotas + usage UI
 
+**Status:** pending
+
 **Goal:** Plans/entitlements/quotas without hardcoded plan checks; AI-style usage surfaces.
 
 **DB:** plans, entitlements, subscriptions (manual assign OK), credit accounts/ledger, period counters, storage events.
@@ -836,6 +872,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 ---
 
 ### Phase 6 — Billing gateways + billing UI
+
+**Status:** pending
 
 **Goal:** Multi-gateway, one enabled; subscribe + credit packs.
 
@@ -849,6 +887,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 7 — API keys + public Chat API + API UI
 
+**Status:** pending
+
 **Goal:** `/api/v1/chat` + workspace keys; Keys/Usage pages in shell.
 
 **Acceptance:** Key auth, revocation, metering attribution; UI for create/revoke/copy-once.
@@ -856,6 +896,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 ---
 
 ### Phase 8 — Platform Admin (separate scope / future `dashboard_web`)
+
+**Status:** pending
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -867,6 +909,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 9 — App Store foundations + Apps UI
 
+**Status:** pending
+
 **Goal:** apps + installations schema; workspace install stub UI using AI Concept visual language only.
 
 **Acceptance:** Install/uninstall recorded; config encrypted; no connector sync yet.
@@ -874,6 +918,8 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 ---
 
 ### Phase 10 — Hardening
+
+**Status:** pending
 
 Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass.
 

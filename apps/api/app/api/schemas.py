@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentCreateResponse(BaseModel):
     id: uuid.UUID
     status: str
     page_count: int
+    byte_size: int | None = None
 
 
 class DocumentSummary(BaseModel):
@@ -18,12 +19,15 @@ class DocumentSummary(BaseModel):
     original_filename: str
     status: str
     page_count: int
+    byte_size: int | None = None
+    mime_type: str | None = None
     processed_pages: int = 0
     failed_pages: int = 0
     current_stage: str | None = None
     progress: float = 0.0
     failure_reason: str | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
     completed_at: datetime | None = None
 
 
@@ -46,8 +50,18 @@ class ReprocessRequest(BaseModel):
 
 
 class QueryRequest(BaseModel):
+    """RAG query request (Phase 3B).
+
+    ``expert_id`` is required — every query targets a specific Expert whose
+    linked knowledge determines the retrieval set. ``document_ids`` is
+    intentionally rejected: filtering by Documents is a legacy per-request
+    concern; Expert scope is now the single source of truth.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     question: str
-    document_ids: list[uuid.UUID] | None = None
+    expert_id: uuid.UUID
     top_k: int | None = None
 
 

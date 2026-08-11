@@ -9,11 +9,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from starlette.concurrency import iterate_in_threadpool
 
-from app.api.schemas import JobResponse, QueryRequest, QueryResponse, Citation
+from app.api.schemas import Citation, JobResponse, QueryRequest, QueryResponse
 from app.core.errors import AppError, ErrorCategory
-from app.db.models import IngestionJob
+from app.db.models import Document, IngestionJob
 from app.db.session import SessionLocal, get_db
-from app.rag.service import RagService
+from app.documents.dependencies import DocumentAccess, get_document_access
+from app.experts.query_service import ExpertQueryService
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api", tags=["query"])
 
@@ -22,10 +24,28 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
+def _require_read(access: DocumentAccess) -> None:
+    # Reading knowledge — including through an Expert — requires the same
+    # Workspace read grant tenants need to view Documents.
+    access.require_action(WorkspaceAction.READ_DOCUMENT)
+
+
 @router.post("/query", response_model=QueryResponse)
-def query(body: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
-    svc = RagService(db)
-    result = svc.query(body.question, document_ids=body.document_ids, top_k=body.top_k)
+def query(
+    body: QueryRequest,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> QueryResponse:
+    _require_read(access)
+    svc = ExpertQueryService(db)
+    result = svc.query(
+        workspace=access.workspace,
+        membership=access.membership,
+        actor=access.user,
+        expert_id=body.expert_id,
+        question=body.question,
+        top_k=body.top_k,
+    )
     return QueryResponse(
         answer=result["answer"],
         insufficient_context=result["insufficient_context"],
@@ -38,15 +58,29 @@ def query(body: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
 
 
 @router.post("/query/stream")
-async def query_stream(body: QueryRequest) -> StreamingResponse:
+async def query_stream(
+    body: QueryRequest,
+    access: DocumentAccess = Depends(get_document_access),
+) -> StreamingResponse:
+    _require_read(access)
+    workspace = access.workspace
+    membership = access.membership
+    actor = access.user
+    expert_id = body.expert_id
+    question = body.question
+    top_k = body.top_k
+
     def generate() -> Iterator[str]:
         db = SessionLocal()
         try:
-            svc = RagService(db)
+            svc = ExpertQueryService(db)
             for item in svc.query_stream(
-                body.question,
-                document_ids=body.document_ids,
-                top_k=body.top_k,
+                workspace=workspace,
+                membership=membership,
+                actor=actor,
+                expert_id=expert_id,
+                question=question,
+                top_k=top_k,
             ):
                 yield _sse(item["event"], item["data"])
         except AppError as exc:
@@ -75,10 +109,23 @@ async def query_stream(body: QueryRequest) -> StreamingResponse:
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)) -> JobResponse:
+def get_job(
+    job_id: uuid.UUID,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> JobResponse:
+    """Job status — Workspace-owned documents only (Phase 2C)."""
     job = db.get(IngestionJob, job_id)
     if not job:
         raise AppError(ErrorCategory.NOT_FOUND, "Job not found")
+
+    document = db.get(Document, job.document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError(ErrorCategory.NOT_FOUND, "Job not found")
+
+    if document.workspace_id != access.workspace.id:
+        raise AppError(ErrorCategory.NOT_FOUND, "Job not found")
+
     return JobResponse(
         id=job.id,
         document_id=job.document_id,

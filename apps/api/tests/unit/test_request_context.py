@@ -53,10 +53,20 @@ def test_request_context_set_reset() -> None:
 
 def test_settings_phase0_class_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Assert Settings field defaults without process .env / env var coupling."""
-    for key in ("AUTH_REQUIRED", "APP_NAME", "CORS_ORIGINS"):
+    for key in (
+        "AUTH_REQUIRED",
+        "APP_NAME",
+        "CORS_ORIGINS",
+        "JWT_SECRET",
+        "BOOTSTRAP_ADMIN_EMAIL",
+    ):
         monkeypatch.delenv(key, raising=False)
 
     settings = Settings(_env_file=None)
-    assert settings.auth_required is False
+    assert settings.auth_required is True
+    assert settings.legacy_mvp_writes_enabled is False
     assert settings.app_name == "Geem"
     assert "http://localhost:5174" in settings.cors_origin_list
+    assert settings.is_local is True
+    assert "admin" in settings.reserved_slugs
+    assert settings.access_token_ttl_seconds == 900

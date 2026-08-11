@@ -1,5 +1,5 @@
-from __future__ import annotations
+"""Database package — session factory and model metadata."""
 
-from app.db.models import Chunk, Document, DocumentPage, IngestionJob, UsageEvent
+from app.db.session import Base, SessionLocal, get_db
 
-__all__ = ["Chunk", "Document", "DocumentPage", "IngestionJob", "UsageEvent"]
+__all__ = ["Base", "SessionLocal", "get_db"]

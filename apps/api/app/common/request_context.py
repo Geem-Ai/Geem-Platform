@@ -10,8 +10,9 @@ from uuid import UUID
 class RequestContext:
     """Per-request tenancy / identity snapshot.
 
-    Phase 0: structure only — auth and workspace resolution arrive in Phase 1.
-    Frontend hostname/slug is UX context; backend always re-resolves and authorizes.
+    Frontend hostname/slug is UX context only; backend always re-resolves and authorizes.
+    ``workspace_resolution`` records how the candidate was obtained (host|header_slug|
+    header_id|api_key|none) so Phase 7 API-key resolution can share this system.
     """
 
     request_id: str | None = None
@@ -20,6 +21,8 @@ class RequestContext:
     workspace_slug: str | None = None
     membership_role: str | None = None
     platform_role: str | None = None
+    session_id: UUID | None = None
+    workspace_resolution: str | None = None
     auth_required: bool = False
     extras: dict[str, Any] = field(default_factory=dict)
 
@@ -30,6 +33,10 @@ class RequestContext:
     @property
     def has_workspace(self) -> bool:
         return self.workspace_id is not None
+
+    @property
+    def is_platform_admin(self) -> bool:
+        return self.platform_role == "admin"
 
 
 _request_context: ContextVar[RequestContext | None] = ContextVar(

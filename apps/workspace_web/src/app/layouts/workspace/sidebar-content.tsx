@@ -58,19 +58,13 @@ function NavLinkItem({
 }
 
 export function SidebarContent() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isSidebarOpen } = useLayout();
   const collapsed = !isSidebarOpen;
+  const dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <ScrollArea
-      className={cn(
-        'shrink-0 w-full',
-        isSidebarOpen
-          ? 'h-[calc(100vh-1rem)] lg:h-[calc(100vh-9.5rem)]'
-          : 'h-[calc(100vh-9rem)]',
-      )}
-    >
+    <ScrollArea dir={dir} className="min-h-0 flex-1 w-full">
       <nav className="p-2.5 space-y-1" aria-label={t('shell.workspacePlaceholder')}>
         {workspaceNav.map((item) => (
           <div key={item.id} className="space-y-1">
