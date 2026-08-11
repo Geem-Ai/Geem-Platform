@@ -25,4 +25,10 @@ export const queryKeys = {
     workspaceQueryKey(workspaceId, 'experts', expertId),
   expertKnowledge: (workspaceId: string, expertId: string) =>
     workspaceQueryKey(workspaceId, 'experts', expertId, 'knowledge'),
+  conversations: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'conversations'),
+  conversation: (workspaceId: string, conversationId: string) =>
+    workspaceQueryKey(workspaceId, 'conversations', conversationId),
+  conversationMessages: (workspaceId: string, conversationId: string) =>
+    workspaceQueryKey(workspaceId, 'conversations', conversationId, 'messages'),
 };

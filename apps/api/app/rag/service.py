@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "rag_answer_v1.txt"
 GENERAL_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "general_fallback_v1.txt"
+GENERAL_CHAT_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "general_chat_v1.txt"
 
 
 def load_system_prompt() -> str:
@@ -45,6 +46,10 @@ def load_system_prompt() -> str:
 
 def load_general_prompt() -> str:
     return GENERAL_PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def load_general_chat_prompt() -> str:
+    return GENERAL_CHAT_PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def build_source_xml(chunks: list[dict]) -> str:
@@ -88,11 +93,11 @@ class RagService:
         self.reranker = reranker or OpenRouterRerankProvider(settings=self.settings)
         self.vectors = vectors or QdrantVectorStore(self.settings)
         self.chunker = PageChunker(self.settings)
-        prompt = load_system_prompt()
+        prompt = compose_expert_system_prompt(load_system_prompt(), "")
         self.chat = chat or OpenRouterChatProvider(settings=self.settings, system_prompt=prompt)
         self.general_chat = OpenRouterChatProvider(
             settings=self.settings,
-            system_prompt=load_general_prompt(),
+            system_prompt=compose_expert_system_prompt(load_general_prompt(), ""),
             client=self.chat.client,
         )
 
@@ -113,7 +118,7 @@ class RagService:
 
         if self._needs_citation_retry(validated):
             stricter = (
-                load_system_prompt()
+                compose_expert_system_prompt(load_system_prompt(), "")
                 + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
             )
             retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
@@ -162,7 +167,7 @@ class RagService:
             yield {"event": "status", "data": {"stage": "retrying"}}
             yield {"event": "replace", "data": {"text": ""}}
             stricter = (
-                load_system_prompt()
+                compose_expert_system_prompt(load_system_prompt(), "")
                 + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
             )
             retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
@@ -317,6 +322,107 @@ class RagService:
         if usage_id is not None:
             final_data["usage_event_id"] = str(usage_id)
         yield {"event": "final", "data": final_data}
+
+    def query_general_expert(
+        self,
+        question: str,
+        knowledge: ResolvedExpertKnowledge,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """LLM-only Expert answer (Geem General) — no retrieve/rerank/citations."""
+        question = (question or "").strip()
+        if not question:
+            raise AppError(ErrorCategory.VALIDATION, "question is required")
+        chat = self._build_general_expert_chat(knowledge)
+        result = chat.answer_general(question, history=history)
+        answer = (result.get("answer_markdown") or "").strip()
+        validated = {
+            "answer": answer,
+            "insufficient_context": False,
+            "citations": [],
+            "model": result.get("model"),
+            "general_answer": None,
+            "used_general_knowledge": True,
+            "general_model": result.get("model"),
+        }
+        usage_id = self._record_generation_usage(
+            validated,
+            result,
+            operation_type="general_expert",
+            scope=knowledge.scope,
+        )
+        if usage_id is not None:
+            validated["usage_event_id"] = str(usage_id)
+        return validated
+
+    def query_general_expert_stream(
+        self,
+        question: str,
+        knowledge: ResolvedExpertKnowledge,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream LLM-only Expert answer — SSE-compatible with ChatOrchestrator."""
+        question = (question or "").strip()
+        if not question:
+            raise AppError(ErrorCategory.VALIDATION, "question is required")
+
+        yield {"event": "status", "data": {"stage": "generating"}}
+        chat = self._build_general_expert_chat(knowledge)
+        result: dict | None = None
+        for event in chat.answer_general_stream(question, history=history):
+            etype = event.get("type")
+            if etype == "delta":
+                yield {"event": "token", "data": {"text": event.get("text") or ""}}
+            elif etype == "replace":
+                yield {"event": "replace", "data": {"text": event.get("text") or ""}}
+            elif etype == "done":
+                result = event.get("result")
+
+        if not result:
+            raise AppError(ErrorCategory.GENERATION_FAILED, "Stream ended without a result")
+
+        answer = (result.get("answer_markdown") or "").strip()
+        validated = {
+            "answer": answer,
+            "insufficient_context": False,
+            "citations": [],
+            "model": result.get("model"),
+            "general_answer": None,
+            "used_general_knowledge": True,
+            "general_model": result.get("model"),
+        }
+        usage_id = self._record_generation_usage(
+            validated,
+            result,
+            operation_type="general_expert",
+            scope=knowledge.scope,
+        )
+        final_data = {
+            "answer": validated["answer"],
+            "insufficient_context": False,
+            "citations": [],
+            "model": validated["model"],
+            "general_answer": None,
+            "used_general_knowledge": True,
+            "general_model": validated.get("general_model"),
+        }
+        if usage_id is not None:
+            final_data["usage_event_id"] = str(usage_id)
+        yield {"event": "final", "data": final_data}
+
+    def _build_general_expert_chat(
+        self, knowledge: ResolvedExpertKnowledge
+    ) -> OpenRouterChatProvider:
+        prompt = compose_expert_system_prompt(
+            load_general_chat_prompt(), knowledge.system_instructions
+        )
+        return OpenRouterChatProvider(
+            settings=self.settings,
+            system_prompt=prompt,
+            client=self.chat.client,
+        )
 
     def _compose_expert_prompt(self, knowledge: ResolvedExpertKnowledge) -> str:
         return compose_expert_system_prompt(

@@ -12,6 +12,7 @@ from app.experts.models import (
     Expert,
     ExpertAvailabilityMode,
     ExpertDocument,
+    ExpertKnowledgeMode,
     ExpertSource,
     ExpertSourceStatus,
     ExpertStatus,
@@ -19,7 +20,7 @@ from app.experts.models import (
     ExpertVisibility,
     WorkspaceExpertGrant,
 )
-from app.experts.prompt import compose_expert_system_prompt
+from app.experts.prompt import compose_expert_system_prompt, load_prompt_safety
 from app.experts.rag_config import EffectiveRagConfig, resolve_effective_rag_config
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "Expert",
     "ExpertAvailabilityMode",
     "ExpertDocument",
+    "ExpertKnowledgeMode",
     "ExpertSource",
     "ExpertSourceStatus",
     "ExpertStatus",
@@ -34,5 +36,6 @@ __all__ = [
     "ExpertVisibility",
     "WorkspaceExpertGrant",
     "compose_expert_system_prompt",
+    "load_prompt_safety",
     "resolve_effective_rag_config",
 ]

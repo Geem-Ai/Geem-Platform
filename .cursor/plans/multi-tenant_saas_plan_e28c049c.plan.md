@@ -15,8 +15,8 @@ todos:
     content: "Phase 3: Experts — 3A domain PASS + 3B Expert-scoped RAG PASS + 3C Experts UX PASS; Phase 3 complete. Do not start Phase 4 until requested."
     status: completed
   - id: phase-4
-    content: "Phase 4: 4A persistence PASS + 4B ChatOrchestrator/SSE PASS; 4C Metronic Chat UX remaining. Do not start 4C until requested."
-    status: in_progress
+    content: "Phase 4: 4A–4D complete (incl. Geem General Expert). Do not start Phase 5 until requested."
+    status: completed
   - id: phase-5
     content: "Phase 5: Entitlements/ledger/quotas + AI-style usage surfaces"
     status: pending
@@ -839,7 +839,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 4 — Conversations + full Metronic AI Chat
 
-**Status:** in_progress — **4A + 4B complete**; 4C Metronic Chat UX not started
+**Status:** completed — **4A + 4B + 4C + 4D PASS** (Phase 4 complete). Do not start Phase 5 until requested.
 
 **Goal:** Persisted threads; Metronic AI Chat is the production Chat experience.
 
@@ -847,7 +847,11 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 **4B (done):** `ChatOrchestrator` persists user/assistant Messages, revalidates Expert per turn, streams via ExpertQueryService→RagService SSE (extended with `message_start` / `message_complete` + IDs), retry without duplicate user message, deterministic titles, generation lock, bounded multi-turn history. `/api/query` kept.
 
-**DB:** conversations, messages.
+**4C (done):** Production Chat UX in `apps/workspace_web` — `/chat` + `/chat/:conversationId`, Metronic AI visual language (starter, bubbles, sidebar recent/pinned), real Conversations REST + SSE (`useChatStream`), Expert required + `?expert=` deep-link, markdown+citations, pin/rename/delete, EN/AR RTL, Geem assistant avatar, zero Metronic mock chat state, no `samples/` runtime imports.
+
+**4D (done):** Geem General Platform Expert — `knowledge_mode=general`, LLM-only (no RAG/rerank), `all_workspaces` + published, bootstrap via `ensure_geem_general_expert`, Chat picker pins General first and defaults to it when no deep-link/last Expert.
+
+**DB:** conversations, messages; `experts.knowledge_mode`.
 
 **Frontend:**
 - Port/adapt `chat-starter*`, `chat-messages`, `chat-message`, recent/pinned sidebar

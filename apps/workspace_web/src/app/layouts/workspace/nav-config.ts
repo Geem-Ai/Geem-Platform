@@ -20,8 +20,8 @@ export type NavItem = {
 };
 
 export const workspaceNav: NavItem[] = [
-  { id: 'overview', labelKey: 'nav.overview', to: '/', icon: LayoutDashboard },
   { id: 'chat', labelKey: 'nav.chat', to: '/chat', icon: MessageSquare },
+  { id: 'overview', labelKey: 'nav.overview', to: '/overview', icon: LayoutDashboard },
   { id: 'experts', labelKey: 'nav.experts', to: '/experts', icon: Sparkles },
   {
     id: 'api',

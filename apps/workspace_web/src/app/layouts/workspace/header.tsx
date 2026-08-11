@@ -28,7 +28,7 @@ export function Header() {
     <header className="transition-[start,end] duration-300 fixed top-0 start-0 end-0 z-50 flex items-center shrink-0 bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-muted h-[var(--header-height-mobile)] pe-[var(--removed-body-scroll-bar-size,0px)]">
       <div className="container-fluid grow flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/chat" className="flex items-center gap-2">
             <img
               src={geemAvatarUrl()}
               alt={t('app.name')}

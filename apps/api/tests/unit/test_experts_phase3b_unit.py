@@ -22,9 +22,17 @@ def test_compose_expert_system_prompt_keeps_base_and_instructions() -> None:
     assert "BASE RULES" in composed
     assert "Be a legal specialist." in composed
     assert composed.index("BASE RULES") < composed.index("Be a legal specialist.")
-    # Empty instructions → base only
-    assert compose_expert_system_prompt(base, "") == base
-    assert compose_expert_system_prompt(base, "   ") == base
+    # Safety footer is always last (prompt injection / model secrecy)
+    assert "Security and confidentiality" in composed
+    assert composed.index("Be a legal specialist.") < composed.index(
+        "Security and confidentiality"
+    )
+    # Empty instructions → base + safety only
+    empty = compose_expert_system_prompt(base, "")
+    assert empty.startswith("BASE RULES")
+    assert "Security and confidentiality" in empty
+    assert "## Expert-specific instructions" not in empty
+    assert compose_expert_system_prompt(base, "   ") == empty
 
 
 def test_rag_config_defaults_and_clamps() -> None:

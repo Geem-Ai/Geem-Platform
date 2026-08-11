@@ -51,6 +51,7 @@ def _expert_out(
         status=expert.status,
         visibility=expert.visibility,
         availability_mode=expert.availability_mode,
+        knowledge_mode=getattr(expert, "knowledge_mode", None) or "rag",
         created_by=expert.created_by,
         created_at=expert.created_at,
         updated_at=expert.updated_at,

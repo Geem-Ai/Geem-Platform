@@ -33,6 +33,10 @@ export type ApiErrorCode =
   | 'expert_knowledge_unavailable'
   | 'upload_type_rejected'
   | 'upload_too_large'
+  | 'conversation_not_found'
+  | 'message_not_found'
+  | 'conversation_busy'
+  | 'generation_failed'
   | 'network'
   | 'aborted'
   | 'unknown';
@@ -72,6 +76,10 @@ const KNOWN_CODES = new Set<string>([
   'expert_knowledge_unavailable',
   'upload_type_rejected',
   'upload_too_large',
+  'conversation_not_found',
+  'message_not_found',
+  'conversation_busy',
+  'generation_failed',
 ]);
 
 export class ApiError extends Error {
@@ -152,6 +160,10 @@ export function errorMessageKey(code: ApiErrorCode): string {
     expert_knowledge_unavailable: 'errors.expertKnowledgeUnavailable',
     upload_type_rejected: 'errors.uploadTypeRejected',
     upload_too_large: 'errors.uploadTooLarge',
+    conversation_not_found: 'errors.conversationNotFound',
+    message_not_found: 'errors.messageNotFound',
+    conversation_busy: 'errors.conversationBusy',
+    generation_failed: 'errors.generationFailed',
   };
   return map[code] ?? 'errors.generic';
 }

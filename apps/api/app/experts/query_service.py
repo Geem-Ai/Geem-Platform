@@ -34,7 +34,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.access import AuthorizedExpert, ExpertAccessService
 from app.experts.knowledge import ExpertKnowledgeResolver, ResolvedExpertKnowledge
-from app.experts.models import ExpertStatus, ExpertType
+from app.experts.models import ExpertKnowledgeMode, ExpertStatus, ExpertType
 from app.experts.policy import ExpertAction
 from app.identity.models import User
 from app.workspaces.models import Workspace, WorkspaceMembership
@@ -85,6 +85,12 @@ class ExpertQueryService:
             actor=actor,
             expert_id=expert_id,
         )
+        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            return self._rag.query_general_expert(
+                question=question,
+                knowledge=knowledge,
+                history=history,
+            )
         return self._rag.query_expert(
             question=question,
             knowledge=knowledge,
@@ -109,6 +115,13 @@ class ExpertQueryService:
             actor=actor,
             expert_id=expert_id,
         )
+        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            yield from self._rag.query_general_expert_stream(
+                question=question,
+                knowledge=knowledge,
+                history=history,
+            )
+            return
         yield from self._rag.query_expert_stream(
             question=question,
             knowledge=knowledge,
@@ -161,6 +174,10 @@ class ExpertQueryService:
         # 3. Resolve knowledge (scope + system_instructions + rag_config +
         # ready docs) — never before the checks above.
         knowledge = self.resolver.resolve(authorized)
+
+        # General Experts answer without linked knowledge (LLM-only).
+        if authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            return knowledge
 
         # 4. An Expert can be status=ready with 0 ready docs if all its docs
         # got soft-deleted after the last reconciliation — treat that as

@@ -86,6 +86,18 @@ class ExpertAvailabilityMode(str, enum.Enum):
     ALL_WORKSPACES = "all_workspaces"
 
 
+class ExpertKnowledgeMode(str, enum.Enum):
+    """How the Expert answers questions.
+
+    * ``rag`` — retrieve Expert knowledge, then answer with citations (default)
+    * ``general`` — LLM-only (no retrieval). Reserved for the system Geem General
+      Platform Expert; Workspace Experts must remain ``rag``.
+    """
+
+    RAG = "rag"
+    GENERAL = "general"
+
+
 class ExpertSourceType(str, enum.Enum):
     UPLOAD = "upload"
 
@@ -123,10 +135,22 @@ class Expert(Base, SoftDeleteMixin):
             "(type = 'platform' AND workspace_id IS NULL)",
             name="ck_experts_type_workspace_ownership",
         ),
+        CheckConstraint(
+            "knowledge_mode IN ('rag', 'general')",
+            name="ck_experts_knowledge_mode",
+        ),
         Index("ix_experts_workspace_id", "workspace_id"),
         Index("ix_experts_type", "type"),
         Index("ix_experts_status", "status"),
         Index("ix_experts_visibility", "visibility"),
+        Index(
+            "uq_experts_platform_general",
+            "knowledge_mode",
+            unique=True,
+            postgresql_where=text(
+                "type = 'platform' AND knowledge_mode = 'general' AND deleted_at IS NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -156,6 +180,12 @@ class Expert(Base, SoftDeleteMixin):
         default=ExpertAvailabilityMode.SELECTED_WORKSPACES.value,
         server_default=ExpertAvailabilityMode.SELECTED_WORKSPACES.value,
     )
+    knowledge_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=ExpertKnowledgeMode.RAG.value,
+        server_default=ExpertKnowledgeMode.RAG.value,
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -181,6 +211,10 @@ class Expert(Base, SoftDeleteMixin):
     @property
     def is_platform_expert(self) -> bool:
         return self.type == ExpertType.PLATFORM.value
+
+    @property
+    def is_general_knowledge_mode(self) -> bool:
+        return self.knowledge_mode == ExpertKnowledgeMode.GENERAL.value
 
 
 class ExpertSource(Base, SoftDeleteMixin):

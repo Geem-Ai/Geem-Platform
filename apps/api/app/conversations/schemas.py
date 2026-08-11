@@ -71,6 +71,7 @@ class ConversationExpertSummary(BaseModel):
     icon_url: str | None = None
     status: str
     visibility: str
+    knowledge_mode: str = "rag"
 
 
 class MessagePreviewOut(BaseModel):
