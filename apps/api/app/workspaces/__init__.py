@@ -1,1 +1,1 @@
-"""Workspaces domain (workspace, membership, settings, subdomain) — Phase 1."""
+"""Workspaces domain (workspace, membership, roles, slug, policies)."""

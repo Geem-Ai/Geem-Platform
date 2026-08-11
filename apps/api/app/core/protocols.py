@@ -44,14 +44,24 @@ class VectorStore(Protocol):
 
     def upsert(self, points: list[dict]) -> None: ...
 
-    def search(
+    def search_workspace(
         self,
+        *,
+        workspace_id,
         vector: list[float],
         top_k: int,
         document_ids: list[str] | None = None,
     ) -> list[dict]: ...
 
-    def delete_by_document(self, document_id: str) -> None: ...
+    def search_legacy(
+        self,
+        *,
+        vector: list[float],
+        top_k: int,
+        document_ids: list[str],
+    ) -> list[dict]: ...
+
+    def delete_by_document(self, document_id: str, *, workspace_id=None) -> None: ...
 
 
 @runtime_checkable

@@ -29,6 +29,18 @@ class JsonFormatter(logging.Formatter):
             "status",
             "openrouter_id",
             "usage",
+            "security_event",
+            "user_id",
+            "workspace_id",
+            "session_id",
+            "email",
+            "slug",
+            "reason",
+            "actor_id",
+            "target_user_id",
+            "role",
+            "revoked_count",
+            "old_session_id",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)

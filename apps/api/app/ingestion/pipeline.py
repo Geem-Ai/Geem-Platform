@@ -12,8 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import Chunk, Document, DocumentPage, IngestionJob, UsageEvent
+from app.experts.membership_sync import ExpertVectorMembershipSynchronizer
+from app.experts.status import ExpertStatusReconciler
 from app.ingestion.arabic_normalize import normalize_canonical, normalize_search, page_quality_diagnostics
 from app.ingestion.chunker import PageChunker, detect_repeated_headers_footers
+from app.ingestion.parsers import DocumentFormat, get_parser_for_format
 from app.ingestion.pdf_utils import split_page
 from app.openrouter.embeddings import OpenRouterEmbeddingProvider
 from app.openrouter.parser import OpenRouterDocumentParser
@@ -28,6 +31,12 @@ def _strip_file_wrappers(text: str | None) -> str:
         return ""
     cleaned = re.sub(r"</?file\b[^>]*>", " ", text, flags=re.IGNORECASE)
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
+def _hash_text(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
 def _utcnow() -> datetime:
@@ -55,6 +64,8 @@ class IngestionPipeline:
         embedder: OpenRouterEmbeddingProvider | None = None,
         vectors: QdrantVectorStore | None = None,
         chunker: PageChunker | None = None,
+        membership_sync: ExpertVectorMembershipSynchronizer | None = None,
+        status_reconciler: ExpertStatusReconciler | None = None,
     ) -> None:
         self.db = db
         self.settings = settings or get_settings()
@@ -63,6 +74,16 @@ class IngestionPipeline:
         self.embedder = embedder or OpenRouterEmbeddingProvider(settings=self.settings)
         self.vectors = vectors or QdrantVectorStore(self.settings)
         self.chunker = chunker or PageChunker(self.settings)
+        self._membership_sync = membership_sync
+        self._status_reconciler = status_reconciler or ExpertStatusReconciler(db)
+
+    @property
+    def membership_sync(self) -> ExpertVectorMembershipSynchronizer:
+        if self._membership_sync is None:
+            self._membership_sync = ExpertVectorMembershipSynchronizer(
+                self.db, self.settings, vectors=self.vectors
+            )
+        return self._membership_sync
 
     def run(self, document_id: uuid.UUID, mode: str = "full") -> None:
         document = self.db.get(Document, document_id)
@@ -84,14 +105,18 @@ class IngestionPipeline:
         job.status = "processing"
         job.started_at = job.started_at or _utcnow()
         job.attempt_count += 1
-        job.current_stage = "ocr"
+        # OCR only applies to PDFs; text/markdown skip straight to parsing.
+        job.current_stage = "ocr" if self._needs_ocr(document) else "parsing"
         self.db.commit()
 
         try:
             if mode == "full":
                 self._reset_derived(document)
             self._ensure_page_rows(document)
-            self._ocr_pages(document, job, failed_only=(mode == "failed_pages"))
+            if self._needs_ocr(document):
+                self._ocr_pages(document, job, failed_only=(mode == "failed_pages"))
+            else:
+                self._parse_text_document(document, job)
             self.db.refresh(document)
             pages = list(
                 self.db.scalars(select(DocumentPage).where(DocumentPage.document_id == document.id))
@@ -123,6 +148,11 @@ class IngestionPipeline:
             job.completed_at = _utcnow()
             job.last_error = None
             self.db.commit()
+
+            # After commit, project PG expert_documents onto Qdrant payload and
+            # recompute Expert.status for every linked Expert. Soft-fail so a
+            # transient Redis/Qdrant issue never rolls the pipeline back.
+            self._reconcile_expert_membership_after_ready(document)
         except Exception as exc:
             logger.exception("ingestion_failed", extra={"document_id": str(document_id)})
             document.status = "failed"
@@ -133,6 +163,11 @@ class IngestionPipeline:
             self.db.commit()
             raise
 
+    @staticmethod
+    def _needs_ocr(document: Document) -> bool:
+        mime = (document.mime_type or "").split(";", 1)[0].strip().lower()
+        return mime == "application/pdf" or not mime
+
     def _latest_job(self, document_id: uuid.UUID) -> IngestionJob | None:
         return self.db.scalar(
             select(IngestionJob)
@@ -142,8 +177,11 @@ class IngestionPipeline:
         )
 
     def _reset_derived(self, document: Document) -> None:
-        # Delete vectors first
-        self.vectors.delete_by_document(str(document.id))
+        # Delete vectors first (workspace-scoped when owned)
+        self.vectors.delete_by_document(
+            str(document.id),
+            workspace_id=document.workspace_id,
+        )
         for chunk in list(document.chunks):
             self.db.delete(chunk)
         for page in list(document.pages):
@@ -157,7 +195,8 @@ class IngestionPipeline:
                 select(DocumentPage).where(DocumentPage.document_id == document.id)
             )
         }
-        for n in range(1, document.page_count + 1):
+        target_count = max(1, document.page_count or 1)
+        for n in range(1, target_count + 1):
             if n not in existing:
                 self.db.add(
                     DocumentPage(
@@ -169,8 +208,98 @@ class IngestionPipeline:
                 )
         self.db.commit()
 
+    def _parse_text_document(self, document: Document, job: IngestionJob) -> None:
+        """Parse a non-PDF (text / markdown) Document into a single page.
+
+        Text uploads are pre-validated at HTTP upload time so this stays
+        cheap; still, all parser errors are captured on the page row so the
+        job surfaces the failure like an OCR failure would.
+        """
+        parser = get_parser_for_format(document.mime_type)
+        file_bytes, used_key = self.storage.get_document_bytes(
+            document_id=document.id,
+            workspace_id=document.workspace_id,
+            stored_key=document.storage_key,
+        )
+        logger.info(
+            "ingest_text_loaded",
+            extra={
+                "document_id": str(document.id),
+                "workspace_id": str(document.workspace_id) if document.workspace_id else None,
+                "storage_key": used_key,
+                "operation": "text_load",
+                "mime_type": document.mime_type,
+            },
+        )
+        page_row = self.db.scalar(
+            select(DocumentPage)
+            .where(DocumentPage.document_id == document.id, DocumentPage.page_number == 1)
+        )
+        if page_row is None:
+            page_row = DocumentPage(
+                id=uuid.uuid4(),
+                document_id=document.id,
+                page_number=1,
+                status="pending",
+            )
+            self.db.add(page_row)
+            self.db.flush()
+
+        page_row.attempt_count += 1
+        page_row.started_at = page_row.started_at or _utcnow()
+        try:
+            parsed = parser.parse(file_bytes, document.original_filename)
+        except AppError as exc:
+            page_row.status = "failed"
+            page_row.last_error = str(exc)[:2000]
+            job.failed_pages = 1
+            job.last_error = str(exc)[:2000]
+            self.db.commit()
+            return
+
+        if not parsed.pages:
+            page_row.status = "failed"
+            page_row.last_error = "empty_parser_output"
+            job.failed_pages = 1
+            self.db.commit()
+            return
+
+        parsed_page = parsed.pages[0]
+        raw_markdown = parsed_page.raw_markdown or ""
+        canonical = normalize_canonical(raw_markdown)
+        search = normalize_search(canonical)
+        diagnostics = page_quality_diagnostics(parsed_page.plain_text or canonical)
+
+        page_row.status = "parsed"
+        page_row.raw_markdown = raw_markdown
+        page_row.canonical_text = canonical
+        page_row.search_text = search
+        page_row.parser = f"text:{parsed.mime_type}"
+        page_row.parser_hash = _hash_text(raw_markdown)
+        page_row.text_length = diagnostics["text_length"]
+        page_row.arabic_ratio = diagnostics["arabic_ratio"]
+        page_row.last_error = None
+        page_row.completed_at = _utcnow()
+
+        job.processed_pages = 1
+        job.failed_pages = 0
+        self.db.commit()
+
     def _ocr_pages(self, document: Document, job: IngestionJob, failed_only: bool) -> None:
-        pdf_bytes = self.storage.get_bytes(document.storage_key)
+        pdf_bytes, used_key = self.storage.get_document_bytes(
+            document_id=document.id,
+            workspace_id=document.workspace_id,
+            stored_key=document.storage_key,
+        )
+        logger.info(
+            "ingest_pdf_loaded",
+            extra={
+                "document_id": str(document.id),
+                "workspace_id": str(document.workspace_id) if document.workspace_id else None,
+                "storage_key": used_key,
+                "operation": "ocr_load",
+            },
+        )
         pages = list(
             self.db.scalars(
                 select(DocumentPage)
@@ -361,22 +490,36 @@ class IngestionPipeline:
                 raise AppError(ErrorCategory.EMBEDDING_FAILED, "Inconsistent embedding dimensions")
 
         points = []
+        # Document.workspace_id is authoritative — never take workspace from request bodies.
+        workspace_payload = (
+            str(document.workspace_id) if document.workspace_id is not None else None
+        )
+        # Phase 3B: seed Qdrant expert_ids from PG at upsert time so a query
+        # that lands before the post-commit sync still filters correctly.
+        expert_ids_payload = [
+            str(eid)
+            for eid in self.membership_sync.list_active_expert_ids_for_document(document.id)
+        ]
         for chunk, vector in zip(all_chunks, vectors, strict=True):
+            payload = {
+                "chunk_id": str(chunk.id),
+                "document_id": str(document.id),
+                "document_title": document.title,
+                "page": chunk.page_number,
+                "ordinal": chunk.ordinal,
+                "heading_path": chunk.heading_path or [],
+                "embedding_model": chunk.embedding_model,
+                "canonical_text": chunk.canonical_text,
+                "search_text": chunk.search_text,
+                "expert_ids": expert_ids_payload,
+            }
+            if workspace_payload is not None:
+                payload["workspace_id"] = workspace_payload
             points.append(
                 {
                     "id": str(chunk.qdrant_point_id),
                     "vector": vector,
-                    "payload": {
-                        "chunk_id": str(chunk.id),
-                        "document_id": str(document.id),
-                        "document_title": document.title,
-                        "page": chunk.page_number,
-                        "ordinal": chunk.ordinal,
-                        "heading_path": chunk.heading_path or [],
-                        "embedding_model": chunk.embedding_model,
-                        "canonical_text": chunk.canonical_text,
-                        "search_text": chunk.search_text,
-                    },
+                    "payload": payload,
                 }
             )
         # Batch upsert
@@ -397,3 +540,36 @@ class IngestionPipeline:
         )
         job.current_stage = "indexed"
         self.db.commit()
+
+    def _reconcile_expert_membership_after_ready(self, document: Document) -> None:
+        """Best-effort Qdrant + Expert.status reconciliation after commit.
+
+        Sync failures are logged but never bubble up so a transient Redis /
+        Qdrant issue can't roll the ingestion pipeline back — retrieval is
+        still safe (mandatory workspace_id filter) and a background
+        reconciliation job will catch up.
+        """
+        try:
+            expert_ids = self.membership_sync.sync_document(document.id)
+        except Exception as exc:  # noqa: BLE001 — best-effort background sync
+            logger.warning(
+                "expert_membership_sync.pipeline_deferred",
+                extra={"document_id": str(document.id), "error": str(exc)},
+            )
+            expert_ids = [
+                str(eid)
+                for eid in self.membership_sync.list_active_expert_ids_for_document(document.id)
+            ]
+
+        for raw_id in expert_ids:
+            try:
+                expert_id = uuid.UUID(str(raw_id))
+            except (ValueError, TypeError):
+                continue
+            try:
+                self._status_reconciler.reconcile(expert_id)
+            except Exception as exc:  # noqa: BLE001 — status derived from PG state
+                logger.warning(
+                    "expert.status_reconcile_pipeline_failed",
+                    extra={"expert_id": str(expert_id), "error": str(exc)},
+                )

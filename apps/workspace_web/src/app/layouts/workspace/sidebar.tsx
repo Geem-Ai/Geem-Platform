@@ -7,9 +7,9 @@ export function Sidebar() {
   const { isSidebarOpen } = useLayout();
 
   return (
-    <aside className="fixed overflow-hidden bg-background rounded-xl top-2.5 bottom-2.5 start-2.5 z-20 transition-all duration-300 flex items-stretch shrink-0 w-(--sidebar-width) in-data-[sidebar-open=false]:w-(--sidebar-width-collapsed) border border-input">
+    <aside className="fixed overflow-hidden bg-background rounded-xl top-2.5 bottom-2.5 start-2.5 z-20 transition-all duration-300 flex flex-col shrink-0 w-(--sidebar-width) in-data-[sidebar-open=false]:w-(--sidebar-width-collapsed) border border-input">
       <div
-        className="grow shrink-0 transition-all duration-300 flex flex-col"
+        className="h-full min-h-0 transition-all duration-300 flex flex-col"
         style={{
           width: isSidebarOpen
             ? 'var(--sidebar-width)'

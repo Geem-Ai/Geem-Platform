@@ -92,7 +92,7 @@ export function LayoutProvider({
         sidebarToggle,
       }}
     >
-      <div data-slot="layout-wrapper" className="flex grow">
+      <div data-slot="layout-wrapper" className="flex grow min-w-0 w-full">
         <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
       </div>
     </LayoutContext.Provider>

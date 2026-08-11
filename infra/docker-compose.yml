@@ -127,7 +127,8 @@ services:
       context: ../apps/web
       dockerfile: Dockerfile
     environment:
-      VITE_API_URL: http://localhost:8000
+      # Browser calls the published API host (not the Docker service name).
+      VITE_API_URL: ${VITE_API_URL:-http://api.geem.dm:8000}
     ports:
       - "5173:5173"
     volumes:
@@ -142,8 +143,12 @@ services:
     build:
       context: ../apps/workspace_web
       dockerfile: Dockerfile
+    env_file:
+      - ../apps/workspace_web/.env
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: ${VITE_API_URL:-http://api.geem.dm:8000}
+      VITE_ROOT_DOMAIN: ${VITE_ROOT_DOMAIN:-geem.dm}
+      VITE_APP_ENV: ${VITE_APP_ENV:-local}
     ports:
       - "5174:5174"
     volumes:

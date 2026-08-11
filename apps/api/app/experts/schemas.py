@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class ExpertCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    system_instructions: str | None = Field(default=None, max_length=32000)
+    rag_config: dict[str, Any] | None = None
+    visibility: str | None = None
+    status: str | None = None
+    icon_url: str | None = Field(default=None, max_length=1024)
+    # Client-submitted workspace_id is ignored — ownership from RequestContext.
+
+
+class ExpertUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    system_instructions: str | None = Field(default=None, max_length=32000)
+    rag_config: dict[str, Any] | None = None
+    visibility: str | None = None
+    status: str | None = None
+    icon_url: str | None = Field(default=None, max_length=1024)
+    availability_mode: str | None = None
+
+
+class ExpertOut(BaseModel):
+    id: uuid.UUID
+    type: str
+    ownership: str
+    workspace_id: uuid.UUID | None
+    name: str
+    description: str | None
+    icon_url: str | None
+    # Workspace-facing Platform Experts omit instructions/config (Phase 3C privacy).
+    # Platform admin APIs continue to return full values.
+    system_instructions: str | None = None
+    rag_config: dict[str, Any] | None = None
+    status: str
+    visibility: str
+    availability_mode: str
+    created_by: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+    knowledge_document_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ExpertDocumentLinkRequest(BaseModel):
+    document_id: uuid.UUID
+    source_id: uuid.UUID | None = None
+
+
+class ExpertDocumentLinkOut(BaseModel):
+    id: uuid.UUID
+    expert_id: uuid.UUID
+    document_id: uuid.UUID
+    source_id: uuid.UUID | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ExpertKnowledgeItemOut(BaseModel):
+    """Workspace Expert knowledge row with Document display fields (Phase 3C)."""
+
+    id: uuid.UUID
+    expert_id: uuid.UUID
+    document_id: uuid.UUID
+    source_id: uuid.UUID | None
+    created_at: datetime
+    title: str
+    original_filename: str
+    status: str
+    mime_type: str | None
+    byte_size: int | None
+    page_count: int
+    failure_reason: str | None
+    source_type: str = "upload"
+
+
+class ExpertSourceCreateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    type: str = "upload"
+
+
+class ExpertSourceOut(BaseModel):
+    id: uuid.UUID
+    expert_id: uuid.UUID
+    type: str
+    name: str | None
+    status: str
+    config: dict[str, Any]
+    created_by: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ExpertUploadResponse(BaseModel):
+    """Response shape for ``POST /api/experts/{expert_id}/upload`` (Phase 3B)."""
+
+    expert_id: uuid.UUID
+    source_id: uuid.UUID
+    document_id: uuid.UUID
+    status: str
+    mime_type: str
+    page_count: int
+    reused: bool
+
+
+class PlatformExpertCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    system_instructions: str | None = Field(default=None, max_length=32000)
+    rag_config: dict[str, Any] | None = None
+    visibility: str | None = None
+    status: str | None = None
+    availability_mode: str | None = None
+    icon_url: str | None = Field(default=None, max_length=1024)
+
+
+class PlatformExpertGrantRequest(BaseModel):
+    workspace_id: uuid.UUID
+
+
+class WorkspaceExpertGrantOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    expert_id: uuid.UUID
+    created_by: uuid.UUID | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
