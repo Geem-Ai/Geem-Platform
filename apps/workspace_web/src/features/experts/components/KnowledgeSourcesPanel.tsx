@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import { useUnlinkExpertDocument, useReprocessDocument } from '../hooks/useExpertMutations';
-import { docStatusBadgeVariant, docStatusLabelKey } from '../lib/status';
+import { docStatusBadgeVariant, docStatusLabelKey, isProcessingDocStatus } from '../lib/status';
+import { KnowledgeIngestionProgress } from './KnowledgeIngestionProgress';
 import { RemoveKnowledgeDialog } from './RemoveKnowledgeDialog';
 import { UploadKnowledgeDialog } from './UploadKnowledgeDialog';
 
@@ -95,59 +96,65 @@ export function KnowledgeSourcesPanel({
 
       {items.length > 0 && (
         <div className="divide-y divide-border rounded-lg border border-border">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 justify-between"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {item.title || item.original_filename}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Badge
-                    variant={docStatusBadgeVariant(item.status)}
-                    appearance="light"
-                    size="sm"
-                  >
-                    {t(docStatusLabelKey(item.status))}
-                  </Badge>
-                  {item.page_count && item.page_count > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {item.page_count}p
-                    </span>
-                  )}
-                  {item.failure_reason && (
-                    <span className="text-xs text-destructive truncate max-w-[200px]">
-                      {item.failure_reason}
-                    </span>
-                  )}
+          {items.map((item) => {
+            const processing = isProcessingDocStatus(item.status);
+            return (
+              <div
+                key={item.id}
+                className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
+                    <p className="text-sm font-medium truncate">
+                      {item.title || item.original_filename}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      <Badge
+                        variant={docStatusBadgeVariant(item.status)}
+                        appearance="light"
+                        size="sm"
+                      >
+                        {t(docStatusLabelKey(item.status))}
+                      </Badge>
+                      {!processing && item.page_count != null && item.page_count > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {t('experts.pageCount', { count: item.page_count })}
+                        </span>
+                      )}
+                      {item.failure_reason && (
+                        <span className="text-xs text-destructive truncate max-w-[240px]">
+                          {item.failure_reason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <KnowledgeIngestionProgress item={item} />
                 </div>
-              </div>
-              {canManage && (
-                <div className="flex items-center gap-2 shrink-0">
-                  {item.status === 'failed' && (
+                {canManage && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.status === 'failed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleReprocess(item.document_id)}
+                        disabled={reprocessMutation.isPending}
+                      >
+                        {t('experts.reprocess')}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleReprocess(item.document_id)}
-                      disabled={reprocessMutation.isPending}
+                      onClick={() => setRemoveItem(item)}
+                      disabled={unlinkMutation.isPending || processing}
                     >
-                      {t('experts.reprocess')}
+                      {t('experts.remove')}
                     </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRemoveItem(item)}
-                    disabled={unlinkMutation.isPending}
-                  >
-                    {t('experts.remove')}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -157,11 +164,14 @@ export function KnowledgeSourcesPanel({
             expertId={expertId}
             open={uploadOpen}
             onOpenChange={setUploadOpen}
+            knowledgeItems={items}
           />
           <RemoveKnowledgeDialog
             item={removeItem}
             open={Boolean(removeItem)}
-            onOpenChange={(o) => { if (!o) setRemoveItem(null); }}
+            onOpenChange={(o) => {
+              if (!o) setRemoveItem(null);
+            }}
             onConfirm={handleRemove}
             isPending={unlinkMutation.isPending}
           />

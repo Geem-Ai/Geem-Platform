@@ -21,14 +21,17 @@ function makeItem(status: string): ExpertKnowledgeItem {
 }
 
 describe('POLL_INTERVAL_MS', () => {
-  it('is 3000', () => {
-    expect(POLL_INTERVAL_MS).toBe(3000);
+  it('is 2000', () => {
+    expect(POLL_INTERVAL_MS).toBe(2000);
   });
 });
 
 describe('shouldPollKnowledge', () => {
   it('returns true when any item is pending', () => {
     expect(shouldPollKnowledge([makeItem('pending')])).toBe(true);
+  });
+  it('returns true when any item is queued', () => {
+    expect(shouldPollKnowledge([makeItem('queued')])).toBe(true);
   });
   it('returns true when any item is processing', () => {
     expect(shouldPollKnowledge([makeItem('ready'), makeItem('processing')])).toBe(true);

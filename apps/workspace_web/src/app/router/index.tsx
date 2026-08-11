@@ -9,9 +9,6 @@ import { PlaceholderPage } from '@/components/shared/PlaceholderPage';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { AskExpertPage } from '@/features/chat/pages/AskExpertPage';
-import { CreateExpertPage } from '@/features/experts/pages/CreateExpertPage';
-import { EditExpertPage } from '@/features/experts/pages/EditExpertPage';
-import { ExpertDetailPage } from '@/features/experts/pages/ExpertDetailPage';
 import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { MembersPage } from '@/features/members/pages/MembersPage';
 import { CreateWorkspacePage } from '@/features/workspaces/pages/CreateWorkspacePage';
@@ -35,10 +32,11 @@ export function AppRouter() {
           <Route element={<WorkspaceLayout />}>
             <Route index element={<OverviewPage />} />
             <Route path="chat" element={<AskExpertPage />} />
+            {/* Experts list hosts Metronic-style create/edit/view Sheets */}
             <Route path="experts" element={<ExpertsPage />} />
-            <Route path="experts/new" element={<CreateExpertPage />} />
-            <Route path="experts/:expertId" element={<ExpertDetailPage />} />
-            <Route path="experts/:expertId/edit" element={<EditExpertPage />} />
+            <Route path="experts/new" element={<ExpertsPage />} />
+            <Route path="experts/:expertId/edit" element={<ExpertsPage />} />
+            <Route path="experts/:expertId" element={<ExpertsPage />} />
             <Route path="api" element={<Navigate to="/api/keys" replace />} />
             <Route
               path="api/keys"

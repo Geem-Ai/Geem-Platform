@@ -83,6 +83,11 @@ class ExpertKnowledgeItemOut(BaseModel):
     page_count: int
     failure_reason: str | None
     source_type: str = "upload"
+    # Ingestion progress (from latest IngestionJob) — for Expert knowledge UX.
+    processed_pages: int = 0
+    failed_pages: int = 0
+    current_stage: str | None = None
+    progress: float = 0.0
 
 
 class ExpertSourceCreateRequest(BaseModel):
