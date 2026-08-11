@@ -1,7 +1,10 @@
 import type { ExpertKnowledgeItem } from '@/services/api/types';
 import { isProcessingDocStatus, isProcessingExpertStatus } from './status';
 
-export const POLL_INTERVAL_MS = 3000;
+export const POLL_INTERVAL_MS = 2000;
+
+/** Faster poll while pages are actively advancing (PDF OCR). */
+export const POLL_INTERVAL_ACTIVE_MS = 1500;
 
 /** Returns true if any knowledge item is still processing/pending. */
 export function shouldPollKnowledge(items: ExpertKnowledgeItem[]): boolean {

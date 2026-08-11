@@ -17,6 +17,7 @@ export function expertStatusLabelKey(status: string): string {
 
 export function docStatusLabelKey(status: string): string {
   const map: Record<string, string> = {
+    queued: 'experts.docStatus.queued',
     pending: 'experts.docStatus.pending',
     processing: 'experts.docStatus.processing',
     ready: 'experts.docStatus.ready',
@@ -40,6 +41,7 @@ export function docStatusBadgeVariant(status: string): BadgeVariant {
   const map: Record<string, BadgeVariant> = {
     ready: 'success',
     processing: 'warning',
+    queued: 'warning',
     pending: 'secondary',
     failed: 'destructive',
   };
@@ -51,5 +53,18 @@ export function isProcessingExpertStatus(status: string): boolean {
 }
 
 export function isProcessingDocStatus(status: string): boolean {
-  return status === 'pending' || status === 'processing';
+  return status === 'queued' || status === 'pending' || status === 'processing';
+}
+
+export function ingestionStageLabelKey(stage: string | null | undefined): string | null {
+  if (!stage) return null;
+  const map: Record<string, string> = {
+    ocr: 'experts.stage.ocr',
+    parsing: 'experts.stage.parsing',
+    chunking: 'experts.stage.chunking',
+    embedding: 'experts.stage.embedding',
+    indexed: 'experts.stage.indexed',
+    ready: 'experts.stage.ready',
+  };
+  return map[stage] ?? null;
 }

@@ -154,6 +154,11 @@ export type ExpertKnowledgeItem = {
   page_count: number | null;
   failure_reason: string | null;
   source_type: string | null;
+  processed_pages?: number;
+  failed_pages?: number;
+  current_stage?: string | null;
+  /** 0–1 ingestion progress from latest job. */
+  progress?: number;
 };
 
 export type ExpertUploadResponse = {

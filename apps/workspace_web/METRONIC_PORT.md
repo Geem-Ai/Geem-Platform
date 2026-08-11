@@ -80,6 +80,21 @@ Adapted AI Concept patterns (no sample imports, no mock data):
 - Citation list (metadata-only; Platform citations never link to raw Documents)
 - Dialog/Sheet patterns already ported for upload + confirmations
 
+### Experts create/edit/view Sheets (visual pattern only)
+
+Adapted from Metronic **store-inventory** product list interaction (read-only reference):
+
+- `samples/.../store-inventory/pages/components/product-form-sheet.tsx`
+- `samples/.../store-inventory/pages/components/product-details-analytics-sheet.tsx`
+- `samples/.../store-inventory/pages/tables/product-list.tsx`
+
+Ported into Geem as:
+
+- `features/experts/components/ExpertFormSheet.tsx` (create + edit)
+- `features/experts/components/ExpertDetailSheet.tsx` (view)
+
+Pattern kept: list page stays mounted; floating inset `Sheet` (`inset-5`, rounded, header/body/footer) opens for add/edit/view. Inventory domain (SKU, stock, variants, charts) was **not** ported.
+
 Still deferred to Phase 4: conversation persistence, recent/pinned chats, Metronic `chat-message` / `chat-starter*` full chrome, history sidebar.
 
 ## Intentionally excluded

@@ -166,30 +166,41 @@ def list_expert_documents(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> list[ExpertKnowledgeItemOut]:
-    items = ExpertService(db).list_knowledge_items(
+    from app.documents.service import DocumentService
+
+    svc = ExpertService(db)
+    doc_svc = DocumentService(db)
+    items = svc.list_knowledge_items(
         workspace=access.workspace,
         membership=access.membership,
         actor=access.user,
         expert_id=expert_id,
     )
-    return [
-        ExpertKnowledgeItemOut(
-            id=link.id,
-            expert_id=link.expert_id,
-            document_id=link.document_id,
-            source_id=link.source_id,
-            created_at=link.created_at,
-            title=document.title,
-            original_filename=document.original_filename,
-            status=document.status,
-            mime_type=document.mime_type,
-            byte_size=document.byte_size,
-            page_count=document.page_count,
-            failure_reason=document.failure_reason,
-            source_type="upload",
+    out: list[ExpertKnowledgeItemOut] = []
+    for link, document in items:
+        prog = doc_svc.progress(document)
+        out.append(
+            ExpertKnowledgeItemOut(
+                id=link.id,
+                expert_id=link.expert_id,
+                document_id=link.document_id,
+                source_id=link.source_id,
+                created_at=link.created_at,
+                title=document.title,
+                original_filename=document.original_filename,
+                status=document.status,
+                mime_type=document.mime_type,
+                byte_size=document.byte_size,
+                page_count=document.page_count,
+                failure_reason=document.failure_reason,
+                source_type="upload",
+                processed_pages=int(prog["processed_pages"] or 0),
+                failed_pages=int(prog["failed_pages"] or 0),
+                current_stage=prog["current_stage"],
+                progress=float(prog["progress"] or 0.0),
+            )
         )
-        for link, document in items
-    ]
+    return out
 
 
 @router.post("/{expert_id}/documents", response_model=ExpertDocumentLinkOut, status_code=201)
