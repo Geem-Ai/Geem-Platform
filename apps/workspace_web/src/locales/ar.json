@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "Geem",
+    "tagline": "مساحة عمل ذكاء اصطناعي بالعربية أولاً"
+  },
+  "nav": {
+    "overview": "نظرة عامة",
+    "chat": "محادثة",
+    "experts": "الخبراء",
+    "api": "واجهة البرمجة",
+    "apiKeys": "مفاتيح API",
+    "usage": "الاستخدام",
+    "apps": "التطبيقات",
+    "members": "الأعضاء",
+    "storage": "التخزين",
+    "billing": "الفوترة",
+    "subscription": "الاشتراك",
+    "credits": "الأرصدة",
+    "billingHistory": "سجل الفوترة",
+    "settings": "الإعدادات"
+  },
+  "shell": {
+    "workspacePlaceholder": "مساحة العمل",
+    "workspaceSwitcherHint": "تبديل مساحة العمل في المرحلة 1",
+    "accountPlaceholder": "الحساب",
+    "accountHint": "تسجيل الدخول في المرحلة 1",
+    "themeLight": "الوضع الفاتح",
+    "themeDark": "الوضع الداكن",
+    "themeSystem": "حسب النظام",
+    "language": "اللغة",
+    "languageEn": "الإنجليزية",
+    "languageAr": "العربية",
+    "comingSoon": "قريباً",
+    "pagePlaceholder": "هذه منطقة هيكل مؤقتة للمرحلة 0أ.",
+    "loading": "جارٍ التحميل...",
+    "close": "إغلاق",
+    "expandSidebar": "توسيع الشريط الجانبي",
+    "collapseSidebar": "طي الشريط الجانبي"
+  },
+  "chat": {
+    "title": "محادثة",
+    "placeholder": "واجهة المحادثة تُبنى في المرحلة 4. الهيكل ونظام التصميم جاهزان."
+  },
+  "overview": {
+    "title": "نظرة عامة",
+    "description": "مرحباً بك في مساحة عمل Geem. تظهر الشاشات المصادقة في مراحل لاحقة."
+  },
+  "errors": {
+    "notFound": "الصفحة غير موجودة",
+    "generic": "حدث خطأ ما"
+  }
+}

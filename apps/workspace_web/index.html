@@ -1,0 +1,32 @@
+<!doctype html>
+<html class="h-full" lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/webp" href="/brand/geem-avatar.webp" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Geem — Arabic-first AI workspace" />
+    <meta name="author" content="Geem" />
+    <title>Geem</title>
+    <script>
+      (function () {
+        try {
+          const theme = localStorage.getItem('geem-theme') || 'system';
+          const prefersDark = window.matchMedia(
+            '(prefers-color-scheme: dark)',
+          ).matches;
+          const isDarkMode =
+            theme === 'dark' || (theme === 'system' && prefersDark);
+          if (isDarkMode) document.documentElement.classList.add('dark');
+
+          const locale = localStorage.getItem('geem-locale') || 'en';
+          document.documentElement.lang = locale;
+          document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="text-foreground bg-background flex h-full text-base antialiased">
+    <div class="flex grow" id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
