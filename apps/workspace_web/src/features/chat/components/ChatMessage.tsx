@@ -11,6 +11,7 @@ import { errorMessageKey } from '@/services/api/errors';
 import type { ApiErrorCode } from '@/services/api/errors';
 import { CitationList } from './CitationList';
 import { MessageRenderer } from './MessageRenderer';
+import { ThinkingStatus } from './ThinkingStatus';
 import type { ChatUiMessage } from '../types';
 
 interface ChatMessageProps {
@@ -96,15 +97,19 @@ export function ChatMessage({
               {message.content ? (
                 <MessageRenderer content={message.content} />
               ) : isStreaming ? (
-                <span className="text-muted-foreground">{t('chat.thinking')}</span>
+                <>
+                  <span className="sr-only" role="status" aria-live="polite">
+                    {t('chat.thinking')}
+                  </span>
+                  <ThinkingStatus />
+                </>
               ) : null}
-              {isStreaming && (
+              {isStreaming && message.content ? (
                 <span
                   className="inline-block w-2 h-4 ms-1 bg-current animate-pulse align-middle"
-                  aria-live="polite"
-                  aria-label={t('chat.sending')}
+                  aria-hidden
                 />
-              )}
+              ) : null}
               {cancelled && !isStreaming && (
                 <p className="text-xs text-muted-foreground mt-2 italic">
                   {t('chat.cancelled')}

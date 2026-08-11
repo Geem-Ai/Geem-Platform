@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/lib/i18n';
 import { ChatMessage } from './components/ChatMessage';
@@ -10,6 +10,28 @@ import type { Expert } from '@/services/api/types';
 function withI18n(ui: React.ReactElement) {
   return render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
 }
+
+function mockReducedMotion(reduced: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: reduced && query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+beforeEach(() => {
+  mockReducedMotion(false);
+});
+
 
 const readyExpert: Expert = {
   id: 'exp-1',
@@ -204,6 +226,24 @@ describe('ChatMessage citations + retry', () => {
     expect(img.getAttribute('src')).toContain('/brand/geem-avatar.webp');
     expect(img.getAttribute('alt')).toBe('Geem');
   });
+
+  it('shows typewriter thinking status while streaming with no content', () => {
+    withI18n(
+      <ChatMessage
+        message={{
+          id: 'a-stream',
+          role: 'assistant',
+          content: '',
+          citations: [],
+          status: 'streaming',
+          created_at: '2026-01-01T00:00:00Z',
+        }}
+        isStreaming
+      />,
+    );
+    expect(screen.getByTestId('thinking-status')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/Geem is thinking/i);
+  });
 });
 
 describe('CitationList', () => {
@@ -241,5 +281,121 @@ describe('Arabic RTL chat smoke', () => {
     expect(i18n.language).toBe('ar');
     expect(document.documentElement.dir).toBe('rtl');
     await i18n.changeLanguage('en');
+  });
+});
+
+describe('Sample prompt suggestions', () => {
+  it('renders sample prompts on the starter', async () => {
+    await i18n.changeLanguage('en');
+    mockReducedMotion(true);
+    withI18n(
+      <ChatStarter
+        experts={[readyExpert]}
+        selectedExpertId="exp-1"
+        onSelectExpert={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const list = screen.getByTestId('sample-prompts');
+    expect(list).toBeInTheDocument();
+    const chips = within(list).getAllByTestId(/sample-prompt-/);
+    expect(chips).toHaveLength(5);
+    expect(chips.every((c) => c.getAttribute('data-done') === 'true')).toBe(true);
+  });
+
+  it('submits when a finished chip is clicked with an Expert selected', async () => {
+    await i18n.changeLanguage('en');
+    mockReducedMotion(true);
+    const onSubmit = vi.fn();
+    withI18n(
+      <ChatStarter
+        experts={[readyExpert]}
+        selectedExpertId="exp-1"
+        onSelectExpert={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const chip = screen.getByTestId('sample-prompt-0');
+    const promptText = chip.textContent?.trim() ?? '';
+    expect(promptText.length).toBeGreaterThan(0);
+    fireEvent.click(chip);
+
+    expect(onSubmit).toHaveBeenCalledWith(promptText);
+    const input = screen.getByLabelText(/Ask Legal a question/i);
+    expect(input).toHaveValue(promptText);
+  });
+
+  it('only fills the composer when no Expert is selected', async () => {
+    await i18n.changeLanguage('en');
+    mockReducedMotion(true);
+    const onSubmit = vi.fn();
+    withI18n(
+      <ChatStarter
+        experts={[readyExpert]}
+        selectedExpertId={null}
+        onSelectExpert={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const chip = screen.getByTestId('sample-prompt-0');
+    const promptText = chip.textContent?.trim() ?? '';
+    fireEvent.click(chip);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Select an Expert to start/i)).toHaveValue(
+      promptText,
+    );
+  });
+
+  it('does not pause typewriter from autofocus (P1)', async () => {
+    await i18n.changeLanguage('en');
+    mockReducedMotion(false);
+    vi.useFakeTimers();
+    withI18n(
+      <ChatStarter
+        experts={[readyExpert]}
+        selectedExpertId="exp-1"
+        onSelectExpert={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Autofocus runs on mount; typewriter should still advance.
+    for (let i = 0; i < 20; i += 1) {
+      await vi.advanceTimersByTimeAsync(30);
+    }
+    const list = screen.getByTestId('sample-prompts');
+    const chips = within(list).queryAllByTestId(/sample-prompt-/);
+    expect(chips.length).toBeGreaterThan(0);
+    expect((chips[0]?.textContent ?? '').replace(/\s/g, '').length).toBeGreaterThan(1);
+    vi.useRealTimers();
+  });
+
+  it('user focus pauses and hides incomplete chips (P2)', async () => {
+    await i18n.changeLanguage('en');
+    mockReducedMotion(false);
+    vi.useFakeTimers();
+    withI18n(
+      <ChatStarter
+        experts={[readyExpert]}
+        selectedExpertId="exp-1"
+        onSelectExpert={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    await vi.advanceTimersByTimeAsync(30 * 3);
+    const input = screen.getByLabelText(/Ask Legal a question/i);
+    fireEvent.focus(input);
+
+    // Incomplete chip dropped; may be zero finished chips yet.
+    const chips = within(screen.getByTestId('sample-prompts')).queryAllByTestId(
+      /sample-prompt-/,
+    );
+    expect(chips.every((c) => c.getAttribute('data-done') === 'true')).toBe(true);
+    vi.useRealTimers();
   });
 });

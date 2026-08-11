@@ -13,6 +13,10 @@ vi.mock('@/services/api/conversations', () => ({
 }));
 
 import { useChatStream, titlePollConfig } from './useChatStream';
+import {
+  clearActiveChatTurn,
+  ensureActiveChatTurn,
+} from '../lib/activeChatTurn';
 
 function createWrapper() {
   const client = new QueryClient({
@@ -32,10 +36,12 @@ describe('useChatStream', () => {
     streamMock.mockReset();
     retryMock.mockReset();
     titlePollConfig.delaysMs = [];
+    clearActiveChatTurn('c1');
   });
 
   afterEach(() => {
     titlePollConfig.delaysMs = defaultTitlePollDelays;
+    clearActiveChatTurn('c1');
   });
 
   it('optimistically appends user + assistant and reconciles IDs without duplicates', async () => {
@@ -246,6 +252,34 @@ describe('useChatStream', () => {
     expect(retryMock).toHaveBeenCalledWith(
       'c1',
       'a1',
+      expect.any(Object),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('starts the network stream after an optimistic first-message seed', async () => {
+    streamMock.mockImplementation(async () => undefined);
+    ensureActiveChatTurn('c1', 'First from starter');
+
+    const { result } = renderHook(
+      () =>
+        useChatStream({
+          workspaceId: 'ws1',
+          conversationId: 'c1',
+          initialMessages: [],
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    expect(result.current.isStreaming).toBe(true);
+
+    await act(async () => {
+      await result.current.send('First from starter');
+    });
+
+    expect(streamMock).toHaveBeenCalledWith(
+      'c1',
+      'First from starter',
       expect.any(Object),
       expect.any(AbortSignal),
     );

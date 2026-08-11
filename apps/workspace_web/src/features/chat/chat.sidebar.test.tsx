@@ -114,6 +114,27 @@ describe('ConversationLists Metronic actions', () => {
     expect(screen.getByText(/No pinned chats/i)).toBeInTheDocument();
   });
 
+  it('truncates long conversation titles and keeps the actions menu visible', async () => {
+    await i18n.changeLanguage('ar');
+    const longTitle =
+      'ما الحد الأقصى لفترة التجربة وفق نظام العمل السعودي وما هي الاستثناءات المحتملة لهذه القاعدة';
+    wrap(
+      <RecentConversations
+        conversations={[{ ...sample, id: 'c-long', title: longTitle }]}
+      />,
+    );
+
+    const row = screen.getByTestId('conversation-row-c-long');
+    expect(row.className).toMatch(/grid-cols-\[minmax\(0,1fr\)_auto\]/);
+    const link = row.querySelector('a');
+    expect(link).toHaveClass('truncate');
+    expect(link).toHaveAttribute('title', longTitle);
+    expect(link).toHaveTextContent(longTitle);
+    expect(
+      screen.getByTestId('conversation-actions-c-long'),
+    ).toBeInTheDocument();
+  });
+
   it('renders conversation list shimmer rows', async () => {
     await i18n.changeLanguage('en');
     wrap(<ConversationListsShimmer />);

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { geemAvatarUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
-import { ChatComposer } from './ChatComposer';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
+import { ChatComposer } from './ChatComposer';
+import { SamplePromptSuggestions } from './SamplePromptSuggestions';
 
 interface ChatStarterProps {
   experts: Expert[];
@@ -31,10 +33,16 @@ export function ChatStarter({
   className,
 }: ChatStarterProps) {
   const { t } = useTranslation();
+  const [draft, setDraft] = useState('');
+  const [promptsPaused, setPromptsPaused] = useState(false);
   const selected = selectedExpertId
     ? experts.find((e) => e.id === selectedExpertId)
     : null;
   const selectedName = selected ? localizeExpertDisplay(selected, t).name : null;
+
+  function pausePrompts() {
+    setPromptsPaused(true);
+  }
 
   return (
     <div
@@ -73,9 +81,18 @@ export function ChatStarter({
           )}
           <ChatComposer
             variant="starter"
-            onSubmit={onSubmit}
+            onSubmit={(content) => {
+              pausePrompts();
+              onSubmit(content);
+            }}
             disabled={disabled || !selected || submitting}
             isStreaming={submitting}
+            value={draft}
+            onValueChange={(next) => {
+              setDraft(next);
+              if (next.length > 0) pausePrompts();
+            }}
+            onFocus={pausePrompts}
             placeholder={
               selectedName
                 ? t('chat.askHint', { name: selectedName })
@@ -94,6 +111,16 @@ export function ChatStarter({
               {t('chat.expertRequired')}
             </p>
           )}
+
+          <SamplePromptSuggestions
+            paused={promptsPaused}
+            onSelect={(prompt) => {
+              pausePrompts();
+              setDraft(prompt);
+              if (!selected || disabled || submitting) return;
+              onSubmit(prompt);
+            }}
+          />
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-8 max-w-md">

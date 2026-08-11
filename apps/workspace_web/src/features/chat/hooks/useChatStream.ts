@@ -15,13 +15,21 @@ import type {
   Citation,
   Conversation,
 } from '@/services/api/types';
-import { newClientId, type ChatUiMessage } from '../types';
+import { type ChatUiMessage } from '../types';
+import {
+  clearActiveChatTurn,
+  buildOptimisticTurnMessages,
+  getActiveChatTurn,
+  patchActiveChatTurn,
+  publishActiveChatTurn,
+  subscribeActiveChatTurn,
+} from '../lib/activeChatTurn';
 
 const EMPTY_MESSAGES: ChatUiMessage[] = [];
 
 /** Soft-poll delays while a background LLM title job commits. Mutable for tests. */
 export const titlePollConfig: { delaysMs: number[] } = {
-  delaysMs: [600, 1600, 3200],
+  delaysMs: [800, 1600, 2800, 4500],
 };
 
 function textFromPayload(data: unknown): string {
@@ -83,22 +91,75 @@ export function useChatStream({
   initialMessages = EMPTY_MESSAGES,
 }: UseChatStreamOptions) {
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<ChatUiMessage[]>(initialMessages);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const seeded = getActiveChatTurn(conversationId);
+  const [messages, setMessagesState] = useState<ChatUiMessage[]>(
+    () => seeded?.messages ?? initialMessages,
+  );
+  const [isStreaming, setIsStreamingState] = useState(
+    () => seeded?.isStreaming ?? false,
+  );
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<ApiErrorCode | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const conversationIdRef = useRef(conversationId);
   const messagesRef = useRef(messages);
+  const isStreamingRef = useRef(isStreaming);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
   useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
+
+  /** Keep Strict Mode remounts in sync with an in-flight turn. */
+  useEffect(() => {
+    return subscribeActiveChatTurn(() => {
+      const turn = getActiveChatTurn(conversationIdRef.current);
+      if (!turn) return;
+      // External store is source of truth while a turn is published.
+      setMessagesState(turn.messages);
+      setIsStreamingState(turn.isStreaming);
+      messagesRef.current = turn.messages;
+      isStreamingRef.current = turn.isStreaming;
+    });
+  }, []);
+
+  const setMessages = useCallback(
+    (update: ChatUiMessage[] | ((prev: ChatUiMessage[]) => ChatUiMessage[])) => {
+      const prev = messagesRef.current;
+      const next = typeof update === 'function' ? update(prev) : update;
+      messagesRef.current = next;
+      if (getActiveChatTurn(conversationId)) {
+        patchActiveChatTurn(conversationId, {
+          messages: next,
+          isStreaming: isStreamingRef.current,
+        });
+      }
+      setMessagesState(next);
+    },
+    [conversationId],
+  );
+
+  const setIsStreaming = useCallback(
+    (next: boolean) => {
+      isStreamingRef.current = next;
+      setIsStreamingState(next);
+      if (getActiveChatTurn(conversationId)) {
+        patchActiveChatTurn(conversationId, {
+          isStreaming: next,
+          messages: messagesRef.current,
+        });
+      }
+    },
+    [conversationId],
+  );
 
   /** Sync when persisted history arrives / changes (e.g. after reload). */
   const historyFingerprint = initialMessages
@@ -107,13 +168,14 @@ export function useChatStream({
 
   useEffect(() => {
     if (isStreaming) return;
+    if (getActiveChatTurn(conversationId)?.isStreaming) return;
     // Avoid wiping optimistic/local transcript when the messages query is still empty
     // (common right after abort/send before refetch settles).
     if (initialMessages.length === 0 && messagesRef.current.length > 0) return;
-    setMessages(initialMessages);
+    setMessagesState(initialMessages);
     // fingerprint captures identity/content of server history; avoid depending on array identity
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyFingerprint, isStreaming]);
+  }, [historyFingerprint, isStreaming, conversationId]);
 
   const abort = useCallback(() => {
     abortRef.current?.abort();
@@ -134,21 +196,34 @@ export function useChatStream({
     ]);
   }, [conversationId, queryClient, workspaceId]);
 
-  /** Clear local stream state when workspace or conversation changes. */
+  /**
+   * Abort + reset only when workspace/conversation identity actually changes.
+   * Do not abort in effect cleanups — React Strict Mode remounts would cancel the
+   * first-message stream and leave the title stuck on "New conversation".
+   */
+  const prevScopeRef = useRef<{
+    workspaceId: string;
+    conversationId: string;
+  } | null>(null);
   useEffect(() => {
+    const prev = prevScopeRef.current;
+    prevScopeRef.current = { workspaceId, conversationId };
+    if (prev === null) return;
+    if (
+      prev.workspaceId === workspaceId &&
+      prev.conversationId === conversationId
+    ) {
+      return;
+    }
     abort();
+    clearActiveChatTurn(prev.conversationId);
     setIsStreaming(false);
     setError(null);
     setErrorCode(null);
-    setMessages(initialMessages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on scope change
+    const nextSeed = getActiveChatTurn(conversationId);
+    setMessagesState(nextSeed?.messages ?? initialMessages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope identity only
   }, [workspaceId, conversationId, abort]);
-
-  useEffect(() => {
-    return () => {
-      abort();
-    };
-  }, [abort]);
 
   const handleStreamEvents = useCallback(
     (
@@ -303,42 +378,53 @@ export function useChatStream({
         );
       }
     },
-    [conversationId, queryClient, workspaceId],
+    [conversationId, queryClient, setMessages, workspaceId],
   );
 
   const send = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed) return;
+
+      // Optimistic first-message seed (ChatStartPage → ChatPage) sets isStreaming
+      // before the network call. Allow that resume; block only a real in-flight stream.
+      const seeded = getActiveChatTurn(conversationId);
+      const resumingOptimisticSeed =
+        seeded !== null &&
+        seeded.content === trimmed &&
+        abortRef.current === null;
+      if (isStreamingRef.current && !resumingOptimisticSeed) return;
+      if (abortRef.current) return;
 
       abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const userClientId = newClientId('client-user');
-      const assistantClientId = newClientId('client-assistant');
-      const now = new Date().toISOString();
+      let userClientId: string;
+      let assistantClientId: string;
+      let nextMessages: ChatUiMessage[];
 
-      const optimisticUser: ChatUiMessage = {
-        id: userClientId,
-        clientId: userClientId,
-        role: 'user',
-        content: trimmed,
-        citations: [],
-        status: 'completed',
-        created_at: now,
-      };
-      const optimisticAssistant: ChatUiMessage = {
-        id: assistantClientId,
-        clientId: assistantClientId,
-        role: 'assistant',
-        content: '',
-        citations: [],
-        status: 'streaming',
-        created_at: now,
-      };
+      if (seeded && seeded.content === trimmed) {
+        userClientId = seeded.userClientId;
+        assistantClientId = seeded.assistantClientId;
+        nextMessages = seeded.messages;
+      } else {
+        const built = buildOptimisticTurnMessages(trimmed);
+        userClientId = built.userClientId;
+        assistantClientId = built.assistantClientId;
+        nextMessages = [...messagesRef.current, ...built.messages];
+        publishActiveChatTurn({
+          conversationId,
+          content: trimmed,
+          messages: nextMessages,
+          isStreaming: true,
+          userClientId,
+          assistantClientId,
+        });
+      }
 
-      setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
+      setMessagesState(nextMessages);
+      messagesRef.current = nextMessages;
       setIsStreaming(true);
       setError(null);
       setErrorCode(null);
@@ -356,7 +442,9 @@ export function useChatStream({
           trimmed,
           {
             onEvent(event, data) {
-              if (event === 'message_complete') turnCompleted = true;
+              if (event === 'message_complete' || event === 'final') {
+                turnCompleted = true;
+              }
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,
@@ -421,6 +509,7 @@ export function useChatStream({
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+        clearActiveChatTurn(conversationId);
         await invalidateConversationCaches();
         if (expectTitle && turnCompleted) {
           const scopedId = conversationId;
@@ -438,8 +527,9 @@ export function useChatStream({
       conversationId,
       handleStreamEvents,
       invalidateConversationCaches,
-      isStreaming,
       queryClient,
+      setIsStreaming,
+      setMessages,
       workspaceId,
     ],
   );
@@ -487,7 +577,9 @@ export function useChatStream({
           assistantMessageId,
           {
             onEvent(event, data) {
-              if (event === 'message_complete') turnCompleted = true;
+              if (event === 'message_complete' || event === 'final') {
+                turnCompleted = true;
+              }
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,

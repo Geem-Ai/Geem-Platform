@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   useLocation,
   useNavigate,
@@ -17,6 +17,14 @@ import {
   useConversationMessages,
 } from '../hooks/useConversation';
 import { useChatStream } from '../hooks/useChatStream';
+import { ensureActiveChatTurn, getActiveChatTurn } from '../lib/activeChatTurn';
+import {
+  beginPendingChatSend,
+  clearPendingChatMessage,
+  endPendingChatSend,
+  peekPendingChatMessage,
+  setPendingChatMessage,
+} from '../lib/pendingChatMessage';
 import { toChatUiMessage } from '../types';
 import {
   useCurrentUserInitials,
@@ -40,6 +48,19 @@ export function ChatPage() {
     [messagesQuery.data],
   );
 
+  // Seed user + AI thinking cards as soon as we know the pending first message.
+  // (Also seeded in ChatStartPage before navigate; this covers refresh/remount.)
+  if (conversationId) {
+    const fromState = (location.state as ChatPendingLocationState | null)
+      ?.pendingMessage?.trim();
+    const pending =
+      fromState || peekPendingChatMessage(conversationId)?.trim() || null;
+    if (pending) {
+      setPendingChatMessage(conversationId, pending);
+      ensureActiveChatTurn(conversationId, pending);
+    }
+  }
+
   const {
     messages,
     isStreaming,
@@ -54,21 +75,39 @@ export function ChatPage() {
     initialMessages,
   });
 
-  // Survive React Strict Mode remounts for the starter → conversation handoff.
-  const pendingStartedKey = useRef<string | null>(null);
-
-  // First message from /chat starter — send once after mount.
+  // First message from /chat starter — send once (survives Strict Mode remount).
+  // Do not gate on isStreaming: ensureActiveChatTurn seeds it true before the
+  // network call; beginPendingChatSend + send()'s abortRef guard duplicates.
   useEffect(() => {
-    if (!conversationId || isStreaming) return;
-    const state = location.state as ChatPendingLocationState | null;
-    const pending = state?.pendingMessage?.trim();
+    if (!conversationId) return;
+
+    const fromState = (location.state as ChatPendingLocationState | null)
+      ?.pendingMessage?.trim();
+    if (fromState) {
+      setPendingChatMessage(conversationId, fromState);
+      ensureActiveChatTurn(conversationId, fromState);
+      // Clear router state so refresh/back doesn't re-send; storage keeps the handoff.
+      void navigate(location.pathname, { replace: true, state: {} });
+    }
+
+    const pending = peekPendingChatMessage(conversationId)?.trim();
     if (!pending) return;
-    const key = `${conversationId}:${pending}`;
-    if (pendingStartedKey.current === key) return;
-    pendingStartedKey.current = key;
-    void navigate(location.pathname, { replace: true, state: {} });
-    void send(pending);
-  }, [conversationId, isStreaming, location.pathname, location.state, navigate, send]);
+    if (!beginPendingChatSend(conversationId)) return;
+
+    void send(pending)
+      .then(() => {
+        clearPendingChatMessage(conversationId);
+      })
+      .finally(() => {
+        endPendingChatSend(conversationId);
+      });
+  }, [
+    conversationId,
+    location.pathname,
+    location.state,
+    navigate,
+    send,
+  ]);
 
   // Workspace switch / inaccessible conversation → back to new chat.
   useEffect(() => {
@@ -112,9 +151,17 @@ export function ChatPage() {
       messages.find((m) => m.role === 'assistant' && m.status === 'streaming')?.id
     : null;
 
+  const hasPendingFirstMessage = Boolean(
+    conversationId &&
+      (peekPendingChatMessage(conversationId) ||
+        getActiveChatTurn(conversationId)?.isStreaming),
+  );
+
   const loadingHistory =
     (conversationQuery.isLoading || messagesQuery.isLoading) &&
-    messages.length === 0;
+    messages.length === 0 &&
+    !hasPendingFirstMessage &&
+    !isStreaming;
 
   return (
     <div

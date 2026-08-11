@@ -2,7 +2,6 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
@@ -160,8 +159,8 @@ function ChatHistorySections({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <div className="space-y-3.5 pb-2" data-testid="chat-sidebar-history">
-      <div className="px-2.5">
+    <div className="min-w-0 max-w-full space-y-3.5 pb-2" data-testid="chat-sidebar-history">
+      <div className="min-w-0 px-2.5">
         <NewChatButton />
       </div>
 
@@ -185,7 +184,7 @@ function ChatHistorySections({ collapsed }: { collapsed: boolean }) {
 
       <Separator className="mx-2.5 opacity-80" />
 
-      <div className="px-2.5">
+      <div className="min-w-0 px-2.5">
         <QuickActions />
       </div>
     </div>
@@ -199,12 +198,18 @@ export function SidebarContent() {
   const dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <ScrollArea dir={dir} className="min-h-0 flex-1 w-full">
-      <div className="flex flex-col gap-1 py-2" data-testid={`sidebar-mode-${sidebarMode}`}>
+    <div
+      dir={dir}
+      className="min-h-0 min-w-0 flex-1 w-full overflow-y-auto overflow-x-hidden"
+    >
+      <div
+        className="flex flex-col gap-1 py-2 min-w-0 w-full max-w-full"
+        data-testid={`sidebar-mode-${sidebarMode}`}
+      >
         {sidebarMode === 'chat' ? (
           <ChatHistorySections collapsed={collapsed} />
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <div className="px-2.5 pb-1">
               <BackToChats collapsed={collapsed} />
             </div>
@@ -213,6 +218,6 @@ export function SidebarContent() {
           </div>
         )}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
