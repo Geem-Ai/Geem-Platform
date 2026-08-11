@@ -156,6 +156,12 @@ def test_sanitize_generated_title_strips_wrappers() -> None:
 
     assert sanitize_generated_title('  "Policy overview"  ') == "Policy overview"
     assert sanitize_generated_title("Title: Hiring process") == "Hiring process"
+    assert sanitize_generated_title("Language:") == ""
+    assert sanitize_generated_title("Language: Commercial register basics") == (
+        "Commercial register basics"
+    )
+    assert sanitize_generated_title("اللغة:") == ""
+    assert sanitize_generated_title("Arabic") == ""
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +211,7 @@ def test_stream_turn_persists_messages_and_citations(
     assert "token" in names
     assert "final" in names
     assert "message_complete" in names
-    # Title is generated after unlock (background); not held on the SSE stream.
+    # Title is generated in parallel with the answer (background); not held on the SSE stream.
     assert "title" not in names
 
     start = next(d for n, d in events if n == "message_start")

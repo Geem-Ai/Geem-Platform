@@ -5,10 +5,19 @@ import {
   AvatarFallback,
 } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { geemAvatarUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
 import { errorMessageKey } from '@/services/api/errors';
 import type { ApiErrorCode } from '@/services/api/errors';
+import {
+  formatMessageDateTime,
+  formatMessageDateTimeExact,
+} from '../lib/formatMessageDateTime';
 import { CitationList } from './CitationList';
 import { MessageRenderer } from './MessageRenderer';
 import { ThinkingStatus } from './ThinkingStatus';
@@ -33,7 +42,7 @@ export function ChatMessage({
   onRetry,
   className,
 }: ChatMessageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isUser = message.role === 'user';
   const failed =
     message.status === 'failed' || Boolean(message.errorMessage);
@@ -43,6 +52,11 @@ export function ChatMessage({
     (failed || cancelled) &&
     onRetry &&
     !message.id.startsWith('client-');
+  const timestamp = formatMessageDateTime(message.created_at, i18n.language);
+  const timestampExact = formatMessageDateTimeExact(message.created_at);
+  const metaLabel = isUser
+    ? userLabel || null
+    : userLabel || t('app.name');
 
   return (
     <div
@@ -56,8 +70,8 @@ export function ChatMessage({
       data-status={message.status}
     >
       {isUser ? (
-        <Avatar className="size-9 shrink-0">
-          <AvatarFallback className="bg-primary/15 text-primary text-xs font-semibold">
+        <Avatar className="size-10 shrink-0 rounded-md">
+          <AvatarFallback className="rounded-md bg-primary/15 text-primary text-xs font-semibold">
             {userInitials}
           </AvatarFallback>
         </Avatar>
@@ -65,31 +79,31 @@ export function ChatMessage({
         <img
           src={geemAvatarUrl()}
           alt={t('app.name')}
-          className="size-8 shrink-0 rounded-full object-cover bg-primary/10"
+          className="size-10 shrink-0 rounded-none object-contain bg-primary/5"
           data-testid="geem-assistant-avatar"
         />
       )}
 
       <div
         className={cn(
-          'flex flex-col gap-1 flex-1 min-w-0',
+          'flex flex-col gap-1.5 flex-1 min-w-0',
           isUser && 'items-end',
         )}
       >
         <div
           className={cn(
-            'rounded-2xl px-5 py-3.5 text-sm shadow-sm relative',
+            'rounded-2xl px-5 py-4 text-sm shadow-sm relative',
             isUser
               ? 'bg-primary text-primary-foreground max-w-[85%] rounded-ee-sm'
               : 'bg-muted/50 text-foreground max-w-[90%] rounded-es-sm',
           )}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words leading-relaxed">
+            <p className="whitespace-pre-wrap break-words leading-7">
               {message.content}
             </p>
           ) : failed && !message.content ? (
-            <p className="text-destructive" role="alert">
+            <p className="text-destructive leading-7" role="alert">
               {message.errorMessage || t('chat.responseFailed')}
             </p>
           ) : (
@@ -145,10 +159,36 @@ export function ChatMessage({
           )}
         </div>
 
-        {!isUser && (
-          <span className="text-xs text-muted-foreground px-1">
-            {userLabel ? null : t('app.name')}
-          </span>
+        {(metaLabel || timestamp) && (
+          <div
+            className={cn(
+              'flex items-center gap-1.5 text-xs text-muted-foreground px-1',
+              isUser && 'flex-row-reverse',
+            )}
+          >
+            {metaLabel && <span>{metaLabel}</span>}
+            {metaLabel && timestamp && (
+              <span aria-hidden className="opacity-50">
+                ·
+              </span>
+            )}
+            {timestamp && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <time
+                    dateTime={message.created_at}
+                    data-testid="message-timestamp"
+                    className="cursor-default underline-offset-2 hover:underline"
+                  >
+                    {timestamp}
+                  </time>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="font-mono tabular-nums">
+                  {timestampExact}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         )}
       </div>
     </div>

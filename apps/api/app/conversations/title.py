@@ -1,8 +1,9 @@
-"""Conversation titles — post-turn LLM naming (Phase 4 polish).
+"""Conversation titles — parallel LLM naming for the first user message.
 
-After the first successful turn, title generation runs in the background
-(Celery, with a thread fallback) so the chat lock and SSE stream are not held
-open for the LLM call. The client discovers the title via conversation refetch.
+Title generation is scheduled as soon as the first user message is accepted
+(alongside answer streaming), so the sidebar can update before the reply
+finishes. Celery (with a thread fallback) keeps the chat lock and SSE stream
+free. The client discovers the title via conversation refetch / soft-poll.
 """
 
 from __future__ import annotations
@@ -50,6 +51,24 @@ def derive_conversation_title(
     return f"{truncated.rstrip()}…"
 
 
+_JUNK_TITLES = frozenset(
+    {
+        "language",
+        "title",
+        "arabic",
+        "english",
+        "topic",
+        "subject",
+        "عنوان",
+        "اللغة",
+        "عربي",
+        "العربية",
+        "الإنجليزية",
+        "موضوع",
+    }
+)
+
+
 def sanitize_generated_title(
     text: str,
     *,
@@ -58,9 +77,20 @@ def sanitize_generated_title(
     """Normalize LLM output into a single-line sidebar title."""
     cleaned = (text or "").strip()
     cleaned = cleaned.strip("\"'`“”‘’")
-    cleaned = re.sub(r"^(title|عنوان)\s*[:：\-–—]\s*", "", cleaned, flags=re.I)
+    # Strip common instruction-echo prefixes (Language:, Title:, اللغة:, …).
+    cleaned = re.sub(
+        r"^(title|عنوان|language|اللغة|topic|subject|موضوع)\s*[:：\-–—]\s*",
+        "",
+        cleaned,
+        flags=re.I,
+    )
     cleaned = " ".join(cleaned.split())
     if not cleaned:
+        return ""
+    # Reject bare labels the model sometimes echoes from the system prompt.
+    if cleaned.casefold() in _JUNK_TITLES:
+        return ""
+    if len(cleaned) < 3:
         return ""
     if max_length >= 1 and len(cleaned) > max_length:
         return derive_conversation_title(cleaned, max_length=max_length)
@@ -87,7 +117,7 @@ def generate_conversation_title(
         assistant = (assistant_message or "").strip()
         if assistant:
             user_parts.append(f"Assistant reply (excerpt):\n{assistant[:800]}")
-        user_parts.append("Title:")
+        user_parts.append("Return only the conversation title.")
         payload = {
             "model": model,
             "messages": [
@@ -126,10 +156,10 @@ def persist_generated_conversation_title(
     workspace_id: uuid.UUID,
     user_id: uuid.UUID,
     user_message: str,
-    assistant_message: str,
+    assistant_message: str = "",
     settings: Settings | None = None,
 ) -> str | None:
-    """Generate and commit a title on a fresh DB session (safe after lock release)."""
+    """Generate and commit a title on a fresh DB session (safe off the chat lock)."""
     from app.conversations.models import Conversation
     from app.db.session import SessionLocal
 
@@ -175,9 +205,9 @@ def schedule_conversation_title(
     workspace_id: uuid.UUID,
     user_id: uuid.UUID,
     user_message: str,
-    assistant_message: str,
+    assistant_message: str = "",
 ) -> None:
-    """Enqueue title generation after the chat lock is released.
+    """Enqueue title generation in parallel with the first-turn answer stream.
 
     Tries Celery first so API workers stay free. Always also starts a short
     delayed in-process backup: ``.delay()`` succeeds even when the worker is

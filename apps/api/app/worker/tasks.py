@@ -169,7 +169,7 @@ def generate_conversation_title_task(
     user_message: str,
     assistant_message: str,
 ) -> dict:
-    """Background LLM title after the first successful chat turn (lock already released)."""
+    """Background LLM title for the first user message (runs beside answer streaming)."""
     from app.conversations.title import persist_generated_conversation_title
 
     titled = persist_generated_conversation_title(
