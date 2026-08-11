@@ -44,7 +44,12 @@
     "registerLink": "Register",
     "loginLink": "Sign in",
     "logout": "Log out",
-    "logoutAll": "Log out all sessions"
+    "logoutAll": "Log out all sessions",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmHint": "You will need to sign in again to access this workspace.",
+    "logoutAllConfirmTitle": "Log out all sessions?",
+    "logoutAllConfirmHint": "This signs you out on every device. You will need to sign in again everywhere.",
+    "loggingOut": "Logging out…"
   },
   "onboarding": {
     "title": "Create your workspace",

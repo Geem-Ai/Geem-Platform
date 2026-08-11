@@ -178,7 +178,7 @@ export function UploadKnowledgeDialog({
                     status: 'queued',
                     page_count: 0,
                     processed_pages: 0,
-                    progress: 0.05,
+                    progress: 0,
                     current_stage: null,
                     mime_type: file?.type ?? null,
                   }}

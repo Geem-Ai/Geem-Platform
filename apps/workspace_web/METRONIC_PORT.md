@@ -35,6 +35,7 @@ From `samples/metronic_vite_9.5.0/src/components/ui/`:
 - `badge.tsx`
 - `button.tsx`
 - `card.tsx`
+- `alert-dialog.tsx` (ReUI / Metronic confirm dialog — used for destructive logout)
 - `dialog.tsx`
 - `dropdown-menu.tsx`
 - `input.tsx`
