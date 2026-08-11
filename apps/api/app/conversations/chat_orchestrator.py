@@ -96,8 +96,6 @@ class ChatOrchestrator:
         user_msg: Message | None = None
         settled = False
         accumulated = ""
-        needs_title = False
-        title_job: dict[str, Any] | None = None
 
         try:
             # Heal abandoned streaming rows (worker crash after insert, lock TTL expired).
@@ -159,6 +157,17 @@ class ChatOrchestrator:
                 "assistant_message_id": str(assistant.id),
             }
             yield {"event": "message_start", "data": start_data}
+
+            # Title from the first user message — run in parallel with answer streaming
+            # (not after the reply finishes). Idempotent if a title already exists.
+            if needs_title:
+                schedule_conversation_title(
+                    conversation_id=conversation.id,
+                    workspace_id=workspace.id,
+                    user_id=actor.id,
+                    user_message=user_msg.content,
+                    assistant_message="",
+                )
 
             history = self._history_payload(conversation.id, before_message_id=user_msg.id)
 
@@ -252,15 +261,6 @@ class ChatOrchestrator:
                     },
                 }
                 return
-
-            if settled and needs_title and user_msg is not None and assistant is not None:
-                title_job = {
-                    "conversation_id": conversation.id,
-                    "workspace_id": workspace.id,
-                    "user_id": actor.id,
-                    "user_message": user_msg.content,
-                    "assistant_message": assistant.content or accumulated,
-                }
         except GeneratorExit:
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
@@ -274,9 +274,6 @@ class ChatOrchestrator:
             raise
         finally:
             self.lock.release(conversation_id)
-            # Title LLM runs after unlock so busy/streaming clear immediately.
-            if title_job is not None:
-                schedule_conversation_title(**title_job)
 
     def stream_retry(
         self,
@@ -312,7 +309,6 @@ class ChatOrchestrator:
         settled = False
         accumulated = ""
         needs_title = not bool((conversation.title or "").strip())
-        title_job: dict[str, Any] | None = None
 
         try:
             stale_before = datetime.now(timezone.utc) - timedelta(
@@ -395,6 +391,16 @@ class ChatOrchestrator:
                     "retry_of_message_id": str(failed.id),
                 },
             }
+
+            # Still untitled (e.g. first attempt failed before title ran) — parallelize.
+            if needs_title:
+                schedule_conversation_title(
+                    conversation_id=conversation.id,
+                    workspace_id=workspace.id,
+                    user_id=actor.id,
+                    user_message=user_msg.content,
+                    assistant_message="",
+                )
 
             history = self._history_payload(conversation.id, before_message_id=user_msg.id)
 
@@ -488,15 +494,6 @@ class ChatOrchestrator:
                 }
                 return
 
-            if settled and needs_title and user_msg is not None and assistant is not None:
-                # First successful answer may still lack a title (failed first attempt).
-                title_job = {
-                    "conversation_id": conversation.id,
-                    "workspace_id": workspace.id,
-                    "user_id": actor.id,
-                    "user_message": user_msg.content,
-                    "assistant_message": assistant.content or accumulated,
-                }
         except GeneratorExit:
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
@@ -508,8 +505,6 @@ class ChatOrchestrator:
             raise
         finally:
             self.lock.release(conversation_id)
-            if title_job is not None:
-                schedule_conversation_title(**title_job)
 
     # ------------------------------------------------------------------
     # Internals

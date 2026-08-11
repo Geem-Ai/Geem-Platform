@@ -24,12 +24,14 @@ import {
   publishActiveChatTurn,
   subscribeActiveChatTurn,
 } from '../lib/activeChatTurn';
+import { clearPendingChatMessage } from '../lib/pendingChatMessage';
+import { provisionalConversationTitle, isUsableConversationTitle } from '../lib/conversationTitle';
 
 const EMPTY_MESSAGES: ChatUiMessage[] = [];
 
-/** Soft-poll delays while a background LLM title job commits. Mutable for tests. */
+/** Soft-poll delays while a parallel LLM title job commits. Mutable for tests. */
 export const titlePollConfig: { delaysMs: number[] } = {
-  delaysMs: [800, 1600, 2800, 4500],
+  delaysMs: [400, 900, 1600, 2800, 4500],
 };
 
 function textFromPayload(data: unknown): string {
@@ -74,7 +76,7 @@ async function pollForConversationTitle(
     const conv = queryClient.getQueryData<Conversation>(
       queryKeys.conversation(workspaceId, conversationId),
     );
-    if (conv?.title?.trim()) return;
+    if (isUsableConversationTitle(conv?.title)) return;
   }
 }
 
@@ -276,7 +278,7 @@ export function useChatStream({
 
       if (event === 'title') {
         const payload = data as ChatTitleEvent;
-        if (payload.title?.trim()) {
+        if (isUsableConversationTitle(payload.title)) {
           queryClient.setQueryData(
             queryKeys.conversation(workspaceId, conversationId),
             (prev: { title?: string | null } | undefined) =>
@@ -433,8 +435,36 @@ export function useChatStream({
         queryKeys.conversation(workspaceId, conversationId),
       );
       const expectTitle = !existing?.title?.trim();
-      let turnCompleted = false;
       const accumulate = { text: '' };
+
+      // Title job starts with the first user message on the server — poll + show a
+      // provisional title immediately so the sidebar updates during streaming.
+      if (expectTitle) {
+        const provisional = provisionalConversationTitle(trimmed);
+        if (provisional) {
+          queryClient.setQueryData(
+            queryKeys.conversation(workspaceId, conversationId),
+            (prev: Conversation | undefined) =>
+              prev && !prev.title?.trim() ? { ...prev, title: provisional } : prev,
+          );
+          queryClient.setQueryData(
+            queryKeys.conversations(workspaceId),
+            (prev: Conversation[] | undefined) =>
+              prev?.map((c) =>
+                c.id === conversationId && !c.title?.trim()
+                  ? { ...c, title: provisional }
+                  : c,
+              ),
+          );
+        }
+        const scopedId = conversationId;
+        void pollForConversationTitle(
+          queryClient,
+          workspaceId,
+          scopedId,
+          () => conversationIdRef.current !== scopedId,
+        );
+      }
 
       try {
         await streamConversationMessage(
@@ -442,9 +472,6 @@ export function useChatStream({
           trimmed,
           {
             onEvent(event, data) {
-              if (event === 'message_complete' || event === 'final') {
-                turnCompleted = true;
-              }
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,
@@ -509,17 +536,12 @@ export function useChatStream({
       } finally {
         setIsStreaming(false);
         abortRef.current = null;
+        // Clear first-message handoff BEFORE dropping the active turn. Otherwise a
+        // ChatPage re-render (e.g. title/cache invalidation) can re-seed a blank
+        // "thinking" assistant while pending is still set.
+        clearPendingChatMessage(conversationId);
         clearActiveChatTurn(conversationId);
         await invalidateConversationCaches();
-        if (expectTitle && turnCompleted) {
-          const scopedId = conversationId;
-          void pollForConversationTitle(
-            queryClient,
-            workspaceId,
-            scopedId,
-            () => conversationIdRef.current !== scopedId,
-          );
-        }
       }
     },
     [
@@ -568,8 +590,17 @@ export function useChatStream({
         queryKeys.conversation(workspaceId, conversationId),
       );
       const expectTitle = !existing?.title?.trim();
-      let turnCompleted = false;
       const accumulate = { text: '' };
+
+      if (expectTitle) {
+        const scopedId = conversationId;
+        void pollForConversationTitle(
+          queryClient,
+          workspaceId,
+          scopedId,
+          () => conversationIdRef.current !== scopedId,
+        );
+      }
 
       try {
         await retryConversationMessageStream(
@@ -577,9 +608,6 @@ export function useChatStream({
           assistantMessageId,
           {
             onEvent(event, data) {
-              if (event === 'message_complete' || event === 'final') {
-                turnCompleted = true;
-              }
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,
@@ -644,15 +672,6 @@ export function useChatStream({
         setIsStreaming(false);
         abortRef.current = null;
         await invalidateConversationCaches();
-        if (expectTitle && turnCompleted) {
-          const scopedId = conversationId;
-          void pollForConversationTitle(
-            queryClient,
-            workspaceId,
-            scopedId,
-            () => conversationIdRef.current !== scopedId,
-          );
-        }
       }
     },
     [

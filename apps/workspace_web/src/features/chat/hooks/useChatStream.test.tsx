@@ -16,7 +16,13 @@ import { useChatStream, titlePollConfig } from './useChatStream';
 import {
   clearActiveChatTurn,
   ensureActiveChatTurn,
+  getActiveChatTurn,
 } from '../lib/activeChatTurn';
+import {
+  clearPendingChatMessage,
+  peekPendingChatMessage,
+  setPendingChatMessage,
+} from '../lib/pendingChatMessage';
 
 function createWrapper() {
   const client = new QueryClient({
@@ -37,11 +43,13 @@ describe('useChatStream', () => {
     retryMock.mockReset();
     titlePollConfig.delaysMs = [];
     clearActiveChatTurn('c1');
+    clearPendingChatMessage('c1');
   });
 
   afterEach(() => {
     titlePollConfig.delaysMs = defaultTitlePollDelays;
     clearActiveChatTurn('c1');
+    clearPendingChatMessage('c1');
   });
 
   it('optimistically appends user + assistant and reconciles IDs without duplicates', async () => {
@@ -283,5 +291,63 @@ describe('useChatStream', () => {
       expect.any(Object),
       expect.any(AbortSignal),
     );
+  });
+
+  it('clears pending handoff before active turn so title invalidation cannot re-seed thinking', async () => {
+    setPendingChatMessage('c1', 'Hello laws');
+    ensureActiveChatTurn('c1', 'Hello laws');
+
+    streamMock.mockImplementation(
+      async (
+        _id: string,
+        _content: string,
+        handlers: { onEvent?: (event: string, data: unknown) => void },
+      ) => {
+        handlers.onEvent?.('message_start', {
+          conversation_id: 'c1',
+          user_message_id: 'u1',
+          assistant_message_id: 'a1',
+        });
+        handlers.onEvent?.('token', { text: 'Final answer' });
+        handlers.onEvent?.('final', {
+          answer: 'Final answer',
+          citations: [],
+          assistant_message_id: 'a1',
+          user_message_id: 'u1',
+          status: 'completed',
+        });
+        handlers.onEvent?.('message_complete', {
+          assistant_message_id: 'a1',
+          user_message_id: 'u1',
+          status: 'completed',
+          citations: [],
+        });
+      },
+    );
+
+    const { result } = renderHook(
+      () =>
+        useChatStream({
+          workspaceId: 'ws1',
+          conversationId: 'c1',
+          initialMessages: [],
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.send('Hello laws');
+    });
+
+    expect(peekPendingChatMessage('c1')).toBeNull();
+    expect(getActiveChatTurn('c1')).toBeNull();
+    expect(result.current.isStreaming).toBe(false);
+    expect(
+      result.current.messages.find((m) => m.role === 'assistant')?.content,
+    ).toBe('Final answer');
+
+    // Simulate a mistaken late seed (old render-path bug): without pending,
+    // ChatPage will not recreate a thinking card after title poll.
+    expect(peekPendingChatMessage('c1')).toBeNull();
   });
 });

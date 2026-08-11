@@ -48,19 +48,6 @@ export function ChatPage() {
     [messagesQuery.data],
   );
 
-  // Seed user + AI thinking cards as soon as we know the pending first message.
-  // (Also seeded in ChatStartPage before navigate; this covers refresh/remount.)
-  if (conversationId) {
-    const fromState = (location.state as ChatPendingLocationState | null)
-      ?.pendingMessage?.trim();
-    const pending =
-      fromState || peekPendingChatMessage(conversationId)?.trim() || null;
-    if (pending) {
-      setPendingChatMessage(conversationId, pending);
-      ensureActiveChatTurn(conversationId, pending);
-    }
-  }
-
   const {
     messages,
     isStreaming,
@@ -76,8 +63,10 @@ export function ChatPage() {
   });
 
   // First message from /chat starter — send once (survives Strict Mode remount).
-  // Do not gate on isStreaming: ensureActiveChatTurn seeds it true before the
-  // network call; beginPendingChatSend + send()'s abortRef guard duplicates.
+  // Seed the optimistic turn only here (and in ChatStartPage before navigate).
+  // Never re-seed during render: after stream finally clears the active turn,
+  // a lingering pending message would recreate an empty "thinking" card and
+  // title/cache invalidation would look like it wiped the answer.
   useEffect(() => {
     if (!conversationId) return;
 
@@ -85,7 +74,6 @@ export function ChatPage() {
       ?.pendingMessage?.trim();
     if (fromState) {
       setPendingChatMessage(conversationId, fromState);
-      ensureActiveChatTurn(conversationId, fromState);
       // Clear router state so refresh/back doesn't re-send; storage keeps the handoff.
       void navigate(location.pathname, { replace: true, state: {} });
     }
@@ -93,6 +81,8 @@ export function ChatPage() {
     const pending = peekPendingChatMessage(conversationId)?.trim();
     if (!pending) return;
     if (!beginPendingChatSend(conversationId)) return;
+
+    ensureActiveChatTurn(conversationId, pending);
 
     void send(pending)
       .then(() => {
