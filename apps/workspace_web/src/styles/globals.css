@@ -151,3 +151,76 @@ html[lang='ar'] .tracking-tighter {
 [data-slot='card-title'] {
   @apply font-medium;
 }
+
+/* Expert card — moving AI stars (restrained orbits) */
+@keyframes ai-star-orbit-a {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(18%, -10%) rotate(8deg);
+  }
+  50% {
+    transform: translate(8%, 16%) rotate(-4deg);
+  }
+  75% {
+    transform: translate(-12%, 6%) rotate(6deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes ai-star-orbit-b {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(-22%, 18%) rotate(-12deg) scale(0.92);
+  }
+  66% {
+    transform: translate(10%, -16%) rotate(10deg) scale(1.05);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes ai-star-orbit-c {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  40% {
+    transform: translate(-16%, -20%) rotate(14deg);
+  }
+  70% {
+    transform: translate(20%, -4%) rotate(-8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+.ai-star {
+  transform-origin: center;
+  will-change: transform;
+}
+
+.ai-star-orbit-a {
+  animation: ai-star-orbit-a 5.5s ease-in-out infinite;
+}
+
+.ai-star-orbit-b {
+  animation: ai-star-orbit-b 4.2s ease-in-out infinite;
+}
+
+.ai-star-orbit-c {
+  animation: ai-star-orbit-c 6.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-star {
+    animation: none !important;
+    will-change: auto;
+  }
+}
