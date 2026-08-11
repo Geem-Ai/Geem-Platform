@@ -207,11 +207,15 @@ class RagService:
         question: str,
         knowledge: ResolvedExpertKnowledge,
         top_k: int | None = None,
+        *,
+        history: list[dict[str, str]] | None = None,
     ) -> dict:
         prepared = self._prepare_expert_context(question, knowledge, top_k)
         scope = prepared["scope"]
         expert_chat = self._build_expert_chat(knowledge)
-        result = expert_chat.answer(prepared["question"], prepared["context"])
+        result = expert_chat.answer(
+            prepared["question"], prepared["context"], history=history
+        )
         validated = self._validate_citations(
             result, prepared["allowed_ids"], prepared["context_chunks"]
         )
@@ -223,14 +227,18 @@ class RagService:
             retry_chat = OpenRouterChatProvider(
                 settings=self.settings, system_prompt=stricter_prompt, client=self.chat.client
             )
-            result = retry_chat.answer(prepared["question"], prepared["context"])
+            result = retry_chat.answer(
+                prepared["question"], prepared["context"], history=history
+            )
             validated = self._validate_citations(
                 result, prepared["allowed_ids"], prepared["context_chunks"]
             )
             if not validated["citations"]:
                 validated["insufficient_context"] = True
 
-        self._record_generation_usage(validated, result, scope=scope)
+        usage_id = self._record_generation_usage(validated, result, scope=scope)
+        if usage_id is not None:
+            validated["usage_event_id"] = str(usage_id)
         self._maybe_attach_general_answer(prepared["question"], validated, scope=scope)
         return validated
 
@@ -239,6 +247,8 @@ class RagService:
         question: str,
         knowledge: ResolvedExpertKnowledge,
         top_k: int | None = None,
+        *,
+        history: list[dict[str, str]] | None = None,
     ) -> Iterator[dict[str, Any]]:
         yield {"event": "status", "data": {"stage": "retrieving"}}
         prepared = self._prepare_expert_context(question, knowledge, top_k)
@@ -247,7 +257,9 @@ class RagService:
 
         expert_chat = self._build_expert_chat(knowledge)
         result: dict | None = None
-        for event in expert_chat.answer_stream(prepared["question"], prepared["context"]):
+        for event in expert_chat.answer_stream(
+            prepared["question"], prepared["context"], history=history
+        ):
             etype = event.get("type")
             if etype == "delta":
                 yield {"event": "token", "data": {"text": event.get("text") or ""}}
@@ -273,7 +285,9 @@ class RagService:
                 settings=self.settings, system_prompt=stricter_prompt, client=self.chat.client
             )
             result = None
-            for event in retry_chat.answer_stream(prepared["question"], prepared["context"]):
+            for event in retry_chat.answer_stream(
+                prepared["question"], prepared["context"], history=history
+            ):
                 etype = event.get("type")
                 if etype == "delta":
                     yield {"event": "token", "data": {"text": event.get("text") or ""}}
@@ -289,20 +303,20 @@ class RagService:
             if not validated["citations"]:
                 validated["insufficient_context"] = True
 
-        self._record_generation_usage(validated, result, scope=scope)
+        usage_id = self._record_generation_usage(validated, result, scope=scope)
         yield from self._stream_general_fallback(prepared["question"], validated, scope=scope)
-        yield {
-            "event": "final",
-            "data": {
-                "answer": validated["answer"],
-                "insufficient_context": validated["insufficient_context"],
-                "citations": validated["citations"],
-                "model": validated["model"],
-                "general_answer": validated.get("general_answer"),
-                "used_general_knowledge": bool(validated.get("used_general_knowledge")),
-                "general_model": validated.get("general_model"),
-            },
+        final_data = {
+            "answer": validated["answer"],
+            "insufficient_context": validated["insufficient_context"],
+            "citations": validated["citations"],
+            "model": validated["model"],
+            "general_answer": validated.get("general_answer"),
+            "used_general_knowledge": bool(validated.get("used_general_knowledge")),
+            "general_model": validated.get("general_model"),
         }
+        if usage_id is not None:
+            final_data["usage_event_id"] = str(usage_id)
+        yield {"event": "final", "data": final_data}
 
     def _compose_expert_prompt(self, knowledge: ResolvedExpertKnowledge) -> str:
         return compose_expert_system_prompt(
@@ -703,7 +717,7 @@ class RagService:
         *,
         operation_type: str = "generation",
         scope: RagScope | None = None,
-    ) -> None:
+    ) -> uuid.UUID | None:
         cost_metadata: dict[str, Any] = {
             "prompt_version": (
                 self.settings.general_prompt_version
@@ -726,9 +740,10 @@ class RagService:
         elif isinstance(scope, LegacyRagScope):
             cost_metadata["population"] = "legacy"
 
+        event_id = uuid.uuid4()
         self.db.add(
             UsageEvent(
-                id=uuid.uuid4(),
+                id=event_id,
                 operation_type=operation_type,
                 model=validated.get("model"),
                 cost_metadata=cost_metadata,
@@ -736,6 +751,7 @@ class RagService:
             )
         )
         self.db.commit()
+        return event_id
 
     def _lexical_article_chunks(
         self,

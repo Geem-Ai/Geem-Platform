@@ -66,6 +66,10 @@ class QueryRequest(BaseModel):
 
 
 class Citation(BaseModel):
+    """Metadata-safe citation contract for API responses and message persistence."""
+
+    model_config = ConfigDict(extra="ignore")
+
     chunk_id: uuid.UUID
     document_id: uuid.UUID
     document_title: str

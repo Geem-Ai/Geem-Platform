@@ -33,7 +33,7 @@ export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
   return (
     <Card
       className={cn(
-        'group relative flex flex-col gap-0 overflow-hidden',
+        'group relative flex flex-col gap-0 overflow-hidden cursor-pointer',
         'transition-[background-color,box-shadow,border-color] duration-200',
         'hover:border-primary/25 hover:shadow-sm hover:bg-accent/20',
       )}

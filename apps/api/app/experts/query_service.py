@@ -77,8 +77,9 @@ class ExpertQueryService:
         expert_id: uuid.UUID,
         question: str,
         top_k: int | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        knowledge = self._prepare(
+        knowledge = self.resolve_knowledge(
             workspace=workspace,
             membership=membership,
             actor=actor,
@@ -88,6 +89,7 @@ class ExpertQueryService:
             question=question,
             knowledge=knowledge,
             top_k=top_k,
+            history=history,
         )
 
     def query_stream(
@@ -99,8 +101,9 @@ class ExpertQueryService:
         expert_id: uuid.UUID,
         question: str,
         top_k: int | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> Iterator[dict[str, Any]]:
-        knowledge = self._prepare(
+        knowledge = self.resolve_knowledge(
             workspace=workspace,
             membership=membership,
             actor=actor,
@@ -110,6 +113,23 @@ class ExpertQueryService:
             question=question,
             knowledge=knowledge,
             top_k=top_k,
+            history=history,
+        )
+
+    def resolve_knowledge(
+        self,
+        *,
+        workspace: Workspace,
+        membership: WorkspaceMembership,
+        actor: User,
+        expert_id: uuid.UUID,
+    ) -> ResolvedExpertKnowledge:
+        """Authorize + lifecycle-check + resolve ExpertRagScope (public for ChatOrchestrator)."""
+        return self._prepare(
+            workspace=workspace,
+            membership=membership,
+            actor=actor,
+            expert_id=expert_id,
         )
 
     # ------------------------------------------------------------------

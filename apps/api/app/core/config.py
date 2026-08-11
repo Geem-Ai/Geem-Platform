@@ -117,6 +117,12 @@ class Settings(BaseSettings):
 
     general_fallback_enabled: bool = True
 
+    # Phase 4B — persisted chat orchestration
+    chat_history_max_messages: int = 20
+    conversation_title_max_length: int = 80
+    conversation_generation_lock_ttl_seconds: int = 300
+    max_chat_message_chars: int = 32_000
+
     max_upload_mb: int = 100
     max_pdf_pages: int = 1000
     ocr_page_concurrency: int = 4
