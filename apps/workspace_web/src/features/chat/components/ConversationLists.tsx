@@ -7,7 +7,6 @@ import {
   PinOff,
   Pencil,
   Trash2,
-  MessageSquare,
   Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -44,8 +43,7 @@ function ConversationRowShimmer() {
       className="flex items-center gap-2 rounded-md px-3 py-2"
       data-testid="conversation-row-shimmer"
     >
-      <div className="size-3.5 shrink-0 rounded bg-muted animate-pulse" />
-      <div className="h-3 w-[65%] rounded bg-muted animate-pulse" />
+      <div className="h-3 w-[75%] rounded bg-muted animate-pulse" />
     </div>
   );
 }
@@ -160,80 +158,85 @@ function ConversationRow({ conversation, selected, onOpenChange }: ConversationR
     <>
       <div
         className={cn(
-          'group relative flex items-center rounded-md px-1 py-0.5',
+          'group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5 rounded-md px-1 py-0.5',
           'has-data-[state=open]:bg-muted',
           selected ? 'bg-primary/10 text-primary' : 'bg-transparent hover:bg-muted',
         )}
         data-testid={`conversation-row-${conversation.id}`}
       >
-        <Button
-          asChild
-          variant="ghost"
+        <Link
+          to={`/chat/${conversation.id}`}
+          onClick={() => onOpenChange?.(false)}
+          title={title}
           className={cn(
-            'flex-1 justify-start gap-2 px-2 h-8 text-xs font-medium truncate',
-            selected && 'text-primary hover:text-primary',
+            'min-w-0 truncate rounded-md px-2 py-1.5 text-xs font-medium outline-none',
+            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+            selected
+              ? 'text-primary'
+              : 'text-foreground hover:text-foreground',
           )}
         >
-          <Link
-            to={`/chat/${conversation.id}`}
-            onClick={() => onOpenChange?.(false)}
-            title={title}
-          >
-            <MessageSquare className="size-3.5 shrink-0 text-muted-foreground/60" />
-            <span className="truncate">{title}</span>
-            {isFavorite && (
-              <Star className="size-3 shrink-0 fill-amber-400 text-amber-400 ms-auto" />
-            )}
-          </Link>
-        </Button>
+          {title}
+        </Link>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              mode="icon"
-              size="sm"
-              className="size-6 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 shrink-0"
-              aria-label={t('chat.conversationActions')}
-              data-testid={`conversation-actions-${conversation.id}`}
-            >
-              <MoreHorizontal className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => void toggleFavorite()}>
-              <Star
-                className={cn('size-3.5', isFavorite && 'fill-amber-400 text-amber-400')}
-              />
-              {isFavorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void togglePin()}>
-              {conversation.is_pinned ? (
-                <>
-                  <PinOff className="size-3.5" />
-                  {t('chat.unpin')}
-                </>
-              ) : (
-                <>
-                  <Pin className="size-3.5" />
-                  {t('chat.pin')}
-                </>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setRenameOpen(true)}>
-              <Pencil className="size-3.5" />
-              {t('chat.rename')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="size-3.5" />
-              {t('chat.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center shrink-0 gap-0.5 pe-0.5">
+          {isFavorite && (
+            <Star
+              className="size-3 shrink-0 fill-amber-400 text-amber-400"
+              aria-hidden
+            />
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                mode="icon"
+                size="sm"
+                className={cn(
+                  'size-6 shrink-0 text-muted-foreground',
+                  'opacity-70 hover:opacity-100 data-[state=open]:opacity-100',
+                )}
+                aria-label={t('chat.conversationActions')}
+                data-testid={`conversation-actions-${conversation.id}`}
+              >
+                <MoreHorizontal className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => void toggleFavorite()}>
+                <Star
+                  className={cn('size-3.5', isFavorite && 'fill-amber-400 text-amber-400')}
+                />
+                {isFavorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void togglePin()}>
+                {conversation.is_pinned ? (
+                  <>
+                    <PinOff className="size-3.5" />
+                    {t('chat.unpin')}
+                  </>
+                ) : (
+                  <>
+                    <Pin className="size-3.5" />
+                    {t('chat.pin')}
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRenameOpen(true)}>
+                <Pencil className="size-3.5" />
+                {t('chat.rename')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-3.5" />
+                {t('chat.delete')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <RenameConversationDialog
@@ -274,12 +277,12 @@ export function ConversationListSection({
   }
 
   return (
-    <div className="px-1.5 mb-3" data-testid={testId}>
+    <div className="min-w-0 max-w-full overflow-hidden px-1.5 mb-3" data-testid={testId}>
       <SectionHeader label={title} />
       {conversations.length === 0 ? (
         <p className="text-xs text-muted-foreground px-2 py-1">{emptyLabel}</p>
       ) : (
-        <div className="space-y-0.5">
+        <div className="min-w-0 max-w-full space-y-0.5 overflow-hidden">
           {conversations.map((c) => (
             <ConversationRow
               key={c.id}

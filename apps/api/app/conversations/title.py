@@ -179,9 +179,10 @@ def schedule_conversation_title(
 ) -> None:
     """Enqueue title generation after the chat lock is released.
 
-    Prefers Celery so API workers stay free. Falls back to a daemon thread if
-    scheduling fails (e.g. broker unreachable) so client disconnects still get
-    a persisted title.
+    Tries Celery first so API workers stay free. Always also starts a short
+    delayed in-process backup: ``.delay()`` succeeds even when the worker is
+    stale/missing the task registry, which previously left chats untitled.
+    ``persist_generated_conversation_title`` is idempotent if a title exists.
     """
     kwargs = {
         "conversation_id": conversation_id,
@@ -200,16 +201,21 @@ def schedule_conversation_title(
             user_message=user_message,
             assistant_message=assistant_message,
         )
-        return
     except Exception:  # noqa: BLE001
         logger.exception(
             "conversation_title_celery_schedule_failed conversation_id=%s",
             conversation_id,
         )
 
+    def _backup() -> None:
+        # Give a healthy Celery worker a head start; then fill in if still untitled.
+        import time
+
+        time.sleep(1.5)
+        persist_generated_conversation_title(**kwargs)
+
     threading.Thread(
-        target=persist_generated_conversation_title,
-        kwargs=kwargs,
+        target=_backup,
         name=f"conversation-title-{conversation_id}",
         daemon=True,
     ).start()

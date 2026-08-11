@@ -11,6 +11,8 @@ import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { Expert } from '@/services/api/types';
 import { ChatStarter } from '../components/ChatStarter';
 import { useCreateConversation } from '../hooks/useConversationMutations';
+import { ensureActiveChatTurn } from '../lib/activeChatTurn';
+import { setPendingChatMessage } from '../lib/pendingChatMessage';
 
 export type ChatPendingLocationState = {
   pendingMessage?: string;
@@ -99,6 +101,8 @@ export function ChatStartPage() {
       const conversation = await createConversation.mutateAsync({
         expert_id: selectedExpert.id,
       });
+      setPendingChatMessage(conversation.id, content);
+      ensureActiveChatTurn(conversation.id, content);
       void navigate(`/chat/${conversation.id}`, {
         state: { pendingMessage: content } satisfies ChatPendingLocationState,
       });

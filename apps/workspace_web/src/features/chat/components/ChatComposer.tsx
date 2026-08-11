@@ -29,6 +29,10 @@ interface ChatComposerProps {
   className?: string;
   /** Compact footer style vs starter elevated shell. */
   variant?: 'starter' | 'compact';
+  /** Optional controlled draft (e.g. sample prompt chips). */
+  value?: string;
+  onValueChange?: (value: string) => void;
+  onFocus?: () => void;
   /** When set, shows Metronic-style Experts picker in the composer toolbar. */
   expertPicker?: {
     experts: Expert[];
@@ -80,16 +84,36 @@ export function ChatComposer({
   autoFocus,
   className,
   variant = 'compact',
+  value: controlledValue,
+  onValueChange,
+  onFocus,
   expertPicker,
 }: ChatComposerProps) {
   const { t } = useTranslation();
-  const [value, setValue] = useState('');
+  const [uncontrolledValue, setUncontrolledValue] = useState('');
+  const isControlled = controlledValue !== undefined;
+  const value = isControlled ? controlledValue : uncontrolledValue;
   const [pickerOpen, setPickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** Ignore the next onFocus from programmatic autoFocus so sample prompts can type. */
+  const suppressFocusNotifyRef = useRef(false);
 
   useEffect(() => {
-    if (autoFocus) textareaRef.current?.focus();
+    if (!autoFocus) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    suppressFocusNotifyRef.current = true;
+    el.focus({ preventScroll: true });
   }, [autoFocus]);
+
+  useEffect(() => {
+    resize();
+  }, [value]);
+
+  function setValue(next: string) {
+    if (!isControlled) setUncontrolledValue(next);
+    onValueChange?.(next);
+  }
 
   function resize() {
     const el = textareaRef.current;
@@ -105,8 +129,9 @@ export function ChatComposer({
     setValue('');
     requestAnimationFrame(() => {
       if (textareaRef.current) {
+        suppressFocusNotifyRef.current = true;
         textareaRef.current.style.height = 'auto';
-        textareaRef.current.focus();
+        textareaRef.current.focus({ preventScroll: true });
       }
     });
   }
@@ -154,6 +179,13 @@ export function ChatComposer({
           onChange={(e) => {
             setValue(e.target.value);
             resize();
+          }}
+          onFocus={() => {
+            if (suppressFocusNotifyRef.current) {
+              suppressFocusNotifyRef.current = false;
+              return;
+            }
+            onFocus?.();
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder ?? t('chat.placeholder')}
