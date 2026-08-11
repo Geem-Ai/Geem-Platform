@@ -19,6 +19,10 @@ class ErrorCategory(StrEnum):
     NOT_FOUND = "not_found"
     CONFLICT = "conflict"
     VALIDATION = "validation"
+    UNAUTHORIZED = "unauthorized"
+    FORBIDDEN = "forbidden"
+    QUOTA_EXCEEDED = "quota_exceeded"
+    BILLING_REQUIRED = "billing_required"
 
 
 class AppError(Exception):

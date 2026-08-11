@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, field
+from typing import Any
+from uuid import UUID
+
+
+@dataclass(slots=True, frozen=True)
+class RequestContext:
+    """Per-request tenancy / identity snapshot.
+
+    Phase 0: structure only — auth and workspace resolution arrive in Phase 1.
+    Frontend hostname/slug is UX context; backend always re-resolves and authorizes.
+    """
+
+    request_id: str | None = None
+    user_id: UUID | None = None
+    workspace_id: UUID | None = None
+    workspace_slug: str | None = None
+    membership_role: str | None = None
+    platform_role: str | None = None
+    auth_required: bool = False
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_authenticated(self) -> bool:
+        return self.user_id is not None
+
+    @property
+    def has_workspace(self) -> bool:
+        return self.workspace_id is not None
+
+
+_request_context: ContextVar[RequestContext | None] = ContextVar(
+    "geem_request_context",
+    default=None,
+)
+
+
+def get_request_context() -> RequestContext:
+    ctx = _request_context.get()
+    if ctx is None:
+        return RequestContext()
+    return ctx
+
+
+def set_request_context(ctx: RequestContext) -> Token[RequestContext | None]:
+    return _request_context.set(ctx)
+
+
+def reset_request_context(token: Token[RequestContext | None]) -> None:
+    _request_context.reset(token)
+
+
+def clear_request_context() -> None:
+    _request_context.set(None)

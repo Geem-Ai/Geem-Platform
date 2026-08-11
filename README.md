@@ -16,11 +16,27 @@ Services:
 
 | Service | URL |
 |--------|-----|
-| Web UI | http://localhost:5173 |
+| Web UI (legacy MVP) | http://localhost:5173 |
+| Workspace UI (Geem SaaS) | http://localhost:5174 |
 | API docs | http://localhost:8000/docs |
 | API health | http://localhost:8000/api/health/ready |
 | MinIO console | http://localhost:9101 (minio / change-me) |
 | MinIO API | http://localhost:9100 |
+
+Reserved (not scaffolded yet beyond README placeholders):
+
+- `apps/dashboard_web` — Platform Admin
+- `apps/landpage_web` — marketing / landing
+
+Local frontend without Docker:
+
+```bash
+# Legacy MVP
+cd apps/web && npm install && npm run dev
+
+# Geem Workspace (Phase 0+)
+cd apps/workspace_web && npm install && npm run dev
+```
 
 ## Flow
 

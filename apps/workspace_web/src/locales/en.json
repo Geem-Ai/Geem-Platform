@@ -1,0 +1,52 @@
+{
+  "app": {
+    "name": "Geem",
+    "tagline": "Arabic-first AI workspace"
+  },
+  "nav": {
+    "overview": "Overview",
+    "chat": "Chat",
+    "experts": "Experts",
+    "api": "API",
+    "apiKeys": "API Keys",
+    "usage": "Usage",
+    "apps": "Apps",
+    "members": "Members",
+    "storage": "Storage",
+    "billing": "Billing",
+    "subscription": "Subscription",
+    "credits": "Credits",
+    "billingHistory": "Billing History",
+    "settings": "Settings"
+  },
+  "shell": {
+    "workspacePlaceholder": "Workspace",
+    "workspaceSwitcherHint": "Workspace switching arrives in Phase 1",
+    "accountPlaceholder": "Account",
+    "accountHint": "Sign-in arrives in Phase 1",
+    "themeLight": "Light mode",
+    "themeDark": "Dark mode",
+    "themeSystem": "System",
+    "language": "Language",
+    "languageEn": "English",
+    "languageAr": "Arabic",
+    "comingSoon": "Coming soon",
+    "pagePlaceholder": "This area is a shell placeholder for Phase 0A.",
+    "loading": "Loading...",
+    "close": "Close",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
+  },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Chat UI will be built in Phase 4. The shell and design system are ready."
+  },
+  "overview": {
+    "title": "Overview",
+    "description": "Welcome to Geem Workspace. Authenticated product surfaces land in later phases."
+  },
+  "errors": {
+    "notFound": "Page not found",
+    "generic": "Something went wrong"
+  }
+}

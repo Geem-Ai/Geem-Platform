@@ -15,3 +15,5 @@ build/
 .coverage
 htmlcov/
 apps/web/dist/
+# Large commercial Metronic kit — keep local at samples/metronic_vite_9.5.0 (see AGENTS.md)
+samples/

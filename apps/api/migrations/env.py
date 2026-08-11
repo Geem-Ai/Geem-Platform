@@ -6,8 +6,11 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
-from app.db import models as _models  # noqa: F401
+from app.db import models as _models  # noqa: F401 — register metadata for autogenerate
 from app.db.session import Base
+
+# Future domain models (identity/workspaces/…) must be imported here or via app.db.models
+# before `alembic revision --autogenerate` so new tables are detected.
 
 config = context.config
 if config.config_file_name is not None:

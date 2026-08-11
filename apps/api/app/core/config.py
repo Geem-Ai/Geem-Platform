@@ -9,9 +9,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "local"
+    app_name: str = "Geem"
     app_url: str = "http://localhost:8000"
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
     log_level: str = "INFO"
+
+    # Phase 0 default: MVP routes remain open. Flip true after identity bootstrap (Phase 1+).
+    auth_required: bool = False
+
+    # Root domain for workspace subdomain resolution (e.g. geem.ai). Local DX uses header fallback.
+    app_root_domain: str = "localhost"
+    app_admin_host: str = "admin.localhost"
 
     database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/rag"
     redis_url: str = "redis://localhost:6379/0"

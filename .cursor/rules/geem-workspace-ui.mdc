@@ -1,0 +1,17 @@
+---
+description: Geem Workspace UI boundary and frontend app conventions
+alwaysApply: true
+---
+
+# Geem Workspace frontend conventions
+
+- Product name: **Geem**. Workspace UI lives in `apps/workspace_web`.
+- Keep `apps/web` intact as the legacy MVP; never rename/delete it for SaaS work.
+- UI foundation: Metronic Vite 9.5.0 **AI Concept only**, ported into `workspace_web`.
+- Never import from `samples/`. Never mutate Metronic sample source.
+- Do not port CRM/Mail/Calendar/Todo/Real Estate/Store Inventory concepts.
+- Feature-oriented architecture under `apps/workspace_web/src/features/`.
+- API access only via `src/services/api/` (no scattered raw `fetch` in components).
+- i18n: `react-i18next` with `en`/`ar` and document `dir` ltr/rtl.
+- Theme: `next-themes` with Geem-specific storage key; preserve AI Concept tokens.
+- Brand avatar: local `public/brand/geem-avatar.webp` only (not user avatar).

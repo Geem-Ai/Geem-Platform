@@ -1,0 +1,27 @@
+---
+description: Metronic samples are read-only; never import or mutate samples/
+globs: samples/**
+alwaysApply: false
+---
+
+# Samples directory is read-only
+
+`samples/metronic_vite_9.5.0` is a **read-only UI reference**.
+
+## Forbidden
+
+- Editing any file under `samples/`
+- Importing from `samples/` in production apps
+- Runtime dependency on `samples/` (path aliases, npm link, relative imports)
+- Copying entire Metronic concept apps
+
+## Allowed
+
+- Reading sample source to understand AI Concept patterns
+- Selectively porting/adapting AI Concept + traced shared UI into `apps/workspace_web`
+
+## Do not port wholesale
+
+CRM, Mail, Calendar, Todo, Real Estate, Store Inventory, and other non-AI Metronic concepts.
+
+Upgrades: manual cherry-pick into `apps/workspace_web`; update `METRONIC_PORT.md`.
