@@ -16,6 +16,7 @@
 - Phase 4A: `0006_conversations_messages.py` — `conversations` (consumer workspace + user + expert, soft-delete) + `messages` (role/content/citations/status, optional `usage_event_id`)
 - Phase 4B: no Alembic — `ChatOrchestrator` + `POST .../messages/stream` + retry SSE; bounded chat history via settings; generation lock (Redis/memory)
 - Phase 4D: `0007_geem_general_expert.py` — `experts.knowledge_mode` (`rag`|`general`) + unique platform general Expert; seed via `python -m app.identity.bootstrap` (`ensure_geem_general_expert`)
+- Phase 4 polish: `0008_conversation_favorites.py` — `conversations.favorited_at` (mirrors pin)
 
 ### Document tenancy (Phase 2C final)
 

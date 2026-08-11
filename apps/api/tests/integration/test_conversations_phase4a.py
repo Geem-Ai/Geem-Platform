@@ -86,6 +86,8 @@ def test_create_conversation_with_workspace_expert(client, register_user) -> Non
     assert body["title"] is None
     assert body["is_pinned"] is False
     assert body["pinned_at"] is None
+    assert body["is_favorite"] is False
+    assert body["favorited_at"] is None
     assert body["expert"]["id"] == expert["id"]
     assert body["expert"]["ownership"] == "workspace"
     assert body["expert"]["name"] == expert["name"]
@@ -229,6 +231,33 @@ def test_noop_patch_does_not_bump_updated_at(client, register_user) -> None:
     assert repin.status_code == 200
     assert repin.json()["updated_at"] == after_pin
 
+    favorited = client.patch(
+        f"/api/conversations/{created['id']}",
+        headers=headers,
+        json={"is_favorite": True},
+    )
+    assert favorited.status_code == 200
+    assert favorited.json()["is_favorite"] is True
+    assert favorited.json()["favorited_at"] is not None
+    after_fav = favorited.json()["updated_at"]
+
+    refav = client.patch(
+        f"/api/conversations/{created['id']}",
+        headers=headers,
+        json={"is_favorite": True},
+    )
+    assert refav.status_code == 200
+    assert refav.json()["updated_at"] == after_fav
+
+    unfav = client.patch(
+        f"/api/conversations/{created['id']}",
+        headers=headers,
+        json={"is_favorite": False},
+    )
+    assert unfav.status_code == 200
+    assert unfav.json()["is_favorite"] is False
+    assert unfav.json()["favorited_at"] is None
+
 
 def test_list_retrieve_rename_pin_delete(client, register_user, db) -> None:
     user = register_user(email="conv-lifecycle@example.com")
@@ -355,6 +384,38 @@ def test_list_retrieve_rename_pin_delete(client, register_user, db) -> None:
     listed3 = client.get("/api/conversations", headers=headers).json()
     assert c1["id"] not in {c["id"] for c in listed3}
     assert c2["id"] in {c["id"] for c in listed3}
+
+
+def test_clear_conversation_history(client, register_user) -> None:
+    user = register_user(email="conv-clear@example.com")
+    ws = _create_workspace(client, user["access_token"], "Clear", "conv-clear")
+    headers = _ws_headers(user["access_token"], ws)
+    expert = _create_workspace_expert(client, headers)
+
+    ids = []
+    for i in range(3):
+        created = client.post(
+            "/api/conversations",
+            headers=headers,
+            json={"expert_id": expert["id"], "title": f"C{i}"},
+        )
+        assert created.status_code == 201
+        ids.append(created.json()["id"])
+
+    cleared = client.delete("/api/conversations", headers=headers)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["deleted_count"] == 3
+
+    listed = client.get("/api/conversations", headers=headers).json()
+    assert listed == []
+
+    for cid in ids:
+        assert client.get(f"/api/conversations/{cid}", headers=headers).status_code == 404
+
+    # Idempotent empty clear
+    again = client.delete("/api/conversations", headers=headers)
+    assert again.status_code == 200
+    assert again.json()["deleted_count"] == 0
 
 
 # ---------------------------------------------------------------------------

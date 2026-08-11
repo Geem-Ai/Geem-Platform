@@ -17,6 +17,7 @@ export type ConversationCreateInput = {
 export type ConversationUpdateInput = {
   title?: string | null;
   is_pinned?: boolean;
+  is_favorite?: boolean;
 };
 
 export function listConversations(params?: { limit?: number; offset?: number }) {
@@ -47,6 +48,13 @@ export function updateConversation(conversationId: string, input: ConversationUp
 
 export function deleteConversation(conversationId: string) {
   return apiRequest<void>(`/api/conversations/${conversationId}`, { method: 'DELETE' });
+}
+
+/** Soft-delete all conversations for the current user in the workspace. */
+export function clearConversationHistory() {
+  return apiRequest<{ deleted_count: number }>('/api/conversations', {
+    method: 'DELETE',
+  });
 }
 
 export function listConversationMessages(

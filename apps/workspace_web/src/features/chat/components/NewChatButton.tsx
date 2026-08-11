@@ -23,7 +23,8 @@ export function NewChatButton({ collapsed, className }: NewChatButtonProps) {
     <Button
       asChild
       className={cn(
-        'w-full h-10 rounded-full shadow-md gap-2',
+        'new-chat-gradient w-full h-10 rounded-full shadow-lg gap-2 text-white',
+        'border-0 hover:brightness-105',
         collapsed && 'size-10 p-0',
         className,
       )}
@@ -31,7 +32,7 @@ export function NewChatButton({ collapsed, className }: NewChatButtonProps) {
     >
       <Link to="/chat" aria-label={label}>
         <MessageSquarePlus className="size-4 shrink-0" />
-        {!collapsed && <span className="truncate">{label}</span>}
+        {!collapsed && <span className="truncate font-semibold">{label}</span>}
       </Link>
     </Button>
   );

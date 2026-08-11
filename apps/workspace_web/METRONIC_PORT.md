@@ -106,11 +106,14 @@ Selectively adapted from `samples/metronic_vite_9.5.0/src/ai/**` into `features/
 |------------------|------------|
 | `chat-starter*` | `ChatStarter.tsx` + `ChatComposer.tsx` + `ExpertSelector.tsx` |
 | `chat-message` / `chat-messages` | `ChatMessage.tsx` / `ChatMessages.tsx` (+ `react-markdown`, Geem avatar) |
-| `recent-chats` / `pinned-chats` / `new-chat-button` | `ConversationLists.tsx` / `NewChatButton.tsx` in workspace sidebar |
+| `recent-chats` / `pinned-chats` / `new-chat-button` | `ConversationLists.tsx` / `NewChatButton.tsx` (primary→purple animated gradient) in workspace sidebar |
+| `quick-actions.tsx` | `features/chat/components/QuickActions.tsx` (Favorites, Clear History; Templates → Soon) |
+| `user-dropdown-menu.tsx` | `account-menu.tsx` profile card + workspace switcher in dropdown |
+| Chat vs product nav | `sidebarMode` in `layouts/workspace/context.tsx` — chat mode vs Workspace settings (`workspaceNav`) |
 | `pages/start.tsx` / `pages/chat.tsx` | `ChatStartPage.tsx` (`/chat`) / `ChatPage.tsx` (`/chat/:conversationId`) |
 | Share dialog / model selector | **Not ported** (no backend share; Experts replace models) |
 
-Production data: Conversations REST + SSE (`useChatStream`), Workspace-scoped React Query keys, pin/rename/delete mutations.
+Production data: Conversations REST + SSE (`useChatStream`), Workspace-scoped React Query keys, pin/favorite/rename/delete mutations.
 
 ## Intentionally excluded
 

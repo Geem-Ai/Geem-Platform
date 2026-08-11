@@ -101,6 +101,7 @@ class Conversation(Base, SoftDeleteMixin):
     )
     title: Mapped[str | None] = mapped_column(String(MAX_CONVERSATION_TITLE_LENGTH), nullable=True)
     pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    favorited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -115,6 +116,10 @@ class Conversation(Base, SoftDeleteMixin):
     @property
     def is_pinned(self) -> bool:
         return self.pinned_at is not None
+
+    @property
+    def is_favorite(self) -> bool:
+        return self.favorited_at is not None
 
 
 class Message(Base):

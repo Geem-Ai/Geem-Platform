@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   retryConversationMessageStream,
   streamConversationMessage,
@@ -11,11 +11,18 @@ import type {
   ChatMessageCompleteEvent,
   ChatMessageStartEvent,
   ChatStreamErrorEvent,
+  ChatTitleEvent,
   Citation,
+  Conversation,
 } from '@/services/api/types';
 import { newClientId, type ChatUiMessage } from '../types';
 
 const EMPTY_MESSAGES: ChatUiMessage[] = [];
+
+/** Soft-poll delays while a background LLM title job commits. Mutable for tests. */
+export const titlePollConfig: { delaysMs: number[] } = {
+  delaysMs: [600, 1600, 3200],
+};
 
 function textFromPayload(data: unknown): string {
   if (typeof data === 'string') return data;
@@ -34,6 +41,33 @@ function asCitations(value: unknown): Citation[] {
 function mapApiErrorCode(err: unknown): ApiErrorCode {
   if (err instanceof ApiError) return err.code;
   return 'unknown';
+}
+
+async function pollForConversationTitle(
+  queryClient: QueryClient,
+  workspaceId: string,
+  conversationId: string,
+  isCancelled: () => boolean,
+): Promise<void> {
+  for (const delay of titlePollConfig.delaysMs) {
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    if (isCancelled()) return;
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversation(workspaceId, conversationId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations(workspaceId),
+      }),
+    ]);
+    if (isCancelled()) return;
+    const conv = queryClient.getQueryData<Conversation>(
+      queryKeys.conversation(workspaceId, conversationId),
+    );
+    if (conv?.title?.trim()) return;
+  }
 }
 
 export type UseChatStreamOptions = {
@@ -155,6 +189,24 @@ export function useChatStream({
           }),
         );
         if (payload.title) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.conversations(workspaceId),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.conversation(workspaceId, conversationId),
+          });
+        }
+        return;
+      }
+
+      if (event === 'title') {
+        const payload = data as ChatTitleEvent;
+        if (payload.title?.trim()) {
+          queryClient.setQueryData(
+            queryKeys.conversation(workspaceId, conversationId),
+            (prev: { title?: string | null } | undefined) =>
+              prev ? { ...prev, title: payload.title } : prev,
+          );
           void queryClient.invalidateQueries({
             queryKey: queryKeys.conversations(workspaceId),
           });
@@ -291,6 +343,11 @@ export function useChatStream({
       setError(null);
       setErrorCode(null);
 
+      const existing = queryClient.getQueryData<Conversation>(
+        queryKeys.conversation(workspaceId, conversationId),
+      );
+      const expectTitle = !existing?.title?.trim();
+      let turnCompleted = false;
       const accumulate = { text: '' };
 
       try {
@@ -299,6 +356,7 @@ export function useChatStream({
           trimmed,
           {
             onEvent(event, data) {
+              if (event === 'message_complete') turnCompleted = true;
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,
@@ -364,6 +422,15 @@ export function useChatStream({
         setIsStreaming(false);
         abortRef.current = null;
         await invalidateConversationCaches();
+        if (expectTitle && turnCompleted) {
+          const scopedId = conversationId;
+          void pollForConversationTitle(
+            queryClient,
+            workspaceId,
+            scopedId,
+            () => conversationIdRef.current !== scopedId,
+          );
+        }
       }
     },
     [
@@ -372,6 +439,8 @@ export function useChatStream({
       handleStreamEvents,
       invalidateConversationCaches,
       isStreaming,
+      queryClient,
+      workspaceId,
     ],
   );
 
@@ -405,6 +474,11 @@ export function useChatStream({
       setError(null);
       setErrorCode(null);
 
+      const existing = queryClient.getQueryData<Conversation>(
+        queryKeys.conversation(workspaceId, conversationId),
+      );
+      const expectTitle = !existing?.title?.trim();
+      let turnCompleted = false;
       const accumulate = { text: '' };
 
       try {
@@ -413,6 +487,7 @@ export function useChatStream({
           assistantMessageId,
           {
             onEvent(event, data) {
+              if (event === 'message_complete') turnCompleted = true;
               handleStreamEvents(event, data, {
                 userClientId,
                 assistantClientId,
@@ -477,6 +552,15 @@ export function useChatStream({
         setIsStreaming(false);
         abortRef.current = null;
         await invalidateConversationCaches();
+        if (expectTitle && turnCompleted) {
+          const scopedId = conversationId;
+          void pollForConversationTitle(
+            queryClient,
+            workspaceId,
+            scopedId,
+            () => conversationIdRef.current !== scopedId,
+          );
+        }
       }
     },
     [
@@ -485,6 +569,8 @@ export function useChatStream({
       handleStreamEvents,
       invalidateConversationCaches,
       isStreaming,
+      queryClient,
+      workspaceId,
     ],
   );
 

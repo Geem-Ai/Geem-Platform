@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { ApiError } from '@/services/api/errors';
@@ -12,7 +12,7 @@ vi.mock('@/services/api/conversations', () => ({
   retryConversationMessageStream: (...args: unknown[]) => retryMock(...args),
 }));
 
-import { useChatStream } from './useChatStream';
+import { useChatStream, titlePollConfig } from './useChatStream';
 
 function createWrapper() {
   const client = new QueryClient({
@@ -26,9 +26,16 @@ function createWrapper() {
 }
 
 describe('useChatStream', () => {
+  const defaultTitlePollDelays = titlePollConfig.delaysMs;
+
   beforeEach(() => {
     streamMock.mockReset();
     retryMock.mockReset();
+    titlePollConfig.delaysMs = [];
+  });
+
+  afterEach(() => {
+    titlePollConfig.delaysMs = defaultTitlePollDelays;
   });
 
   it('optimistically appends user + assistant and reconciles IDs without duplicates', async () => {
