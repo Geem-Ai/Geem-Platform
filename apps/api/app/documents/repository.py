@@ -104,6 +104,20 @@ class DocumentRepository:
             .limit(1)
         )
 
+    def latest_jobs_by_document_ids(
+        self, document_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, IngestionJob]:
+        """Latest IngestionJob per document (Postgres DISTINCT ON)."""
+        if not document_ids:
+            return {}
+        rows = self.db.scalars(
+            select(IngestionJob)
+            .where(IngestionJob.document_id.in_(document_ids))
+            .distinct(IngestionJob.document_id)
+            .order_by(IngestionJob.document_id, IngestionJob.created_at.desc())
+        ).all()
+        return {job.document_id: job for job in rows}
+
     def failed_pages(self, document_id: uuid.UUID) -> list[DocumentPage]:
         return list(
             self.db.scalars(

@@ -166,19 +166,22 @@ def list_expert_documents(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> list[ExpertKnowledgeItemOut]:
-    from app.documents.service import DocumentService
+    from app.documents.repository import DocumentRepository
+    from app.documents.service import compute_document_progress
 
     svc = ExpertService(db)
-    doc_svc = DocumentService(db)
     items = svc.list_knowledge_items(
         workspace=access.workspace,
         membership=access.membership,
         actor=access.user,
         expert_id=expert_id,
     )
+    jobs_by_doc = DocumentRepository(db).latest_jobs_by_document_ids(
+        [document.id for _, document in items]
+    )
     out: list[ExpertKnowledgeItemOut] = []
     for link, document in items:
-        prog = doc_svc.progress(document)
+        prog = compute_document_progress(document, jobs_by_doc.get(document.id))
         out.append(
             ExpertKnowledgeItemOut(
                 id=link.id,

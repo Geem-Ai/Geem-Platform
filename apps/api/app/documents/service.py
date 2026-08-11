@@ -57,6 +57,25 @@ class WorkspaceUploadResult:
     reused: bool
 
 
+def compute_document_progress(
+    document: Document, job: IngestionJob | None
+) -> dict:
+    """DB-only progress snapshot — safe for list endpoints (no storage/vector clients)."""
+    processed = job.processed_pages if job else 0
+    failed = job.failed_pages if job else 0
+    total = document.page_count or 1
+    progress = min(1.0, processed / total) if document.status != "ready" else 1.0
+    if document.status == "ready":
+        progress = 1.0
+    return {
+        "processed_pages": processed,
+        "failed_pages": failed,
+        "current_stage": job.current_stage if job else None,
+        "progress": progress,
+        "job_id": str(job.id) if job else None,
+    }
+
+
 class DocumentService:
     def __init__(
         self,
@@ -278,20 +297,7 @@ class DocumentService:
     # ------------------------------------------------------------------
 
     def progress(self, document: Document) -> dict:
-        job = self.repo.latest_job(document.id)
-        processed = job.processed_pages if job else 0
-        failed = job.failed_pages if job else 0
-        total = document.page_count or 1
-        progress = min(1.0, processed / total) if document.status != "ready" else 1.0
-        if document.status == "ready":
-            progress = 1.0
-        return {
-            "processed_pages": processed,
-            "failed_pages": failed,
-            "current_stage": job.current_stage if job else None,
-            "progress": progress,
-            "job_id": str(job.id) if job else None,
-        }
+        return compute_document_progress(document, self.repo.latest_job(document.id))
 
     def pages_for_document(self, document_id: uuid.UUID) -> list[DocumentPage]:
         return self.repo.pages_for_document(document_id)
