@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
   MessageSquare,
+  Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,56 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
+function ConversationRowShimmer() {
+  return (
+    <div
+      className="flex items-center gap-2 rounded-md px-3 py-2"
+      data-testid="conversation-row-shimmer"
+    >
+      <div className="size-3.5 shrink-0 rounded bg-muted animate-pulse" />
+      <div className="h-3 w-[65%] rounded bg-muted animate-pulse" />
+    </div>
+  );
+}
+
+function ConversationSectionShimmer({
+  title,
+  rows = 2,
+}: {
+  title: string;
+  rows?: number;
+}) {
+  return (
+    <div className="px-1.5 mb-3" data-testid="conversation-section-shimmer">
+      <SectionHeader label={title} />
+      <div className="space-y-0.5">
+        {Array.from({ length: rows }, (_, i) => (
+          <ConversationRowShimmer key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Sidebar loading: Pinned + Recent section headers with row shimmers. */
+export function ConversationListsShimmer() {
+  const { t } = useTranslation();
+  return (
+    <div data-testid="conversation-lists-shimmer">
+      <ConversationSectionShimmer title={t('chat.pinned')} rows={2} />
+      <ConversationSectionShimmer title={t('chat.recent')} rows={3} />
+    </div>
+  );
+}
+
+/** Favorites-only filter loading state. */
+export function FavoriteConversationsShimmer() {
+  const { t } = useTranslation();
+  return (
+    <ConversationSectionShimmer title={t('chat.favorites')} rows={3} />
+  );
+}
+
 function conversationTitle(c: Conversation, untitled: string) {
   return c.title?.trim() || untitled;
 }
@@ -55,6 +106,7 @@ function ConversationRow({ conversation, selected, onOpenChange }: ConversationR
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const title = conversationTitle(conversation, t('chat.untitled'));
+  const isFavorite = Boolean(conversation.is_favorite);
 
   async function togglePin() {
     try {
@@ -64,6 +116,22 @@ function ConversationRow({ conversation, selected, onOpenChange }: ConversationR
       });
       toast.success(
         conversation.is_pinned ? t('chat.unpinSuccess') : t('chat.pinSuccess'),
+      );
+    } catch (err) {
+      const key =
+        err instanceof ApiError ? errorMessageKey(err.code) : 'errors.generic';
+      toast.error(t(key));
+    }
+  }
+
+  async function toggleFavorite() {
+    try {
+      await update.mutateAsync({
+        conversationId: conversation.id,
+        input: { is_favorite: !isFavorite },
+      });
+      toast.success(
+        isFavorite ? t('chat.unfavoriteSuccess') : t('chat.favoriteSuccess'),
       );
     } catch (err) {
       const key =
@@ -113,6 +181,9 @@ function ConversationRow({ conversation, selected, onOpenChange }: ConversationR
           >
             <MessageSquare className="size-3.5 shrink-0 text-muted-foreground/60" />
             <span className="truncate">{title}</span>
+            {isFavorite && (
+              <Star className="size-3 shrink-0 fill-amber-400 text-amber-400 ms-auto" />
+            )}
           </Link>
         </Button>
 
@@ -124,11 +195,18 @@ function ConversationRow({ conversation, selected, onOpenChange }: ConversationR
               size="sm"
               className="size-6 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 shrink-0"
               aria-label={t('chat.conversationActions')}
+              data-testid={`conversation-actions-${conversation.id}`}
             >
               <MoreHorizontal className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => void toggleFavorite()}>
+              <Star
+                className={cn('size-3.5', isFavorite && 'fill-amber-400 text-amber-400')}
+              />
+              {isFavorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void togglePin()}>
               {conversation.is_pinned ? (
                 <>
@@ -229,6 +307,7 @@ export function PinnedConversations({
     <ConversationListSection
       title={t('chat.pinned')}
       conversations={pinned}
+      emptyLabel={t('chat.noPinned')}
       testId="pinned-conversations"
       onOpenChange={onOpenChange}
     />
@@ -250,6 +329,26 @@ export function RecentConversations({
       conversations={recent}
       emptyLabel={conversations.length === 0 ? t('chat.noConversations') : undefined}
       testId="recent-conversations"
+      onOpenChange={onOpenChange}
+    />
+  );
+}
+
+export function FavoriteConversations({
+  conversations,
+  onOpenChange,
+}: {
+  conversations: Conversation[];
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const favorites = conversations.filter((c) => c.is_favorite);
+  return (
+    <ConversationListSection
+      title={t('chat.favorites')}
+      conversations={favorites}
+      emptyLabel={t('chat.noFavorites')}
+      testId="favorite-conversations"
       onOpenChange={onOpenChange}
     />
   );

@@ -17,6 +17,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from app.conversations.chat_orchestrator import ChatOrchestrator
 from app.conversations.schemas import (
+    ConversationClearHistoryOut,
     ConversationCreateRequest,
     ConversationDetailOut,
     ConversationMessageStreamRequest,
@@ -70,6 +71,20 @@ def list_conversations(
     )
 
 
+@router.delete("", response_model=ConversationClearHistoryOut)
+def clear_conversation_history(
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> ConversationClearHistoryOut:
+    """Soft-delete all conversations for the current user in this Workspace."""
+    deleted = ConversationService(db).clear_history(
+        workspace=access.workspace,
+        membership=access.membership,
+        actor=access.user,
+    )
+    return ConversationClearHistoryOut(deleted_count=deleted)
+
+
 @router.get("/{conversation_id}", response_model=ConversationDetailOut)
 def get_conversation(
     conversation_id: uuid.UUID,
@@ -103,6 +118,7 @@ def update_conversation(
         title=body.title,
         title_provided=title_provided,
         is_pinned=body.is_pinned,
+        is_favorite=body.is_favorite,
     )
     return svc.to_out(conversation)
 

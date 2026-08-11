@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Languages, LogOut, Moon, Sun, UserRound } from 'lucide-react';
+import {
+  Building2,
+  Check,
+  Languages,
+  LogOut,
+  Moon,
+  Plus,
+  Sun,
+  UserRound,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -45,7 +54,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const { user, logout, logoutAll } = useAuth();
-  const { currentWorkspace } = useWorkspace();
+  const { availableWorkspaces, currentWorkspace, selectWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const locale = (i18n.language === 'ar' ? 'ar' : 'en') as AppLocale;
 
@@ -76,7 +85,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
     <>
       <DropdownMenu>
         {isCollapsed ? (
-          <DropdownMenuTrigger className="cursor-pointer">
+          <DropdownMenuTrigger className="cursor-pointer" data-testid="account-menu-trigger">
             <Avatar className="size-9">
               <AvatarFallback>{initials(user?.email)}</AvatarFallback>
             </Avatar>
@@ -87,6 +96,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
               className={cn(
                 'flex items-center gap-2.5 lg:px-2 py-1.5 rounded-md hover:bg-muted transition-colors w-full',
               )}
+              data-testid="account-menu-trigger"
             >
               <Avatar className="size-9">
                 <AvatarFallback>
@@ -106,14 +116,55 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
         )}
 
         <DropdownMenuContent
-          className="w-56"
+          className="w-64"
           side="top"
           align="start"
           sideOffset={11}
         >
-          <DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
-          <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-            {currentWorkspace?.name}
+          <div className="flex items-center gap-2.5 px-2.5 py-1.5">
+            <Avatar className="size-9">
+              <AvatarFallback>{initials(user?.email)}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col items-start min-w-0">
+              <span className="text-sm font-semibold text-foreground truncate w-full">
+                {user?.email ?? t('shell.accountPlaceholder')}
+              </span>
+              <span className="text-xs text-muted-foreground truncate w-full">
+                {currentWorkspace?.name ?? t('shell.workspacePlaceholder')}
+              </span>
+            </div>
+          </div>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <Building2 className="size-3.5" />
+            {t('shell.workspaces')}
+          </DropdownMenuLabel>
+          {availableWorkspaces.map((ws) => (
+            <DropdownMenuItem
+              key={ws.id}
+              onClick={() => selectWorkspace(ws.id)}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="truncate">
+                {ws.name}
+                <span className="ms-1 text-xs text-muted-foreground">
+                  ({t(`roles.${ws.role}`)})
+                </span>
+              </span>
+              {currentWorkspace?.id === ws.id && (
+                <Check className="size-3.5 shrink-0" />
+              )}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuItem
+            onClick={() => {
+              navigate('/workspaces/new');
+            }}
+          >
+            <Plus className="size-3.5" />
+            {t('shell.createWorkspace')}
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

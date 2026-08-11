@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import {
+  clearConversationHistory,
   createConversation,
   deleteConversation,
   updateConversation,
   type ConversationCreateInput,
   type ConversationUpdateInput,
 } from '@/services/api/conversations';
-import { queryKeys } from '@/services/api/query-keys';
+import { queryKeys, workspaceQueryKey } from '@/services/api/query-keys';
 import type { Conversation } from '@/services/api/types';
 
 function useWorkspaceId() {
@@ -68,6 +69,20 @@ export function useDeleteConversation() {
       });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+      });
+    },
+  });
+}
+
+export function useClearConversationHistory() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => clearConversationHistory(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspaceQueryKey(workspaceId, 'conversations'),
       });
     },
   });

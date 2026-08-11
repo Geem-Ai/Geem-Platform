@@ -40,12 +40,13 @@ class ConversationCreateRequest(BaseModel):
 
 
 class ConversationUpdateRequest(BaseModel):
-    """Rename and/or pin/unpin. Expert is immutable once the conversation exists."""
+    """Rename and/or pin/favorite. Expert is immutable once the conversation exists."""
 
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, max_length=MAX_CONVERSATION_TITLE_LENGTH)
     is_pinned: bool | None = None
+    is_favorite: bool | None = None
 
     @field_validator("title")
     @classmethod
@@ -54,6 +55,10 @@ class ConversationUpdateRequest(BaseModel):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+
+class ConversationClearHistoryOut(BaseModel):
+    deleted_count: int
 
 
 class ConversationExpertSummary(BaseModel):
@@ -103,6 +108,8 @@ class ConversationOut(BaseModel):
     title: str | None
     is_pinned: bool
     pinned_at: datetime | None
+    is_favorite: bool = False
+    favorited_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     expert: ConversationExpertSummary | None = None

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.conversations.models import MessageRole, MessageStatus
-from app.conversations.title import derive_conversation_title
+from app.conversations.title import derive_conversation_title, persist_generated_conversation_title
 from app.core.errors import AppError, ErrorCategory
 from app.experts.models import ExpertStatus, ExpertType, ExpertVisibility
 from app.identity.models import PlatformRole
@@ -151,18 +151,33 @@ def test_derive_conversation_title_unicode_and_trim() -> None:
     assert len(titled) <= 41
 
 
+def test_sanitize_generated_title_strips_wrappers() -> None:
+    from app.conversations.title import sanitize_generated_title
+
+    assert sanitize_generated_title('  "Policy overview"  ') == "Policy overview"
+    assert sanitize_generated_title("Title: Hiring process") == "Hiring process"
+
+
 # ---------------------------------------------------------------------------
 # Standard flow
 # ---------------------------------------------------------------------------
 
 
+@patch(
+    "app.conversations.title.generate_conversation_title",
+    return_value="Policy question",
+)
+@patch(
+    "app.conversations.chat_orchestrator.schedule_conversation_title",
+    side_effect=persist_generated_conversation_title,
+)
 @patch("app.experts.query_service.ExpertQueryService.resolve_knowledge", return_value=MagicMock())
 @patch(
     "app.experts.query_service.ExpertQueryService.query_stream",
     side_effect=_fake_stream_success,
 )
 def test_stream_turn_persists_messages_and_citations(
-    _mock_stream, _mock_resolve, client, register_user, db
+    _mock_stream, _mock_resolve, _mock_schedule, _mock_title, client, register_user, db
 ) -> None:
     user = register_user(email="4b-flow@example.com")
     ws = _create_workspace(client, user["access_token"], "Flow", "conv-4b-flow")
@@ -190,13 +205,15 @@ def test_stream_turn_persists_messages_and_citations(
     assert "token" in names
     assert "final" in names
     assert "message_complete" in names
+    # Title is generated after unlock (background); not held on the SSE stream.
+    assert "title" not in names
 
     start = next(d for n, d in events if n == "message_start")
     final = next(d for n, d in events if n == "final")
     assert start["conversation_id"] == conv["id"]
     assert start["user_message_id"]
     assert start["assistant_message_id"]
-    assert start.get("title")  # auto-titled from first message
+    assert "title" not in start
     assert final["assistant_message_id"] == start["assistant_message_id"]
     assert final["citations"][0]["document_title"] == "Policy"
     assert set(final["citations"][0].keys()) == {
@@ -220,7 +237,8 @@ def test_stream_turn_persists_messages_and_citations(
     assert body[1]["citations"][0]["snippet"] == "safe snippet"
 
     detail = client.get(f"/api/conversations/{conv['id']}", headers=headers).json()
-    assert detail["title"] == "What does the policy say?"
+    assert detail["title"] == "Policy question"
+    _mock_schedule.assert_called_once()
 
 
 @patch("app.experts.query_service.ExpertQueryService.resolve_knowledge", return_value=MagicMock())

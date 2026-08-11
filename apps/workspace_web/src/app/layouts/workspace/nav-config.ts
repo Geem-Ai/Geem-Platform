@@ -5,7 +5,6 @@ import {
   HardDrive,
   KeyRound,
   LayoutDashboard,
-  MessageSquare,
   Settings,
   Sparkles,
   Users,
@@ -20,7 +19,6 @@ export type NavItem = {
 };
 
 export const workspaceNav: NavItem[] = [
-  { id: 'chat', labelKey: 'nav.chat', to: '/chat', icon: MessageSquare },
   { id: 'overview', labelKey: 'nav.overview', to: '/overview', icon: LayoutDashboard },
   { id: 'experts', labelKey: 'nav.experts', to: '/experts', icon: Sparkles },
   {

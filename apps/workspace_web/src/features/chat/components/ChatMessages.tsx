@@ -34,10 +34,38 @@ export function ChatMessages({
   if (isLoading) {
     return (
       <div
-        className={cn('flex flex-1 items-center justify-center', className)}
+        className={cn(
+          'flex flex-1 flex-col gap-1 px-4 sm:px-6 py-4',
+          className,
+        )}
         data-testid="chat-messages-loading"
+        aria-busy="true"
+        aria-label={t('chat.loadingHistory')}
       >
-        <p className="text-sm text-muted-foreground">{t('chat.loadingHistory')}</p>
+        {[false, true, false].map((isUser, i) => (
+          <div
+            key={i}
+            className={cn(
+              'flex items-start gap-3 py-4',
+              isUser && 'flex-row-reverse',
+            )}
+          >
+            <div className="size-8 shrink-0 rounded-full bg-muted animate-pulse" />
+            <div
+              className={cn(
+                'flex flex-col gap-2 flex-1 min-w-0',
+                isUser && 'items-end',
+              )}
+            >
+              <div
+                className={cn(
+                  'h-16 rounded-2xl bg-muted animate-pulse',
+                  isUser ? 'w-[55%] rounded-ee-sm' : 'w-[70%] rounded-es-sm',
+                )}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

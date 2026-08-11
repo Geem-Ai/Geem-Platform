@@ -221,6 +221,8 @@ export type Conversation = {
   title: string | null;
   is_pinned: boolean;
   pinned_at: string | null;
+  is_favorite?: boolean;
+  favorited_at?: string | null;
   created_at: string;
   updated_at: string;
   expert: ConversationExpertSummary | null;
@@ -244,7 +246,13 @@ export type ChatMessageStartEvent = {
   conversation_id: string;
   user_message_id: string;
   assistant_message_id: string;
+  /** @deprecated Prefer the post-turn ``title`` SSE event (LLM-generated). */
   title?: string;
+};
+
+export type ChatTitleEvent = {
+  conversation_id: string;
+  title: string;
 };
 
 export type ChatMessageCompleteEvent = {

@@ -158,3 +158,29 @@ def enqueue_ingest(
         actor_id=actor_id,
     )
     return result.id
+
+
+@celery_app.task(name="generate_conversation_title", bind=True, max_retries=2)
+def generate_conversation_title_task(
+    self,
+    conversation_id: str,
+    workspace_id: str,
+    user_id: str,
+    user_message: str,
+    assistant_message: str,
+) -> dict:
+    """Background LLM title after the first successful chat turn (lock already released)."""
+    from app.conversations.title import persist_generated_conversation_title
+
+    titled = persist_generated_conversation_title(
+        conversation_id=uuid.UUID(conversation_id),
+        workspace_id=uuid.UUID(workspace_id),
+        user_id=uuid.UUID(user_id),
+        user_message=user_message,
+        assistant_message=assistant_message,
+    )
+    return {
+        "conversation_id": conversation_id,
+        "title": titled,
+        "task_id": getattr(self.request, "id", None),
+    }

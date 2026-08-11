@@ -27,7 +27,7 @@ from app.conversations.models import (
 from app.conversations.policy import ConversationAction, ConversationPolicy
 from app.conversations.repository import ConversationRepository
 from app.conversations.service import ConversationService
-from app.conversations.title import derive_conversation_title
+from app.conversations.title import schedule_conversation_title
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.query_service import ExpertQueryService
@@ -96,7 +96,8 @@ class ChatOrchestrator:
         user_msg: Message | None = None
         settled = False
         accumulated = ""
-        title_set: str | None = None
+        needs_title = False
+        title_job: dict[str, Any] | None = None
 
         try:
             # Heal abandoned streaming rows (worker crash after insert, lock TTL expired).
@@ -123,6 +124,8 @@ class ChatOrchestrator:
                 expert_id=conversation.expert_id,
             )
 
+            needs_title = not bool((conversation.title or "").strip())
+
             now = datetime.now(timezone.utc)
             user_msg = Message(
                 conversation_id=conversation.id,
@@ -134,14 +137,6 @@ class ChatOrchestrator:
                 updated_at=now,
             )
             self.repo.create_message(user_msg)
-
-            if not conversation.title:
-                title_set = derive_conversation_title(
-                    question,
-                    max_length=self.settings.conversation_title_max_length,
-                )
-                if title_set:
-                    conversation.title = title_set
 
             assistant = Message(
                 conversation_id=conversation.id,
@@ -157,16 +152,12 @@ class ChatOrchestrator:
             self.db.commit()
             self.db.refresh(user_msg)
             self.db.refresh(assistant)
-            if title_set:
-                self.db.refresh(conversation)
 
             start_data: dict[str, Any] = {
                 "conversation_id": str(conversation.id),
                 "user_message_id": str(user_msg.id),
                 "assistant_message_id": str(assistant.id),
             }
-            if title_set:
-                start_data["title"] = title_set
             yield {"event": "message_start", "data": start_data}
 
             history = self._history_payload(conversation.id, before_message_id=user_msg.id)
@@ -261,6 +252,15 @@ class ChatOrchestrator:
                     },
                 }
                 return
+
+            if settled and needs_title and user_msg is not None and assistant is not None:
+                title_job = {
+                    "conversation_id": conversation.id,
+                    "workspace_id": workspace.id,
+                    "user_id": actor.id,
+                    "user_message": user_msg.content,
+                    "assistant_message": assistant.content or accumulated,
+                }
         except GeneratorExit:
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
@@ -274,6 +274,9 @@ class ChatOrchestrator:
             raise
         finally:
             self.lock.release(conversation_id)
+            # Title LLM runs after unlock so busy/streaming clear immediately.
+            if title_job is not None:
+                schedule_conversation_title(**title_job)
 
     def stream_retry(
         self,
@@ -308,6 +311,8 @@ class ChatOrchestrator:
         user_msg: Message | None = None
         settled = False
         accumulated = ""
+        needs_title = not bool((conversation.title or "").strip())
+        title_job: dict[str, Any] | None = None
 
         try:
             stale_before = datetime.now(timezone.utc) - timedelta(
@@ -482,6 +487,16 @@ class ChatOrchestrator:
                     },
                 }
                 return
+
+            if settled and needs_title and user_msg is not None and assistant is not None:
+                # First successful answer may still lack a title (failed first attempt).
+                title_job = {
+                    "conversation_id": conversation.id,
+                    "workspace_id": workspace.id,
+                    "user_id": actor.id,
+                    "user_message": user_msg.content,
+                    "assistant_message": assistant.content or accumulated,
+                }
         except GeneratorExit:
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
@@ -493,6 +508,8 @@ class ChatOrchestrator:
             raise
         finally:
             self.lock.release(conversation_id)
+            if title_job is not None:
+                schedule_conversation_title(**title_job)
 
     # ------------------------------------------------------------------
     # Internals

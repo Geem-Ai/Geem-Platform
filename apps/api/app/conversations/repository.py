@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import case, select
+from sqlalchemy import case, select, update
 from sqlalchemy.orm import Session
 
 from app.conversations.models import Conversation, Message, MessageStatus
@@ -71,6 +71,27 @@ class ConversationRepository:
     def soft_delete(self, conversation: Conversation, when: datetime | None = None) -> None:
         conversation.soft_delete(when=when)
         self.db.flush()
+
+    def soft_delete_all_for_user(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        user_id: uuid.UUID,
+        when: datetime | None = None,
+    ) -> int:
+        """Soft-delete every active conversation for this user in the workspace."""
+        stamp = when or datetime.now(timezone.utc)
+        result = self.db.execute(
+            update(Conversation)
+            .where(
+                Conversation.workspace_id == workspace_id,
+                Conversation.user_id == user_id,
+                Conversation.deleted_at.is_(None),
+            )
+            .values(deleted_at=stamp, updated_at=stamp)
+        )
+        self.db.flush()
+        return int(result.rowcount or 0)
 
     def list_messages(
         self,

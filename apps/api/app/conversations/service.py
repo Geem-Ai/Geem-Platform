@@ -124,6 +124,7 @@ class ConversationService:
         title: str | None = None,
         title_provided: bool = False,
         is_pinned: bool | None = None,
+        is_favorite: bool | None = None,
     ) -> Conversation:
         ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
         conversation = self._require_owned(
@@ -144,6 +145,14 @@ class ConversationService:
         elif is_pinned is False:
             if conversation.pinned_at is not None:
                 conversation.pinned_at = None
+                changed = True
+        if is_favorite is True:
+            if conversation.favorited_at is None:
+                conversation.favorited_at = datetime.now(timezone.utc)
+                changed = True
+        elif is_favorite is False:
+            if conversation.favorited_at is not None:
+                conversation.favorited_at = None
                 changed = True
 
         if not changed:
@@ -171,6 +180,22 @@ class ConversationService:
         )
         self.repo.soft_delete(conversation)
         self.db.commit()
+
+    def clear_history(
+        self,
+        *,
+        workspace: Workspace,
+        membership: WorkspaceMembership,
+        actor: User,
+    ) -> int:
+        """Soft-delete all of the actor's conversations in this workspace."""
+        ConversationPolicy.require(membership.role, ConversationAction.DELETE)
+        deleted = self.repo.soft_delete_all_for_user(
+            workspace_id=workspace.id,
+            user_id=actor.id,
+        )
+        self.db.commit()
+        return deleted
 
     def list_messages(
         self,
@@ -351,6 +376,8 @@ class ConversationService:
             title=conversation.title,
             is_pinned=conversation.is_pinned,
             pinned_at=conversation.pinned_at,
+            is_favorite=conversation.is_favorite,
+            favorited_at=conversation.favorited_at,
             created_at=conversation.created_at,
             updated_at=conversation.updated_at,
             expert=self._expert_summary(expert) if expert else None,
