@@ -35,7 +35,7 @@ export function SidebarHeader() {
 
   return (
     <div className="flex items-center justify-between shrink-0 px-3 py-3.5">
-      <Link to="/" className="flex items-center gap-2 min-w-0">
+      <Link to="/chat" className="flex items-center gap-2 min-w-0">
         <img
           src={geemAvatarUrl()}
           alt={t('app.name')}

@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
 import { canAskExpert } from '../lib/capabilities';
+import { localizeExpertDisplay } from '../lib/localize';
 import { AiStarsMark } from './AiStarsMark';
 import { ExpertStatusBadge } from './ExpertStatusBadge';
 
@@ -21,6 +22,7 @@ export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
   const navigate = useNavigate();
   const canAsk = canAskExpert(expert.status);
   const isPlatform = expert.ownership === 'platform';
+  const display = localizeExpertDisplay(expert, t);
 
   function openExpert() {
     if (onOpen) {
@@ -47,19 +49,19 @@ export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
             'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30',
           )}
           onClick={openExpert}
-          aria-label={expert.name}
+          aria-label={display.name}
         >
           <div className="flex items-start gap-3">
             <AiStarsMark />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-semibold tracking-tight truncate leading-5">
-                  {expert.name}
+                  {display.name}
                 </h3>
                 <ExpertStatusBadge status={expert.status} />
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2 min-h-8 leading-relaxed">
-                {expert.description?.trim() || t('experts.noDescription')}
+                {display.description?.trim() || t('experts.noDescription')}
               </p>
             </div>
           </div>
@@ -68,6 +70,11 @@ export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
             <Badge variant="secondary" appearance="light" size="sm">
               {isPlatform ? t('experts.platformBadge') : t('experts.type.workspace')}
             </Badge>
+            {expert.knowledge_mode === 'general' && (
+              <Badge variant="primary" appearance="light" size="sm">
+                {t('chat.geemGeneralBadge')}
+              </Badge>
+            )}
             {!isPlatform && (
               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <FileText className="size-3.5 opacity-70" aria-hidden />

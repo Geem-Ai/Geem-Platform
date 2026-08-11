@@ -8,6 +8,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import {
+  PinnedConversations,
+  RecentConversations,
+} from '@/features/chat/components/ConversationLists';
+import { NewChatButton } from '@/features/chat/components/NewChatButton';
+import { useConversations } from '@/features/chat/hooks/useConversations';
 import { useLayout } from './context';
 import { workspaceNav, type NavItem } from './nav-config';
 
@@ -57,6 +63,33 @@ function NavLinkItem({
   );
 }
 
+function ChatHistorySections({ collapsed }: { collapsed: boolean }) {
+  const conversationsQuery = useConversations();
+  const conversations = conversationsQuery.data ?? [];
+
+  if (collapsed) {
+    return (
+      <div className="px-2 pb-2">
+        <NewChatButton collapsed />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 pb-2" data-testid="chat-sidebar-history">
+      <div className="px-2.5 mb-2">
+        <NewChatButton />
+      </div>
+      {conversationsQuery.isLoading ? null : (
+        <>
+          <PinnedConversations conversations={conversations} />
+          <RecentConversations conversations={conversations} />
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SidebarContent() {
   const { t, i18n } = useTranslation();
   const { isSidebarOpen } = useLayout();
@@ -65,25 +98,29 @@ export function SidebarContent() {
 
   return (
     <ScrollArea dir={dir} className="min-h-0 flex-1 w-full">
-      <nav className="p-2.5 space-y-1" aria-label={t('shell.workspacePlaceholder')}>
-        {workspaceNav.map((item) => (
-          <div key={item.id} className="space-y-1">
-            <NavLinkItem item={item} collapsed={collapsed} />
-            {!collapsed &&
-              item.children?.map((child) => (
-                <NavLinkItem
-                  key={child.id}
-                  item={child}
-                  collapsed={collapsed}
-                  nested
-                />
-              ))}
-            {!collapsed && item.children && (
-              <Separator className="my-2 opacity-80" />
-            )}
-          </div>
-        ))}
-      </nav>
+      <div className="flex flex-col gap-1 py-2">
+        <ChatHistorySections collapsed={collapsed} />
+        <Separator className="mx-2.5 my-1 opacity-80" />
+        <nav className="p-2.5 space-y-1" aria-label={t('shell.workspacePlaceholder')}>
+          {workspaceNav.map((item) => (
+            <div key={item.id} className="space-y-1">
+              <NavLinkItem item={item} collapsed={collapsed} />
+              {!collapsed &&
+                item.children?.map((child) => (
+                  <NavLinkItem
+                    key={child.id}
+                    item={child}
+                    collapsed={collapsed}
+                    nested
+                  />
+                ))}
+              {!collapsed && item.children && (
+                <Separator className="my-2 opacity-80" />
+              )}
+            </div>
+          ))}
+        </nav>
+      </div>
     </ScrollArea>
   );
 }

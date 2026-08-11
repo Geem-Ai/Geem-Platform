@@ -15,6 +15,7 @@
 - Phase 3B: no Alembic for Qdrant `expert_ids` — payload index via `QdrantVectorStore._ensure_payload_indexes`; maintenance: `python -m app.maintenance.sync_expert_vector_memberships`, `python -m app.maintenance.phase3b_legacy_library`
 - Phase 4A: `0006_conversations_messages.py` — `conversations` (consumer workspace + user + expert, soft-delete) + `messages` (role/content/citations/status, optional `usage_event_id`)
 - Phase 4B: no Alembic — `ChatOrchestrator` + `POST .../messages/stream` + retry SSE; bounded chat history via settings; generation lock (Redis/memory)
+- Phase 4D: `0007_geem_general_expert.py` — `experts.knowledge_mode` (`rag`|`general`) + unique platform general Expert; seed via `python -m app.identity.bootstrap` (`ensure_geem_general_expert`)
 
 ### Document tenancy (Phase 2C final)
 

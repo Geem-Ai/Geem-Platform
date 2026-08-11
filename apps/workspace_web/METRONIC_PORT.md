@@ -70,7 +70,7 @@ Production stack aligned with the approved plan:
 - `radix-ui` (unified package used by Metronic shadcn primitives)
 - `@tanstack/react-query`
 - `i18next`, `react-i18next`
-- `react-markdown`, `remark-gfm` (wired in Phase 3C Ask Expert / MessageRenderer)
+- `react-markdown`, `remark-gfm` (wired in Phase 3C Ask Expert / MessageRenderer; Phase 4C Chat bubbles)
 
 ## Phase 3C — Experts UX + Stateless Ask Expert
 
@@ -96,20 +96,34 @@ Ported into Geem as:
 
 Pattern kept: list page stays mounted; floating inset `Sheet` (`inset-5`, rounded, header/body/footer) opens for add/edit/view. Inventory domain (SKU, stock, variants, charts) was **not** ported.
 
-Still deferred to Phase 4: conversation persistence, recent/pinned chats, Metronic `chat-message` / `chat-starter*` full chrome, history sidebar.
+Phase 3C stateless Ask UI was replaced by Phase 4C persisted Chat (below).
+
+## Phase 4C — Production Metronic AI Chat UX
+
+Selectively adapted from `samples/metronic_vite_9.5.0/src/ai/**` into `features/chat/**` (no runtime sample imports, zero mock chat state):
+
+| Sample reference | Production |
+|------------------|------------|
+| `chat-starter*` | `ChatStarter.tsx` + `ChatComposer.tsx` + `ExpertSelector.tsx` |
+| `chat-message` / `chat-messages` | `ChatMessage.tsx` / `ChatMessages.tsx` (+ `react-markdown`, Geem avatar) |
+| `recent-chats` / `pinned-chats` / `new-chat-button` | `ConversationLists.tsx` / `NewChatButton.tsx` in workspace sidebar |
+| `pages/start.tsx` / `pages/chat.tsx` | `ChatStartPage.tsx` (`/chat`) / `ChatPage.tsx` (`/chat/:conversationId`) |
+| Share dialog / model selector | **Not ported** (no backend share; Experts replace models) |
+
+Production data: Conversations REST + SSE (`useChatStream`), Workspace-scoped React Query keys, pin/rename/delete mutations.
 
 ## Intentionally excluded
 
 - Entire `src/ai/mock/**` (no demo data / fake chat replies)
-- Full AI chat history chrome (`chat-message`, `chat-starter*`, pinned/recent) — Phase 4
 - Dead AI files: `model-selector.tsx`, `new-chat-context.tsx`
-- `chats-context.tsx`, pinned/recent chats, AI model selector as product logic
-- Demo auth / fake user avatars (`300-2.png`, KeenAI logos)
-- Concepts: CRM, Mail, Calendar, Todo, Real Estate, Store Inventory
+- `chats-context.tsx`, AI model selector as product logic
+- Demo auth / fake user avatars (`300-2.png`, KeenAI logos, `logo-34.svg`)
+- Concepts: CRM, Mail, Calendar, Todo, Real Estate, Store Inventory (except Sheet interaction pattern already noted in 3C)
 - `modules-provider.tsx` multi-demo router
 - `src/styles/demos/**`
 - Unrelated Metronic deps (apexcharts, leaflet, formik, dnd-kit, vaul, cmdk, etc.)
 - Most of `public/media/**`
+- Fake share dialog
 
 ## Branding
 

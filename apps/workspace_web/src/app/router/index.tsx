@@ -8,7 +8,8 @@ import {
 import { PlaceholderPage } from '@/components/shared/PlaceholderPage';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
-import { AskExpertPage } from '@/features/chat/pages/AskExpertPage';
+import { ChatPage } from '@/features/chat/pages/ChatPage';
+import { ChatStartPage } from '@/features/chat/pages/ChatStartPage';
 import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { MembersPage } from '@/features/members/pages/MembersPage';
 import { CreateWorkspacePage } from '@/features/workspaces/pages/CreateWorkspacePage';
@@ -30,8 +31,10 @@ export function AppRouter() {
 
         <Route element={<WorkspaceShellRoute />}>
           <Route element={<WorkspaceLayout />}>
-            <Route index element={<OverviewPage />} />
-            <Route path="chat" element={<AskExpertPage />} />
+            <Route index element={<Navigate to="/chat" replace />} />
+            <Route path="chat" element={<ChatStartPage />} />
+            <Route path="chat/:conversationId" element={<ChatPage />} />
+            <Route path="overview" element={<OverviewPage />} />
             {/* Experts list hosts Metronic-style create/edit/view Sheets */}
             <Route path="experts" element={<ExpertsPage />} />
             <Route path="experts/new" element={<ExpertsPage />} />

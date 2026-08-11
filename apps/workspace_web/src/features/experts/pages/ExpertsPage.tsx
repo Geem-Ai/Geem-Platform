@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import type { Expert } from '@/services/api/types';
 import { canCreateExpert } from '../lib/capabilities';
+import { localizeExpertDisplay } from '../lib/localize';
 import { useExperts } from '../hooks/useExperts';
 import { ExpertDetailSheet } from '../components/ExpertDetailSheet';
 import { ExpertFormSheet } from '../components/ExpertFormSheet';
@@ -63,30 +64,27 @@ export function ExpertsPage() {
 
   const query = search.trim().toLowerCase();
 
+  function matchesExpertSearch(e: Expert): boolean {
+    if (!query) return true;
+    const display = localizeExpertDisplay(e, t);
+    return (
+      display.name.toLowerCase().includes(query) ||
+      (display.description ?? '').toLowerCase().includes(query) ||
+      e.name.toLowerCase().includes(query) ||
+      (e.description ?? '').toLowerCase().includes(query)
+    );
+  }
+
   const workspaceExperts = useMemo(
     () =>
-      allExperts.filter((e) => {
-        if (e.ownership !== 'workspace') return false;
-        if (!query) return true;
-        return (
-          e.name.toLowerCase().includes(query) ||
-          (e.description ?? '').toLowerCase().includes(query)
-        );
-      }),
-    [allExperts, query],
+      allExperts.filter((e) => e.ownership === 'workspace' && matchesExpertSearch(e)),
+    [allExperts, query, t],
   );
 
   const platformExperts = useMemo(
     () =>
-      allExperts.filter((e) => {
-        if (e.ownership !== 'platform') return false;
-        if (!query) return true;
-        return (
-          e.name.toLowerCase().includes(query) ||
-          (e.description ?? '').toLowerCase().includes(query)
-        );
-      }),
-    [allExperts, query],
+      allExperts.filter((e) => e.ownership === 'platform' && matchesExpertSearch(e)),
+    [allExperts, query, t],
   );
 
   const workspaceCount = allExperts.filter((e) => e.ownership === 'workspace').length;

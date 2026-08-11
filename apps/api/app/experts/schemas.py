@@ -44,6 +44,7 @@ class ExpertOut(BaseModel):
     status: str
     visibility: str
     availability_mode: str
+    knowledge_mode: str = "rag"
     created_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime

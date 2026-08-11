@@ -1,6 +1,5 @@
 /**
- * Conversation API client (Phase 4A CRUD + Phase 4B stream helpers).
- * Full Metronic Chat UX wiring is Phase 4C.
+ * Conversation API client (Phase 4A CRUD + Phase 4B stream + Phase 4C Chat UX).
  */
 
 import type {

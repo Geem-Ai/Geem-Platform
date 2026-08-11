@@ -41,6 +41,7 @@ from app.experts.models import (
     Expert,
     ExpertAvailabilityMode,
     ExpertDocument,
+    ExpertKnowledgeMode,
     ExpertSource,
     ExpertSourceStatus,
     ExpertSourceType,
@@ -211,6 +212,15 @@ class ExpertService:
                 extra={"expert_id": str(expert_id), "error": str(exc)},
             )
 
+    @staticmethod
+    def _reject_general_knowledge_mutation(expert: Expert) -> None:
+        """Geem General (knowledge_mode=general) cannot attach knowledge."""
+        if expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert does not support knowledge sources.",
+            )
+
     # ------------------------------------------------------------------
     # Workspace-facing
     # ------------------------------------------------------------------
@@ -260,6 +270,7 @@ class ExpertService:
             status=st,
             visibility=vis,
             availability_mode=ExpertAvailabilityMode.SELECTED_WORKSPACES.value,
+            knowledge_mode=ExpertKnowledgeMode.RAG.value,
             created_by=actor.id,
         )
         self.repo.create(expert)
@@ -417,6 +428,7 @@ class ExpertService:
             action=ExpertAction.MANAGE_KNOWLEDGE,
             actor_id=actor.id,
         )
+        self._reject_general_knowledge_mutation(auth.expert)
         link = self.repo.get_document_link(auth.expert.id, document_id)
         if link is None:
             raise AppError(ErrorCategory.NOT_FOUND, "Expert document link not found.")
@@ -565,6 +577,7 @@ class ExpertService:
         source_id: uuid.UUID | None,
         actor_id: uuid.UUID,
     ) -> ExpertDocument:
+        self._reject_general_knowledge_mutation(expert)
         # Scoped lookup — never Document.get globally then compare loosely.
         document = self.documents.get_for_workspace(expected_document_workspace_id, document_id)
         if document is None:
@@ -713,6 +726,7 @@ class ExpertService:
         declared_mime_type: str | None,
         audit_event: str = "expert.document_uploaded",
     ) -> "ExpertUploadResult":
+        self._reject_general_knowledge_mutation(expert)
         # 1. Upload (or reuse) the Document in the knowledge Workspace.
         docs = DocumentService(self.db, self.settings)
         upload: WorkspaceUploadResult = docs.upload_for_workspace_or_link_existing(
@@ -839,6 +853,7 @@ class ExpertService:
             status=st,
             visibility=vis,
             availability_mode=mode,
+            knowledge_mode=ExpertKnowledgeMode.RAG.value,
             created_by=actor.id,
         )
         self.repo.create(expert)
@@ -920,6 +935,11 @@ class ExpertService:
             platform_role=actor.platform_role,
             actor_id=actor.id,
         )
+        if expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert cannot be deleted.",
+            )
         linked_doc_ids = [link.document_id for link in self.repo.list_document_links(expert.id)]
         expert.soft_delete()
         self.db.commit()

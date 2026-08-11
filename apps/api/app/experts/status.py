@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.common.security_log import security_log
 from app.db.models import Document
-from app.experts.models import Expert, ExpertDocument, ExpertStatus
+from app.experts.models import Expert, ExpertDocument, ExpertKnowledgeMode, ExpertStatus
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,44 @@ class ExpertStatusReconciler:
             return None
         if expert.status == ExpertStatus.DISABLED.value:
             return None
+
+        # Geem General (and any knowledge_mode=general) stays ready without docs.
+        if expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            previous = expert.status
+            if previous == ExpertStatus.READY.value:
+                return ReconciliationResult(
+                    expert_id=expert_id,
+                    previous_status=previous,
+                    new_status=previous,
+                    changed=False,
+                    linked_count=0,
+                    ready_count=0,
+                    processing_count=0,
+                    failed_count=0,
+                )
+            expert.status = ExpertStatus.READY.value
+            self.db.commit()
+            security_log(
+                "expert.status_reconciled",
+                expert_id=str(expert_id),
+                previous_status=previous,
+                new_status=ExpertStatus.READY.value,
+                linked_count=0,
+                ready_count=0,
+                processing_count=0,
+                failed_count=0,
+                knowledge_mode="general",
+            )
+            return ReconciliationResult(
+                expert_id=expert_id,
+                previous_status=previous,
+                new_status=ExpertStatus.READY.value,
+                changed=True,
+                linked_count=0,
+                ready_count=0,
+                processing_count=0,
+                failed_count=0,
+            )
 
         counts = self._count_link_states(expert_id)
         new_status = self._derive_status(counts)

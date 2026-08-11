@@ -28,6 +28,7 @@ import {
   canEditExpert,
   canManageExpertKnowledge,
 } from '../lib/capabilities';
+import { localizeExpertDisplay } from '../lib/localize';
 import { useExpert } from '../hooks/useExpert';
 import { useExpertKnowledge } from '../hooks/useExpertKnowledge';
 import { useDeleteExpert } from '../hooks/useExpertMutations';
@@ -73,6 +74,7 @@ export function ExpertDetailSheet({
     ? canManageExpertKnowledge(role, expert.ownership)
     : false;
   const canAsk = expert ? canAskExpert(expert.status) : false;
+  const display = expert ? localizeExpertDisplay(expert, t) : null;
 
   function handleDelete() {
     if (!expert) return;
@@ -101,18 +103,18 @@ export function ExpertDetailSheet({
           <div className="flex items-start justify-between gap-3 pe-8">
             <div className="flex items-center gap-3 min-w-0">
               <ExpertAvatar
-                name={expert?.name ?? t('experts.title')}
+                name={display?.name ?? t('experts.title')}
                 iconUrl={expert?.icon_url}
                 ownership={expert?.ownership ?? 'workspace'}
                 size="md"
               />
               <div className="min-w-0 space-y-1">
                 <SheetTitle className="font-medium truncate">
-                  {expert?.name ?? t('experts.title')}
+                  {display?.name ?? t('experts.title')}
                 </SheetTitle>
-                {expert?.description && (
+                {display?.description && (
                   <p className="text-xs text-muted-foreground line-clamp-2">
-                    {expert.description}
+                    {display.description}
                   </p>
                 )}
               </div>

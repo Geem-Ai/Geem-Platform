@@ -125,6 +125,8 @@ export type Expert = {
   status: string;
   visibility: string;
   availability_mode: string;
+  /** ``rag`` (default) or ``general`` (Geem General LLM-only). */
+  knowledge_mode?: 'rag' | 'general' | string;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -183,7 +185,7 @@ export type ExpertSource = {
   updated_at: string;
 };
 
-/** Phase 4A — Conversation persistence (Chat UX wiring is Phase 4B). */
+/** Phase 4 — Conversation persistence + Chat UX. */
 export type ConversationExpertSummary = {
   id: string;
   type: string;
@@ -193,11 +195,20 @@ export type ConversationExpertSummary = {
   icon_url: string | null;
   status: string;
   visibility: string;
+  knowledge_mode?: 'rag' | 'general' | string;
 };
+
+export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageStatus =
+  | 'pending'
+  | 'streaming'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
 
 export type MessagePreview = {
   id: string;
-  role: string;
+  role: MessageRole | string;
   content: string;
   created_at: string;
 };
@@ -219,11 +230,46 @@ export type Conversation = {
 export type ConversationMessage = {
   id: string;
   conversation_id: string;
-  role: string;
+  role: MessageRole | string;
   content: string;
   citations: Citation[];
-  status: string;
+  status: MessageStatus | string;
   usage_event_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** SSE payloads from ChatOrchestrator (Phase 4B). */
+export type ChatMessageStartEvent = {
+  conversation_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  title?: string;
+};
+
+export type ChatMessageCompleteEvent = {
+  conversation_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  status: MessageStatus | string;
+  citations: Citation[];
+};
+
+export type ChatFinalEvent = {
+  answer?: string;
+  citations?: Citation[];
+  insufficient_context?: boolean;
+  conversation_id?: string;
+  user_message_id?: string;
+  assistant_message_id?: string;
+  status?: MessageStatus | string;
+};
+
+export type ChatStreamErrorEvent = {
+  error?: string;
+  message?: string;
+  conversation_id?: string;
+  user_message_id?: string | null;
+  assistant_message_id?: string | null;
+  status?: MessageStatus | string;
 };

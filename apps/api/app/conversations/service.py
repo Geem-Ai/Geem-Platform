@@ -373,6 +373,7 @@ class ConversationService:
             icon_url=expert.icon_url,
             status=expert.status,
             visibility=expert.visibility,
+            knowledge_mode=getattr(expert, "knowledge_mode", None) or "rag",
         )
 
     @staticmethod

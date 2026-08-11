@@ -29,6 +29,7 @@ from app.db.session import SessionLocal
 from app.identity.models import PlatformRole, User, UserStatus
 from app.identity.repository import UserRepository
 from app.identity.security import hash_password, normalize_email, validate_password
+from app.experts.geem_general import ensure_geem_general_expert
 from app.workspaces.service import WorkspaceService
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,9 @@ def bootstrap_platform_admin(
 
         # Platform Knowledge system Workspace — no tenant memberships.
         WorkspaceService(db, settings).ensure_platform_knowledge_workspace()
+
+        # Geem General Platform Expert (LLM-only; available to all workspaces).
+        ensure_geem_general_expert(db, settings=settings)
 
         return user
     finally:

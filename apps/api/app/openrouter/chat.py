@@ -130,20 +130,34 @@ class OpenRouterChatProvider:
                 history=history,
             )
 
-    def answer_general(self, question: str) -> dict:
+    def answer_general(
+        self,
+        question: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
         """Non-RAG general-knowledge answer (plain markdown)."""
         primary = self._general_model()
         try:
-            return self._call_text(primary, question)
+            return self._call_text(primary, question, history=history)
         except AppError:
-            return self._call_text(self.settings.openrouter_chat_fallback_model, question)
+            return self._call_text(
+                self.settings.openrouter_chat_fallback_model,
+                question,
+                history=history,
+            )
 
-    def answer_general_stream(self, question: str) -> Iterator[dict[str, Any]]:
+    def answer_general_stream(
+        self,
+        question: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
         """Stream a plain-markdown general-knowledge answer."""
         primary = self._general_model()
         completed = False
         try:
-            for event in self._call_text_stream(primary, question):
+            for event in self._call_text_stream(primary, question, history=history):
                 if event.get("type") == "done":
                     completed = True
                 yield event
@@ -152,7 +166,9 @@ class OpenRouterChatProvider:
                 raise
             yield {"type": "replace", "text": ""}
             yield from self._call_text_stream(
-                self.settings.openrouter_chat_fallback_model, question
+                self.settings.openrouter_chat_fallback_model,
+                question,
+                history=history,
             )
 
     def _general_model(self) -> str:
@@ -191,15 +207,120 @@ class OpenRouterChatProvider:
             "provider": self.client.provider_preferences(),
         }
 
-    def _text_payload(self, model: str, question: str, *, stream: bool) -> dict[str, Any]:
+    def _text_payload(
+        self,
+        model: str,
+        question: str,
+        *,
+        stream: bool,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        messages: list[dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
+        for turn in history or []:
+            role = (turn.get("role") or "").strip()
+            content = turn.get("content") or ""
+            if role in {"user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": question})
         return {
             "model": model,
-            "messages": [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": question},
-            ],
+            "messages": messages,
             "stream": stream,
             "provider": self.client.provider_preferences(),
+        }
+
+    def _call_text(
+        self,
+        model: str,
+        question: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict:
+        payload = self._text_payload(model, question, stream=False, history=history)
+        payload.pop("stream", None)
+        body, meta, status = self.client.request(
+            "POST",
+            "/chat/completions",
+            json_body=payload,
+            timeout=120.0,
+        )
+        if status >= 400 or not body:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                f"General chat generation failed with status {status}",
+                details={"model": model, "openrouter_id": (meta or {}).get("openrouter_id")},
+                retryable=status in {429, 500, 502, 503, 504, 529},
+            )
+        choices = body.get("choices") or []
+        if not choices:
+            raise AppError(ErrorCategory.GENERATION_FAILED, "No choices in general chat response")
+        content = (choices[0].get("message", {}) or {}).get("content") or ""
+        return {
+            "answer_markdown": content.strip(),
+            "model": body.get("model") or model,
+            "prompt_version": self.settings.general_prompt_version,
+            "_meta": {
+                "openrouter_id": meta.get("openrouter_id"),
+                "usage": meta.get("usage"),
+                "request_id": meta.get("request_id"),
+            },
+        }
+
+    def _call_text_stream(
+        self,
+        model: str,
+        question: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        payload = self._text_payload(model, question, stream=True, history=history)
+        buffer = ""
+        resolved_model = model
+        request_id: str | None = None
+        openrouter_id: str | None = None
+        usage: Any = None
+        for chunk in self.client.stream(
+            "POST",
+            "/chat/completions",
+            json_body=payload,
+            timeout=180.0,
+        ):
+            request_id = chunk.get("_request_id") or request_id
+            if chunk.get("model"):
+                resolved_model = chunk["model"]
+            if chunk.get("id"):
+                openrouter_id = chunk["id"]
+            if chunk.get("usage"):
+                usage = chunk["usage"]
+
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            piece = delta.get("content") or ""
+            if not piece and not buffer:
+                message = choices[0].get("message") or {}
+                piece = message.get("content") or ""
+            if not piece:
+                continue
+            buffer += piece
+            yield {"type": "delta", "text": piece}
+
+        if not buffer.strip():
+            raise AppError(ErrorCategory.GENERATION_FAILED, "Empty streamed general chat response")
+
+        yield {
+            "type": "done",
+            "result": {
+                "answer_markdown": buffer.strip(),
+                "model": resolved_model,
+                "prompt_version": self.settings.general_prompt_version,
+                "_meta": {
+                    "openrouter_id": openrouter_id,
+                    "usage": usage,
+                    "request_id": request_id,
+                },
+            },
         }
 
     def _call(
@@ -308,88 +429,6 @@ class OpenRouterChatProvider:
         elif final_answer != emitted and final_answer:
             yield {"type": "replace", "text": final_answer}
         yield {"type": "done", "result": parsed}
-
-    def _call_text(self, model: str, question: str) -> dict:
-        payload = self._text_payload(model, question, stream=False)
-        payload.pop("stream", None)
-        body, meta, status = self.client.request(
-            "POST",
-            "/chat/completions",
-            json_body=payload,
-            timeout=120.0,
-        )
-        if status >= 400 or not body:
-            raise AppError(
-                ErrorCategory.GENERATION_FAILED,
-                f"General chat generation failed with status {status}",
-                details={"model": model, "openrouter_id": (meta or {}).get("openrouter_id")},
-                retryable=status in {429, 500, 502, 503, 504, 529},
-            )
-        choices = body.get("choices") or []
-        if not choices:
-            raise AppError(ErrorCategory.GENERATION_FAILED, "No choices in general chat response")
-        content = (choices[0].get("message", {}) or {}).get("content") or ""
-        return {
-            "answer_markdown": content.strip(),
-            "model": body.get("model") or model,
-            "prompt_version": self.settings.general_prompt_version,
-            "_meta": {
-                "openrouter_id": meta.get("openrouter_id"),
-                "usage": meta.get("usage"),
-                "request_id": meta.get("request_id"),
-            },
-        }
-
-    def _call_text_stream(self, model: str, question: str) -> Iterator[dict[str, Any]]:
-        payload = self._text_payload(model, question, stream=True)
-        buffer = ""
-        resolved_model = model
-        request_id: str | None = None
-        openrouter_id: str | None = None
-        usage: Any = None
-        for chunk in self.client.stream(
-            "POST",
-            "/chat/completions",
-            json_body=payload,
-            timeout=180.0,
-        ):
-            request_id = chunk.get("_request_id") or request_id
-            if chunk.get("model"):
-                resolved_model = chunk["model"]
-            if chunk.get("id"):
-                openrouter_id = chunk["id"]
-            if chunk.get("usage"):
-                usage = chunk["usage"]
-
-            choices = chunk.get("choices") or []
-            if not choices:
-                continue
-            delta = choices[0].get("delta") or {}
-            piece = delta.get("content") or ""
-            if not piece and not buffer:
-                message = choices[0].get("message") or {}
-                piece = message.get("content") or ""
-            if not piece:
-                continue
-            buffer += piece
-            yield {"type": "delta", "text": piece}
-
-        if not buffer.strip():
-            raise AppError(ErrorCategory.GENERATION_FAILED, "Empty streamed general chat response")
-
-        yield {
-            "type": "done",
-            "result": {
-                "answer_markdown": buffer.strip(),
-                "model": resolved_model,
-                "prompt_version": self.settings.general_prompt_version,
-                "_meta": {
-                    "openrouter_id": openrouter_id,
-                    "usage": usage,
-                    "request_id": request_id,
-                },
-            },
-        }
 
     def _parse_json_content(self, content: str) -> dict:
         text = content.strip()
