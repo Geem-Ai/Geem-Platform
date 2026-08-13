@@ -148,10 +148,10 @@ async function rawFetch(
   }
 }
 
-export async function apiRequest<T>(
+async function authorizedFetch(
   path: string,
   options: RequestOptions = {},
-): Promise<T> {
+): Promise<Response> {
   const res = await rawFetch(path, options);
 
   if (res.status === 401 && !options.skipAuth) {
@@ -165,10 +165,7 @@ export async function apiRequest<T>(
         }
         throw err;
       }
-      if (retry.status === 204) {
-        return undefined as T;
-      }
-      return (await retry.json()) as T;
+      return retry;
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.code === 'session_expired' || err.code === 'session_revoked')) {
         clientConfig.onSessionInvalid?.();
@@ -181,11 +178,58 @@ export async function apiRequest<T>(
     throw await parseError(res);
   }
 
+  return res;
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const res = await authorizedFetch(path, options);
   if (res.status === 204) {
     return undefined as T;
   }
-
   return (await res.json()) as T;
+}
+
+export type BlobDownload = {
+  blob: Blob;
+  filename: string;
+  contentType: string;
+};
+
+export function filenameFromContentDisposition(
+  header: string | null,
+  fallback = 'download',
+): string {
+  if (!header) return fallback;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1]);
+    } catch {
+      return star[1];
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(header);
+  if (quoted?.[1]) return quoted[1];
+  const plain = /filename=([^;]+)/i.exec(header);
+  if (plain?.[1]) return plain[1].trim();
+  return fallback;
+}
+
+export async function apiRequestBlob(
+  path: string,
+  options: RequestOptions = {},
+): Promise<BlobDownload> {
+  const res = await authorizedFetch(path, options);
+  return {
+    blob: await res.blob(),
+    filename: filenameFromContentDisposition(
+      res.headers.get('Content-Disposition'),
+    ),
+    contentType: res.headers.get('Content-Type') || 'application/octet-stream',
+  };
 }
 
 export { buildHeaders, parseError, rawFetch };

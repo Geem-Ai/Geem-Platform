@@ -425,7 +425,7 @@ def test_9_upload_exceeding_quota_blocked(
     assert body["used"] == 0
     assert body["remaining"] == body["limit"]
     assert _summary(client, headers)["storage"]["used_bytes"] == 0
-    assert client.get("/api/documents", headers=headers).json() == []
+    assert client.get("/api/documents", headers=headers).json()["items"] == []
 
 
 def test_10_same_workspace_hash_reuse_does_not_double_charge(
@@ -536,7 +536,7 @@ def test_13_failed_upload_releases_reservation(
     db.expire_all()
     assert _reserved_bytes(db, workspace_id) == 0
     assert _summary(client, headers)["storage"]["used_bytes"] == 0
-    assert client.get("/api/documents", headers=headers).json() == []
+    assert client.get("/api/documents", headers=headers).json()["items"] == []
     rows = db.query(StorageReservation).filter_by(workspace_id=workspace_id).all()
     assert all(r.status != StorageReservationStatus.RESERVED.value for r in rows)
 
@@ -596,18 +596,18 @@ def test_14_delete_updates_billable_storage(
     assert any(e.reason == StorageUsageReason.DELETE.value and e.delta_bytes == -len(pdf) for e in events)
 
     workspace = db.get(Workspace, uuid.UUID(ws["id"]))
-    restored = DocumentService(db).restore_for_workspace(workspace, uuid.UUID(doc_id))
-    assert restored.deleted_at is None
+    with pytest.raises(AppError) as restore_exc:
+        DocumentService(db).restore_for_workspace(workspace, uuid.UUID(doc_id))
+    assert restore_exc.value.category == ErrorCategory.DOCUMENT_DELETED
+    assert _summary(client, headers)["storage"]["used_bytes"] == 0
+
+    again = _upload(client, headers, pdf, "keep.pdf")
+    assert again.status_code == 200
+    assert again.json()["id"] != doc_id
     assert _summary(client, headers)["storage"]["used_bytes"] == len(pdf)
 
     other = _unique_pdf(b"s14b")
     assert _upload(client, headers, other, "nope.pdf").status_code == 429
-
-    assert client.delete(f"/api/documents/{doc_id}", headers=headers).status_code == 200
-    assert _summary(client, headers)["storage"]["used_bytes"] == 0
-    restored_again = DocumentService(db).restore_for_workspace(workspace, uuid.UUID(doc_id))
-    assert restored_again.deleted_at is None
-    assert _summary(client, headers)["storage"]["used_bytes"] == len(pdf)
 
 
 def test_15_concurrent_uploads_cannot_exceed_quota(

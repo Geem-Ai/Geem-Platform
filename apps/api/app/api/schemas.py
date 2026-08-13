@@ -13,6 +13,11 @@ class DocumentCreateResponse(BaseModel):
     byte_size: int | None = None
 
 
+class DocumentExpertRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class DocumentSummary(BaseModel):
     id: uuid.UUID
     title: str
@@ -29,6 +34,14 @@ class DocumentSummary(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     completed_at: datetime | None = None
+    experts: list[DocumentExpertRef] = Field(default_factory=list)
+
+
+class DocumentListOut(BaseModel):
+    items: list[DocumentSummary]
+    total: int = 0
+    limit: int = 25
+    offset: int = 0
 
 
 class FailedPageInfo(BaseModel):

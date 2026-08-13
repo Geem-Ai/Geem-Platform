@@ -23,6 +23,7 @@ import { ApiKeysPage } from '@/features/api-keys/pages/ApiKeysPage';
 import { ApiUsagePage } from '@/features/api-keys/pages/ApiUsagePage';
 import { UsageHistoryPage } from '@/features/usage/pages/UsageHistoryPage';
 import { UsagePage } from '@/features/usage/pages/UsagePage';
+import { StoragePage } from '@/features/storage/pages/StoragePage';
 
 export function AppRouter() {
   return (
@@ -52,10 +53,7 @@ export function AppRouter() {
             <Route path="api/usage" element={<ApiUsagePage />} />
             <Route path="apps" element={<PlaceholderPage titleKey="nav.apps" />} />
             <Route path="members" element={<MembersPage />} />
-            <Route
-              path="storage"
-              element={<PlaceholderPage titleKey="nav.storage" />}
-            />
+            <Route path="storage" element={<StoragePage />} />
             <Route
               path="billing"
               element={<Navigate to="/billing/subscription" replace />}
