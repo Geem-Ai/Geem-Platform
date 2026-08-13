@@ -1,1 +1,1 @@
-"""App Store catalog + installations — Phase 9 foundations."""
+"""App Store catalog + installations — Phase 8 foundations."""

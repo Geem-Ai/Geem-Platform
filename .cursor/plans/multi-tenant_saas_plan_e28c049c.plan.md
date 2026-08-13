@@ -27,13 +27,13 @@ todos:
     content: "Phase 7: 7A PASS + 7B PASS + 7C PASS (API Keys + OpenAI-compatible Chat Completions + API Usage UI). Do not start Phase 8 until requested."
     status: completed
   - id: phase-8
-    content: "Phase 8: Platform Admin APIs + apps/dashboard_web (separate from workspace_web)"
+    content: "Phase 8: App Store foundations + Apps UI in AI Concept visual language"
     status: pending
   - id: phase-9
-    content: "Phase 9: App Store foundations + Apps UI in AI Concept visual language"
+    content: "Phase 9: Hardening — soft-delete purge, audit, isolation/load/UI tests"
     status: pending
   - id: phase-10
-    content: "Phase 10: Hardening — soft-delete purge, audit, isolation/load/UI tests"
+    content: "Phase 10: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
     status: pending
 isProject: false
 ---
@@ -94,7 +94,7 @@ apps/
 ├── api/                 # FastAPI backend (existing)
 ├── web/                 # Existing MVP UI — keep as-is (do not rename or delete)
 ├── workspace_web/       # New Workspace tenant product UI (this plan)
-├── dashboard_web/       # Platform Admin UI (future — Phase 8+)
+├── dashboard_web/       # Platform Admin UI (future — Phase 10, last)
 └── landpage_web/        # Marketing / landing site (future)
 ```
 
@@ -688,7 +688,7 @@ Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SEL
 
 ## 17. App Store foundations
 
-Catalog + installation tables + encrypted config; no connector implementations yet. UI in Phase 9 uses AI Concept visual language (cards/dialogs), not another Metronic concept app.
+Catalog + installation tables + encrypted config; no connector implementations yet. UI in Phase 8 uses AI Concept visual language (cards/dialogs), not another Metronic concept app.
 
 ---
 
@@ -1014,7 +1014,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Billing history (`/billing/history`) lists Workspace `purchases`; credit ledger linked via Usage history
 - Existing `/billing/usage` kept; Overview “Manage subscription”; EN/AR + RTL; workspace-scoped React Query keys
 
-**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 8), enabling two gateways at once.
+**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 10), enabling two gateways at once.
 
 **Acceptance (full Phase 6):** Pay for a plan or credit pack through the enabled gateway via redirect; return is verified server-side and applied once; switching the enabled gateway does not change `BillingService` call sites.
 
@@ -1059,19 +1059,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ---
 
-### Phase 8 — Platform Admin (separate scope / future `dashboard_web`)
-
-**Status:** pending
-
-**Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
-
-**UI:** Implement as a **separate** frontend app — prefer scaffolding `apps/dashboard_web` when this phase starts (not pages inside `workspace_web`). May reuse the same shadcn/Metronic **primitive patterns** (copied or later shared package), but keep Platform Admin IA, routing, authz, and deployment separate from the Workspace product.
-
-**Acceptance:** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only.
-
----
-
-### Phase 9 — App Store foundations + Apps UI
+### Phase 8 — App Store foundations + Apps UI
 
 **Status:** pending
 
@@ -1081,11 +1069,23 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ---
 
-### Phase 10 — Hardening
+### Phase 9 — Hardening
 
 **Status:** pending
 
 Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass.
+
+---
+
+### Phase 10 — Platform Admin (separate scope / future `dashboard_web`)
+
+**Status:** pending — **last step.** Do not start until Phase 8 (App Store) and Phase 9 (Hardening) are complete and this phase is explicitly requested.
+
+**Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
+
+**UI:** Implement as a **separate** frontend app — prefer scaffolding `apps/dashboard_web` when this phase starts (not pages inside `workspace_web`). May reuse the same shadcn/Metronic **primitive patterns** (copied or later shared package), but keep Platform Admin IA, routing, authz, and deployment separate from the Workspace product.
+
+**Acceptance:** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only.
 
 ---
 
