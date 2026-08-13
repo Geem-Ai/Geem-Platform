@@ -1,4 +1,4 @@
-"""Minimal Platform Expert admin APIs (Phase 3A scaffolding for Phase 8).
+"""Minimal Platform Expert admin APIs (Phase 3A scaffolding for Phase 10).
 
 Protected by ``platform_role=admin``. Not the full Platform Admin product surface.
 """
