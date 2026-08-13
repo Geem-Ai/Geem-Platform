@@ -19,7 +19,7 @@ from app.billing.gateways.dtos import (
     GatewayTransactionStatus,
     TransactionQueryResult,
 )
-from app.billing.money import normalize_currency, parse_decimal_money, quantize_money
+from app.billing.money import format_money, parse_decimal_money, require_sar
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 
@@ -95,8 +95,8 @@ class ClickPayGateway:
             "tran_class": "ecom",
             "cart_id": request.cart_id,
             "cart_description": request.description,
-            "cart_currency": normalize_currency(request.currency),
-            "cart_amount": float(quantize_money(request.amount)),
+            "cart_currency": require_sar(request.currency),
+            "cart_amount": format_money(request.amount),
             "hide_shipping": True,
             "return": request.return_url,
             "customer_details": _customer_payload(request),
