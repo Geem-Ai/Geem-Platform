@@ -92,6 +92,8 @@ class IngestionPipeline:
         if not document:
             raise AppError(ErrorCategory.NOT_FOUND, f"Document {document_id} not found")
 
+        self._assert_ingestible(document)
+
         job = self._latest_job(document_id)
         if not job:
             job = IngestionJob(
@@ -102,6 +104,7 @@ class IngestionPipeline:
             )
             self.db.add(job)
             self.db.commit()
+            self._assert_ingestible(document)
 
         document.status = "processing"
         job.status = "processing"
@@ -112,6 +115,7 @@ class IngestionPipeline:
         self.db.commit()
 
         try:
+            self._assert_ingestible(document)
             if mode == "full":
                 self._reset_derived(document)
             self._ensure_page_rows(document)
@@ -120,6 +124,7 @@ class IngestionPipeline:
             else:
                 self._parse_text_document(document, job)
             self.db.refresh(document)
+            self._assert_ingestible(document)
             pages = list(
                 self.db.scalars(select(DocumentPage).where(DocumentPage.document_id == document.id))
             )
@@ -139,8 +144,10 @@ class IngestionPipeline:
 
             job.current_stage = "chunking"
             self.db.commit()
+            self._assert_ingestible(document)
             self._chunk_and_embed(document, job)
 
+            self._assert_ingestible(document)
             document.status = "ready"
             document.completed_at = _utcnow()
             document.failure_reason = None
@@ -155,15 +162,51 @@ class IngestionPipeline:
             # recompute Expert.status for every linked Expert. Soft-fail so a
             # transient Redis/Qdrant issue never rolls the pipeline back.
             self._reconcile_expert_membership_after_ready(document)
+        except AppError as exc:
+            if exc.category == ErrorCategory.DOCUMENT_DELETED:
+                self._mark_job_aborted_for_deleted_document(job)
+                raise
+            self._mark_job_failed(document, job, exc)
+            raise
         except Exception as exc:
             logger.exception("ingestion_failed", extra={"document_id": str(document_id)})
-            document.status = "failed"
-            document.failure_reason = str(exc)[:2000]
-            job.status = "failed"
-            job.last_error = str(exc)[:2000]
-            job.completed_at = _utcnow()
-            self.db.commit()
+            self.db.refresh(document)
+            if document.deleted_at is not None or document.status == "deleting":
+                self._mark_job_aborted_for_deleted_document(job)
+                raise AppError(
+                    ErrorCategory.DOCUMENT_DELETED,
+                    "Document was deleted; aborting ingest",
+                    details={"id": str(document.id)},
+                ) from exc
+            self._mark_job_failed(document, job, exc)
             raise
+
+    def _assert_ingestible(self, document: Document) -> None:
+        """Fail closed if Storage purge soft-deleted the document mid-ingest."""
+        self.db.refresh(document)
+        if document.deleted_at is not None or document.status == "deleting":
+            raise AppError(
+                ErrorCategory.DOCUMENT_DELETED,
+                "Document was deleted; aborting ingest",
+                details={"id": str(document.id)},
+            )
+
+    def _mark_job_aborted_for_deleted_document(self, job: IngestionJob) -> None:
+        """Update the job only — never overwrite soft-delete / deleting on Document."""
+        job.status = "failed"
+        job.last_error = "document_deleted"
+        job.completed_at = _utcnow()
+        self.db.commit()
+
+    def _mark_job_failed(
+        self, document: Document, job: IngestionJob, exc: BaseException
+    ) -> None:
+        document.status = "failed"
+        document.failure_reason = str(exc)[:2000]
+        job.status = "failed"
+        job.last_error = str(exc)[:2000]
+        job.completed_at = _utcnow()
+        self.db.commit()
 
     @staticmethod
     def _needs_ocr(document: Document) -> bool:
@@ -446,6 +489,7 @@ class IngestionPipeline:
                 self.db.commit()
 
     def _chunk_and_embed(self, document: Document, job: IngestionJob) -> None:
+        self._assert_ingestible(document)
         pages = list(
             self.db.scalars(
                 select(DocumentPage)
@@ -568,7 +612,8 @@ class IngestionPipeline:
                     "payload": payload,
                 }
             )
-        # Batch upsert
+        # Batch upsert — refuse to write vectors for a purged document.
+        self._assert_ingestible(document)
         batch = 64
         for i in range(0, len(points), batch):
             self.vectors.upsert(points[i : i + batch])

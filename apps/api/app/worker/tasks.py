@@ -42,6 +42,19 @@ def ingest_document(
         document = db.get(Document, doc_uuid)
         if document is None:
             raise AppError(ErrorCategory.DOCUMENT_NOT_FOUND, "Document not found")
+        if document.deleted_at is not None or document.status == "deleting":
+            security_log(
+                "ingest.skipped_deleted",
+                document_id=document_id,
+                workspace_id=str(task_workspace_id) if task_workspace_id else None,
+                task_id=getattr(self.request, "id", None),
+                action="ingest_skipped",
+            )
+            return {
+                "document_id": document_id,
+                "workspace_id": str(task_workspace_id) if task_workspace_id else None,
+                "status": "deleted",
+            }
 
         # Fail closed on tenant mismatch (including None vs UUID).
         if document.workspace_id != task_workspace_id:
@@ -94,7 +107,11 @@ def ingest_document(
             },
         )
         # Tenant mismatch / forbidden must not retry (would never succeed).
-        if exc.category in {ErrorCategory.FORBIDDEN, ErrorCategory.DOCUMENT_NOT_FOUND}:
+        if exc.category in {
+            ErrorCategory.FORBIDDEN,
+            ErrorCategory.DOCUMENT_NOT_FOUND,
+            ErrorCategory.DOCUMENT_DELETED,
+        }:
             return {
                 "document_id": document_id,
                 "workspace_id": workspace_id,

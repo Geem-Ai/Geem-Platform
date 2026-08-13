@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.schemas import (
     DocumentCreateResponse,
     DocumentDetail,
+    DocumentExpertRef,
+    DocumentListOut,
     DocumentSummary,
     FailedPageInfo,
     JobResponse,
@@ -24,8 +26,8 @@ from app.workspaces.policy import WorkspaceAction
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
-def content_disposition_inline(filename: str) -> str:
-    """Build a latin-1-safe Content-Disposition header for inline PDF viewing.
+def content_disposition(filename: str, *, inline: bool = False) -> str:
+    """Build a latin-1-safe Content-Disposition header.
 
     Starlette encodes header values as latin-1; Arabic/other Unicode filenames
     must use RFC 5987 ``filename*`` with an ASCII ``filename`` fallback.
@@ -35,10 +37,15 @@ def content_disposition_inline(filename: str) -> str:
     if not ascii_name or ascii_name in {'"', "'"}:
         ascii_name = "document.pdf"
     ascii_name = ascii_name.replace("\\", "_").replace('"', "'")
-    return f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(raw)}"
+    kind = "inline" if inline else "attachment"
+    return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(raw)}"
 
 
-def _summary(svc: DocumentService, doc) -> DocumentSummary:
+def content_disposition_inline(filename: str) -> str:
+    return content_disposition(filename, inline=True)
+
+
+def _summary(svc: DocumentService, doc, *, experts: list[DocumentExpertRef] | None = None) -> DocumentSummary:
     prog = svc.progress(doc)
     return DocumentSummary(
         id=doc.id,
@@ -56,6 +63,7 @@ def _summary(svc: DocumentService, doc) -> DocumentSummary:
         created_at=doc.created_at,
         updated_at=doc.updated_at,
         completed_at=doc.completed_at,
+        experts=experts or [],
     )
 
 
@@ -91,15 +99,31 @@ async def upload_document(
     )
 
 
-@router.get("", response_model=list[DocumentSummary])
+@router.get("", response_model=DocumentListOut)
 def list_documents(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
-) -> list[DocumentSummary]:
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=200),
+) -> DocumentListOut:
     svc = DocumentService(db)
     access.require_action(WorkspaceAction.LIST_DOCUMENTS)
-    docs = svc.list_for_workspace(access.workspace)
-    return [_summary(svc, d) for d in docs]
+    docs, total, refs = svc.list_page_for_workspace(
+        access.workspace, limit=limit, offset=offset, q=q
+    )
+    items = [
+        _summary(
+            svc,
+            doc,
+            experts=[
+                DocumentExpertRef(id=expert_id, name=name)
+                for expert_id, name in refs.get(doc.id, [])
+            ],
+        )
+        for doc in docs
+    ]
+    return DocumentListOut(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{document_id}", response_model=DocumentDetail)
@@ -155,11 +179,11 @@ def download_file(
 ) -> Response:
     svc = DocumentService(db)
     access.require_action(WorkspaceAction.READ_DOCUMENT)
-    data, filename = svc.get_file_for_workspace(access.workspace, document_id)
+    data, filename, mime_type = svc.get_file_for_workspace(access.workspace, document_id)
     return Response(
         content=data,
-        media_type="application/pdf",
-        headers={"Content-Disposition": content_disposition_inline(filename)},
+        media_type=mime_type,
+        headers={"Content-Disposition": content_disposition(filename)},
     )
 
 

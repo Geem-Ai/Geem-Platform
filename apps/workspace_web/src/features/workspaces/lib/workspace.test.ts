@@ -6,6 +6,7 @@ import {
   workspaceRootDomain,
 } from '@/features/workspaces/lib/hostname';
 import {
+  canDeleteStorageFiles,
   canDeleteWorkspace,
   canManageApiKeys,
   canManageMembers,
@@ -65,6 +66,9 @@ describe('role helpers', () => {
     expect(canManageApiKeys('owner')).toBe(true);
     expect(canManageApiKeys('admin')).toBe(true);
     expect(canManageApiKeys('member')).toBe(false);
+    expect(canDeleteStorageFiles('owner')).toBe(true);
+    expect(canDeleteStorageFiles('admin')).toBe(true);
+    expect(canDeleteStorageFiles('member')).toBe(false);
   });
 });
 
@@ -158,6 +162,27 @@ describe('i18n coverage', () => {
     expect(errorMessageKey('quota_exceeded')).toBe('errors.quotaExceeded');
     expect(errorMessageKey('expert_limit_reached')).toBe('errors.expertLimitReached');
     expect(errorMessageKey('storage_quota_exceeded')).toBe('errors.storageQuotaExceeded');
+  });
+
+  it('has matching storage keys in en and ar', () => {
+    expect(en.storage.title).toBeTruthy();
+    expect(ar.storage.title).toBeTruthy();
+    expect(en.storage.filesTitle).toBeTruthy();
+    expect(ar.storage.filesTitle).toBeTruthy();
+    expect(en.storage.columnActions).toBeTruthy();
+    expect(ar.storage.columnActions).toBeTruthy();
+    expect(en.storage.pageCountOne).toBeTruthy();
+    expect(ar.storage.pageCountOne).toBeTruthy();
+    expect(en.storage.deleteHint).toBeTruthy();
+    expect(ar.storage.deleteHint).toBeTruthy();
+    expect(en.storage.confirmDelete).toBeTruthy();
+    expect(ar.storage.confirmDelete).toBeTruthy();
+    expect(en.common.download).toBeTruthy();
+    expect(ar.common.download).toBeTruthy();
+    expect(Object.keys(en.storage).sort()).toEqual(Object.keys(ar.storage).sort());
+    expect(Object.keys(en.storage.fileType).sort()).toEqual(
+      Object.keys(ar.storage.fileType).sort(),
+    );
   });
 
   it('has matching billing keys in en and ar', () => {

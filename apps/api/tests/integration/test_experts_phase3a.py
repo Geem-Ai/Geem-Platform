@@ -557,4 +557,4 @@ def test_expert_soft_delete_keeps_documents(
 
     # Document still listed in workspace
     docs = client.get("/api/documents", headers=headers)
-    assert doc_id in {d["id"] for d in docs.json()}
+    assert doc_id in {d["id"] for d in docs.json()["items"]}

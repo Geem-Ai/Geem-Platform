@@ -58,6 +58,11 @@ export type Member = {
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
+export type DocumentExpertRef = {
+  id: string;
+  name: string;
+};
+
 export type DocumentSummary = {
   id: string;
   title: string;
@@ -74,6 +79,14 @@ export type DocumentSummary = {
   created_at: string | null;
   updated_at: string | null;
   completed_at: string | null;
+  experts?: DocumentExpertRef[];
+};
+
+export type DocumentListPage = {
+  items: DocumentSummary[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type DocumentDetail = DocumentSummary & {

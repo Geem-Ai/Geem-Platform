@@ -103,8 +103,8 @@ def test_cross_tenant_document_isolation(client, register_user, mock_storage_and
     list_b = client.get("/api/documents", headers=_ws_headers(user_b["access_token"], ws_b))
     assert list_a.status_code == 200
     assert list_b.status_code == 200
-    ids_a = {d["id"] for d in list_a.json()}
-    ids_b = {d["id"] for d in list_b.json()}
+    ids_a = {d["id"] for d in list_a.json()["items"]}
+    ids_b = {d["id"] for d in list_b.json()["items"]}
     assert doc_a in ids_a and doc_b not in ids_a
     assert doc_b in ids_b and doc_a not in ids_b
 
@@ -201,8 +201,8 @@ def test_cross_tenant_document_isolation(client, register_user, mock_storage_and
         ).status_code
         == 404
     )
-    # Soft delete does not call MinIO/Qdrant purge in Phase 2A
-    storage.delete.assert_not_called()
+    # Phase 8: logical delete also purges MinIO objects
+    assert storage.delete.called
 
 
 def test_forged_workspace_header_and_host_denied_for_documents(
@@ -326,7 +326,8 @@ def test_new_user_workspace_does_not_see_other_workspace_docs(
     ws = _create_workspace(client, newbie["access_token"], "Newbie", "newbie-ws")
     listed = client.get("/api/documents", headers=_ws_headers(newbie["access_token"], ws))
     assert listed.status_code == 200
-    assert listed.json() == []
+    assert listed.json()["items"] == []
+    assert listed.json()["total"] == 0
     assert (
         client.get(
             f"/api/documents/{seed_id}",

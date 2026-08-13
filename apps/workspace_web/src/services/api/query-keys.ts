@@ -17,7 +17,13 @@ export const queryKeys = {
   workspaces: ['workspaces'] as const,
   members: (workspaceId: string) => workspaceQueryKey(workspaceId, 'members'),
   workspace: (workspaceId: string) => workspaceQueryKey(workspaceId, 'detail'),
-  documents: (workspaceId: string) => workspaceQueryKey(workspaceId, 'documents'),
+  documents: (
+    workspaceId: string,
+    params?: { limit: number; offset: number; q?: string },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'documents', params)
+      : workspaceQueryKey(workspaceId, 'documents'),
   document: (workspaceId: string, documentId: string) =>
     workspaceQueryKey(workspaceId, 'documents', documentId),
   experts: (workspaceId: string) => workspaceQueryKey(workspaceId, 'experts'),

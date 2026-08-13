@@ -27,13 +27,16 @@ todos:
     content: "Phase 7: 7A PASS + 7B PASS + 7C PASS (API Keys + OpenAI-compatible Chat Completions + API Usage UI). Do not start Phase 8 until requested."
     status: completed
   - id: phase-8
-    content: "Phase 8: App Store foundations + Apps UI in AI Concept visual language"
-    status: pending
+    content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
+    status: completed
   - id: phase-9
-    content: "Phase 9: Hardening — soft-delete purge, audit, isolation/load/UI tests"
+    content: "Phase 9: App Store foundations + Apps UI in AI Concept visual language"
     status: pending
   - id: phase-10
-    content: "Phase 10: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
+    content: "Phase 10: Hardening — other-entity soft-delete purge, audit, isolation/load/UI tests"
+    status: pending
+  - id: phase-11
+    content: "Phase 11: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
     status: pending
 isProject: false
 ---
@@ -94,7 +97,7 @@ apps/
 ├── api/                 # FastAPI backend (existing)
 ├── web/                 # Existing MVP UI — keep as-is (do not rename or delete)
 ├── workspace_web/       # New Workspace tenant product UI (this plan)
-├── dashboard_web/       # Platform Admin UI (future — Phase 10, last)
+├── dashboard_web/       # Platform Admin UI (future — Phase 11, last)
 └── landpage_web/        # Marketing / landing site (future)
 ```
 
@@ -688,7 +691,7 @@ Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SEL
 
 ## 17. App Store foundations
 
-Catalog + installation tables + encrypted config; no connector implementations yet. UI in Phase 8 uses AI Concept visual language (cards/dialogs), not another Metronic concept app.
+Catalog + installation tables + encrypted config; no connector implementations yet. UI in Phase 9 uses AI Concept visual language (cards/dialogs), not another Metronic concept app.
 
 ---
 
@@ -935,7 +938,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 **Phase 5C delivered (Expert allowance + storage quota):**
 - `experts_limit` enforced on Workspace Expert create/restore with `pg_advisory_xact_lock` (Experts namespace); Platform Experts, Geem General, and grants do not consume slots; soft-deleted Experts do not count
 - `storage_bytes` enforced before chargeable blob persist; reuse-on-hash and Expert-document links do not double-charge; Platform Knowledge (SYSTEM) never counts against tenant storage
-- Logical Document delete releases billable storage; restore re-checks quota. Physical MinIO/Qdrant purge remains a later lifecycle concern
+- Logical Document delete releases billable storage; restore re-checks quota. Physical MinIO/Qdrant/RAG purge of Workspace documents is Phase 8 Storage (not Hardening).
 - Concurrent last-slot Expert create and concurrent uploads: exactly one succeeds; typed `expert_limit_reached` / `storage_quota_exceeded` with metric/limit/used/remaining
 - `GET /api/usage/summary` adds `storage.{limit_bytes,used_bytes,remaining_bytes,percentage}` (byte values stay exact on the API)
 
@@ -1014,7 +1017,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Billing history (`/billing/history`) lists Workspace `purchases`; credit ledger linked via Usage history
 - Existing `/billing/usage` kept; Overview “Manage subscription”; EN/AR + RTL; workspace-scoped React Query keys
 
-**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 10), enabling two gateways at once.
+**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 11), enabling two gateways at once.
 
 **Acceptance (full Phase 6):** Pay for a plan or credit pack through the enabled gateway via redirect; return is verified server-side and applied once; switching the enabled gateway does not change `BillingService` call sites.
 
@@ -1022,7 +1025,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 7 — API keys + public Chat API + API UI
 
-**Status:** **7A PASS + 7B PASS + 7C PASS** (workspace API keys + OpenAI-compatible public Chat Completions + Keys/Usage UI). Do not start Phase 8 until requested.
+**Status:** **7A PASS + 7B PASS + 7C PASS** (workspace API keys + OpenAI-compatible public Chat Completions + Keys/Usage UI). Phase 8 Storage is complete.
 
 **Goal:** OpenAI-compatible public Chat Completions + Models + workspace keys; Keys/Usage pages in shell.
 
@@ -1059,7 +1062,17 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ---
 
-### Phase 8 — App Store foundations + Apps UI
+### Phase 8 — Workspace Storage inventory
+
+**Status:** complete
+
+**Goal:** `/storage` knowledge inventory (quota meter, paginated file list with Expert links, download, irreversible full purge). Not a Documents-first product IA — upload stays on Experts.
+
+**Acceptance:** List is paged and Workspace-isolated; download returns the original blob; delete frees quota and purges MinIO + Qdrant + PG chunks/pages + Expert links; in-flight ingest no-ops; restore fails closed; same file can be re-uploaded as a new document via Expert.
+
+---
+
+### Phase 9 — App Store foundations + Apps UI
 
 **Status:** pending
 
@@ -1069,17 +1082,17 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ---
 
-### Phase 9 — Hardening
+### Phase 10 — Hardening
 
 **Status:** pending
 
-Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass.
+Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
 
 ---
 
-### Phase 10 — Platform Admin (separate scope / future `dashboard_web`)
+### Phase 11 — Platform Admin (separate scope / future `dashboard_web`)
 
-**Status:** pending — **last step.** Do not start until Phase 8 (App Store) and Phase 9 (Hardening) are complete and this phase is explicitly requested.
+**Status:** pending — **last step.** Do not start until Phase 9 (App Store) and Phase 10 (Hardening) are complete and this phase is explicitly requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 

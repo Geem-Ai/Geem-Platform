@@ -61,6 +61,9 @@ export function OverviewPage() {
           <Link to="/members">{t('nav.members')}</Link>
         </Button>
         <Button asChild variant="outline">
+          <Link to="/storage">{t('nav.storage')}</Link>
+        </Button>
+        <Button asChild variant="outline">
           <Link to="/settings">{t('nav.settings')}</Link>
         </Button>
       </div>

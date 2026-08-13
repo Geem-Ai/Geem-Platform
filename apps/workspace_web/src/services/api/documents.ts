@@ -1,13 +1,24 @@
-import type { DocumentDetail, DocumentSummary } from './types';
-import { apiRequest } from './client';
+import type { DocumentDetail, DocumentListPage, DocumentSummary } from './types';
+import { apiRequest, apiRequestBlob } from './client';
+
+export const STORAGE_PAGE_SIZE = 25;
 
 /**
- * Workspace-scoped document API (Phase 2A).
+ * Workspace-scoped document API (Phase 2A + Phase 8 inventory).
  * Workspace context is sent by the shared API client (headers / host);
  * do not pass workspace_id in the body — ownership is server-side.
  */
-export function listDocuments() {
-  return apiRequest<DocumentSummary[]>('/api/documents');
+export function listDocuments(params?: {
+  limit?: number;
+  offset?: number;
+  q?: string;
+}) {
+  const search = new URLSearchParams();
+  search.set('limit', String(params?.limit ?? STORAGE_PAGE_SIZE));
+  search.set('offset', String(params?.offset ?? 0));
+  const q = params?.q?.trim();
+  if (q) search.set('q', q);
+  return apiRequest<DocumentListPage>(`/api/documents?${search.toString()}`);
 }
 
 export function getDocument(documentId: string, debug = false) {
@@ -41,3 +52,9 @@ export function reprocessDocument(documentId: string, mode: 'failed_pages' | 'fu
     },
   );
 }
+
+export function downloadDocumentFile(documentId: string) {
+  return apiRequestBlob(`/api/documents/${documentId}/file`);
+}
+
+export type { DocumentSummary };

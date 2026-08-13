@@ -8,7 +8,7 @@ Stack: FastAPI, Celery, PostgreSQL, Redis, Qdrant, MinIO, React. OpenRouter prov
 
 ## Status
 
-Phases **0–7** of the multi-tenant SaaS plan are complete (through Workspace API Keys/Usage UI). Do not start Phase 8 until requested.
+Phases **0–8** of the multi-tenant SaaS plan are complete (through Workspace Storage inventory). Phase 9 is App Store foundations.
 
 | Ready | Not yet |
 |-------|---------|
@@ -18,6 +18,7 @@ Phases **0–7** of the multi-tenant SaaS plan are complete (through Workspace A
 | Plans, entitlements, usage meters, quotas | |
 | Billing checkout + Workspace billing UI | |
 | OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` (Expert via `X-Geem-Expert-Id`) | |
+| Workspace Storage inventory (`/storage`) — download + full purge | |
 
 Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md).
 

@@ -196,6 +196,23 @@ class DocumentService:
         self._require_active_workspace(workspace)
         return self.repo.list_for_workspace(workspace.id)
 
+    def list_page_for_workspace(
+        self,
+        workspace: Workspace,
+        *,
+        limit: int,
+        offset: int,
+        q: str | None = None,
+    ) -> tuple[list[Document], int, dict[uuid.UUID, list[tuple[uuid.UUID, str]]]]:
+        self._require_active_workspace(workspace)
+        items, total = self.repo.list_page_for_workspace(
+            workspace.id, limit=limit, offset=offset, q=q
+        )
+        refs = self.repo.expert_refs_for_documents(
+            workspace.id, [doc.id for doc in items]
+        )
+        return items, total, refs
+
     def get_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> Document:
         self._require_active_workspace(workspace)
         document = self.repo.get_for_workspace(workspace.id, document_id)
@@ -205,7 +222,7 @@ class DocumentService:
 
     def get_file_for_workspace(
         self, workspace: Workspace, document_id: uuid.UUID
-    ) -> tuple[bytes, str]:
+    ) -> tuple[bytes, str, str]:
         document = self.get_for_workspace(workspace, document_id)
         data, used_key = self.storage.get_document_bytes(
             document_id=document.id,
@@ -219,19 +236,40 @@ class DocumentService:
             action="download",
             storage_key=used_key,
         )
-        return data, document.original_filename
+        mime = (document.mime_type or "application/octet-stream").split(";", 1)[0].strip()
+        return data, document.original_filename, mime or "application/octet-stream"
 
     def delete_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> None:
-        """Soft-delete a Workspace document and release billable logical storage.
+        """Soft-delete a Workspace document and purge blob + vectors + derived RAG.
 
-        Physical MinIO/Qdrant objects are not purged here (later lifecycle).
-        Restoring the same row re-checks storage quota.
+        The PG ``documents`` row stays for audit and old citations. Hash uniqueness
+        is released so the same file can be uploaded again as a new document.
+        Restore is not supported after this purge.
         """
+        from sqlalchemy import select
+
+        from app.experts.models import ExpertDocument
+        from app.experts.status import ExpertStatusReconciler
         from app.usage.storage import StorageQuotaService
 
         document = self.get_for_workspace(workspace, document_id)
         if document.deleted_at is not None:
             raise AppError(ErrorCategory.DOCUMENT_DELETED, "Document is already deleted")
+
+        document.status = "deleting"
+        links = list(
+            self.db.scalars(
+                select(ExpertDocument).where(ExpertDocument.document_id == document.id)
+            )
+        )
+        expert_ids = {link.expert_id for link in links}
+        for link in links:
+            self.db.delete(link)
+        for chunk in list(document.chunks):
+            self.db.delete(chunk)
+        for page in list(document.pages):
+            self.db.delete(page)
+
         document.soft_delete()
         StorageQuotaService(self.db, self.settings).record_logical_delete(
             workspace.id,
@@ -239,52 +277,85 @@ class DocumentService:
             byte_size=int(document.byte_size or 0),
         )
         self.db.commit()
+
+        self._purge_object_and_vectors(document)
+        reconciler = ExpertStatusReconciler(self.db)
+        for expert_id in expert_ids:
+            try:
+                reconciler.reconcile(expert_id)
+            except Exception as exc:  # noqa: BLE001 — status is derived; never undo purge
+                logger.warning(
+                    "document.expert_reconcile_failed",
+                    extra={"document_id": str(document.id), "expert_id": str(expert_id), "error": str(exc)},
+                )
+
         security_log(
-            "document.soft_deleted",
+            "document.purged",
             workspace_id=str(workspace.id),
             document_id=str(document_id),
             action="delete",
         )
 
+    def _purge_object_and_vectors(self, document: Document) -> None:
+        keys = resolve_document_storage_key(document.id, document.workspace_id)
+        for key in keys.candidate_read_keys(document.storage_key, include_legacy_flat=True):
+            try:
+                self.storage.delete(key)
+            except AppError as exc:
+                logger.warning(
+                    "document.minio_purge_failed",
+                    extra={
+                        "document_id": str(document.id),
+                        "workspace_id": str(document.workspace_id) if document.workspace_id else None,
+                        "key": key,
+                        "error": str(exc),
+                    },
+                )
+        try:
+            self.vectors.delete_by_document(
+                str(document.id),
+                workspace_id=document.workspace_id,
+            )
+        except AppError as exc:
+            logger.warning(
+                "document.qdrant_purge_failed",
+                extra={
+                    "document_id": str(document.id),
+                    "workspace_id": str(document.workspace_id) if document.workspace_id else None,
+                    "error": str(exc),
+                },
+            )
+            try:
+                self.vectors.delete_by_document(
+                    str(document.id),
+                    workspace_id=document.workspace_id,
+                )
+            except AppError as retry_exc:
+                logger.warning(
+                    "document.qdrant_purge_retry_failed",
+                    extra={
+                        "document_id": str(document.id),
+                        "error": str(retry_exc),
+                    },
+                )
+
     def restore_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> Document:
-        """Undo logical deletion after re-checking Workspace storage quota."""
-        from sqlalchemy.exc import IntegrityError
+        """Restore is closed after Phase 8 physical purge.
 
-        from app.usage.storage import StorageQuotaService
-
+        Historical tests that resurrected a soft-deleted row after logical
+        delete must re-upload instead.
+        """
         self._require_active_workspace(workspace)
         document = self.repo.get_for_workspace(workspace.id, document_id, include_deleted=True)
         if document is None:
             raise AppError(ErrorCategory.DOCUMENT_NOT_FOUND, "Document not found")
         if document.deleted_at is None:
             raise AppError(ErrorCategory.CONFLICT, "Document is not deleted")
-
-        quota = StorageQuotaService(self.db, self.settings)
-        quota.heal_stale_committed(workspace.id)
-        quota.lock(workspace.id)
-        quota.consume_restore(
-            workspace,
-            document_id=document.id,
-            byte_size=int(document.byte_size or 0),
+        raise AppError(
+            ErrorCategory.DOCUMENT_DELETED,
+            "Document was purged and cannot be restored. Upload the file again.",
+            details={"id": str(document.id)},
         )
-        document.restore()
-        try:
-            self.db.commit()
-        except IntegrityError as exc:
-            self.db.rollback()
-            raise AppError(
-                ErrorCategory.DOCUMENT_ALREADY_EXISTS,
-                "An active document with the same hash already exists in this workspace",
-            ) from exc
-        self.db.refresh(document)
-        security_log(
-            "document.restored",
-            workspace_id=str(workspace.id),
-            document_id=str(document.id),
-            action="restore",
-            byte_size=document.byte_size,
-        )
-        return document
 
     def reprocess_for_workspace(
         self, workspace: Workspace, document_id: uuid.UUID, mode: str = "failed_pages"

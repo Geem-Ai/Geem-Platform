@@ -67,8 +67,10 @@ async function handle<T>(res: Response): Promise<T> {
 }
 
 export async function listDocuments(): Promise<DocumentSummary[]> {
-  const res = await fetch(`${API_URL}/api/documents`);
-  return handle(res);
+  const res = await fetch(`${API_URL}/api/documents?limit=100`);
+  const body = await handle(res);
+  if (Array.isArray(body)) return body;
+  return (body as { items?: DocumentSummary[] }).items ?? [];
 }
 
 export async function getDocument(id: string, debug = false): Promise<DocumentDetail> {

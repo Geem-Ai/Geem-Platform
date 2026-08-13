@@ -93,7 +93,8 @@ class Document(Base, SoftDeleteMixin):
     - Soft-deleted rows (``deleted_at`` set) release the uniqueness slot.
     - FK uses RESTRICT (not CASCADE) so workspace hard-delete cannot silently
       wipe document history; workspace deletion/retention is a later phase.
-    - Soft-delete is the production lifecycle; MinIO/Qdrant purge is deferred.
+    - Soft-delete keeps the row for audit/citations; Phase 8 Storage purge
+      removes MinIO objects, Qdrant points, and derived chunks/pages.
     """
 
     __tablename__ = "documents"

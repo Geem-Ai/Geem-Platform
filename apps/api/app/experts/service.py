@@ -533,7 +533,12 @@ class ExpertService:
         doc_ids = [link.document_id for link in links]
         docs = {
             d.id: d
-            for d in self.db.scalars(select(Document).where(Document.id.in_(doc_ids))).all()
+            for d in self.db.scalars(
+                select(Document).where(
+                    Document.id.in_(doc_ids),
+                    Document.deleted_at.is_(None),
+                )
+            ).all()
         }
         return [(link, docs[link.document_id]) for link in links if link.document_id in docs]
 
