@@ -162,6 +162,9 @@ class Settings(BaseSettings):
     clickpay_base_url: str = "https://secure.clickpay.com.sa"
     clickpay_timeout_seconds: float = 30.0
     billing_currency: str = "SAR"
+    # SPA origin for post-verification browser handoff (Phase 6B).
+    # Empty: local/test fall back to http://localhost:5174; non-local disables HTML redirect.
+    workspace_web_url: str = ""
 
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
@@ -207,6 +210,15 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.app_env.lower() in {"local", "dev", "development", "test"}
+
+    @property
+    def effective_workspace_web_url(self) -> str:
+        raw = (self.workspace_web_url or "").strip().rstrip("/")
+        if raw:
+            return raw
+        if self.is_local:
+            return "http://localhost:5174"
+        return ""
 
     @property
     def cookie_secure(self) -> bool:

@@ -4,6 +4,7 @@ import {
   Check,
   Languages,
   LogOut,
+  Monitor,
   Moon,
   Plus,
   Sun,
@@ -13,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import {
   AlertDialog,
@@ -33,7 +35,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { AppLocale } from '@/lib/i18n';
@@ -44,10 +51,30 @@ interface AccountMenuProps {
 }
 
 type LogoutKind = 'session' | 'all';
+type ThemeOption = 'light' | 'dark' | 'system';
+
+const THEME_OPTIONS: ThemeOption[] = ['light', 'dark', 'system'];
+const LOCALE_OPTIONS: AppLocale[] = ['en', 'ar'];
 
 function initials(email: string | undefined): string {
   if (!email) return '?';
   return email.slice(0, 2).toUpperCase();
+}
+
+function isThemeOption(value: string | undefined): value is ThemeOption {
+  return value === 'light' || value === 'dark' || value === 'system';
+}
+
+function themeLabelKey(theme: ThemeOption): 'themeLight' | 'themeDark' | 'themeSystem' {
+  if (theme === 'dark') return 'themeDark';
+  if (theme === 'system') return 'themeSystem';
+  return 'themeLight';
+}
+
+function ThemeGlyph({ theme }: { theme: ThemeOption }) {
+  if (theme === 'dark') return <Moon className="size-4" />;
+  if (theme === 'system') return <Monitor className="size-4" />;
+  return <Sun className="size-4" />;
 }
 
 export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
@@ -57,9 +84,11 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
   const { availableWorkspaces, currentWorkspace, selectWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const locale = (i18n.language === 'ar' ? 'ar' : 'en') as AppLocale;
+  const currentTheme: ThemeOption = isThemeOption(theme) ? theme : 'light';
 
   const [logoutKind, setLogoutKind] = useState<LogoutKind | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const setLocale = (next: AppLocale) => {
     void i18n.changeLanguage(next);
@@ -159,9 +188,8 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
             </DropdownMenuItem>
           ))}
           <DropdownMenuItem
-            onClick={() => {
-              navigate('/workspaces/new');
-            }}
+            onSelect={() => setCreateOpen(true)}
+            data-testid="create-workspace-menu-item"
           >
             <Plus className="size-3.5" />
             {t('shell.createWorkspace')}
@@ -169,34 +197,65 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            <span>{theme === 'dark' ? t('shell.themeLight') : t('shell.themeDark')}</span>
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger data-testid="theme-menu">
+              <ThemeGlyph theme={currentTheme} />
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span>{t('shell.theme')}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t(`shell.${themeLabelKey(currentTheme)}`)}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-40">
+              <DropdownMenuRadioGroup
+                value={currentTheme}
+                onValueChange={(value) => {
+                  if (isThemeOption(value)) setTheme(value);
+                }}
+              >
+                {THEME_OPTIONS.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option}
+                    value={option}
+                    data-testid={`theme-option-${option}`}
+                  >
+                    {t(`shell.${themeLabelKey(option)}`)}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
 
-          <DropdownMenuItem onClick={() => setTheme('system')}>
-            <Sun className="size-4 opacity-60" />
-            <span>{t('shell.themeSystem')}</span>
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <Languages className="size-3.5" />
-            {t('shell.language')}
-          </DropdownMenuLabel>
-          <DropdownMenuItem
-            onClick={() => setLocale('en')}
-            className={locale === 'en' ? 'bg-accent' : undefined}
-          >
-            {t('shell.languageEn')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setLocale('ar')}
-            className={locale === 'ar' ? 'bg-accent' : undefined}
-          >
-            {t('shell.languageAr')}
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger data-testid="language-menu">
+              <Languages className="size-4" />
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span>{t('shell.language')}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t(locale === 'ar' ? 'shell.languageAr' : 'shell.languageEn')}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-40">
+              <DropdownMenuRadioGroup
+                value={locale}
+                onValueChange={(value) => {
+                  if (value === 'en' || value === 'ar') setLocale(value);
+                }}
+              >
+                {LOCALE_OPTIONS.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option}
+                    value={option}
+                    data-testid={`language-option-${option}`}
+                  >
+                    {t(option === 'ar' ? 'shell.languageAr' : 'shell.languageEn')}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
 
           <DropdownMenuSeparator />
 
@@ -216,6 +275,8 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       <AlertDialog
         open={logoutKind !== null}

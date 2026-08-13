@@ -12,10 +12,13 @@ import { ChatPage } from '@/features/chat/pages/ChatPage';
 import { ChatStartPage } from '@/features/chat/pages/ChatStartPage';
 import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { MembersPage } from '@/features/members/pages/MembersPage';
-import { CreateWorkspacePage } from '@/features/workspaces/pages/CreateWorkspacePage';
 import { OnboardingPage } from '@/features/workspaces/pages/OnboardingPage';
 import { OverviewPage } from '@/features/workspaces/pages/OverviewPage';
 import { SettingsPage } from '@/features/workspaces/pages/SettingsPage';
+import { BillingHistoryPage } from '@/features/billing/pages/BillingHistoryPage';
+import { CreditsPage } from '@/features/billing/pages/CreditsPage';
+import { PaymentResultPage } from '@/features/billing/pages/PaymentResultPage';
+import { SubscriptionPage } from '@/features/billing/pages/SubscriptionPage';
 import { UsageHistoryPage } from '@/features/usage/pages/UsageHistoryPage';
 import { UsagePage } from '@/features/usage/pages/UsagePage';
 
@@ -29,7 +32,7 @@ export function AppRouter() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/workspaces/new" element={<CreateWorkspacePage />} />
+        <Route path="/workspaces/new" element={<Navigate to="/" replace />} />
 
         <Route element={<WorkspaceShellRoute />}>
           <Route element={<WorkspaceLayout />}>
@@ -61,20 +64,15 @@ export function AppRouter() {
               path="billing"
               element={<Navigate to="/billing/subscription" replace />}
             />
-            <Route
-              path="billing/subscription"
-              element={<Navigate to="/billing/usage" replace />}
-            />
+            <Route path="billing/subscription" element={<SubscriptionPage />} />
             <Route path="billing/usage" element={<UsagePage />} />
             <Route path="billing/usage/history" element={<UsageHistoryPage />} />
-            <Route
-              path="billing/credits"
-              element={<PlaceholderPage titleKey="nav.credits" />}
-            />
-            <Route
-              path="billing/history"
-              element={<PlaceholderPage titleKey="nav.billingHistory" />}
-            />
+            <Route path="billing/credits" element={<CreditsPage />} />
+            <Route path="billing/history" element={<BillingHistoryPage />} />
+            <Route path="billing/payment/success" element={<PaymentResultPage />} />
+            <Route path="billing/payment/failed" element={<PaymentResultPage />} />
+            <Route path="billing/payment/pending" element={<PaymentResultPage />} />
+            <Route path="billing/payment/result" element={<PaymentResultPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route
               path="*"

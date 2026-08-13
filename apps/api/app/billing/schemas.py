@@ -116,6 +116,7 @@ class PurchasablePlanOut(BaseModel):
     status: str
     price_amount: str
     currency: str
+    entitlements: list[EntitlementItemOut] = []
 
 
 class CreditPackOut(BaseModel):
@@ -152,6 +153,15 @@ class PurchaseOut(BaseModel):
     kind: str
     amount: str
     currency: str
-    redirect_url: str | None = None
+    item_name: str | None = None
+    item_code: str | None = None
+    credits: int | None = None
     paid_at: datetime | None = None
     created_at: datetime
+
+
+class PurchaseListOut(BaseModel):
+    items: list[PurchaseOut]
+    total: int = 0
+    limit: int = 25
+    offset: int = 0

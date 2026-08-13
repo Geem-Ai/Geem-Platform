@@ -16,7 +16,8 @@ Optional:
 
 Safe to re-run: existing admin email is promoted to platform_role=admin;
 password is only set when creating a new user (existing passwords unchanged
-unless BOOTSTRAP_ADMIN_RESET_PASSWORD=true).
+unless BOOTSTRAP_ADMIN_RESET_PASSWORD=true). Local/dev also seeds a demo
+billing catalog (Starter/Pro/Business + credit packs) for checkout testing.
 """
 
 from __future__ import annotations
@@ -89,8 +90,10 @@ def bootstrap_platform_admin(
 
         PlanService(db, settings).ensure_bootstrap_plan()
         from app.billing.provisioning import ensure_local_noop_gateway
+        from app.billing.seed import ensure_local_demo_catalog
 
         ensure_local_noop_gateway(db, settings=settings)
+        ensure_local_demo_catalog(db, settings=settings)
         db.commit()
 
         # Geem General Platform Expert (LLM-only; available to all workspaces).

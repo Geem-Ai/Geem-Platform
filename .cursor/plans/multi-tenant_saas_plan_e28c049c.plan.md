@@ -21,8 +21,8 @@ todos:
     content: "Phase 5: 5A PASS + 5B PASS + 5C PASS + 5D PASS (usage UI, quota warnings, E2E). Phase 5 complete. Do not start Phase 6 until requested."
     status: completed
   - id: phase-6
-    content: "Phase 6: 6A PASS (gateway registry + ClickPay hosted redirect + Noop). 6B Workspace billing UI not started."
-    status: in_progress
+    content: "Phase 6: 6A PASS + 6B PASS (Workspace billing UI: subscription, credits, history, payment return). Do not start Phase 7 until requested."
+    status: completed
   - id: phase-7
     content: "Phase 7: Workspace API keys + public /api/v1/chat + API Keys/Usage UI"
     status: pending
@@ -924,7 +924,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 6 — Billing gateways + billing UI
 
-**Status:** **6A PASS** (backend registry + ClickPay hosted redirect + Noop). **6B not started** — do not implement Workspace billing UI until requested.
+**Status:** **6A PASS** (backend registry + ClickPay hosted redirect + Noop). **6B PASS** (Workspace billing UI). Do not start Phase 7 until requested.
 
 **Goal:** Pluggable payment gateways (add more without rewriting billing domain); **ClickPay first**; subscribe + credit packs via **hosted-page redirect**. No webhooks in this phase.
 
@@ -973,12 +973,13 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Isolation: tenant A cannot complete tenant B’s purchase; SYSTEM workspaces cannot checkout
 - Tests: Noop happy path; ClickPay adapter mocked; double-return does not double-GRANT; disabled gateway rejected
 
-**6B — Workspace billing UI**
-- Plan picker + current subscription (replace read-only-only 5D surface where checkout starts)
-- Credit pack purchase
-- Redirect out / return success & fail pages
-- Purchase/billing history list (purchases + existing extra-credit ledger)
-- Same quota/usage nav; Geem i18n; workspace-scoped React Query keys
+**6B — Workspace billing UI** — **PASS**
+- Plan picker + current subscription (`/billing/subscription`); checkout sends `plan_id` only
+- Credit pack purchase (`/billing/credits`); checkout sends `credit_pack_id` only
+- Browser follows backend `redirect_url`; return is verified server-side then 303 to SPA
+- Payment result pages fetch authoritative Purchase (provider query params ignored)
+- Billing history (`/billing/history`) lists Workspace `purchases`; credit ledger linked via Usage history
+- Existing `/billing/usage` kept; Overview “Manage subscription”; EN/AR + RTL; workspace-scoped React Query keys
 
 **Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 8), enabling two gateways at once.
 

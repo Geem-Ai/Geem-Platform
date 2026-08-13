@@ -245,6 +245,11 @@ export function UsagePage() {
                     <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
                       {t('usage.subscriptionReadOnly')}
                     </p>
+                    <Button variant="outline" size="sm" asChild className="mt-2">
+                      <Link to="/billing/subscription" data-testid="usage-view-plans">
+                        {t('usage.viewPlans')}
+                      </Link>
+                    </Button>
                   </div>
                   {periodStart && periodEnd ? (
                     <div className="text-sm lg:text-end">
@@ -352,6 +357,11 @@ export function UsagePage() {
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {t('usage.creditsHint')}
                   </p>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/billing/credits" data-testid="usage-buy-credits">
+                      {t('usage.buyCredits')}
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             </div>

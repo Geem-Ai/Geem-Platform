@@ -135,6 +135,22 @@ export function getUsageHistory(params?: {
   return apiRequest<UsageHistory>(`/api/usage/history?${qs.toString()}`);
 }
 
+export type EntitlementItem = {
+  key: string;
+  value: number | boolean | string;
+  value_type: string;
+};
+
+export type Entitlements = {
+  subscription_id: string;
+  plan: Subscription['plan'];
+  items: EntitlementItem[];
+};
+
 export function getSubscription(): Promise<Subscription> {
   return apiRequest<Subscription>('/api/subscription');
+}
+
+export function getEntitlements(): Promise<Entitlements> {
+  return apiRequest<Entitlements>('/api/entitlements');
 }

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.billing.schemas import EntitlementItemOut, EntitlementsOut, PlanSummaryOut
 from app.db.session import get_db
+from app.entitlements.keys import entitlement_display_sort_key
 from app.entitlements.service import EntitlementService
 from app.workspaces.dependencies import require_workspace
 from app.workspaces.models import Workspace, WorkspaceMembership
@@ -35,7 +36,10 @@ def get_entitlements(
             value=item.as_python(),
             value_type=item.value_type.value,
         )
-        for item in sorted(resolved.items.values(), key=lambda row: row.key)
+        for item in sorted(
+            resolved.items.values(),
+            key=lambda row: entitlement_display_sort_key(row.key),
+        )
     ]
     return EntitlementsOut(
         subscription_id=resolved.subscription_id,

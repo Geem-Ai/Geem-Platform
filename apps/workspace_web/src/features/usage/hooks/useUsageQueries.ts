@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { queryKeys } from '@/services/api/query-keys';
 import {
+  getEntitlements,
   getSubscription,
   getUsageHistory,
   getUsageSummary,
@@ -68,6 +69,15 @@ export function useSubscription() {
   return useQuery({
     queryKey: queryKeys.subscription(workspaceId),
     queryFn: getSubscription,
+    enabled: Boolean(workspaceId),
+  });
+}
+
+export function useEntitlements() {
+  const workspaceId = useWorkspaceId();
+  return useQuery({
+    queryKey: queryKeys.entitlements(workspaceId),
+    queryFn: getEntitlements,
     enabled: Boolean(workspaceId),
   });
 }

@@ -9,6 +9,7 @@ import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { WorkspaceSlugInput } from '@/features/workspaces/components/WorkspaceSlugInput';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 
 export function OnboardingPage() {
@@ -86,15 +87,12 @@ export function OnboardingPage() {
               <label htmlFor="ws-slug" className="text-sm font-medium">
                 {t('onboarding.workspaceSlug')}
               </label>
-              <Input
+              <WorkspaceSlugInput
                 id="ws-slug"
-                required
-                minLength={3}
-                maxLength={63}
                 value={slug}
-                onChange={(e) => {
+                onChange={(next) => {
                   setSlugTouched(true);
-                  setSlug(e.target.value.toLowerCase());
+                  setSlug(next);
                 }}
                 disabled={submitting}
               />

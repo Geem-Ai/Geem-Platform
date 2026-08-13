@@ -1,29 +1,64 @@
-"""Workspace billing catalog, checkout, and gateway return (Phase 6A)."""
+"""Workspace billing catalog, checkout, and gateway return (Phase 6A/6B)."""
 
 from __future__ import annotations
 
 import uuid
+from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.billing.checkout import BillingService
-from app.billing.models import CreditPack, Plan, Purchase
+from app.billing.models import (
+    CreditPack,
+    Plan,
+    Purchase,
+    PurchaseStatus,
+)
 from app.billing.schemas import (
     CheckoutOut,
     CreditPackCheckoutRequest,
     CreditPackOut,
+    EntitlementItemOut,
     PurchasablePlanOut,
+    PurchaseListOut,
     PurchaseOut,
     SubscriptionCheckoutRequest,
 )
+from app.core.config import get_settings
+from app.core.errors import AppError, ErrorCategory
 from app.db.session import get_db
+from app.entitlements.keys import entitlement_display_sort_key
+from app.entitlements.values import entitlement_value_from_row
 from app.identity.dependencies import client_ip, get_current_user
 from app.identity.models import User
 from app.workspaces.dependencies import require_workspace
 from app.workspaces.models import Workspace, WorkspaceMembership
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+
+def _plan_entitlements(plan: Plan) -> list[EntitlementItemOut]:
+    items: list[EntitlementItemOut] = []
+    for row in sorted(plan.entitlements, key=lambda r: entitlement_display_sort_key(r.key)):
+        try:
+            value = entitlement_value_from_row(
+                key=row.key,
+                raw=row.value,
+                value_type=row.value_type,
+            )
+            items.append(
+                EntitlementItemOut(
+                    key=value.key,
+                    value=value.as_python(),
+                    value_type=value.value_type.value,
+                )
+            )
+        except AppError:
+            continue
+    return items
 
 
 def _plan_out(plan: Plan) -> PurchasablePlanOut:
@@ -35,6 +70,7 @@ def _plan_out(plan: Plan) -> PurchasablePlanOut:
         status=plan.status,
         price_amount=str(plan.price_amount),
         currency=plan.currency,
+        entitlements=_plan_entitlements(plan),
     )
 
 
@@ -53,8 +89,6 @@ def _pack_out(pack: CreditPack) -> CreditPackOut:
 
 def _checkout_out(purchase: Purchase) -> CheckoutOut:
     if not purchase.redirect_url:
-        from app.core.errors import AppError, ErrorCategory
-
         raise AppError(
             ErrorCategory.BILLING_GATEWAY_ERROR,
             "Checkout did not produce a redirect URL.",
@@ -69,17 +103,70 @@ def _checkout_out(purchase: Purchase) -> CheckoutOut:
     )
 
 
+def _payload_int(payload: dict[str, Any], key: str) -> int | None:
+    raw = payload.get(key)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        if isinstance(raw, str) and raw.lstrip("-").isdigit():
+            return int(raw)
+        return None
+    return int(raw)
+
+
 def _purchase_out(purchase: Purchase) -> PurchaseOut:
+    payload = purchase.payload if isinstance(purchase.payload, dict) else {}
+    item_code: str | None = None
+    item_name: str | None = None
+    credits: int | None = None
+    if purchase.kind == "subscription":
+        item_code = payload.get("plan_code") if isinstance(payload.get("plan_code"), str) else None
+        item_name = payload.get("plan_name") if isinstance(payload.get("plan_name"), str) else item_code
+    elif purchase.kind == "credit_pack":
+        item_code = (
+            payload.get("credit_pack_code")
+            if isinstance(payload.get("credit_pack_code"), str)
+            else None
+        )
+        item_name = (
+            payload.get("credit_pack_name")
+            if isinstance(payload.get("credit_pack_name"), str)
+            else item_code
+        )
+        credits = _payload_int(payload, "credits")
     return PurchaseOut(
         id=purchase.id,
         status=purchase.status,
         kind=purchase.kind,
         amount=str(purchase.amount),
         currency=purchase.currency,
-        redirect_url=purchase.redirect_url,
+        item_name=item_name,
+        item_code=item_code,
+        credits=credits,
         paid_at=purchase.paid_at,
         created_at=purchase.created_at,
     )
+
+
+def _wants_html_redirect(request: Request) -> bool:
+    accept = (request.headers.get("accept") or "").lower()
+    return "text/html" in accept
+
+
+def _spa_payment_result_url(purchase: Purchase) -> str | None:
+    base = get_settings().effective_workspace_web_url
+    if not base:
+        return None
+    if purchase.status == PurchaseStatus.PAID.value:
+        path = "/billing/payment/success"
+    elif purchase.status in {
+        PurchaseStatus.FAILED.value,
+        PurchaseStatus.CANCELLED.value,
+        PurchaseStatus.EXPIRED.value,
+    }:
+        path = "/billing/payment/failed"
+    else:
+        path = "/billing/payment/pending"
+    query = urlencode({"purchase": str(purchase.id)})
+    return f"{base}{path}?{query}"
 
 
 @router.get("/plans", response_model=list[PurchasablePlanOut])
@@ -138,6 +225,31 @@ def checkout_credit_pack(
     return _checkout_out(purchase)
 
 
+@router.get("/purchases", response_model=PurchaseListOut)
+def list_purchases(
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None, max_length=32),
+    kind: str | None = Query(default=None, max_length=32),
+) -> PurchaseListOut:
+    workspace, _membership = pair
+    rows, total = BillingService(db).list_purchases_for_workspace(
+        workspace,
+        limit=limit,
+        offset=offset,
+        status=status,
+        kind=kind,
+    )
+    return PurchaseListOut(
+        items=[_purchase_out(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/purchases/{purchase_id}", response_model=PurchaseOut)
 def get_purchase(
     purchase_id: uuid.UUID,
@@ -152,18 +264,22 @@ def get_purchase(
 @router.api_route(
     "/return/{gateway_code}/{purchase_id}",
     methods=["GET", "POST"],
-    response_model=PurchaseOut,
+    response_model=None,
 )
 def billing_return(
     gateway_code: str,
     purchase_id: uuid.UUID,
+    request: Request,
     db: Session = Depends(get_db),
     rt: str = Query(default="", alias="rt"),
-) -> PurchaseOut:
+) -> PurchaseOut | RedirectResponse:
     """Browser return from the hosted payment page.
 
     Query/body fields from the provider are ignored. Verification is a
     server-to-server transaction query using the stored tran_ref.
+
+    Browsers (Accept: text/html) are redirected to the Workspace SPA with the
+    purchase id as a lookup key only — never a trusted payment status.
     """
     purchase = BillingService(db).complete_on_return(
         purchase_id,
@@ -171,4 +287,8 @@ def billing_return(
         gateway_code=gateway_code,
     )
     db.commit()
+    if _wants_html_redirect(request):
+        spa_url = _spa_payment_result_url(purchase)
+        if spa_url:
+            return RedirectResponse(url=spa_url, status_code=303)
     return _purchase_out(purchase)

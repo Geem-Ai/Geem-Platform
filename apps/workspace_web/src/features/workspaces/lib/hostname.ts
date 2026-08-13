@@ -73,6 +73,20 @@ export function suggestSlugFromName(name: string): string {
     .slice(0, 63);
 }
 
+/** Root host used for `{slug}.{domain}` UX (SPA env; backend remains authoritative). */
+export function workspaceRootDomain(
+  envDomain = import.meta.env.VITE_ROOT_DOMAIN,
+): string {
+  const raw = envDomain?.trim() || 'localhost';
+  return raw.replace(/^\./, '').toLowerCase();
+}
+
+export function workspaceHostSuffix(
+  rootDomain = workspaceRootDomain(),
+): string {
+  return `.${rootDomain}`;
+}
+
 export function isLocalDevEnvironment(): boolean {
   return (
     import.meta.env.DEV ||

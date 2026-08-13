@@ -1,6 +1,7 @@
 """Attach bootstrap plan + credit account to a tenant Workspace (Phase 5A).
 
-Local/dev also seeds the Noop payment gateway when none is enabled (Phase 6A).
+Local/dev also seeds the Noop payment gateway when none is enabled (Phase 6A)
+and a demo plan/credit-pack catalog for billing UI testing.
 Does not commit — callers own the transaction.
 """
 
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.billing.models import PaymentGatewayConfig
 from app.billing.repository import PaymentGatewayConfigRepository
+from app.billing.seed import ensure_local_demo_catalog
 from app.billing.service import SubscriptionService
 from app.common.crypto import encrypt_json
 from app.core.config import Settings, get_settings
@@ -31,6 +33,7 @@ def provision_tenant_workspace(
     SubscriptionService(db, cfg).ensure_bootstrap_subscription(workspace_id)
     CreditService(db, cfg).ensure_account(workspace_id)
     ensure_local_noop_gateway(db, settings=cfg)
+    ensure_local_demo_catalog(db, settings=cfg)
 
 
 def ensure_local_noop_gateway(
