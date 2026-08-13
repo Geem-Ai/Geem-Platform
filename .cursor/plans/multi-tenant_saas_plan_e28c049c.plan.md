@@ -609,7 +609,7 @@ erDiagram
 - api_keys (hashed secrets, scopes, revocation)
 - apps, app_prices, app_installations (not boolean flags)
 - audit_logs
-- evolve `usage_events` with workspace/user/expert/api_key attribution
+- evolve `usage_events` with workspace/user/expert/api_key attribution; `cost_metadata` stores family, multiplier, raw vs billed tokens
 
 ---
 
@@ -642,9 +642,39 @@ Chat/API → Expert → system_instructions + expert knowledge set
 
 Unchanged architectural intent:
 - `EntitlementService` / `QuotaService` — no `if plan == 'pro'`
-- AI tokens: daily/weekly/monthly entitlements + purchased credit ledger (FIFO), atomic consume with `request_id` idempotency, reserve/settle
 - Expert allowance via entitlement key; storage quota with byte ledger and workspace-isolated paths
 - Additional credits as proper ledger entries, not bare integers on workspaces
+
+### Workspace AI token pool (locked)
+
+**One pool, many OpenRouter families.** Entitlement keys stay `ai_tokens_daily|weekly|monthly` plus purchased credits (FIFO). Chat, embed, rerank, OCR, and title all consume that same pool — there are no per-family entitlements.
+
+| Family | Typical operations | Default multiplier |
+|--------|--------------------|--------------------|
+| `chat` | RAG generation, Geem General, general fallback | 1× |
+| `embed` | ingest `embedding`, query `embed_query` | 1× |
+| `rerank` | query `rerank` | 1× |
+| `ocr` | ingest `pdf_parse` (per page) | **3×** |
+| `title` | conversation auto-title | 1× |
+
+Conversion (see [`apps/api/app/usage/weights.py`](apps/api/app/usage/weights.py)):
+
+```text
+billed_tokens = round(provider_tokens * multiplier)
+```
+
+- Family rates: `AI_TOKEN_MULTIPLIER_CHAT|EMBED|RERANK|OCR|TITLE`.
+- Optional `AI_TOKEN_MODEL_MULTIPLIERS` JSON overrides by **exact** OpenRouter model id (wins over family). Keep in sync with `OPENROUTER_*_MODEL`.
+- When the provider omits a usage payload, fall back to `AI_TOKEN_FALLBACK_EMBED` (100), `_RERANK` (50), `_OCR_PER_PAGE` (500), `_TITLE` (64), chat = reservation size.
+- `usage_events.cost_metadata` records `family`, `multiplier`, raw prompt/completion/total, and `billed_tokens`. History kinds: `chat_tokens`, `embed_tokens`, `rerank_tokens`, `ocr_tokens`, `title_tokens` (legacy `ai_tokens` still accepted).
+
+**Charge paths:**
+- **Chat turn:** reserve before SSE `message_start` / LLM. Query `embed_query` + `rerank` fold into the same reservation via `usage_context` (`billed_extra_tokens`) and settle with chat totals. Release on fail/cancel.
+- **Ingestion:** OCR (`pdf_parse`) and document `embedding` immediately reserve+settle (`charge_now`) against the tenant Workspace. Quota errors fail the page/job.
+- **Title:** immediate charge; failure must not block persisting the title.
+- Platform Knowledge / non-tenant workspaces are not billed.
+
+Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SELECT … FOR UPDATE` + workspace advisory lock.
 
 ---
 
@@ -696,7 +726,7 @@ Argon2 passwords; JWT/session; authorized downloads / signed URLs; mandatory Qdr
 
 ## 21–23. Caching, rate limiting, audit
 
-Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; structured logs + `audit_logs`; keep model `usage_events` for cost.
+Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; structured logs + `audit_logs`; keep model `usage_events` for cost (raw + billed tokens, family, multiplier).
 
 ---
 
@@ -876,7 +906,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 5 — Entitlements + Usage ledger + Storage quotas + usage UI
 
-**Status:** complete — **Phase 5A PASS**, **Phase 5B PASS**, **Phase 5C PASS**, **Phase 5D PASS**. Do **not** start Phase 6 until explicitly requested.
+**Status:** complete — **Phase 5A PASS**, **Phase 5B PASS**, **Phase 5C PASS**, **Phase 5D PASS**. Token-pool weights (embed/rerank/OCR/title + multipliers) are locked in §11–14. Phase 6 is complete.
 
 **Phase 5A delivered (backend foundation only):**
 - `plans`, `plan_entitlements`, `subscriptions` (one active per Workspace), `credit_accounts`, append-only `credit_ledger_entries` (`request_id` idempotency), `usage_period_counters`, `storage_usage_events`
@@ -889,7 +919,10 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 **Phase 5B delivered (atomic AI metering):**
 - `AiUsageService.reserve_ai_usage` / `settle_ai_usage` / `release_ai_usage` with `SELECT … FOR UPDATE` + workspace advisory lock; `request_id` idempotency via `ai_usage_reservations`
 - Included allowance = min(daily, weekly, monthly remaining); purchased credits FIFO from GRANT `remaining_amount`; no negative balance
-- ChatOrchestrator reserves before SSE `message_start` / LLM; settles provider token totals (fallback = reservation); release on fail/cancel
+- **One `ai_tokens` pool** for all OpenRouter families (chat / embed / rerank / OCR / title). `billed = round(provider_tokens * family_or_model_multiplier)`; defaults chat/embed/rerank/title = 1×, OCR = 3× (`AI_TOKEN_MULTIPLIER_*`, optional `AI_TOKEN_MODEL_MULTIPLIERS`)
+- ChatOrchestrator reserves before SSE `message_start` / LLM; query embed + rerank fold into the same reservation (`billed_extra_tokens`); settles billed chat + extras (fallback = reservation); release on fail/cancel
+- Ingestion OCR (`pdf_parse`) and document `embedding`, plus conversation `title`, charge immediately (`charge_now`); Platform / non-tenant workspaces skipped
+- `record_openrouter_event` persists `usage_events` with billed tokens + `cost_metadata` (family, multiplier, raw vs billed)
 - `GET /api/usage/summary` adds `remaining` and `ai` alias; `usage_events` attribution (workspace/user/expert/conversation/message) + token fields
 - Concurrent over-quota integration tests against PostgreSQL (exactly one of two competing requests succeeds)
 
@@ -909,7 +942,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 **Phase 5D delivered (Workspace Usage UI + quota warnings):**
 - Production Usage page at `/billing/usage` (Metronic AI Concept cards/progress; no samples/ imports; `/api/usage` remains Phase 7 placeholder)
 - Meters from backend summary DTOs: AI daily/weekly/monthly, Experts, storage (human-readable bytes), purchased credit balance; read-only plan/subscription
-- `GET /api/usage/history` — AI token events + credit grant/consume/adjust/expire (no reserve/release internals)
+- `GET /api/usage/history` — AI token events (`chat_tokens` / `embed_tokens` / `rerank_tokens` / `ocr_tokens` / `title_tokens`) + credit grant/consume/adjust/expire (no reserve/release internals)
 - Centralized UI warning thresholds: ≥80 approaching, ≥95 critical, 100 exhausted
 - Chat typed `quota_exceeded` / `insufficient_credits`; Expert create `expert_limit_reached`; knowledge upload `storage_quota_exceeded` + current storage meter
 - Overview snapshot (monthly AI + storage + plan); Workspace-scoped React Query keys; EN/AR + RTL
