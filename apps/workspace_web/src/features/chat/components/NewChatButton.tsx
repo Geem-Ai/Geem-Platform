@@ -23,8 +23,8 @@ export function NewChatButton({ collapsed, className }: NewChatButtonProps) {
     <Button
       asChild
       className={cn(
-        'new-chat-gradient w-full max-w-full min-w-0 h-10 rounded-full shadow-lg gap-2 text-white',
-        'border-0 hover:brightness-105 overflow-hidden',
+        'new-chat-gradient w-full max-w-full min-w-0 h-10 rounded-full gap-2 text-primary-foreground',
+        'border-0 hover:brightness-110 overflow-hidden',
         collapsed && 'size-10 p-0',
         className,
       )}

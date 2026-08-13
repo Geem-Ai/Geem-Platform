@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
@@ -118,11 +118,7 @@ export function ChatStartPage() {
       className="flex flex-col h-[calc(100vh-var(--header-height-mobile)-3.5rem)] lg:h-[calc(100vh-2.5rem)]"
       data-testid="chat-start-page"
     >
-      <Helmet>
-        <title>
-          {t('chat.title')} — {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('chat.newChat')} />
 
       <ChatStarter
         experts={allExperts}

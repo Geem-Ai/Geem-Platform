@@ -94,4 +94,20 @@ describe('i18n coverage', () => {
     expect(enL.errors.expertNotFound).toBeTruthy();
     expect(arL.errors.expertNotFound).toBeTruthy();
   });
+
+  it('has matching usage and quota keys in en and ar', () => {
+    expect(en.usage.title).toBeTruthy();
+    expect(ar.usage.title).toBeTruthy();
+    expect(en.usage.units.mb).toBeTruthy();
+    expect(ar.usage.units.mb).toBeTruthy();
+    expect(en.errors.quotaExceeded).toBeTruthy();
+    expect(ar.errors.quotaExceeded).toBeTruthy();
+    expect(en.errors.expertLimitReached).toBeTruthy();
+    expect(ar.errors.expertLimitReached).toBeTruthy();
+    expect(en.errors.storageQuotaExceeded).toBeTruthy();
+    expect(ar.errors.storageQuotaExceeded).toBeTruthy();
+    expect(errorMessageKey('quota_exceeded')).toBe('errors.quotaExceeded');
+    expect(errorMessageKey('expert_limit_reached')).toBe('errors.expertLimitReached');
+    expect(errorMessageKey('storage_quota_exceeded')).toBe('errors.storageQuotaExceeded');
+  });
 });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from starlette.requests import Request
 
 from app.common.workspace_resolver import extract_subdomain_slug, resolve_workspace_hint
@@ -8,6 +9,7 @@ from app.core.config import Settings
 from app.core.errors import AppError, ErrorCategory
 from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
 from app.workspaces.models import WorkspaceRole
+from app.workspaces.service import _is_slug_unique_violation
 from app.workspaces.slug import validate_workspace_slug
 
 
@@ -70,3 +72,20 @@ def test_workspace_policy_matrix() -> None:
 
     with pytest.raises(AppError):
         WorkspacePolicy.require(WorkspaceRole.MEMBER, WorkspaceAction.DELETE_WORKSPACE)
+
+
+class _FakePgOrig:
+    def __init__(self, constraint_name: str) -> None:
+        self.diag = type("Diag", (), {"constraint_name": constraint_name})()
+
+    def __str__(self) -> str:
+        return f'duplicate key value violates unique constraint "{self.diag.constraint_name}"'
+
+
+def test_slug_unique_violation_is_not_plan_unique() -> None:
+    slug_exc = IntegrityError("INSERT", {}, _FakePgOrig("uq_workspaces_slug_active"))
+    plan_exc = IntegrityError("INSERT", {}, _FakePgOrig("uq_plans_code"))
+    sub_exc = IntegrityError("INSERT", {}, _FakePgOrig("uq_subscriptions_workspace_active"))
+    assert _is_slug_unique_violation(slug_exc) is True
+    assert _is_slug_unique_violation(plan_exc) is False
+    assert _is_slug_unique_violation(sub_exc) is False

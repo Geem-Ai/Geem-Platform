@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { canCreateExpert } from '@/features/experts/lib/capabilities';
 import { useExperts } from '@/features/experts/hooks/useExperts';
 import { ExpertCard } from '@/features/experts/components/ExpertCard';
+import { OverviewUsageSummary } from '@/features/usage/components/OverviewUsageSummary';
 import { geemAvatarUrl } from '@/lib/helpers';
 
 const upcoming = [
   { key: 'nav.apiKeys', to: '/api/keys' },
   { key: 'nav.apps', to: '/apps' },
-  { key: 'nav.billing', to: '/billing/subscription' },
 ] as const;
 
 export function OverviewPage() {
@@ -27,11 +27,7 @@ export function OverviewPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-8 w-full max-w-3xl ms-auto me-auto">
-      <Helmet>
-        <title>
-          {t('overview.title')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('overview.title')} />
       <div className="flex items-center gap-3">
         <img
           src={geemAvatarUrl()}
@@ -71,6 +67,8 @@ export function OverviewPage() {
           <Link to="/settings">{t('nav.settings')}</Link>
         </Button>
       </div>
+
+      <OverviewUsageSummary />
 
       {/* Experts quick-access */}
       {experts.length > 0 && (

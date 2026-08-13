@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { suggestSlugFromName } from '@/features/workspaces/lib/hostname';
@@ -60,11 +60,7 @@ export function CreateWorkspacePage() {
 
   return (
     <AuthLayout>
-      <Helmet>
-        <title>
-          {t('shell.createWorkspace')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('shell.createWorkspace')} />
       <Card>
         <CardHeader>
           <CardTitle>{t('shell.createWorkspace')}</CardTitle>

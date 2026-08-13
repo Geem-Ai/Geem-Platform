@@ -15,6 +15,7 @@ from app.db.models import Document, IngestionJob
 from app.db.session import SessionLocal, get_db
 from app.documents.dependencies import DocumentAccess, get_document_access
 from app.experts.query_service import ExpertQueryService
+from app.usage.metered import MeteredWorkspaceGeneration
 from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api", tags=["query"])
@@ -37,15 +38,28 @@ def query(
     db: Session = Depends(get_db),
 ) -> QueryResponse:
     _require_read(access)
-    svc = ExpertQueryService(db)
-    result = svc.query(
-        workspace=access.workspace,
-        membership=access.membership,
-        actor=access.user,
+    meter = MeteredWorkspaceGeneration(
+        db,
+        workspace_id=access.workspace.id,
+        user_id=access.user.id,
         expert_id=body.expert_id,
-        question=body.question,
-        top_k=body.top_k,
     )
+    usage_context = meter.reserve()
+    try:
+        svc = ExpertQueryService(db)
+        result = svc.query(
+            workspace=access.workspace,
+            membership=access.membership,
+            actor=access.user,
+            expert_id=body.expert_id,
+            question=body.question,
+            top_k=body.top_k,
+            usage_context=usage_context,
+        )
+        meter.settle(result)
+    except Exception:
+        meter.release()
+        raise
     return QueryResponse(
         answer=result["answer"],
         insufficient_context=result["insufficient_context"],
@@ -72,7 +86,14 @@ async def query_stream(
 
     def generate() -> Iterator[str]:
         db = SessionLocal()
+        meter = MeteredWorkspaceGeneration(
+            db,
+            workspace_id=workspace.id,
+            user_id=actor.id,
+            expert_id=expert_id,
+        )
         try:
+            usage_context = meter.reserve()
             svc = ExpertQueryService(db)
             for item in svc.query_stream(
                 workspace=workspace,
@@ -81,9 +102,15 @@ async def query_stream(
                 expert_id=expert_id,
                 question=question,
                 top_k=top_k,
+                usage_context=usage_context,
             ):
+                if item.get("event") == "final":
+                    meter.settle(item.get("data") or {})
                 yield _sse(item["event"], item["data"])
+            if not meter.closed:
+                meter.release()
         except AppError as exc:
+            meter.release()
             yield _sse(
                 "error",
                 {
@@ -92,7 +119,11 @@ async def query_stream(
                     "details": exc.details,
                 },
             )
+        except GeneratorExit:
+            meter.release()
+            raise
         except Exception as exc:  # noqa: BLE001 — surface to client SSE
+            meter.release()
             yield _sse("error", {"error": "generation_failed", "message": str(exc)})
         finally:
             db.close()

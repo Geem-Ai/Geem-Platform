@@ -9,5 +9,6 @@ export * from './documents';
 export * from './experts';
 export * from './conversations';
 export * from './query';
+export * from './usage';
 export { streamSse } from './sse';
 export { apiRequest };

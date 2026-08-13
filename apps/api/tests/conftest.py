@@ -53,6 +53,10 @@ def clean_tables() -> Generator[None, None, None]:
         conn.execute(
             text(
                 "TRUNCATE TABLE "
+                "purchases, credit_packs, payment_gateway_configs, "
+                "ai_usage_reservations, storage_reservations, workspace_resource_usage, "
+                "storage_usage_events, usage_period_counters, credit_ledger_entries, "
+                "credit_accounts, subscriptions, plan_entitlements, plans, "
                 "messages, conversations, "
                 "expert_documents, expert_sources, workspace_expert_grants, experts, "
                 "usage_events, chunks, document_pages, ingestion_jobs, documents, "

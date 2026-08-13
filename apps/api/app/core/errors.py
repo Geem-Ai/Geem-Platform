@@ -66,6 +66,32 @@ class ErrorCategory(StrEnum):
     # Conversations (Phase 4B) — overlapping generation
     CONVERSATION_BUSY = "conversation_busy"
 
+    # Entitlements / subscriptions (Phase 5A)
+    ENTITLEMENT_NOT_FOUND = "entitlement_not_found"
+    ENTITLEMENT_INVALID = "entitlement_invalid"
+    ENTITLEMENT_TYPE_MISMATCH = "entitlement_type_mismatch"
+    SUBSCRIPTION_NOT_FOUND = "subscription_not_found"
+
+    # AI usage metering (Phase 5B)
+    INSUFFICIENT_CREDITS = "insufficient_credits"
+
+    # Workspace resource quotas (Phase 5C)
+    EXPERT_LIMIT_REACHED = "expert_limit_reached"
+    STORAGE_QUOTA_EXCEEDED = "storage_quota_exceeded"
+
+    # Billing / checkout (Phase 6A)
+    BILLING_GATEWAY_UNAVAILABLE = "billing_gateway_unavailable"
+    BILLING_GATEWAY_ERROR = "billing_gateway_error"
+    INVALID_PURCHASE = "invalid_purchase"
+    PURCHASE_NOT_FOUND = "purchase_not_found"
+    PURCHASE_ALREADY_COMPLETED = "purchase_already_completed"
+    PAYMENT_VERIFICATION_FAILED = "payment_verification_failed"
+    PAYMENT_AMOUNT_MISMATCH = "payment_amount_mismatch"
+    PAYMENT_CURRENCY_MISMATCH = "payment_currency_mismatch"
+    CREDIT_PACK_UNAVAILABLE = "credit_pack_unavailable"
+    PLAN_UNAVAILABLE = "plan_unavailable"
+    SYSTEM_WORKSPACE_CHECKOUT_FORBIDDEN = "system_workspace_checkout_forbidden"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -110,6 +136,26 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "message_not_found": 404,
     # Phase 4B
     "conversation_busy": 409,
+    # Phase 5A
+    "entitlement_not_found": 404,
+    "entitlement_invalid": 422,
+    "entitlement_type_mismatch": 422,
+    "subscription_not_found": 404,
+    "insufficient_credits": 402,
+    "expert_limit_reached": 429,
+    "storage_quota_exceeded": 429,
+    # Phase 6A — billing checkout
+    "billing_gateway_unavailable": 503,
+    "billing_gateway_error": 502,
+    "invalid_purchase": 400,
+    "purchase_not_found": 404,
+    "purchase_already_completed": 409,
+    "payment_verification_failed": 402,
+    "payment_amount_mismatch": 409,
+    "payment_currency_mismatch": 409,
+    "credit_pack_unavailable": 404,
+    "plan_unavailable": 404,
+    "system_workspace_checkout_forbidden": 403,
 }
 
 
@@ -126,3 +172,25 @@ class AppError(Exception):
         self.details = details
         self.retryable = retryable
         super().__init__(f"{category}: {message}")
+
+
+def raise_resource_quota(
+    category: ErrorCategory,
+    message: str,
+    *,
+    metric: str,
+    limit: int,
+    used: int,
+    remaining: int,
+) -> None:
+    """Raise a typed quota error with machine-readable fields for the Workspace UI."""
+    raise AppError(
+        category,
+        message,
+        details={
+            "metric": metric,
+            "limit": int(limit),
+            "used": int(used),
+            "remaining": int(remaining),
+        },
+    )

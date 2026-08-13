@@ -20,6 +20,8 @@ from app.ingestion.parsers import DocumentFormat, get_parser_for_format
 from app.ingestion.pdf_utils import split_page
 from app.openrouter.embeddings import OpenRouterEmbeddingProvider
 from app.openrouter.parser import OpenRouterDocumentParser
+from app.usage.openrouter_billing import provider_meta, record_openrouter_event
+from app.usage.weights import OpenRouterFamily
 from app.storage.minio_storage import MinioObjectStorage
 from app.storage.qdrant_store import QdrantVectorStore, deterministic_point_id
 
@@ -392,20 +394,49 @@ class IngestionPipeline:
                         "empty_page_skipped" if result.get("empty_page") else None
                     )
                     db_page.completed_at = _utcnow()
-                    usage = result["metadata"].get("usage") or {}
-                    self.db.add(
-                        UsageEvent(
-                            id=uuid.uuid4(),
-                            operation_type="pdf_parse",
-                            model=result["metadata"].get("model"),
-                            input_tokens=usage.get("prompt_tokens"),
-                            output_tokens=usage.get("completion_tokens"),
-                            cost_metadata=usage if usage else None,
-                            document_id=document.id,
-                            page_number=db_page.page_number,
-                            request_id=result["metadata"].get("request_id"),
+                    metadata = result.get("metadata") or {}
+                    usage = metadata.get("usage") or {}
+                    if isinstance(self.parser, OpenRouterDocumentParser):
+                        try:
+                            record_openrouter_event(
+                                self.db,
+                                self.settings,
+                                family=OpenRouterFamily.OCR,
+                                operation_type="pdf_parse",
+                                provider_usage=usage or None,
+                                model=metadata.get("model"),
+                                request_id=metadata.get("request_id"),
+                                workspace_id=document.workspace_id,
+                                document_id=document.id,
+                                page_number=db_page.page_number,
+                                charge_now=True,
+                            )
+                        except AppError as exc:
+                            if exc.category in {
+                                ErrorCategory.QUOTA_EXCEEDED,
+                                ErrorCategory.INSUFFICIENT_CREDITS,
+                            }:
+                                db_page.status = "failed"
+                                db_page.last_error = exc.message[:2000]
+                                job.last_error = exc.message[:2000]
+                                self.db.commit()
+                                raise
+                            raise
+                    else:
+                        self.db.add(
+                            UsageEvent(
+                                id=uuid.uuid4(),
+                                operation_type="pdf_parse",
+                                model=metadata.get("model"),
+                                input_tokens=usage.get("prompt_tokens"),
+                                output_tokens=usage.get("completion_tokens"),
+                                cost_metadata=usage if usage else None,
+                                document_id=document.id,
+                                page_number=db_page.page_number,
+                                request_id=metadata.get("request_id"),
+                                workspace_id=document.workspace_id,
+                            )
                         )
-                    )
 # Refresh progress
                 all_pages = list(
                     self.db.scalars(select(DocumentPage).where(DocumentPage.document_id == document.id))
@@ -483,6 +514,21 @@ class IngestionPipeline:
         vectors = self.embedder.embed_documents(texts)
         if not vectors:
             raise AppError(ErrorCategory.EMBEDDING_FAILED, "No embeddings returned")
+        if isinstance(self.embedder, OpenRouterEmbeddingProvider):
+            meta = provider_meta(self.embedder)
+            record_openrouter_event(
+                self.db,
+                self.settings,
+                family=OpenRouterFamily.EMBED,
+                operation_type="embedding",
+                provider_usage=meta.get("usage"),
+                model=meta.get("model") or self.embedder.model_id,
+                request_id=meta.get("request_id"),
+                workspace_id=document.workspace_id,
+                document_id=document.id,
+                extra_metadata={"chunk_count": len(all_chunks)},
+                charge_now=True,
+            )
         dim = len(vectors[0])
         self.vectors.ensure_collection(dim)
         for v in vectors:
@@ -527,17 +573,19 @@ class IngestionPipeline:
         for i in range(0, len(points), batch):
             self.vectors.upsert(points[i : i + batch])
 
-        self.db.add(
-            UsageEvent(
-                id=uuid.uuid4(),
-                operation_type="embedding",
-                model=self.embedder.model_id,
-                input_tokens=None,
-                output_tokens=None,
-                cost_metadata={"chunk_count": len(all_chunks)},
-                document_id=document.id,
+        if not isinstance(self.embedder, OpenRouterEmbeddingProvider):
+            self.db.add(
+                UsageEvent(
+                    id=uuid.uuid4(),
+                    operation_type="embedding",
+                    model=self.embedder.model_id,
+                    input_tokens=None,
+                    output_tokens=None,
+                    cost_metadata={"chunk_count": len(all_chunks)},
+                    document_id=document.id,
+                    workspace_id=document.workspace_id,
+                )
             )
-        )
         job.current_stage = "indexed"
         self.db.commit()
 

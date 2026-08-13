@@ -117,6 +117,52 @@ class Settings(BaseSettings):
 
     general_fallback_enabled: bool = True
 
+    # Phase 5A — bootstrap/dev plan entitlements (NOT Geem commercial pricing).
+    # Existing Workspaces receive this plan so they keep a valid entitlement set.
+    bootstrap_plan_code: str = "bootstrap_dev"
+    bootstrap_plan_name: str = "Bootstrap (development)"
+    bootstrap_plan_description: str = (
+        "Development/bootstrap default plan. Values are conservative high limits "
+        "so existing Workspaces keep working; they are not Geem product pricing."
+    )
+    bootstrap_ai_tokens_daily: int = 1_000_000
+    bootstrap_ai_tokens_weekly: int = 5_000_000
+    bootstrap_ai_tokens_monthly: int = 20_000_000
+    bootstrap_experts_limit: int = 100
+    bootstrap_storage_bytes: int = 10 * 1024 * 1024 * 1024  # 10 GiB
+
+    # Phase 5B — tokens held before an LLM call. 0 means max_context_tokens.
+    ai_usage_reservation_tokens: int = 0
+
+    # Workspace AI token pool weights. billed = round(provider_tokens * multiplier).
+    # Family rates apply to the matching OPENROUTER_*_MODEL unless overridden.
+    ai_token_multiplier_chat: float = 1.0
+    ai_token_multiplier_embed: float = 1.0
+    ai_token_multiplier_rerank: float = 1.0
+    ai_token_multiplier_ocr: float = 3.0
+    ai_token_multiplier_title: float = 1.0
+    # Optional JSON object: {"openai/gpt-5.6-luna": 3, "cohere/rerank-v3.5": 2}
+    ai_token_model_multipliers: str = ""
+    ai_token_fallback_embed: int = 100
+    ai_token_fallback_rerank: int = 50
+    ai_token_fallback_ocr_per_page: int = 500
+    ai_token_fallback_title: int = 64
+
+    # Phase 5C — stale storage holds (crashed upload before finalize/release).
+    storage_reservation_ttl_seconds: int = 900
+
+    # Phase 6A — secret-at-rest key for payment_gateway_configs credentials.
+    # Empty → derived from JWT_SECRET. Set a dedicated key in non-local env.
+    secrets_encryption_key: str = ""
+
+    # Phase 6A — ClickPay hosted-page (used when DB credentials are empty).
+    clickpay_profile_id: str = ""
+    clickpay_server_key: str = ""
+    clickpay_test_mode: bool = True
+    clickpay_base_url: str = "https://secure.clickpay.com.sa"
+    clickpay_timeout_seconds: float = 30.0
+    billing_currency: str = "SAR"
+
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
     conversation_title_max_length: int = 80
@@ -144,6 +190,11 @@ class Settings(BaseSettings):
     prompt_version: str = "rag_answer_v1"
     general_prompt_version: str = "general_fallback_v1"
     embedding_version: str = "v1"
+
+    @property
+    def effective_ai_usage_reservation_tokens(self) -> int:
+        n = int(self.ai_usage_reservation_tokens)
+        return n if n > 0 else int(self.max_context_tokens)
 
     @property
     def cors_origin_list(self) -> list[str]:

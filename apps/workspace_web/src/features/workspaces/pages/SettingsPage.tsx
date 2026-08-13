@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
 import { canManageWorkspace } from '@/features/workspaces/lib/roles';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
@@ -57,11 +57,7 @@ export function SettingsPage() {
 
   return (
     <div className="p-6 md:p-8 w-full max-w-xl space-y-6 ms-auto me-auto">
-      <Helmet>
-        <title>
-          {t('settings.title')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('settings.title')} />
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{t('settings.title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('settings.description')}</p>

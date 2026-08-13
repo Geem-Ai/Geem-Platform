@@ -84,6 +84,15 @@ def bootstrap_platform_admin(
         # Platform Knowledge system Workspace — no tenant memberships.
         WorkspaceService(db, settings).ensure_platform_knowledge_workspace()
 
+        # Bootstrap/dev plan so existing tenant Workspaces have entitlements.
+        from app.billing.service import PlanService
+
+        PlanService(db, settings).ensure_bootstrap_plan()
+        from app.billing.provisioning import ensure_local_noop_gateway
+
+        ensure_local_noop_gateway(db, settings=settings)
+        db.commit()
+
         # Geem General Platform Expert (LLM-only; available to all workspaces).
         ensure_geem_general_expert(db, settings=settings)
 

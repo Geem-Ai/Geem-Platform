@@ -78,6 +78,7 @@ class ExpertQueryService:
         question: str,
         top_k: int | None = None,
         history: list[dict[str, str]] | None = None,
+        usage_context: Any | None = None,
     ) -> dict[str, Any]:
         knowledge = self.resolve_knowledge(
             workspace=workspace,
@@ -90,12 +91,14 @@ class ExpertQueryService:
                 question=question,
                 knowledge=knowledge,
                 history=history,
+                usage_context=usage_context,
             )
         return self._rag.query_expert(
             question=question,
             knowledge=knowledge,
             top_k=top_k,
             history=history,
+            usage_context=usage_context,
         )
 
     def query_stream(
@@ -108,6 +111,7 @@ class ExpertQueryService:
         question: str,
         top_k: int | None = None,
         history: list[dict[str, str]] | None = None,
+        usage_context: Any | None = None,
     ) -> Iterator[dict[str, Any]]:
         knowledge = self.resolve_knowledge(
             workspace=workspace,
@@ -120,6 +124,7 @@ class ExpertQueryService:
                 question=question,
                 knowledge=knowledge,
                 history=history,
+                usage_context=usage_context,
             )
             return
         yield from self._rag.query_expert_stream(
@@ -127,6 +132,7 @@ class ExpertQueryService:
             knowledge=knowledge,
             top_k=top_k,
             history=history,
+            usage_context=usage_context,
         )
 
     def resolve_knowledge(

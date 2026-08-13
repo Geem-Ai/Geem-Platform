@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
@@ -70,11 +70,7 @@ export function MembersPage() {
 
   return (
     <div className="p-6 md:p-8 w-full max-w-3xl space-y-6 ms-auto me-auto">
-      <Helmet>
-        <title>
-          {t('members.title')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('members.title')} />
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{t('members.title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('members.description')}</p>

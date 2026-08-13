@@ -2,6 +2,12 @@
 
 Arabic-first PDF RAG on a single Mac Studio host. OpenRouter provides OCR (`mistral-ocr`), embeddings, reranking, and chat. Local stack: FastAPI, Celery, PostgreSQL, Redis, Qdrant, MinIO, React.
 
+## Documentation
+
+- [Local development](docs/development.md)
+- [Deploy on aaPanel](docs/deployment.md)
+- [Architecture](docs/architecture.md)
+
 ## Quick start
 
 ```bash

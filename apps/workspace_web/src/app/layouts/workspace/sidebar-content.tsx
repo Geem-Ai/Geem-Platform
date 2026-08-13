@@ -39,11 +39,13 @@ function NavLinkItem({
   const link = (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
+      // Group parents and nested leaves must match exactly. Prefix match would
+      // paint Billing + every /billing/* child as active at once.
+      end={Boolean(item.children) || nested}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
-          nested && 'ms-4',
+          'flex w-full min-w-0 items-center justify-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+          nested && 'ps-4',
           isActive
             ? 'bg-accent text-accent-foreground font-medium'
             : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
@@ -52,7 +54,7 @@ function NavLinkItem({
       }
     >
       <Icon className="size-4 shrink-0" />
-      {!collapsed && <span className="truncate">{label}</span>}
+      {!collapsed && <span className="min-w-0 truncate">{label}</span>}
     </NavLink>
   );
 
@@ -73,12 +75,12 @@ function WorkspaceNav({ collapsed }: { collapsed: boolean }) {
 
   return (
     <nav
-      className="p-2.5 space-y-1"
+      className="w-full p-2.5 space-y-1"
       aria-label={t('shell.workspaceSettings')}
       data-testid="workspace-nav"
     >
       {workspaceNav.map((item) => (
-        <div key={item.id} className="space-y-1">
+        <div key={item.id} className="w-full space-y-1">
           <NavLinkItem item={item} collapsed={collapsed} />
           {!collapsed &&
             item.children?.map((child) => (
@@ -209,7 +211,7 @@ export function SidebarContent() {
         {sidebarMode === 'chat' ? (
           <ChatHistorySections collapsed={collapsed} />
         ) : (
-          <div className="space-y-1 min-w-0">
+          <div className="space-y-1 min-w-0 w-full">
             <div className="px-2.5 pb-1">
               <BackToChats collapsed={collapsed} />
             </div>

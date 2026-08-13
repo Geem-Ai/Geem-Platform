@@ -32,6 +32,10 @@ from app.storage.scopes import (
     RagScope,
     WorkspaceRagScope,
 )
+from app.usage.accounting import accumulate_result_usage, parse_provider_usage
+from app.usage.attribution import GenerationUsageContext
+from app.usage.openrouter_billing import provider_meta, record_openrouter_event
+from app.usage.weights import OpenRouterFamily, billed_usage
 
 logger = logging.getLogger(__name__)
 
@@ -117,14 +121,20 @@ class RagService:
         )
 
         if self._needs_citation_retry(validated):
+            self._record_generation_usage(
+                validated, result, operation_type="generation_attempt", scope=scope
+            )
             stricter = (
                 compose_expert_system_prompt(load_system_prompt(), "")
                 + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
             )
             retry_chat = OpenRouterChatProvider(settings=self.settings, system_prompt=stricter)
             result = retry_chat.answer(prepared["question"], prepared["context"])
-            validated = self._validate_citations(
-                result, prepared["allowed_ids"], prepared["context_chunks"]
+            validated = self._carry_usage(
+                validated,
+                self._validate_citations(
+                    result, prepared["allowed_ids"], prepared["context_chunks"]
+                ),
             )
             if not validated["citations"]:
                 validated["insufficient_context"] = True
@@ -164,6 +174,9 @@ class RagService:
             result, prepared["allowed_ids"], prepared["context_chunks"]
         )
         if self._needs_citation_retry(validated):
+            self._record_generation_usage(
+                validated, result, operation_type="generation_attempt", scope=scope
+            )
             yield {"event": "status", "data": {"stage": "retrying"}}
             yield {"event": "replace", "data": {"text": ""}}
             stricter = (
@@ -182,8 +195,11 @@ class RagService:
                     result = event.get("result")
             if not result:
                 raise AppError(ErrorCategory.GENERATION_FAILED, "Retry stream ended without a result")
-            validated = self._validate_citations(
-                result, prepared["allowed_ids"], prepared["context_chunks"]
+            validated = self._carry_usage(
+                validated,
+                self._validate_citations(
+                    result, prepared["allowed_ids"], prepared["context_chunks"]
+                ),
             )
             if not validated["citations"]:
                 validated["insufficient_context"] = True
@@ -200,6 +216,17 @@ class RagService:
                 "general_answer": validated.get("general_answer"),
                 "used_general_knowledge": bool(validated.get("used_general_knowledge")),
                 "general_model": validated.get("general_model"),
+                **({"usage": validated["usage"]} if validated.get("usage") else {}),
+                **(
+                    {"billed_chat_tokens": validated["billed_chat_tokens"]}
+                    if validated.get("billed_chat_tokens") is not None
+                    else {}
+                ),
+                **(
+                    {"billed_extra_tokens": validated["billed_extra_tokens"]}
+                    if validated.get("billed_extra_tokens") is not None
+                    else {}
+                ),
             },
         }
 
@@ -214,8 +241,11 @@ class RagService:
         top_k: int | None = None,
         *,
         history: list[dict[str, str]] | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> dict:
-        prepared = self._prepare_expert_context(question, knowledge, top_k)
+        prepared = self._prepare_expert_context(
+            question, knowledge, top_k, usage_context=usage_context
+        )
         scope = prepared["scope"]
         expert_chat = self._build_expert_chat(knowledge)
         result = expert_chat.answer(
@@ -225,6 +255,13 @@ class RagService:
             result, prepared["allowed_ids"], prepared["context_chunks"]
         )
         if self._needs_citation_retry(validated):
+            self._record_generation_usage(
+                validated,
+                result,
+                operation_type="generation_attempt",
+                scope=scope,
+                usage_context=usage_context,
+            )
             stricter_prompt = (
                 self._compose_expert_prompt(knowledge)
                 + "\n\nSTRICT: You must cite at least one valid SOURCE id, or set insufficient_context=true."
@@ -235,16 +272,26 @@ class RagService:
             result = retry_chat.answer(
                 prepared["question"], prepared["context"], history=history
             )
-            validated = self._validate_citations(
-                result, prepared["allowed_ids"], prepared["context_chunks"]
+            validated = self._carry_usage(
+                validated,
+                self._validate_citations(
+                    result, prepared["allowed_ids"], prepared["context_chunks"]
+                ),
             )
             if not validated["citations"]:
                 validated["insufficient_context"] = True
 
-        usage_id = self._record_generation_usage(validated, result, scope=scope)
+        usage_id = self._record_generation_usage(
+            validated, result, scope=scope, usage_context=usage_context
+        )
         if usage_id is not None:
             validated["usage_event_id"] = str(usage_id)
-        self._maybe_attach_general_answer(prepared["question"], validated, scope=scope)
+        self._maybe_attach_general_answer(
+            prepared["question"],
+            validated,
+            scope=scope,
+            usage_context=usage_context,
+        )
         return validated
 
     def query_expert_stream(
@@ -254,9 +301,12 @@ class RagService:
         top_k: int | None = None,
         *,
         history: list[dict[str, str]] | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> Iterator[dict[str, Any]]:
         yield {"event": "status", "data": {"stage": "retrieving"}}
-        prepared = self._prepare_expert_context(question, knowledge, top_k)
+        prepared = self._prepare_expert_context(
+            question, knowledge, top_k, usage_context=usage_context
+        )
         scope = prepared["scope"]
         yield {"event": "status", "data": {"stage": "generating"}}
 
@@ -280,6 +330,13 @@ class RagService:
             result, prepared["allowed_ids"], prepared["context_chunks"]
         )
         if self._needs_citation_retry(validated):
+            self._record_generation_usage(
+                validated,
+                result,
+                operation_type="generation_attempt",
+                scope=scope,
+                usage_context=usage_context,
+            )
             yield {"event": "status", "data": {"stage": "retrying"}}
             yield {"event": "replace", "data": {"text": ""}}
             stricter_prompt = (
@@ -302,14 +359,24 @@ class RagService:
                     result = event.get("result")
             if not result:
                 raise AppError(ErrorCategory.GENERATION_FAILED, "Retry stream ended without a result")
-            validated = self._validate_citations(
-                result, prepared["allowed_ids"], prepared["context_chunks"]
+            validated = self._carry_usage(
+                validated,
+                self._validate_citations(
+                    result, prepared["allowed_ids"], prepared["context_chunks"]
+                ),
             )
             if not validated["citations"]:
                 validated["insufficient_context"] = True
 
-        usage_id = self._record_generation_usage(validated, result, scope=scope)
-        yield from self._stream_general_fallback(prepared["question"], validated, scope=scope)
+        usage_id = self._record_generation_usage(
+            validated, result, scope=scope, usage_context=usage_context
+        )
+        yield from self._stream_general_fallback(
+            prepared["question"],
+            validated,
+            scope=scope,
+            usage_context=usage_context,
+        )
         final_data = {
             "answer": validated["answer"],
             "insufficient_context": validated["insufficient_context"],
@@ -321,6 +388,12 @@ class RagService:
         }
         if usage_id is not None:
             final_data["usage_event_id"] = str(usage_id)
+        if validated.get("usage"):
+            final_data["usage"] = validated["usage"]
+        if validated.get("billed_chat_tokens") is not None:
+            final_data["billed_chat_tokens"] = validated["billed_chat_tokens"]
+        if validated.get("billed_extra_tokens") is not None:
+            final_data["billed_extra_tokens"] = validated["billed_extra_tokens"]
         yield {"event": "final", "data": final_data}
 
     def query_general_expert(
@@ -329,6 +402,7 @@ class RagService:
         knowledge: ResolvedExpertKnowledge,
         *,
         history: list[dict[str, str]] | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> dict:
         """LLM-only Expert answer (Geem General) — no retrieve/rerank/citations."""
         question = (question or "").strip()
@@ -351,6 +425,7 @@ class RagService:
             result,
             operation_type="general_expert",
             scope=knowledge.scope,
+            usage_context=usage_context,
         )
         if usage_id is not None:
             validated["usage_event_id"] = str(usage_id)
@@ -362,6 +437,7 @@ class RagService:
         knowledge: ResolvedExpertKnowledge,
         *,
         history: list[dict[str, str]] | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream LLM-only Expert answer — SSE-compatible with ChatOrchestrator."""
         question = (question or "").strip()
@@ -398,6 +474,7 @@ class RagService:
             result,
             operation_type="general_expert",
             scope=knowledge.scope,
+            usage_context=usage_context,
         )
         final_data = {
             "answer": validated["answer"],
@@ -410,6 +487,12 @@ class RagService:
         }
         if usage_id is not None:
             final_data["usage_event_id"] = str(usage_id)
+        if validated.get("usage"):
+            final_data["usage"] = validated["usage"]
+        if validated.get("billed_chat_tokens") is not None:
+            final_data["billed_chat_tokens"] = validated["billed_chat_tokens"]
+        if validated.get("billed_extra_tokens") is not None:
+            final_data["billed_extra_tokens"] = validated["billed_extra_tokens"]
         yield {"event": "final", "data": final_data}
 
     def _build_general_expert_chat(
@@ -447,6 +530,7 @@ class RagService:
         question: str,
         knowledge: ResolvedExpertKnowledge,
         top_k: int | None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> dict[str, Any]:
         question = (question or "").strip()
         if not question:
@@ -470,6 +554,13 @@ class RagService:
         retrieval_question = expand_article_query(question)
         normalized_q = normalize_search(retrieval_question)
         query_vec = self.embedder.embed_query(normalized_q)
+        self._note_openrouter_call(
+            OpenRouterFamily.EMBED,
+            "embed_query",
+            usage_context=usage_context,
+            scope=scope,
+            provider=self.embedder,
+        )
 
         hits = self.vectors.search_expert(
             knowledge_workspace_id=scope.knowledge_workspace_id,
@@ -577,6 +668,13 @@ class RagService:
 
         rerank_top_n = rag_cfg.rerank_top_n
         ranked = self.reranker.rerank(normalized_q, enriched, top_n=rerank_top_n)
+        self._note_openrouter_call(
+            OpenRouterFamily.RERANK,
+            "rerank",
+            usage_context=usage_context,
+            scope=scope,
+            provider=self.reranker,
+        )
         expanded = self._expand_neighbors(ranked)
         # Neighbor expansion must not introduce chunks that fail Expert scope.
         filtered_expanded: list[dict] = []
@@ -606,8 +704,18 @@ class RagService:
             "scope": scope,
         }
 
+    def _carry_usage(self, previous: dict, validated: dict) -> dict:
+        if previous.get("usage"):
+            validated["usage"] = previous["usage"]
+        return validated
+
     def _maybe_attach_general_answer(
-        self, question: str, validated: dict, *, scope: RagScope | None = None
+        self,
+        question: str,
+        validated: dict,
+        *,
+        scope: RagScope | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> None:
         validated.setdefault("general_answer", None)
         validated.setdefault("used_general_knowledge", False)
@@ -625,10 +733,11 @@ class RagService:
         validated["used_general_knowledge"] = bool(validated["general_answer"])
         validated["general_model"] = general.get("model")
         self._record_generation_usage(
-            {"model": general.get("model")},
+            validated,
             general,
             operation_type="general_fallback",
             scope=scope,
+            usage_context=usage_context,
         )
 
     def _stream_general_fallback(
@@ -637,6 +746,7 @@ class RagService:
         validated: dict,
         *,
         scope: RagScope | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> Iterator[dict[str, Any]]:
         validated.setdefault("general_answer", None)
         validated.setdefault("used_general_knowledge", False)
@@ -667,10 +777,11 @@ class RagService:
         validated["used_general_knowledge"] = bool(validated["general_answer"])
         validated["general_model"] = general_result.get("model")
         self._record_generation_usage(
-            {"model": general_result.get("model")},
+            validated,
             general_result,
             operation_type="general_fallback",
             scope=scope,
+            usage_context=usage_context,
         )
 
     def _prepare_context(
@@ -707,6 +818,13 @@ class RagService:
         retrieval_question = expand_article_query(question)
         normalized_q = normalize_search(retrieval_question)
         query_vec = self.embedder.embed_query(normalized_q)
+        self._note_openrouter_call(
+            OpenRouterFamily.EMBED,
+            "embed_query",
+            usage_context=None,
+            scope=scope,
+            provider=self.embedder,
+        )
         k = top_k or self.settings.retrieval_top_k
 
         if isinstance(scope, WorkspaceRagScope):
@@ -766,6 +884,13 @@ class RagService:
             enriched.insert(0, lexical)
 
         ranked = self.reranker.rerank(normalized_q, enriched, top_n=self.settings.rerank_top_n)
+        self._note_openrouter_call(
+            OpenRouterFamily.RERANK,
+            "rerank",
+            usage_context=None,
+            scope=scope,
+            provider=self.reranker,
+        )
         expanded = self._expand_neighbors(ranked)
         # Neighbor expansion must not introduce out-of-scope chunks.
         expanded = [
@@ -816,6 +941,53 @@ class RagService:
             and (validated.get("answer") or "").strip()
         )
 
+    def _consumer_workspace_id(
+        self,
+        scope: RagScope | None,
+        usage_context: GenerationUsageContext | None,
+    ) -> uuid.UUID | None:
+        if usage_context and usage_context.workspace_id:
+            return usage_context.workspace_id
+        if isinstance(scope, ExpertRagScope):
+            return scope.consumer_workspace_id
+        if isinstance(scope, WorkspaceRagScope):
+            return scope.workspace_id
+        return None
+
+    def _note_openrouter_call(
+        self,
+        family: OpenRouterFamily,
+        operation_type: str,
+        *,
+        usage_context: GenerationUsageContext | None,
+        scope: RagScope | None,
+        provider: Any,
+    ) -> None:
+        expected = (
+            OpenRouterEmbeddingProvider
+            if family == OpenRouterFamily.EMBED
+            else OpenRouterRerankProvider
+        )
+        if not isinstance(provider, expected):
+            return
+        meta = provider_meta(provider)
+        if not meta:
+            return
+        record_openrouter_event(
+            self.db,
+            self.settings,
+            family=family,
+            operation_type=operation_type,
+            provider_usage=meta.get("usage"),
+            model=meta.get("model"),
+            request_id=meta.get("request_id"),
+            workspace_id=self._consumer_workspace_id(scope, usage_context),
+            usage_context=usage_context,
+            extra_metadata={"provider_request_id": meta.get("request_id")},
+            charge_now=usage_context is None,
+        )
+        self.db.commit()
+
     def _record_generation_usage(
         self,
         validated: dict,
@@ -823,6 +995,7 @@ class RagService:
         *,
         operation_type: str = "generation",
         scope: RagScope | None = None,
+        usage_context: GenerationUsageContext | None = None,
     ) -> uuid.UUID | None:
         cost_metadata: dict[str, Any] = {
             "prompt_version": (
@@ -831,31 +1004,100 @@ class RagService:
                 else self.settings.prompt_version
             )
         }
+        workspace_id = usage_context.workspace_id if usage_context else None
+        user_id = usage_context.user_id if usage_context else None
+        expert_id = usage_context.expert_id if usage_context else None
+        conversation_id = usage_context.conversation_id if usage_context else None
+        message_id = usage_context.message_id if usage_context else None
+        commercial_request_id = usage_context.request_id if usage_context else None
+
         if isinstance(scope, ExpertRagScope):
             # Attribute cost to the consumer Workspace (the tenant footing the
             # bill), NOT the knowledge Workspace (which for Platform Experts is
             # a system Workspace that must never appear in tenant billing).
+            workspace_id = workspace_id or scope.consumer_workspace_id
+            expert_id = expert_id or scope.expert_id
             cost_metadata["workspace_id"] = str(scope.consumer_workspace_id)
             cost_metadata["expert_id"] = str(scope.expert_id)
             cost_metadata["knowledge_workspace_id"] = str(scope.knowledge_workspace_id)
             cost_metadata["expert_type"] = scope.expert_type
             cost_metadata["population"] = "expert"
         elif isinstance(scope, WorkspaceRagScope):
+            workspace_id = workspace_id or scope.workspace_id
             cost_metadata["workspace_id"] = str(scope.workspace_id)
             cost_metadata["population"] = "workspace"
         elif isinstance(scope, LegacyRagScope):
             cost_metadata["population"] = "legacy"
+
+        result_meta = result.get("_meta") or {}
+        provider_request_id = result_meta.get("request_id")
+        tokens = parse_provider_usage(result_meta.get("usage"))
+        if tokens is not None:
+            accumulate_result_usage(validated, result)
+            cost_metadata["token_source"] = tokens.source
+            cost_metadata["total_tokens"] = tokens.total_tokens
+        family = (
+            OpenRouterFamily.TITLE
+            if operation_type == "title"
+            else OpenRouterFamily.CHAT
+        )
+        model = result.get("model") or validated.get("model")
+        raw, billed, multiplier = billed_usage(
+            self.settings,
+            family,
+            provider_usage=result_meta.get("usage"),
+            model=model if isinstance(model, str) else None,
+            fallback_tokens=0 if tokens is None else None,
+        )
+        if billed.total_tokens > 0:
+            cost_metadata["family"] = family.value
+            cost_metadata["multiplier"] = multiplier
+            cost_metadata["raw_prompt_tokens"] = raw.prompt_tokens
+            cost_metadata["raw_completion_tokens"] = raw.completion_tokens
+            cost_metadata["raw_total_tokens"] = raw.total_tokens
+            cost_metadata["billed_tokens"] = billed.total_tokens
+        if provider_request_id:
+            cost_metadata["provider_request_id"] = provider_request_id
+        if commercial_request_id:
+            cost_metadata["billing_request_id"] = commercial_request_id
+
+        if billed.prompt_tokens is None and billed.completion_tokens is None:
+            input_tokens = billed.total_tokens if billed.total_tokens else None
+            output_tokens = 0 if billed.total_tokens else None
+        else:
+            input_tokens = billed.prompt_tokens
+            output_tokens = billed.completion_tokens
 
         event_id = uuid.uuid4()
         self.db.add(
             UsageEvent(
                 id=event_id,
                 operation_type=operation_type,
-                model=validated.get("model"),
+                model=model if isinstance(model, str) else None,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 cost_metadata=cost_metadata,
-                request_id=(result.get("_meta") or {}).get("request_id"),
+                request_id=commercial_request_id or provider_request_id,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                expert_id=expert_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
             )
         )
+        merged = parse_provider_usage(validated.get("usage"))
+        if merged is not None:
+            _raw_merged, billed_merged, _m = billed_usage(
+                self.settings,
+                OpenRouterFamily.CHAT,
+                provider_usage=validated.get("usage"),
+                model=model if isinstance(model, str) else None,
+            )
+            validated["billed_chat_tokens"] = billed_merged.total_tokens
+        elif billed.total_tokens:
+            validated["billed_chat_tokens"] = billed.total_tokens
+        if usage_context is not None:
+            validated["billed_extra_tokens"] = usage_context.extra_billed_tokens
         self.db.commit()
         return event_id
 

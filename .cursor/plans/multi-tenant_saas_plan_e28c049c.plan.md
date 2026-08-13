@@ -18,11 +18,11 @@ todos:
     content: "Phase 4: 4A–4D complete (incl. Geem General Expert). Do not start Phase 5 until requested."
     status: completed
   - id: phase-5
-    content: "Phase 5: Entitlements/ledger/quotas + AI-style usage surfaces"
-    status: pending
+    content: "Phase 5: 5A PASS + 5B PASS + 5C PASS + 5D PASS (usage UI, quota warnings, E2E). Phase 5 complete. Do not start Phase 6 until requested."
+    status: completed
   - id: phase-6
-    content: "Phase 6: Multi-gateway billing (one enabled) + billing UI aligned to AI Concept"
-    status: pending
+    content: "Phase 6: 6A PASS (gateway registry + ClickPay hosted redirect + Noop). 6B Workspace billing UI not started."
+    status: in_progress
   - id: phase-7
     content: "Phase 7: Workspace API keys + public /api/v1/chat + API Keys/Usage UI"
     status: pending
@@ -66,7 +66,10 @@ Default production host pattern (when domains are wired): `{workspace}.geem.ai` 
 
 ## UI Boundary Rule (mandatory)
 
-> [`samples/metronic_vite_9.5.0`](samples/metronic_vite_9.5.0) is a **read-only UI reference**. Production code must not import from, depend on, or mutate files under `samples/`. Only the **Metronic AI Concept** (`src/ai/**`) and the **shared components actually required by that concept** are the primary UI foundation. Other Metronic concept applications (CRM, Mail, Calendar, Todo, Real Estate, Store Inventory) must not be copied wholesale or used to dictate product architecture.
+> [`samples/`](samples/) is **read-only**. Production code must not import from, depend on, or mutate files under `samples/`.
+>
+> - [`samples/metronic_vite_9.5.0`](samples/metronic_vite_9.5.0) — UI reference. Only the **Metronic AI Concept** (`src/ai/**`) and the **shared components actually required by that concept** are the primary UI foundation. Other Metronic concept applications (CRM, Mail, Calendar, Todo, Real Estate, Store Inventory) must not be copied wholesale or used to dictate product architecture.
+> - [`samples/clickpay_gateway`](samples/clickpay_gateway) — Perfex CRM ClickPay module. Reference for hosted-page redirect only; port the flow into Python adapters, never import PHP.
 
 **Note on path spelling:** The sample lives at `samples/metronic_vite_9.5.0` (correct spelling). Do not create or reference a `metrnoic_*` path.
 
@@ -600,7 +603,8 @@ erDiagram
 
 **Billing / plans / usage / API keys / apps / audit** — unchanged from prior plan decisions:
 - plans, plan_entitlements, subscriptions, purchases, credit_packs
-- payment_gateway_configs (exactly one `enabled=true`), billing_customers, billing_events
+- payment_gateway_configs (multiple rows; **exactly one `enabled=true`**), purchases, credit_packs, billing_customers
+- Phase 6 fulfillment is **redirect return + server-side query**, not `billing_events` webhooks (webhooks later)
 - credit_accounts, credit_ledger_entries (append-only), usage_period_counters, storage events
 - api_keys (hashed secrets, scopes, revocation)
 - apps, app_prices, app_installations (not boolean flags)
@@ -662,14 +666,19 @@ Catalog + installation tables + encrypted config; no connector implementations y
 
 ```text
 BillingGateway (protocol)
-  ├── StripeGateway
-  ├── MoyasarGateway (or regional)
-  ├── TapGateway
-  └── Manual/NoopGateway (dev)
+  ├── ClickPayGateway          # Phase 6 — hosted page redirect (first)
+  ├── Manual/NoopGateway       # local/dev — no real money
+  └── (later) Stripe / Moyasar / Tap / …
 ```
 
-- `payment_gateway_configs`: multiple rows; **exactly one `enabled=true`**
-- Domain never imports a specific SDK directly; webhooks per provider; encrypted credentials
+- `payment_gateway_configs`: multiple rows; **exactly one `enabled=true`** for tenant checkout
+- Domain (`BillingService`, purchases, subscriptions, credit ledger) never branches on gateway name and never imports a provider SDK
+- Adding a gateway = new adapter + config row + credentials; fulfillment stays `create_checkout` → `redirect_url` → `complete_on_return`
+- **Phase 6 is redirect-only.** No webhook/IPN/callback handlers. After the browser returns, Geem **queries the gateway** (ClickPay `tran_ref`) and applies the purchase once (`request_id` / `tran_ref` idempotent)
+- ClickPay reference: read-only Perfex CRM module at [`samples/clickpay_gateway`](samples/clickpay_gateway) — never import PHP, never mutate `samples/`
+- Credentials encrypted at rest; env for local (`CLICKPAY_*` sandbox/production profile id + server key)
+- Currency for ClickPay v1: **SAR only** (matches the sample)
+- Webhooks deferred until a later slice when async capture is required
 
 ---
 
@@ -693,7 +702,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ## 24. Testing strategy
 
-- Backend: entitlements, ledger races, expert visibility, tenant isolation, webhook idempotency
+- Backend: entitlements, ledger races, expert visibility, tenant isolation, **checkout return idempotency** (replayed return URL must not double-GRANT)
 - Frontend: auth shell, Expert flows, chat SSE, RTL smoke, role-aware nav
 - Preserve chunker/normalize unit tests; update RAG tests for expert filters
 
@@ -867,29 +876,113 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 
 ### Phase 5 — Entitlements + Usage ledger + Storage quotas + usage UI
 
-**Status:** pending
+**Status:** complete — **Phase 5A PASS**, **Phase 5B PASS**, **Phase 5C PASS**, **Phase 5D PASS**. Do **not** start Phase 6 until explicitly requested.
+
+**Phase 5A delivered (backend foundation only):**
+- `plans`, `plan_entitlements`, `subscriptions` (one active per Workspace), `credit_accounts`, append-only `credit_ledger_entries` (`request_id` idempotency), `usage_period_counters`, `storage_usage_events`
+- Canonical entitlement keys (`ai_tokens_daily|weekly|monthly`, `experts_limit`, `storage_bytes`) — no `if plan.name == "pro"` branching
+- `EntitlementService` / `QuotaService` lookup; UTC daily/weekly(ISO)/monthly period utilities
+- Manual subscription assignment; bootstrap/dev plan (`bootstrap_dev`) for existing tenant Workspaces (configurable, not Geem commercial pricing)
+- Authenticated Workspace APIs: `GET /api/subscription`, `GET /api/entitlements`, `GET /api/usage/summary`
+- No Stripe/Moyasar/Tap, checkout, invoices, webhooks, or token reserve/settle
+
+**Phase 5B delivered (atomic AI metering):**
+- `AiUsageService.reserve_ai_usage` / `settle_ai_usage` / `release_ai_usage` with `SELECT … FOR UPDATE` + workspace advisory lock; `request_id` idempotency via `ai_usage_reservations`
+- Included allowance = min(daily, weekly, monthly remaining); purchased credits FIFO from GRANT `remaining_amount`; no negative balance
+- ChatOrchestrator reserves before SSE `message_start` / LLM; settles provider token totals (fallback = reservation); release on fail/cancel
+- `GET /api/usage/summary` adds `remaining` and `ai` alias; `usage_events` attribution (workspace/user/expert/conversation/message) + token fields
+- Concurrent over-quota integration tests against PostgreSQL (exactly one of two competing requests succeeds)
 
 **Goal:** Plans/entitlements/quotas without hardcoded plan checks; AI-style usage surfaces.
 
-**DB:** plans, entitlements, subscriptions (manual assign OK), credit accounts/ledger, period counters, storage events.
+**DB:** plans, entitlements, subscriptions (manual assign OK), credit accounts/ledger, period counters, storage events, AI reservations.
 
-**Frontend:** tokens/storage/Expert allowance meters, usage history, quota warnings (same theme tokens).
+**Frontend:** tokens/storage/Expert allowance meters, usage history, quota warnings (same theme tokens). **Delivered in 5D.**
 
-**Acceptance:** Concurrent over-quota blocked; usage visible in UI.
+**Phase 5C delivered (Expert allowance + storage quota):**
+- `experts_limit` enforced on Workspace Expert create/restore with `pg_advisory_xact_lock` (Experts namespace); Platform Experts, Geem General, and grants do not consume slots; soft-deleted Experts do not count
+- `storage_bytes` enforced before chargeable blob persist; reuse-on-hash and Expert-document links do not double-charge; Platform Knowledge (SYSTEM) never counts against tenant storage
+- Logical Document delete releases billable storage; restore re-checks quota. Physical MinIO/Qdrant purge remains a later lifecycle concern
+- Concurrent last-slot Expert create and concurrent uploads: exactly one succeeds; typed `expert_limit_reached` / `storage_quota_exceeded` with metric/limit/used/remaining
+- `GET /api/usage/summary` adds `storage.{limit_bytes,used_bytes,remaining_bytes,percentage}` (byte values stay exact on the API)
+
+**Phase 5D delivered (Workspace Usage UI + quota warnings):**
+- Production Usage page at `/billing/usage` (Metronic AI Concept cards/progress; no samples/ imports; `/api/usage` remains Phase 7 placeholder)
+- Meters from backend summary DTOs: AI daily/weekly/monthly, Experts, storage (human-readable bytes), purchased credit balance; read-only plan/subscription
+- `GET /api/usage/history` — AI token events + credit grant/consume/adjust/expire (no reserve/release internals)
+- Centralized UI warning thresholds: ≥80 approaching, ≥95 critical, 100 exhausted
+- Chat typed `quota_exceeded` / `insufficient_credits`; Expert create `expert_limit_reached`; knowledge upload `storage_quota_exceeded` + current storage meter
+- Overview snapshot (monthly AI + storage + plan); Workspace-scoped React Query keys; EN/AR + RTL
+- Frontend tests for summary/meters/warnings/quota errors/cache isolation/i18n/loading/error
+- Backend E2E gate: full API suite **261 passed** (5A/5B/5C + history isolation + Phase 3 RAG + Phase 4 chat/SSE)
+
+**Deferred to Phase 6 (not started):** subscribe/upgrade checkout, ClickPay hosted-page redirect, credit packs, billing purchase history. Webhooks/IPN and extra gateways are not in the first Phase 6 slice.
+
+**Acceptance (full Phase 5):** Concurrent over-quota blocked; usage visible in UI. **PASS.**
 
 ---
 
 ### Phase 6 — Billing gateways + billing UI
 
-**Status:** pending
+**Status:** **6A PASS** (backend registry + ClickPay hosted redirect + Noop). **6B not started** — do not implement Workspace billing UI until requested.
 
-**Goal:** Multi-gateway, one enabled; subscribe + credit packs.
+**Goal:** Pluggable payment gateways (add more without rewriting billing domain); **ClickPay first**; subscribe + credit packs via **hosted-page redirect**. No webhooks in this phase.
 
-**DB/services:** as prior plan (BillingService + gateways + webhooks).
+#### Locked decisions
 
-**Frontend:** plan selection, subscription status, credit purchase, history — visually aligned to AI Concept (cards/dialogs), not a separate Metronic billing demo.
+| Decision | Choice |
+|----------|--------|
+| Gateway model | Protocol/adapter registry; `payment_gateway_configs` rows; **exactly one `enabled=true`** |
+| First live gateway | **ClickPay** (Saudi hosted payment page) |
+| Local/dev | `Manual/NoopGateway` — mark purchase paid without calling ClickPay |
+| Later gateways | Stripe / Moyasar / Tap / … as new adapters only — **not implemented in Phase 6** |
+| Checkout UX | Redirect to gateway hosted page (`redirect_url`); Geem does not collect card data |
+| Completion | Browser **return URL** → Geem **server-side query** of the transaction → idempotent fulfill |
+| Webhooks / IPN / `callback` | **Out of Phase 6.** Do not add webhook routes; do not trust unsigned return query params alone |
+| Currency (ClickPay v1) | **SAR only** |
+| Samples | [`samples/clickpay_gateway`](samples/clickpay_gateway) is a **read-only** Perfex CRM module. Never import, copy PHP, or mutate it. Port the *flow* into Python adapters |
+| UI | `apps/workspace_web` Metronic AI Concept cards/dialogs; no `samples/` imports; EN/AR + RTL |
+| Invoices/PDFs | Lightweight `purchases` records are enough; invoice PDFs / tax docs later |
+| Card-on-file / recurring charge | Not in Phase 6 — subscription change is a new hosted-page payment (or Noop in local) |
 
-**Acceptance:** Pay via active gateway; switch gateway without domain changes.
+#### ClickPay redirect flow (from the Perfex sample, adapted)
+
+Reference implementation in the sample: `POST https://secure.clickpay.com.sa/payment/request` with `authorization: {server_key}`, `profile_id`, `tran_type=sale`, `tran_class=ecom`, `cart_id`, `cart_amount`, `cart_currency=SAR`, `customer_details`, `return` URL. Response: `tran_ref` + `redirect_url` → browser redirect.
+
+Geem must **not** copy the sample’s “trust return POST + HMAC then fulfill” as the only check. Phase 6 fulfill path:
+
+1. Create `purchases` row (`pending`) with workspace, actor, kind (`subscription` \| `credit_pack`), amount SAR, `cart_id`, enabled gateway id
+2. Adapter `create_checkout` → persist `tran_ref` + `redirect_url` (`redirected`)
+3. Workspace UI sends the user to `redirect_url`
+4. ClickPay returns the browser to Geem `GET /api/billing/return/{gateway}/{purchase_id}` (plus SPA success/fail pages)
+5. Adapter `query_transaction(tran_ref)` against ClickPay; only `A` / paid statuses fulfill
+6. Idempotent apply: subscription switch **or** credit `GRANT` with `request_id=purchase:{id}` (or `tran_ref`); mark purchase `paid`
+7. Failed / cancelled / expired return → `failed` / `cancelled`; no ledger write
+8. Replaying the return URL is a no-op after `paid`
+
+Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key` only if a later hosted-JS slice needs it). Store encrypted on `payment_gateway_configs`; local `.env` `CLICKPAY_PROFILE_ID` / `CLICKPAY_SERVER_KEY` / `CLICKPAY_TEST_MODE`.
+
+#### Suggested slices (do not skip ahead)
+
+**6A — Backend registry + ClickPay redirect (no Workspace checkout UI required to PASS 6A)**
+- `BillingGateway` protocol: `code`, `create_checkout`, `query_transaction`
+- Tables: `payment_gateway_configs`, `credit_packs`, `purchases` (status, amount, currency, gateway, `cart_id`, `tran_ref`, `redirect_url`, kind/payload)
+- `BillingService` creates purchases against the **enabled** gateway only
+- ClickPay adapter + Noop adapter
+- Return endpoint verifies via query API; idempotent fulfill into existing Phase 5 subscription/credit ledger
+- Isolation: tenant A cannot complete tenant B’s purchase; SYSTEM workspaces cannot checkout
+- Tests: Noop happy path; ClickPay adapter mocked; double-return does not double-GRANT; disabled gateway rejected
+
+**6B — Workspace billing UI**
+- Plan picker + current subscription (replace read-only-only 5D surface where checkout starts)
+- Credit pack purchase
+- Redirect out / return success & fail pages
+- Purchase/billing history list (purchases + existing extra-credit ledger)
+- Same quota/usage nav; Geem i18n; workspace-scoped React Query keys
+
+**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 8), enabling two gateways at once.
+
+**Acceptance (full Phase 6):** Pay for a plan or credit pack through the enabled gateway via redirect; return is verified server-side and applied once; switching the enabled gateway does not change `BillingService` call sites.
 
 ---
 
@@ -944,10 +1037,10 @@ Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→
 | Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); later `dashboard_web` + `landpage_web` |
 | Workspace UI path | **New** `apps/workspace_web` — do **not** rename `apps/web` |
 | UI foundation | Metronic Vite 9.5.0 **AI Concept only** (ported into `apps/workspace_web`), rebranded as Geem |
-| Samples | Read-only; no runtime dependency |
+| Samples | Read-only (`metronic_vite_9.5.0`, `clickpay_gateway`); no runtime dependency |
 | Tenancy | Shared DB + `workspace_id` row isolation |
 | Workspace routing | Subdomain slug + API-key workspace for public API |
-| Billing | Multi-gateway registry, **exactly one enabled** |
+| Billing | Multi-gateway registry, **exactly one enabled**; Phase 6 = ClickPay hosted redirect + query-on-return (**no webhooks**) |
 | Auth | Email/password + JWT/session; API keys for machine access |
 | RAG product unit | Expert (not raw file lists) |
 | Chat UX | Metronic AI Chat adapted to FastAPI SSE |
@@ -969,3 +1062,4 @@ Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→
 6. **Tailwind v4 + existing CSS collision** during Phase 0/1 (mitigate: gradual cutover; keep MVP routes working)
 7. **New app bootstrap** for `workspace_web` (Vite 7 + Tailwind v4) while keeping `apps/web` runnable in parallel
 8. Treating frontend hostname as security (mitigate: backend always re-resolves workspace)
+9. Payment return replay / forged return URLs (mitigate: server-side ClickPay query + idempotent `tran_ref` / `request_id`; no webhook trust in Phase 6)

@@ -17,6 +17,10 @@
 - Phase 4B: no Alembic — `ChatOrchestrator` + `POST .../messages/stream` + retry SSE; bounded chat history via settings; generation lock (Redis/memory)
 - Phase 4D: `0007_geem_general_expert.py` — `experts.knowledge_mode` (`rag`|`general`) + unique platform general Expert; seed via `python -m app.identity.bootstrap` (`ensure_geem_general_expert`)
 - Phase 4 polish: `0008_conversation_favorites.py` — `conversations.favorited_at` (mirrors pin)
+- Phase 5A: `0009_plans_subscriptions_usage.py` — plans, plan_entitlements, subscriptions (one active per Workspace), credit_accounts, append-only credit_ledger_entries, usage_period_counters, storage_usage_events. Bootstrap/dev plan is seeded in application code (`PlanService.ensure_bootstrap_plan`), not SQL. Payment gateways are Phase 6.
+- Phase 5B: `0010_ai_usage_reservations.py` — `ai_usage_reservations` (reserve/settle/release + request_id idempotency), `usage_events` Workspace/User/Expert/conversation/message attribution, CHECK `credit_accounts.balance >= 0` and grant `remaining_amount >= 0`. Token reservation is application-enforced with `SELECT … FOR UPDATE` + advisory locks. No payment gateways.
+- Phase 5C: `0011_storage_expert_quota.py` — `workspace_resource_usage` (in-flight `reserved_bytes`) + `storage_reservations`. Expert allowance is live COUNT of active Workspace Experts (`type=workspace`, not deleted). Billable storage is live SUM of active `documents.byte_size`; logical delete releases it; restore re-checks quota. Physical MinIO/Qdrant purge remains a later lifecycle concern.
+- Phase 6A: `0012_billing_gateways_purchases.py` — `plans.price_amount`/`currency`, `payment_gateway_configs` (encrypted credentials, at most one enabled), `credit_packs`, `purchases` (immutable payload, `cart_id`/`tran_ref` uniqueness, return token hash). Checkout is hosted-page redirect + server-side query; no webhooks.
 
 ### Document tenancy (Phase 2C final)
 
@@ -42,7 +46,8 @@
 |-------------|----------|
 | `/api/auth/login`, `/register`, `/refresh` | Public |
 | `/api/auth/*` (authenticated) + `/api/workspaces/*` | Always authenticated |
-| `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*` | Authenticated Workspace required |
+| `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*`, `/api/subscription`, `/api/entitlements`, `/api/usage/*`, `/api/billing/*` (except return) | Authenticated Workspace required |
+| `/api/billing/return/{gateway}/{purchase_id}` | Opaque return token (`rt`); server-side gateway query. Not payment proof. |
 | `/api/health/*` | Public |
 
 Production / SaaS default: `AUTH_REQUIRED=true`, `LEGACY_MVP_WRITES_ENABLED=false`.

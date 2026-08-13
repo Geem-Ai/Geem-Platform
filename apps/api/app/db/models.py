@@ -33,6 +33,23 @@ from app.experts.models import (  # noqa: E402
     WorkspaceExpertGrant,
 )
 from app.conversations.models import Conversation, Message  # noqa: E402
+from app.billing.models import (  # noqa: E402
+    CreditPack,
+    PaymentGatewayConfig,
+    Plan,
+    PlanEntitlement,
+    Purchase,
+    Subscription,
+)
+from app.usage.models import (  # noqa: E402
+    AiUsageReservation,
+    CreditAccount,
+    CreditLedgerEntry,
+    StorageReservation,
+    StorageUsageEvent,
+    UsagePeriodCounter,
+    WorkspaceResourceUsage,
+)
 
 __all__ = [
     "Document",
@@ -50,6 +67,19 @@ __all__ = [
     "WorkspaceExpertGrant",
     "Conversation",
     "Message",
+    "Plan",
+    "PlanEntitlement",
+    "Subscription",
+    "PaymentGatewayConfig",
+    "CreditPack",
+    "Purchase",
+    "CreditAccount",
+    "CreditLedgerEntry",
+    "UsagePeriodCounter",
+    "StorageUsageEvent",
+    "StorageReservation",
+    "WorkspaceResourceUsage",
+    "AiUsageReservation",
 ]
 
 
@@ -207,4 +237,39 @@ class UsageEvent(Base):
     document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    expert_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "messages.id",
+            ondelete="SET NULL",
+            name="fk_usage_events_message_id",
+            use_alter=True,
+        ),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

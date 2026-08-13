@@ -1,3 +1,4 @@
+import type { ApiErrorCode } from '@/services/api/errors';
 import type {
   Citation,
   ConversationMessage,
@@ -15,6 +16,7 @@ export type ChatUiMessage = {
   status: MessageStatus | string;
   created_at: string;
   errorMessage?: string | null;
+  errorCode?: ApiErrorCode | null;
 };
 
 export function toChatUiMessage(msg: ConversationMessage): ChatUiMessage {

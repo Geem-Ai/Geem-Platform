@@ -205,6 +205,7 @@ class OpenRouterChatProvider:
             "response_format": {"type": "json_object"},
             "stream": stream,
             "provider": self.client.provider_preferences(),
+            **({"stream_options": {"include_usage": True}} if stream else {}),
         }
 
     def _text_payload(
@@ -227,6 +228,7 @@ class OpenRouterChatProvider:
             "messages": messages,
             "stream": stream,
             "provider": self.client.provider_preferences(),
+            **({"stream_options": {"include_usage": True}} if stream else {}),
         }
 
     def _call_text(
