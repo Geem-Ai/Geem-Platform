@@ -5,6 +5,9 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.billing.checkout import BillingService
+from app.billing.gateways.registry import GatewayRegistry
+from app.billing.provisioning import ensure_local_checkout_gateway
+from app.billing.repository import PaymentGatewayConfigRepository
 from app.billing.seed import (
     DEMO_CREDIT_PACKS,
     DEMO_PLANS,
@@ -12,6 +15,7 @@ from app.billing.seed import (
     seed_demo_catalog,
 )
 from app.billing.service import PlanService
+from app.common.crypto import decrypt_json
 from app.core.config import Settings
 from app.entitlements.keys import EntitlementKey
 
@@ -72,6 +76,42 @@ def test_demo_plans_are_purchasable_and_bootstrap_is_not(db) -> None:
         "demo_credits_5k",
         "demo_credits_20k",
     ]
+
+
+def test_seed_without_clickpay_env_enables_noop(db) -> None:
+    settings = _local_settings()
+    seed_demo_catalog(db, settings)
+    gateway = ensure_local_checkout_gateway(db, settings=settings)
+    assert gateway is not None
+    assert gateway.code == "noop"
+    assert GatewayRegistry(db, settings).get_enabled().code == "noop"
+
+
+def test_seed_with_clickpay_env_enables_clickpay_and_disables_noop(db) -> None:
+    ensure_local_checkout_gateway(db, settings=_local_settings())
+    assert PaymentGatewayConfigRepository(db).get_by_code("noop") is not None
+    clickpay_settings = Settings(
+        _env_file=None,
+        app_env="local",
+        jwt_secret="x" * 40,
+        clickpay_profile_id="43334",
+        clickpay_server_key="sk_clickpay_test",
+        clickpay_test_mode=True,
+        clickpay_base_url="https://secure.clickpay.com.sa",
+    )
+    seed_demo_catalog(db, clickpay_settings)
+    gateway = ensure_local_checkout_gateway(db, settings=clickpay_settings)
+    assert gateway is not None
+    assert gateway.code == "clickpay"
+    assert gateway.enabled is True
+    assert gateway.test_mode is True
+    noop = PaymentGatewayConfigRepository(db).get_by_code("noop")
+    assert noop is not None
+    assert noop.enabled is False
+    stored = decrypt_json(gateway.credentials_encrypted, settings=clickpay_settings)
+    assert stored["profile_id"] == "43334"
+    assert stored["server_key"] == "sk_clickpay_test"
+    assert GatewayRegistry(db, clickpay_settings).get_enabled().code == "clickpay"
 
 
 def test_ensure_local_demo_catalog_skips_non_local_env(db) -> None:

@@ -89,10 +89,10 @@ def bootstrap_platform_admin(
         from app.billing.service import PlanService
 
         PlanService(db, settings).ensure_bootstrap_plan()
-        from app.billing.provisioning import ensure_local_noop_gateway
+        from app.billing.provisioning import ensure_local_checkout_gateway
         from app.billing.seed import ensure_local_demo_catalog
 
-        ensure_local_noop_gateway(db, settings=settings)
+        ensure_local_checkout_gateway(db, settings=settings)
         ensure_local_demo_catalog(db, settings=settings)
         db.commit()
 

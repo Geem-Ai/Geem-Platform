@@ -20,6 +20,9 @@ os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://mai@localhost:5432/geem_test",
 )
+# Host .env ClickPay keys must not flip the test suite onto a live gateway.
+os.environ["CLICKPAY_PROFILE_ID"] = ""
+os.environ["CLICKPAY_SERVER_KEY"] = ""
 
 from app.core.config import get_settings
 
