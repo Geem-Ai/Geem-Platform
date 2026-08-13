@@ -102,6 +102,7 @@ class BillingService:
             "kind": PurchaseKind.SUBSCRIPTION.value,
             "plan_id": str(plan.id),
             "plan_code": plan.code,
+            "plan_name": plan.name,
             "amount": str(amount),
             "currency": currency,
         }
@@ -138,6 +139,7 @@ class BillingService:
             "kind": PurchaseKind.CREDIT_PACK.value,
             "credit_pack_id": str(pack.id),
             "credit_pack_code": pack.code,
+            "credit_pack_name": pack.name,
             "credits": int(pack.credits),
             "amount": str(amount),
             "currency": currency,
@@ -161,6 +163,35 @@ class BillingService:
         if purchase is None:
             raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
         return purchase
+
+    def list_purchases_for_workspace(
+        self,
+        workspace: Workspace,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        status: str | None = None,
+        kind: str | None = None,
+    ) -> tuple[list[Purchase], int]:
+        statuses: list[str] | None = None
+        if status:
+            allowed = {item.value for item in PurchaseStatus}
+            if status not in allowed:
+                raise AppError(ErrorCategory.VALIDATION, "Unknown purchase status filter.")
+            # Hosted checkout sits in redirected until return; Workspace UI labels it Pending.
+            if status == PurchaseStatus.PENDING.value:
+                statuses = [PurchaseStatus.PENDING.value, PurchaseStatus.REDIRECTED.value]
+            else:
+                statuses = [status]
+        if kind and kind not in {item.value for item in PurchaseKind}:
+            raise AppError(ErrorCategory.VALIDATION, "Unknown purchase kind filter.")
+        return self.purchases.list_for_workspace(
+            workspace.id,
+            limit=limit,
+            offset=offset,
+            statuses=statuses,
+            kind=kind,
+        )
 
     def complete_on_return(
         self,

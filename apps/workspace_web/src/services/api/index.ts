@@ -10,5 +10,6 @@ export * from './experts';
 export * from './conversations';
 export * from './query';
 export * from './usage';
+export * from './billing';
 export { streamSse } from './sse';
 export { apiRequest };

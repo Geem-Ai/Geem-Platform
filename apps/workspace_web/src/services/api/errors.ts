@@ -42,6 +42,17 @@ export type ApiErrorCode =
   | 'generation_failed'
   | 'network'
   | 'aborted'
+  | 'billing_gateway_unavailable'
+  | 'billing_gateway_error'
+  | 'invalid_purchase'
+  | 'purchase_not_found'
+  | 'purchase_already_completed'
+  | 'payment_verification_failed'
+  | 'payment_amount_mismatch'
+  | 'payment_currency_mismatch'
+  | 'credit_pack_unavailable'
+  | 'plan_unavailable'
+  | 'system_workspace_checkout_forbidden'
   | 'unknown';
 
 const KNOWN_CODES = new Set<string>([
@@ -86,6 +97,17 @@ const KNOWN_CODES = new Set<string>([
   'message_not_found',
   'conversation_busy',
   'generation_failed',
+  'billing_gateway_unavailable',
+  'billing_gateway_error',
+  'invalid_purchase',
+  'purchase_not_found',
+  'purchase_already_completed',
+  'payment_verification_failed',
+  'payment_amount_mismatch',
+  'payment_currency_mismatch',
+  'credit_pack_unavailable',
+  'plan_unavailable',
+  'system_workspace_checkout_forbidden',
 ]);
 
 export class ApiError extends Error {
@@ -181,6 +203,17 @@ export function errorMessageKey(code: ApiErrorCode): string {
     insufficient_credits: 'errors.insufficientCredits',
     expert_limit_reached: 'errors.expertLimitReached',
     storage_quota_exceeded: 'errors.storageQuotaExceeded',
+    billing_gateway_unavailable: 'errors.billingGatewayUnavailable',
+    billing_gateway_error: 'errors.billingGatewayError',
+    invalid_purchase: 'errors.invalidPurchase',
+    purchase_not_found: 'errors.purchaseNotFound',
+    purchase_already_completed: 'errors.purchaseAlreadyCompleted',
+    payment_verification_failed: 'errors.paymentVerificationFailed',
+    payment_amount_mismatch: 'errors.paymentAmountMismatch',
+    payment_currency_mismatch: 'errors.paymentCurrencyMismatch',
+    credit_pack_unavailable: 'errors.creditPackUnavailable',
+    plan_unavailable: 'errors.planUnavailable',
+    system_workspace_checkout_forbidden: 'errors.systemWorkspaceCheckoutForbidden',
   };
   return map[code] ?? 'errors.generic';
 }

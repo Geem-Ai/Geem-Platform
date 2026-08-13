@@ -35,6 +35,22 @@ QUOTA_INTEGER_KEYS: frozenset[EntitlementKey] = frozenset(
     }
 )
 
+# Display order: daily → weekly → monthly (not alphabetical; monthly < weekly lexicographically).
+ENTITLEMENT_DISPLAY_ORDER: tuple[str, ...] = (
+    EntitlementKey.AI_TOKENS_DAILY.value,
+    EntitlementKey.AI_TOKENS_WEEKLY.value,
+    EntitlementKey.AI_TOKENS_MONTHLY.value,
+    EntitlementKey.EXPERTS_LIMIT.value,
+    EntitlementKey.STORAGE_BYTES.value,
+)
+
+
+def entitlement_display_sort_key(key: str) -> tuple[int, str]:
+    try:
+        return (ENTITLEMENT_DISPLAY_ORDER.index(key), key)
+    except ValueError:
+        return (len(ENTITLEMENT_DISPLAY_ORDER), key)
+
 
 def parse_entitlement_key(raw: str) -> EntitlementKey:
     try:

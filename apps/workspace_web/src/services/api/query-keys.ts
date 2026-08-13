@@ -48,4 +48,24 @@ export const queryKeys = {
       : workspaceQueryKey(workspaceId, 'usage', 'history'),
   subscription: (workspaceId: string) =>
     workspaceQueryKey(workspaceId, 'subscription'),
+  entitlements: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'entitlements'),
+  billingPlans: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'billing', 'plans'),
+  billingCreditPacks: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'billing', 'credit-packs'),
+  billingPurchases: (
+    workspaceId: string,
+    params?: {
+      limit: number;
+      offset: number;
+      status?: string;
+      kind?: string;
+    },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'billing', 'purchases', params)
+      : workspaceQueryKey(workspaceId, 'billing', 'purchases'),
+  billingPurchase: (workspaceId: string, purchaseId: string) =>
+    workspaceQueryKey(workspaceId, 'billing', 'purchases', purchaseId),
 };

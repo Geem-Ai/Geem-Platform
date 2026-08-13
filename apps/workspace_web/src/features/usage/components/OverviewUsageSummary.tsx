@@ -96,9 +96,16 @@ export function OverviewUsageSummary() {
           />
         </div>
 
-        <Button asChild variant="outline" size="sm">
-          <Link to="/billing/usage">{t('overview.viewUsage')}</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/billing/usage">{t('overview.viewUsage')}</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/billing/subscription" data-testid="overview-manage-subscription">
+              {t('overview.manageSubscription')}
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

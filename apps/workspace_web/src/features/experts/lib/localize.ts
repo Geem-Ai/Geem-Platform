@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import type { ConversationExpertSummary, Expert } from '@/services/api/types';
 
-type ExpertLike = Pick<Expert, 'name' | 'description' | 'knowledge_mode' | 'ownership'> &
+type ExpertLike = Pick<Expert, 'name' | 'description'> &
   Partial<Pick<ConversationExpertSummary, 'knowledge_mode' | 'ownership'>>;
 
 export function isGeemGeneralExpert(expert: {

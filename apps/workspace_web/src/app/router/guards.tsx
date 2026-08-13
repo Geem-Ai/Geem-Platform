@@ -3,6 +3,20 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ScreenLoader } from '@/components/shared/ScreenLoader';
 
+/** Same-origin relative path including search (payment result needs ?purchase=). */
+export function internalReturnPath(location: {
+  pathname: string;
+  search: string;
+}): string {
+  return `${location.pathname}${location.search}`;
+}
+
+export function safeInternalPath(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
 /** Guest-only routes (login/register). */
 export function GuestRoute() {
   const { status } = useAuth();
@@ -12,7 +26,9 @@ export function GuestRoute() {
     return <ScreenLoader />;
   }
   if (status === 'authenticated') {
-    const from = (location.state as { from?: string } | null)?.from;
+    const from = safeInternalPath(
+      (location.state as { from?: string } | null)?.from,
+    );
     return <Navigate to={from || '/'} replace />;
   }
   return <Outlet />;
@@ -28,7 +44,13 @@ export function ProtectedRoute() {
     return <ScreenLoader />;
   }
   if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: internalReturnPath(location) }}
+      />
+    );
   }
   if (availableWorkspaces.length === 0 && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;

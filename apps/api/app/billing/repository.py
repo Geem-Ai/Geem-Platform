@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.billing.models import (
@@ -75,7 +75,7 @@ class PlanRepository:
                     Plan.price_amount.is_not(None),
                     Plan.price_amount > 0,
                 )
-                .order_by(Plan.name.asc())
+                .order_by(Plan.price_amount.asc(), Plan.name.asc())
             )
         )
 
@@ -228,3 +228,34 @@ class PurchaseRepository:
             )
             .with_for_update()
         )
+
+    def list_for_workspace(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        statuses: list[str] | None = None,
+        kind: str | None = None,
+    ) -> tuple[list[Purchase], int]:
+        filters = [Purchase.workspace_id == workspace_id]
+        if statuses:
+            if len(statuses) == 1:
+                filters.append(Purchase.status == statuses[0])
+            else:
+                filters.append(Purchase.status.in_(statuses))
+        if kind:
+            filters.append(Purchase.kind == kind)
+        total = int(
+            self.db.scalar(select(func.count()).select_from(Purchase).where(*filters)) or 0
+        )
+        rows = list(
+            self.db.scalars(
+                select(Purchase)
+                .where(*filters)
+                .order_by(Purchase.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        )
+        return rows, total

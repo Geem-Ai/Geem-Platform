@@ -158,6 +158,11 @@ describe('UsagePage', () => {
     expect(screen.getByTestId('usage-ai-daily')).toBeInTheDocument();
     expect(screen.getByTestId('usage-ai-weekly')).toBeInTheDocument();
     expect(screen.getByTestId('usage-ai-monthly')).toBeInTheDocument();
+    const daily = screen.getByTestId('usage-ai-daily');
+    const weekly = screen.getByTestId('usage-ai-weekly');
+    const monthly = screen.getByTestId('usage-ai-monthly');
+    expect(daily.compareDocumentPosition(weekly) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(weekly.compareDocumentPosition(monthly) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId('usage-experts-used')).toHaveTextContent('2');
     expect(screen.getByTestId('usage-experts-limit')).toHaveTextContent('5');
     expect(screen.getByTestId('usage-storage')).toBeInTheDocument();

@@ -120,13 +120,13 @@ function EventSubtitle({
     if (item.operation_type) {
       const key = operationLabelKey(item.operation_type);
       parts.push(
-        t(key, { defaultValue: item.operation_type.replaceAll('_', ' ') }),
+        t(key, { defaultValue: item.operation_type.replace(/_/g, ' ') }),
       );
     }
   } else if (item.source_type) {
     const key = sourceLabelKey(item.source_type);
     parts.push(
-      t(key, { defaultValue: item.source_type.replaceAll('_', ' ') }),
+      t(key, { defaultValue: item.source_type.replace(/_/g, ' ') }),
     );
   }
   if (parts.length === 0) return null;

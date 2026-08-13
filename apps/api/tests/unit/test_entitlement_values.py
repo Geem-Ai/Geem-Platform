@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from app.core.errors import AppError, ErrorCategory
-from app.entitlements.keys import EntitlementKey, EntitlementValueType
+from app.entitlements.keys import (
+    EntitlementKey,
+    EntitlementValueType,
+    entitlement_display_sort_key,
+)
 from app.entitlements.values import (
     EntitlementValue,
     parse_boolean_entitlement,
@@ -70,3 +74,21 @@ def test_canonical_keys_are_stable() -> None:
     assert EntitlementKey.AI_TOKENS_MONTHLY.value == "ai_tokens_monthly"
     assert EntitlementKey.EXPERTS_LIMIT.value == "experts_limit"
     assert EntitlementKey.STORAGE_BYTES.value == "storage_bytes"
+
+
+def test_entitlement_display_order_is_daily_weekly_monthly() -> None:
+    keys = [
+        EntitlementKey.AI_TOKENS_MONTHLY.value,
+        EntitlementKey.STORAGE_BYTES.value,
+        EntitlementKey.AI_TOKENS_DAILY.value,
+        EntitlementKey.EXPERTS_LIMIT.value,
+        EntitlementKey.AI_TOKENS_WEEKLY.value,
+    ]
+    ordered = sorted(keys, key=entitlement_display_sort_key)
+    assert ordered == [
+        EntitlementKey.AI_TOKENS_DAILY.value,
+        EntitlementKey.AI_TOKENS_WEEKLY.value,
+        EntitlementKey.AI_TOKENS_MONTHLY.value,
+        EntitlementKey.EXPERTS_LIMIT.value,
+        EntitlementKey.STORAGE_BYTES.value,
+    ]

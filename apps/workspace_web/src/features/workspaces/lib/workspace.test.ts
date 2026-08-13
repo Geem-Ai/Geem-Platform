@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   extractHostWorkspaceSlug,
   suggestSlugFromName,
+  workspaceHostSuffix,
+  workspaceRootDomain,
 } from '@/features/workspaces/lib/hostname';
 import {
   canDeleteWorkspace,
@@ -9,7 +11,7 @@ import {
   canManageWorkspace,
   canPromoteToOwner,
 } from '@/features/workspaces/lib/roles';
-import { workspaceQueryKey } from '@/services/api/query-keys';
+import { queryKeys, workspaceQueryKey } from '@/services/api/query-keys';
 import { errorMessageKey } from '@/services/api/errors';
 import en from '@/locales/en.json';
 import ar from '@/locales/ar.json';
@@ -34,6 +36,16 @@ describe('hostname slug extraction', () => {
 describe('slug suggestion', () => {
   it('normalizes display names', () => {
     expect(suggestSlugFromName('Acme Research')).toBe('acme-research');
+  });
+});
+
+describe('workspace host suffix', () => {
+  it('formats the subdomain suffix from the root domain', () => {
+    expect(workspaceRootDomain('geem.ai')).toBe('geem.ai');
+    expect(workspaceRootDomain('.Geem.DM')).toBe('geem.dm');
+    expect(workspaceRootDomain('')).toBe('localhost');
+    expect(workspaceHostSuffix('geem.ai')).toBe('.geem.ai');
+    expect(workspaceHostSuffix('localhost')).toBe('.localhost');
   });
 });
 
@@ -109,5 +121,30 @@ describe('i18n coverage', () => {
     expect(errorMessageKey('quota_exceeded')).toBe('errors.quotaExceeded');
     expect(errorMessageKey('expert_limit_reached')).toBe('errors.expertLimitReached');
     expect(errorMessageKey('storage_quota_exceeded')).toBe('errors.storageQuotaExceeded');
+  });
+
+  it('has matching billing keys in en and ar', () => {
+    expect(en.billing.subscriptionTitle).toBeTruthy();
+    expect(ar.billing.subscriptionTitle).toBeTruthy();
+    expect(en.billing.creditsTitle).toBeTruthy();
+    expect(ar.billing.creditsTitle).toBeTruthy();
+    expect(en.billing.historyTitle).toBeTruthy();
+    expect(ar.billing.historyTitle).toBeTruthy();
+    expect(en.billing.status.paid).toBeTruthy();
+    expect(ar.billing.status.paid).toBeTruthy();
+    expect(en.errors.billingGatewayUnavailable).toBeTruthy();
+    expect(ar.errors.billingGatewayUnavailable).toBeTruthy();
+    expect(errorMessageKey('billing_gateway_unavailable')).toBe(
+      'errors.billingGatewayUnavailable',
+    );
+    expect(errorMessageKey('plan_unavailable')).toBe('errors.planUnavailable');
+    expect(queryKeys.billingPlans('ws-a')[1]).toBe('ws-a');
+    expect(queryKeys.billingPurchase('ws-a', 'p1')).toEqual([
+      'workspace',
+      'ws-a',
+      'billing',
+      'purchases',
+      'p1',
+    ]);
   });
 });

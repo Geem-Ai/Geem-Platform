@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { WorkspaceSlugInput } from '@/features/workspaces/components/WorkspaceSlugInput';
 import { updateWorkspace } from '@/services/api';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 
@@ -84,8 +85,15 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('onboarding.workspaceSlug')}</label>
-              <Input value={currentWorkspace.slug} disabled readOnly />
+              <label htmlFor="settings-slug" className="text-sm font-medium">
+                {t('onboarding.workspaceSlug')}
+              </label>
+              <WorkspaceSlugInput
+                id="settings-slug"
+                value={currentWorkspace.slug}
+                disabled
+                readOnly
+              />
             </div>
           </CardContent>
           {canEdit && (
