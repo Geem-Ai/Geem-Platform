@@ -170,6 +170,14 @@ class BillingService:
         gateway_code: str | None = None,
     ) -> Purchase:
         """Verify via server-side gateway query, then fulfill at most once."""
+        peek = self.purchases.get_by_id(purchase_id)
+        if peek is None or not _token_matches(peek.return_token_hash, return_token):
+            raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
+        if gateway_code:
+            peek_config = self.gateways.get_by_id(peek.payment_gateway_config_id)
+            if peek_config is None or gateway_code != peek_config.code:
+                raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
+
         purchase = self.purchases.get_by_id_for_update(purchase_id)
         if purchase is None or not _token_matches(purchase.return_token_hash, return_token):
             raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
@@ -212,27 +220,9 @@ class BillingService:
             return purchase
 
         if result.amount is not None and not money_equal(result.amount, purchase.amount):
-            purchase.status = PurchaseStatus.FAILED.value
-            purchase.extra = {
-                **(purchase.extra or {}),
-                "failure": "amount_mismatch",
-            }
-            self.db.flush()
-            raise AppError(
-                ErrorCategory.PAYMENT_AMOUNT_MISMATCH,
-                "Verified payment amount does not match the purchase.",
-            )
+            return self._mark_failed(purchase, failure="amount_mismatch")
         if result.currency is not None and result.currency.upper() != purchase.currency.upper():
-            purchase.status = PurchaseStatus.FAILED.value
-            purchase.extra = {
-                **(purchase.extra or {}),
-                "failure": "currency_mismatch",
-            }
-            self.db.flush()
-            raise AppError(
-                ErrorCategory.PAYMENT_CURRENCY_MISMATCH,
-                "Verified payment currency does not match the purchase.",
-            )
+            return self._mark_failed(purchase, failure="currency_mismatch")
 
         self._fulfill(purchase)
         purchase.status = PurchaseStatus.PAID.value
@@ -349,6 +339,13 @@ class BillingService:
             )
             return
         raise AppError(ErrorCategory.INVALID_PURCHASE, "Unknown purchase kind.")
+
+    def _mark_failed(self, purchase: Purchase, *, failure: str) -> Purchase:
+        """Terminal failure that the caller must commit (do not raise after flush)."""
+        purchase.status = PurchaseStatus.FAILED.value
+        purchase.extra = {**(purchase.extra or {}), "failure": failure}
+        self.db.flush()
+        return purchase
 
     def _require_enabled_gateway(self) -> EnabledGateway:
         return self.registry.get_enabled()

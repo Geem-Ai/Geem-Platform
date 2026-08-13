@@ -29,8 +29,20 @@ def money_equal(left: Decimal | int | float | str, right: Decimal | int | float 
     return parse_decimal_money(left) == parse_decimal_money(right)
 
 
+def format_money(value: Decimal | int | float | str) -> str:
+    """Two-decimal string for provider payloads. Never send a binary float."""
+    return f"{quantize_money(value):.2f}"
+
+
 def normalize_currency(value: str | None, *, default: str = DEFAULT_CURRENCY) -> str:
     code = (value or default).strip().upper()
     if len(code) != 3 or not code.isalpha():
         raise AppError(ErrorCategory.VALIDATION, "Currency must be a 3-letter code.")
+    return code
+
+
+def require_sar(value: str | None) -> str:
+    code = normalize_currency(value)
+    if code != DEFAULT_CURRENCY:
+        raise AppError(ErrorCategory.VALIDATION, "Currency must be SAR.")
     return code

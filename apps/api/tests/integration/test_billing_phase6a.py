@@ -474,14 +474,18 @@ def test_clickpay_amount_mismatch_does_not_fulfill(client, register_user, db) ->
             return_value=_clickpay_query("A", amount="1.00")
         )
         done = client.get(_as_test_path(return_url))
-    assert done.status_code == 409
-    assert done.json()["code"] == "payment_amount_mismatch"
-    got = client.get(
-        f"/api/billing/purchases/{checkout['purchase_id']}",
-        headers=headers,
-    )
-    assert got.json()["status"] == "failed"
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "failed"
     assert client.get("/api/subscription", headers=headers).json()["plan"]["code"] == "bootstrap_dev"
+    db.expire_all()
+    fresh = TestingSessionLocal()
+    try:
+        row = fresh.get(Purchase, uuid.UUID(checkout["purchase_id"]))
+        assert row is not None
+        assert row.status == PurchaseStatus.FAILED.value
+        assert (row.extra or {}).get("failure") == "amount_mismatch"
+    finally:
+        fresh.close()
 
 
 def test_clickpay_currency_mismatch_does_not_fulfill(client, register_user, db) -> None:
@@ -493,9 +497,18 @@ def test_clickpay_currency_mismatch_does_not_fulfill(client, register_user, db) 
             return_value=_clickpay_query("A", currency="USD")
         )
         done = client.get(_as_test_path(return_url))
-    assert done.status_code == 409
-    assert done.json()["code"] == "payment_currency_mismatch"
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "failed"
     assert client.get("/api/subscription", headers=headers).json()["plan"]["code"] == "bootstrap_dev"
+    db.expire_all()
+    fresh = TestingSessionLocal()
+    try:
+        row = fresh.get(Purchase, uuid.UUID(_checkout["purchase_id"]))
+        assert row is not None
+        assert row.status == PurchaseStatus.FAILED.value
+        assert (row.extra or {}).get("failure") == "currency_mismatch"
+    finally:
+        fresh.close()
 
 
 def test_return_browser_params_alone_cannot_mark_paid(client, register_user, db) -> None:

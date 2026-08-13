@@ -42,12 +42,16 @@ def _creds(**extra: str) -> GatewayCredentials:
     return GatewayCredentials(code="clickpay", values=values, test_mode=True)
 
 
-def _checkout_request() -> CheckoutRequest:
+def _checkout_request(
+    *,
+    amount: Decimal = Decimal("49.00"),
+    currency: str = "SAR",
+) -> CheckoutRequest:
     return CheckoutRequest(
         purchase_id=uuid.uuid4(),
         cart_id=str(uuid.uuid4()),
-        amount=Decimal("49.00"),
-        currency="SAR",
+        amount=amount,
+        currency=currency,
         description="Geem subscription: Pro",
         customer=CustomerDetails(
             name="Ada Lovelace",
@@ -85,7 +89,8 @@ def test_create_checkout_maps_hosted_page_fields() -> None:
     assert payload["tran_type"] == "sale"
     assert payload["tran_class"] == "ecom"
     assert payload["cart_currency"] == "SAR"
-    assert payload["cart_amount"] == 49.0
+    assert payload["cart_amount"] == "49.00"
+    assert isinstance(payload["cart_amount"], str)
     assert payload["hide_shipping"] is True
     assert "callback" not in payload
     assert payload["customer_details"]["email"] == "ada@example.com"
@@ -201,3 +206,32 @@ def test_credentials_repr_hides_server_key() -> None:
     text = repr(creds)
     assert "server-key-secret" not in text
     assert "clickpay" in text
+
+
+@respx.mock
+def test_create_checkout_sends_two_decimal_string_not_float() -> None:
+    route = respx.post(f"{BASE}/payment/request").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tran_ref": "TST-AMT",
+                "redirect_url": "https://secure.clickpay.com.sa/payment/page/abc",
+            },
+        )
+    )
+    ClickPayGateway(_settings()).create_checkout(
+        _checkout_request(amount=Decimal("10.15")), _creds()
+    )
+    import json
+
+    payload = json.loads(route.calls.last.request.content)
+    assert payload["cart_amount"] == "10.15"
+
+
+def test_create_checkout_rejects_non_sar() -> None:
+    with pytest.raises(AppError) as exc:
+        ClickPayGateway(_settings()).create_checkout(
+            _checkout_request(currency="USD"), _creds()
+        )
+    assert exc.value.category == ErrorCategory.VALIDATION
+    assert "SAR" in exc.value.message
