@@ -1,7 +1,9 @@
 """ClickPay hosted-page adapter.
 
 Creates a sale via POST /payment/request and verifies via POST /payment/query.
-Never treats browser return parameters as payment proof.
+ClickPay redirects the browser to ``return``. ``callback`` is null so the
+IPN POST does not race that browser hit.
+Neither payload is payment proof — Geem always queries ``tran_ref``.
 """
 
 from __future__ import annotations
@@ -98,6 +100,7 @@ class ClickPayGateway:
             "cart_currency": require_sar(request.currency),
             "cart_amount": format_money(request.amount),
             "hide_shipping": True,
+            "callback": None,
             "return": request.return_url,
             "customer_details": _customer_payload(request),
         }

@@ -1,14 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { continueAfterAuth } from '@/app/router/guards';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { AuthAlert } from '@/features/auth/components/AuthAlert';
+import { AuthFormHeader } from '@/features/auth/components/AuthFields';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { suggestSlugFromName } from '@/features/workspaces/lib/hostname';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { WorkspaceSlugInput } from '@/features/workspaces/components/WorkspaceSlugInput';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 
@@ -17,6 +21,8 @@ export function OnboardingPage() {
   const { status } = useAuth();
   const { availableWorkspaces, createWorkspace } = useWorkspace();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
@@ -34,7 +40,7 @@ export function OnboardingPage() {
   }
 
   if (availableWorkspaces.length > 0) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={continueAfterAuth(from)} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -43,7 +49,7 @@ export function OnboardingPage() {
     setErrorKey(null);
     try {
       await createWorkspace({ name: name.trim(), slug: slug.trim() });
-      navigate('/', { replace: true });
+      navigate(continueAfterAuth(from), { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorKey(errorMessageKey(err.code));
@@ -58,54 +64,46 @@ export function OnboardingPage() {
   return (
     <AuthLayout>
       <DocumentTitle title={t('onboarding.title')} />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('onboarding.title')}</CardTitle>
-          <CardDescription>{t('onboarding.description')}</CardDescription>
-        </CardHeader>
-        <form onSubmit={onSubmit}>
-          <CardContent className="space-y-4">
-            {errorKey && (
-              <p className="text-sm text-destructive" role="alert">
-                {t(errorKey)}
-              </p>
-            )}
-            <div className="space-y-2">
-              <label htmlFor="ws-name" className="text-sm font-medium">
-                {t('onboarding.workspaceName')}
-              </label>
-              <Input
-                id="ws-name"
-                required
-                maxLength={200}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="ws-slug" className="text-sm font-medium">
-                {t('onboarding.workspaceSlug')}
-              </label>
-              <WorkspaceSlugInput
-                id="ws-slug"
-                value={slug}
-                onChange={(next) => {
-                  setSlugTouched(true);
-                  setSlug(next);
-                }}
-                disabled={submitting}
-              />
-              <p className="text-xs text-muted-foreground">{t('onboarding.slugHint')}</p>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={submitting || !name.trim() || !slug.trim()}>
-              {submitting ? t('onboarding.creating') : t('onboarding.create')}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+      <AuthFormHeader
+        title={t('onboarding.title')}
+        subtitle={t('onboarding.description')}
+      />
+      <form onSubmit={onSubmit} className="space-y-5" aria-busy={submitting}>
+        {errorKey && <AuthAlert>{t(errorKey)}</AuthAlert>}
+        <div className="space-y-2">
+          <Label htmlFor="ws-name">{t('onboarding.workspaceName')}</Label>
+          <Input
+            id="ws-name"
+            required
+            maxLength={200}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={submitting}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ws-slug">{t('onboarding.workspaceSlug')}</Label>
+          <WorkspaceSlugInput
+            id="ws-slug"
+            value={slug}
+            onChange={(next) => {
+              setSlugTouched(true);
+              setSlug(next);
+            }}
+            disabled={submitting}
+          />
+          <p className="text-xs text-muted-foreground">{t('onboarding.slugHint')}</p>
+        </div>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          disabled={submitting || !name.trim() || !slug.trim()}
+        >
+          {submitting ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
+          {submitting ? t('onboarding.creating') : t('onboarding.create')}
+        </Button>
+      </form>
     </AuthLayout>
   );
 }

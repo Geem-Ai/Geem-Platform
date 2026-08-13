@@ -26,14 +26,30 @@ def test_assert_secure_settings_rejects_insecure_production_secret() -> None:
 
 
 def test_workspace_web_url_falls_back_to_localhost_only_when_local() -> None:
-    local = Settings(_env_file=None, app_env="test", workspace_web_url="")
+    local = Settings(
+        _env_file=None,
+        app_env="test",
+        app_root_domain="localhost",
+        workspace_web_url="",
+    )
     assert local.effective_workspace_web_url == "http://localhost:5174"
+    geem_local = Settings(
+        _env_file=None,
+        app_env="local",
+        app_root_domain="geem.dm",
+        workspace_web_url="",
+    )
+    assert geem_local.effective_workspace_web_url == "http://app.geem.dm:5174"
+    assert geem_local.is_allowed_spa_origin("http://app.geem.dm:5174")
+    assert geem_local.is_allowed_spa_origin("http://acme.geem.dm:5174")
+    assert not geem_local.is_allowed_spa_origin("http://evil-geem.dm:5174")
     production = Settings(
         _env_file=None,
         app_env="production",
         jwt_secret="a" * 40,
         cors_origins="https://app.geem.ai",
         workspace_web_url="",
+        app_root_domain="geem.ai",
     )
     assert production.effective_workspace_web_url == ""
     explicit = Settings(

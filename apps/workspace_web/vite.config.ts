@@ -3,6 +3,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+const tunnelHost = process.env.VITE_TUNNEL_HOST?.trim();
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -13,8 +15,17 @@ export default defineConfig({
   server: {
     host: true,
     port: 5174,
-    // Local geem.dm / *.geem.dm Host headers (dnsmasq / /etc/hosts)
-    allowedHosts: ['.geem.dm', 'localhost'],
+    // Local geem.dm + UAT Cloudflare Tunnel (app-uat.geem.ai)
+    allowedHosts: ['.geem.dm', '.geem.ai', 'localhost'],
+    ...(tunnelHost
+      ? {
+          hmr: {
+            host: tunnelHost,
+            protocol: 'wss',
+            clientPort: 443,
+          },
+        }
+      : {}),
   },
   build: {
     chunkSizeWarningLimit: 2000,

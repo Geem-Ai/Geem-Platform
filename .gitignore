@@ -1,5 +1,8 @@
 .env
 .env.local
+infra/.env
+infra/cloudflared/*.json
+infra/cloudflared/cert.pem
 .venv/
 venv/
 __pycache__/

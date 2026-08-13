@@ -151,8 +151,22 @@ def _wants_html_redirect(request: Request) -> bool:
     return "text/html" in accept
 
 
+def _spa_origin_from_request(request: Request) -> str | None:
+    settings = get_settings()
+    origin = (request.headers.get("origin") or "").strip().rstrip("/")
+    if origin and settings.is_allowed_spa_origin(origin):
+        return origin
+    return None
+
+
 def _spa_payment_result_url(purchase: Purchase) -> str | None:
-    base = get_settings().effective_workspace_web_url
+    settings = get_settings()
+    stored = (purchase.extra or {}).get("spa_origin")
+    base = ""
+    if isinstance(stored, str) and settings.is_allowed_spa_origin(stored):
+        base = stored.strip().rstrip("/")
+    if not base:
+        base = settings.effective_workspace_web_url
     if not base:
         return None
     if purchase.status == PurchaseStatus.PAID.value:
@@ -201,6 +215,7 @@ def checkout_subscription(
         user,
         body.plan_id,
         customer_ip=client_ip(request),
+        spa_origin=_spa_origin_from_request(request),
     )
     db.commit()
     return _checkout_out(purchase)
@@ -220,6 +235,7 @@ def checkout_credit_pack(
         user,
         body.credit_pack_id,
         customer_ip=client_ip(request),
+        spa_origin=_spa_origin_from_request(request),
     )
     db.commit()
     return _checkout_out(purchase)

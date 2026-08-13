@@ -30,6 +30,8 @@ def test_extract_subdomain_slug() -> None:
     assert extract_subdomain_slug("localhost", "localhost", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("api.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("app-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("api-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("admin.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("www.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("www.localhost", "localhost", reserved_slugs=reserved) is None

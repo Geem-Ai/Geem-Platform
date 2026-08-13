@@ -46,7 +46,7 @@ Set at least:
 
 Keep `AUTH_REQUIRED=true` and `LEGACY_MVP_WRITES_ENABLED=false`. Document / Query / Jobs require a logged-in Workspace user.
 
-Local billing checkout (Phase 6A/6B) needs **exactly one enabled** `payment_gateway_configs` row. Seed/bootstrap/workspace provision enable **ClickPay** when `CLICKPAY_PROFILE_ID` and `CLICKPAY_SERVER_KEY` are set; otherwise they seed **Noop** (`APP_ENV=local`/`test`). After payment verification the API redirects browsers (`Accept: text/html`) to `WORKSPACE_WEB_URL` (`/billing/payment/success|failed|pending?purchase=…`). Empty `WORKSPACE_WEB_URL` falls back to `http://localhost:5174` only in local/test; in production it disables the HTML redirect instead of sending users to localhost. The SPA re-fetches the purchase; it does not trust provider query parameters. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
+Local billing checkout (Phase 6A/6B) needs **exactly one enabled** `payment_gateway_configs` row. Seed/bootstrap/workspace provision enable **ClickPay** when `CLICKPAY_PROFILE_ID` and `CLICKPAY_SERVER_KEY` are set; otherwise they seed **Noop** (`APP_ENV=local`/`test`). After payment verification the API redirects browsers (`Accept: text/html`) to the Workspace SPA (`/billing/payment/success|failed|pending?purchase=…`). It prefers the checkout `Origin` when that origin is allowed, then `WORKSPACE_WEB_URL`. Empty `WORKSPACE_WEB_URL` falls back to `http://app.{APP_ROOT_DOMAIN}:5174` in local/test (or `http://localhost:5174` when the root domain is localhost); production must set the SPA origin explicitly. The SPA re-fetches the purchase; it does not trust provider query parameters. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
 
 Local/dev (`APP_ENV=local`/`dev`/`development`) also seeds a **demo catalog**: Starter / Pro / Business plans plus three credit packs (not commercial pricing; bootstrap plan stays unpriced and is not listed for checkout). Insert missing rows with `python -m app.billing.seed`, by re-running `python -m app.identity.bootstrap`, or by creating a Workspace. Existing demo rows are never overwritten.
 
@@ -94,7 +94,49 @@ address=/geem.dm/127.0.0.1
 
 Then open **http://app.geem.dm:5174**, not `http://api.geem.dm:5174` (that host is the API, not the SPA).
 
-Vite already allows Host headers for `.geem.dm`. With `APP_ENV=local`, the API also allows CORS for `http(s)://{sub.}geem.dm[:port]` in addition to the exact `CORS_ORIGINS` list.
+Vite already allows Host headers for `.geem.dm` and `.geem.ai`. With `APP_ENV=local`, the API also allows CORS for `http(s)://{sub.}geem.dm[:port]` in addition to the exact `CORS_ORIGINS` list.
+
+### C. Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai`)
+
+Expose the local Compose stack on HTTPS without opening ports. This is a **dev/UAT** path (Vite `--reload`), not production. Prefer Cloudflare Access in front of the hostnames.
+
+Ingress lives in [`infra/cloudflared/config.yml`](../infra/cloudflared/config.yml). Credentials (`infra/cloudflared/credentials.json`) are gitignored.
+
+One-time create (already done for `geem-uat`):
+
+```bash
+brew install cloudflared
+cloudflared tunnel login                    # authorize the geem.ai zone
+cloudflared tunnel create geem-uat
+cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
+cloudflared tunnel route dns geem-uat app-uat.geem.ai
+cloudflared tunnel route dns geem-uat api-uat.geem.ai
+```
+
+| Public hostname | Origin (Docker DNS) |
+|-----------------|---------------------|
+| `app-uat.geem.ai` | `http://workspace_web:5174` |
+| `api-uat.geem.ai` | `http://api:8000` |
+
+`.env` `CORS_ORIGINS` must include `https://app-uat.geem.ai`. Start the overlay (recreates `workspace_web` so Vite picks up `VITE_API_URL=https://api-uat.geem.ai`):
+
+```bash
+cd infra
+docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web cloudflared
+```
+
+| Public | Local (still works) |
+|--------|---------------------|
+| https://app-uat.geem.ai | http://app.geem.dm:5174 |
+| https://api-uat.geem.ai | http://api.geem.dm:8000 |
+
+The overlay sets `APP_URL` / `WORKSPACE_WEB_URL` to the UAT hosts (ClickPay return + SPA handoff) and `TRUST_PROXY_HEADERS=true` (cloudflared overwrites `X-Forwarded-For`). OpenAPI: https://api-uat.geem.ai/docs
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.tunnel.yml logs -f cloudflared
+```
+
+Missing `credentials.json` makes `cloudflared` exit. Cloudflare Free HTTP request bodies cap at **100 MB** (matches `MAX_UPLOAD_MB`).
 
 ## Path 1 — full stack with Docker (recommended)
 
@@ -268,4 +310,6 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | OCR / chat failures | `OPENROUTER_API_KEY`, credits, and `checks.openrouter` on `/api/health/ready` |
 | Embedding dimension errors | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models |
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
-| Vite “blocked host” | `allowedHosts` already includes `.geem.dm`; confirm you are not using a different TLD without updating `vite.config.ts` |
+| Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
+| Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:5174` and `http://api:8000` |
+| Tunnel CORS / login refresh fails | `CORS_ORIGINS` includes `https://app-uat.geem.ai`; browser calls `https://api-uat.geem.ai` (recreate `workspace_web` after enabling the overlay) |

@@ -1,12 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { AuthAlert } from '@/features/auth/components/AuthAlert';
+import {
+  AuthEmailField,
+  AuthFormHeader,
+  AuthPasswordField,
+} from '@/features/auth/components/AuthFields';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 
 export function RegisterPage() {
@@ -43,62 +48,49 @@ export function RegisterPage() {
   return (
     <AuthLayout>
       <DocumentTitle title={t('auth.registerTitle')} />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('auth.registerTitle')}</CardTitle>
-        </CardHeader>
-        <form onSubmit={onSubmit}>
-          <CardContent className="space-y-4">
-            {errorKey && (
-              <p className="text-sm text-destructive" role="alert">
-                {t(errorKey)}
-              </p>
-            )}
-            <div className="space-y-2">
-              <label htmlFor="reg-email" className="text-sm font-medium">
-                {t('auth.email')}
-              </label>
-              <Input
-                id="reg-email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="reg-password" className="text-sm font-medium">
-                {t('auth.password')}
-              </label>
-              <Input
-                id="reg-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                maxLength={128}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={submitting}
-              />
-              <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? t('auth.creatingAccount') : t('auth.createAccount')}
-            </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              {t('auth.hasAccount')}{' '}
-              <Link to="/login" className="text-primary hover:underline">
-                {t('auth.loginLink')}
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+      <AuthFormHeader
+        title={t('auth.registerTitle')}
+        subtitle={t('auth.registerSubtitle')}
+      />
+      <form
+        onSubmit={onSubmit}
+        className="space-y-5"
+        data-testid="register-form"
+        aria-busy={submitting}
+      >
+        {errorKey && <AuthAlert>{t(errorKey)}</AuthAlert>}
+        <AuthEmailField
+          id="reg-email"
+          value={email}
+          onChange={setEmail}
+          disabled={submitting}
+          autoFocus
+        />
+        <AuthPasswordField
+          id="reg-password"
+          value={password}
+          onChange={setPassword}
+          disabled={submitting}
+          autoComplete="new-password"
+          minLength={8}
+          maxLength={128}
+          hint={
+            <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
+          }
+        />
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          {submitting ? (
+            <LoaderCircle className="animate-spin" aria-hidden />
+          ) : null}
+          {submitting ? t('auth.creatingAccount') : t('auth.createAccount')}
+        </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          {t('auth.hasAccount')}{' '}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            {t('auth.loginLink')}
+          </Link>
+        </p>
+      </form>
     </AuthLayout>
   );
 }

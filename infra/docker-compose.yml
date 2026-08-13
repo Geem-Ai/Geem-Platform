@@ -1,3 +1,5 @@
+# Local full stack. UAT public hostnames (app-uat.geem.ai / api-uat.geem.ai):
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
 services:
   postgres:
     image: postgres:16-alpine

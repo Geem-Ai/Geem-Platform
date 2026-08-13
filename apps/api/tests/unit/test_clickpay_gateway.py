@@ -92,7 +92,8 @@ def test_create_checkout_maps_hosted_page_fields() -> None:
     assert payload["cart_amount"] == "49.00"
     assert isinstance(payload["cart_amount"], str)
     assert payload["hide_shipping"] is True
-    assert "callback" not in payload
+    assert payload["callback"] is None
+    assert payload["return"] == "https://api.example/api/billing/return/clickpay/x?rt=tok"
     assert payload["customer_details"]["email"] == "ada@example.com"
 
 

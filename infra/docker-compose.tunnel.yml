@@ -1,0 +1,42 @@
+# UAT Cloudflare Tunnel overlay (locally-managed config.yml).
+# Does not replace local geem.dm / localhost DX — use it in addition:
+#
+#   cd infra
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web cloudflared
+#
+# Requires infra/cloudflared/credentials.json (see infra/cloudflared/config.yml).
+# Ingress:
+#   app-uat.geem.ai  →  http://workspace_web:5174
+#   api-uat.geem.ai  →  http://api:8000
+
+services:
+  api:
+    environment:
+      APP_URL: https://api-uat.geem.ai
+      TRUST_PROXY_HEADERS: "true"
+      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+
+  worker:
+    environment:
+      APP_URL: https://api-uat.geem.ai
+      TRUST_PROXY_HEADERS: "true"
+      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+
+  workspace_web:
+    environment:
+      VITE_API_URL: https://api-uat.geem.ai
+      VITE_ROOT_DOMAIN: geem.ai
+      VITE_APP_ENV: local
+      VITE_TUNNEL_HOST: app-uat.geem.ai
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      api:
+        condition: service_started
+      workspace_web:
+        condition: service_started

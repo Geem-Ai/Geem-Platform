@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,6 +14,8 @@ DEFAULT_RESERVED_WORKSPACE_SLUGS: frozenset[str] = frozenset(
         "api",
         "admin",
         "app",
+        "app-uat",
+        "api-uat",
         "dashboard",
         "status",
         "support",
@@ -211,14 +214,36 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         return self.app_env.lower() in {"local", "dev", "development", "test"}
 
+    def local_spa_origin_regex(self) -> str | None:
+        """Allow http(s)://{optional-subdomain.}{APP_ROOT_DOMAIN}{:port} in local/dev only."""
+        if not self.is_local:
+            return None
+        root = self.app_root_domain.strip().lower().lstrip(".")
+        if not root or root in {"localhost", "127.0.0.1"}:
+            return None
+        escaped = re.escape(root)
+        return rf"^https?://([a-z0-9-]+\.)?{escaped}(:\d+)?$"
+
+    def is_allowed_spa_origin(self, origin: str) -> bool:
+        raw = (origin or "").strip().rstrip("/")
+        if not raw:
+            return False
+        if raw in self.cors_origin_list:
+            return True
+        pattern = self.local_spa_origin_regex()
+        return bool(pattern and re.match(pattern, raw))
+
     @property
     def effective_workspace_web_url(self) -> str:
         raw = (self.workspace_web_url or "").strip().rstrip("/")
         if raw:
             return raw
-        if self.is_local:
-            return "http://localhost:5174"
-        return ""
+        if not self.is_local:
+            return ""
+        root = (self.app_root_domain or "").strip().lower().lstrip(".")
+        if root and root not in {"localhost", "127.0.0.1"}:
+            return f"http://app.{root}:5174"
+        return "http://localhost:5174"
 
     @property
     def cookie_secure(self) -> bool:
