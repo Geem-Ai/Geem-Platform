@@ -1,38 +1,65 @@
-"""Public ``/api/v1/chat`` request/response DTOs."""
+"""OpenAI-compatible public Chat Completions + Models DTOs."""
 
 from __future__ import annotations
 
-import uuid
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.schemas import Citation
 
 
-class PublicChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ChatCompletionMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
 
-    expert_id: uuid.UUID
-    message: str
+    role: str
+    content: Any = None
+
+
+class ChatCompletionRequest(BaseModel):
+    """Permissive OpenAI Chat Completions body. Unknown keys are ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    model: str = "geem"
+    messages: list[ChatCompletionMessage] = Field(default_factory=list)
     stream: bool = False
 
-    @field_validator("message")
-    @classmethod
-    def message_present(cls, value: str) -> str:
-        # Length/trim rules are applied by shared Chat validation so the
-        # established Workspace Chat limit stays the source of truth.
-        if value is None or not str(value).strip():
-            raise ValueError("Message content is required.")
-        return value
+
+class ChatCompletionUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
-class PublicChatUsage(BaseModel):
-    billed_tokens: int = 0
+class ChatCompletionChoiceMessage(BaseModel):
+    role: str = "assistant"
+    content: str
 
 
-class PublicChatResponse(BaseModel):
+class ChatCompletionChoice(BaseModel):
+    index: int = 0
+    message: ChatCompletionChoiceMessage
+    finish_reason: str = "stop"
+
+
+class ChatCompletionResponse(BaseModel):
     id: str
-    expert_id: uuid.UUID
-    answer: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: list[ChatCompletionChoice]
+    usage: ChatCompletionUsage
     citations: list[Citation] = Field(default_factory=list)
-    usage: PublicChatUsage
+
+
+class ModelObject(BaseModel):
+    id: str
+    object: str = "model"
+    created: int
+    owned_by: str
+
+
+class ModelListResponse(BaseModel):
+    object: str = "list"
+    data: list[ModelObject] = Field(default_factory=list)

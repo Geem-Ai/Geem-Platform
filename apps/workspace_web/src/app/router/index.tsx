@@ -19,6 +19,8 @@ import { BillingHistoryPage } from '@/features/billing/pages/BillingHistoryPage'
 import { CreditsPage } from '@/features/billing/pages/CreditsPage';
 import { PaymentResultPage } from '@/features/billing/pages/PaymentResultPage';
 import { SubscriptionPage } from '@/features/billing/pages/SubscriptionPage';
+import { ApiKeysPage } from '@/features/api-keys/pages/ApiKeysPage';
+import { ApiUsagePage } from '@/features/api-keys/pages/ApiUsagePage';
 import { UsageHistoryPage } from '@/features/usage/pages/UsageHistoryPage';
 import { UsagePage } from '@/features/usage/pages/UsagePage';
 
@@ -46,14 +48,8 @@ export function AppRouter() {
             <Route path="experts/:expertId/edit" element={<ExpertsPage />} />
             <Route path="experts/:expertId" element={<ExpertsPage />} />
             <Route path="api" element={<Navigate to="/api/keys" replace />} />
-            <Route
-              path="api/keys"
-              element={<PlaceholderPage titleKey="nav.apiKeys" />}
-            />
-            <Route
-              path="api/usage"
-              element={<PlaceholderPage titleKey="nav.usage" />}
-            />
+            <Route path="api/keys" element={<ApiKeysPage />} />
+            <Route path="api/usage" element={<ApiUsagePage />} />
             <Route path="apps" element={<PlaceholderPage titleKey="nav.apps" />} />
             <Route path="members" element={<MembersPage />} />
             <Route

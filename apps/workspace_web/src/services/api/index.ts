@@ -11,5 +11,6 @@ export * from './conversations';
 export * from './query';
 export * from './usage';
 export * from './billing';
+export * from './api-keys';
 export { streamSse } from './sse';
 export { apiRequest };

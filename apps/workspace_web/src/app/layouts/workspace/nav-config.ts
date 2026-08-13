@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   AppWindow,
   CreditCard,
   HardDrive,
@@ -28,7 +29,7 @@ export const workspaceNav: NavItem[] = [
     icon: KeyRound,
     children: [
       { id: 'api-keys', labelKey: 'nav.apiKeys', to: '/api/keys', icon: KeyRound },
-      { id: 'api-usage', labelKey: 'nav.usage', to: '/api/usage', icon: LayoutDashboard },
+      { id: 'api-usage', labelKey: 'nav.usage', to: '/api/usage', icon: Activity },
     ],
   },
   { id: 'apps', labelKey: 'nav.apps', to: '/apps', icon: AppWindow },

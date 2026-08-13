@@ -1,13 +1,13 @@
-"""Public Workspace Chat API — ``POST /api/v1/chat``.
+"""Public OpenAI-compatible Chat Completions + Models API.
 
 Authenticated exclusively by Workspace API key (``chat:write``).
 Workspace identity is taken from the key; Host/headers/body/cookies cannot
-override it. Generation reuses ExpertQueryService + Phase 5 AI metering.
+override it. Expert identity is ``X-Geem-Expert-Id`` (alias ``X-Expert-Id``).
+Generation reuses ExpertQueryService + Phase 5 AI metering.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 import uuid
@@ -18,8 +18,20 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from starlette.concurrency import iterate_in_threadpool
 
-from app.api.schemas import Citation
-from app.api.v1.schemas import PublicChatRequest, PublicChatResponse, PublicChatUsage
+from app.api.v1.openai_compat import (
+    completion_response,
+    iter_completion_sse,
+    iter_sse_error,
+    messages_to_question,
+    model_object,
+    parse_expert_id,
+)
+from app.api.v1.schemas import (
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ModelListResponse,
+    ModelObject,
+)
 from app.api_keys.dependencies import require_api_scope
 from app.api_keys.principal import ApiKeyPrincipal
 from app.api_keys.scopes import SCOPE_CHAT_WRITE
@@ -27,6 +39,8 @@ from app.conversations.invocation import ChatInvocationContext
 from app.conversations.turn import ChatTurnExecutor
 from app.core.errors import AppError, ErrorCategory
 from app.db.session import SessionLocal, get_db
+from app.experts.models import Expert, ExpertStatus
+from app.experts.service import ExpertService
 from app.rate_limits.service import ApiRateLimiter
 from app.usage.metered import MeteredWorkspaceGeneration
 from app.workspaces.models import Workspace
@@ -35,9 +49,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["public-chat"])
 
-
-def _sse(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+_CHAT_RESPONSES = {
+    200: {
+        "description": (
+            "OpenAI Chat Completions JSON when ``stream=false``. When "
+            "``stream=true`` the response is ``text/event-stream`` with "
+            "OpenAI chunks (``data: {...}`` then ``data: [DONE]``). Quota "
+            "and credit failures are HTTP errors even for ``stream=true``."
+        ),
+    },
+    400: {"description": "Invalid request (missing Expert header or user message)."},
+    401: {"description": "Missing or invalid API key."},
+    403: {"description": "API key is missing the ``chat:write`` scope."},
+    404: {"description": "Expert is not accessible to this Workspace."},
+    429: {
+        "description": (
+            "API rate limit exceeded (``rate_limit_exceeded``) or AI quota "
+            "(``quota_exceeded``)."
+        ),
+    },
+    402: {"description": "Insufficient purchased AI credits (``insufficient_credits``)."},
+}
 
 
 def _workspace(request: Request, principal: ApiKeyPrincipal, db: Session) -> Workspace:
@@ -50,37 +82,32 @@ def _workspace(request: Request, principal: ApiKeyPrincipal, db: Session) -> Wor
     return row
 
 
+def _ready_experts(db: Session, workspace: Workspace) -> list[tuple[Expert, str]]:
+    pairs = ExpertService(db).list_for_workspace(workspace)
+    return [
+        (expert, ownership)
+        for expert, ownership in pairs
+        if expert.status == ExpertStatus.READY.value
+    ]
+
+
+def _get_ready_expert(
+    db: Session, workspace: Workspace, expert_id: uuid.UUID
+) -> tuple[Expert, str]:
+    for expert, ownership in _ready_experts(db, workspace):
+        if expert.id == expert_id:
+            return expert, ownership
+    raise AppError(ErrorCategory.EXPERT_NOT_FOUND, "Expert not found.")
+
+
 @router.post(
-    "/chat",
-    response_model=PublicChatResponse,
-    responses={
-        200: {
-            "description": (
-                "JSON answer when ``stream=false``. When ``stream=true`` the "
-                "response is ``text/event-stream`` with message_start, delta, "
-                "replace (full-buffer reset from the RAG engine), "
-                "message_complete, and error events. Quota and credit failures "
-                "are HTTP errors even for ``stream=true``."
-            ),
-        },
-        401: {"description": "Missing or invalid API key."},
-        403: {"description": "API key is missing the ``chat:write`` scope."},
-        404: {"description": "Expert is not accessible to this Workspace."},
-        422: {"description": "Malformed request body."},
-        429: {
-            "description": (
-                "API rate limit exceeded (``rate_limit_exceeded``) or AI quota "
-                "(``quota_exceeded``)."
-            ),
-        },
-        402: {"description": "Insufficient purchased AI credits (``insufficient_credits``)."},
-    },
-    openapi_extra={
-        "security": [{"ApiKey": []}],
-    },
+    "/chat/completions",
+    response_model=ChatCompletionResponse,
+    responses=_CHAT_RESPONSES,
+    openapi_extra={"security": [{"ApiKey": []}]},
 )
-def public_chat(
-    body: PublicChatRequest,
+def chat_completions(
+    body: ChatCompletionRequest,
     request: Request,
     principal: ApiKeyPrincipal = Depends(require_api_scope(SCOPE_CHAT_WRITE)),
     db: Session = Depends(get_db),
@@ -88,18 +115,23 @@ def public_chat(
     """Run one Expert turn for the API key's Workspace.
 
     Send ``Authorization: Bearer geem_sk_xxxxxxxxxxxxxxxxx`` (example secret
-    only — never a real key). Workspace is derived from the key alone.
+    only — never a real key) and ``X-Geem-Expert-Id: <expert-uuid>``.
+    ``model`` is echoed and is not used for routing. Workspace is derived
+    from the key alone.
     """
     started = time.perf_counter()
+    created = int(time.time())
     # Server-owned turn id — never the client/middleware X-Request-Id.
     # AI reservation is idempotent on (workspace_id, request_id); reusing a
     # client header would skip a new hold and under-bill retries.
     turn_id = str(uuid.uuid4())
+    expert_id = parse_expert_id(request)
     workspace = _workspace(request, principal, db)
     rate_headers: dict[str, str] = {}
+    echoed_model = body.model or "geem"
 
     executor = ChatTurnExecutor(db)
-    question = executor.validate_message(body.message)
+    question = executor.validate_message(messages_to_question(body.messages))
 
     rate = ApiRateLimiter(db).consume(
         workspace_id=principal.workspace_id,
@@ -109,14 +141,14 @@ def public_chat(
 
     executor.authorize_expert(
         workspace=workspace,
-        expert_id=body.expert_id,
+        expert_id=expert_id,
         actor_id=principal.api_key_id,
     )
 
     invocation = ChatInvocationContext.api_key(
         workspace_id=workspace.id,
         api_key_id=principal.api_key_id,
-        expert_id=body.expert_id,
+        expert_id=expert_id,
         request_id=turn_id,
     )
 
@@ -124,7 +156,7 @@ def public_chat(
         db,
         workspace_id=workspace.id,
         user_id=None,
-        expert_id=body.expert_id,
+        expert_id=expert_id,
         conversation_id=None,
         message_id=None,
         api_key_id=principal.api_key_id,
@@ -138,7 +170,7 @@ def public_chat(
             request_id=turn_id,
             workspace_id=workspace.id,
             api_key_id=principal.api_key_id,
-            expert_id=body.expert_id,
+            expert_id=expert_id,
             stream=body.stream,
             status="error",
             started=started,
@@ -146,13 +178,15 @@ def public_chat(
         raise
 
     if body.stream:
-        return _stream_chat(
+        return _stream_completions(
             workspace=workspace,
             principal=principal,
-            expert_id=body.expert_id,
+            expert_id=expert_id,
             question=question,
             invocation=invocation,
             request_id=turn_id,
+            model=echoed_model,
+            created=created,
             rate_headers=rate_headers,
             started=started,
         )
@@ -160,7 +194,7 @@ def public_chat(
     try:
         result = executor.execute(
             workspace=workspace,
-            expert_id=body.expert_id,
+            expert_id=expert_id,
             question=question,
             invocation=invocation,
             meter=meter,
@@ -171,25 +205,26 @@ def public_chat(
             request_id=turn_id,
             workspace_id=workspace.id,
             api_key_id=principal.api_key_id,
-            expert_id=body.expert_id,
+            expert_id=expert_id,
             stream=False,
             status="error",
             started=started,
         )
         raise
 
-    payload = PublicChatResponse(
-        id=turn_id,
-        expert_id=body.expert_id,
+    payload = completion_response(
+        turn_id=turn_id,
+        model=echoed_model,
+        created=created,
         answer=result["answer"],
-        citations=[Citation.model_validate(c) for c in result["citations"]],
-        usage=PublicChatUsage(billed_tokens=int(result["billed_tokens"])),
+        citations=result["citations"],
+        billed_tokens=int(result["billed_tokens"]),
     )
     _log_request(
         request_id=turn_id,
         workspace_id=workspace.id,
         api_key_id=principal.api_key_id,
-        expert_id=body.expert_id,
+        expert_id=expert_id,
         stream=False,
         status="ok",
         started=started,
@@ -200,7 +235,46 @@ def public_chat(
     )
 
 
-def _stream_chat(
+@router.get(
+    "/models",
+    response_model=ModelListResponse,
+    openapi_extra={"security": [{"ApiKey": []}]},
+)
+def list_models(
+    request: Request,
+    principal: ApiKeyPrincipal = Depends(require_api_scope(SCOPE_CHAT_WRITE)),
+    db: Session = Depends(get_db),
+) -> ModelListResponse:
+    """List ready Experts the API key's Workspace can USE."""
+    workspace = _workspace(request, principal, db)
+    data = [
+        model_object(expert, ownership) for expert, ownership in _ready_experts(db, workspace)
+    ]
+    return ModelListResponse(data=data)
+
+
+@router.get(
+    "/models/{model_id}",
+    response_model=ModelObject,
+    openapi_extra={"security": [{"ApiKey": []}]},
+)
+def get_model(
+    model_id: str,
+    request: Request,
+    principal: ApiKeyPrincipal = Depends(require_api_scope(SCOPE_CHAT_WRITE)),
+    db: Session = Depends(get_db),
+) -> ModelObject:
+    """Return one ready Expert the API key's Workspace can USE."""
+    workspace = _workspace(request, principal, db)
+    try:
+        expert_id = uuid.UUID(model_id)
+    except ValueError:
+        raise AppError(ErrorCategory.EXPERT_NOT_FOUND, "Expert not found.") from None
+    expert, ownership = _get_ready_expert(db, workspace, expert_id)
+    return model_object(expert, ownership)
+
+
+def _stream_completions(
     *,
     workspace: Workspace,
     principal: ApiKeyPrincipal,
@@ -208,6 +282,8 @@ def _stream_chat(
     question: str,
     invocation: ChatInvocationContext,
     request_id: str,
+    model: str,
+    created: int,
     rate_headers: dict[str, str],
     started: float,
 ) -> StreamingResponse:
@@ -229,30 +305,24 @@ def _stream_chat(
                 request_id=request_id,
             )
             executor = ChatTurnExecutor(db)
-            for item in executor.stream(
-                workspace=workspace,
-                expert_id=expert_id,
-                question=question,
-                invocation=invocation,
-                meter=meter,
-                request_id=request_id,
-            ):
-                if item.get("event") == "error":
-                    status = "error"
-                yield _sse(item["event"], item["data"])
+            yield from iter_completion_sse(
+                executor.stream(
+                    workspace=workspace,
+                    expert_id=expert_id,
+                    question=question,
+                    invocation=invocation,
+                    meter=meter,
+                    request_id=request_id,
+                ),
+                turn_id=request_id,
+                model=model,
+                created=created,
+            )
         except AppError as exc:
             status = "error"
             if meter is not None:
                 meter.release()
-            yield _sse(
-                "error",
-                {
-                    "code": exc.category.value,
-                    "error": exc.category.value,
-                    "message": exc.message,
-                    "details": exc.details,
-                },
-            )
+            yield from iter_sse_error(exc)
         except GeneratorExit:
             status = "cancelled"
             if meter is not None:
@@ -263,14 +333,7 @@ def _stream_chat(
             logger.exception("public_chat_stream_failed")
             if meter is not None:
                 meter.release()
-            yield _sse(
-                "error",
-                {
-                    "code": "generation_failed",
-                    "error": "generation_failed",
-                    "message": "Generation failed.",
-                },
-            )
+            yield from iter_sse_error(Exception("Generation failed."))
         finally:
             _log_request(
                 request_id=request_id,

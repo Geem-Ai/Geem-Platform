@@ -8,15 +8,16 @@ Stack: FastAPI, Celery, PostgreSQL, Redis, Qdrant, MinIO, React. OpenRouter prov
 
 ## Status
 
-Phases **0–5** of the multi-tenant SaaS plan are complete. **Phase 6A** (billing gateway registry, ClickPay hosted redirect, local Noop) is in; Workspace billing UI (**6B**) is next.
+Phases **0–7** of the multi-tenant SaaS plan are complete (through Workspace API Keys/Usage UI). Do not start Phase 8 until requested.
 
 | Ready | Not yet |
 |-------|---------|
-| Auth, workspaces, memberships | Workspace checkout / plan-picker UI |
-| Tenant-scoped documents + Expert RAG | Public `/api/v1/chat` + workspace API keys |
-| Conversations + streaming Chat | Platform Admin SPA (`apps/dashboard_web`) |
-| Plans, entitlements, usage meters, quotas | Marketing site (`apps/landpage_web`) |
-| Billing checkout APIs (ClickPay + Noop) | App Store |
+| Auth, workspaces, memberships | Platform Admin SPA (`apps/dashboard_web`) |
+| Tenant-scoped documents + Expert RAG | Marketing site (`apps/landpage_web`) |
+| Conversations + streaming Chat | App Store |
+| Plans, entitlements, usage meters, quotas | |
+| Billing checkout + Workspace billing UI | |
+| OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` (Expert via `X-Geem-Expert-Id`) | |
 
 Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md).
 

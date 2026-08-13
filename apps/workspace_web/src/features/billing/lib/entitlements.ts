@@ -13,6 +13,7 @@ const KNOWN_KEYS = new Set([
   'ai_tokens_monthly',
   'experts_limit',
   'storage_bytes',
+  'api_requests_per_minute',
 ]);
 
 /** Daily → weekly → monthly (alphabetical order would put monthly before weekly). */
@@ -22,6 +23,7 @@ export const ENTITLEMENT_DISPLAY_ORDER = [
   'ai_tokens_monthly',
   'experts_limit',
   'storage_bytes',
+  'api_requests_per_minute',
 ] as const;
 
 export function sortEntitlements<T extends { key: string }>(items: readonly T[]): T[] {

@@ -7,6 +7,7 @@ import {
 } from '@/features/workspaces/lib/hostname';
 import {
   canDeleteWorkspace,
+  canManageApiKeys,
   canManageMembers,
   canManageWorkspace,
   canPromoteToOwner,
@@ -61,6 +62,9 @@ describe('role helpers', () => {
     expect(canPromoteToOwner('owner')).toBe(true);
     expect(canDeleteWorkspace('owner')).toBe(true);
     expect(canDeleteWorkspace('admin')).toBe(false);
+    expect(canManageApiKeys('owner')).toBe(true);
+    expect(canManageApiKeys('admin')).toBe(true);
+    expect(canManageApiKeys('member')).toBe(false);
   });
 });
 
@@ -71,6 +75,15 @@ describe('query keys', () => {
       'ws-1',
       'members',
     ]);
+    expect(queryKeys.apiKeys('ws-a')).toEqual(['workspace', 'ws-a', 'api-keys']);
+    expect(queryKeys.apiUsageSummary('ws-b', '7d')).toEqual([
+      'workspace',
+      'ws-b',
+      'api-usage',
+      'summary',
+      '7d',
+    ]);
+    expect(queryKeys.apiKeys('ws-a')[1]).not.toBe(queryKeys.apiKeys('ws-b')[1]);
   });
 });
 
@@ -102,6 +115,22 @@ describe('i18n coverage', () => {
     expect((arL.experts as Record<string, string>).create).toBeTruthy();
     expect((enL.experts as Record<string, string>).ask).toBeTruthy();
     expect((arL.experts as Record<string, string>).ask).toBeTruthy();
+    expect(en.experts.apiId).toBeTruthy();
+    expect(ar.experts.apiId).toBeTruthy();
+  });
+
+  it('has matching API keys and API usage keys in en and ar', () => {
+    expect(en.apiKeys.create).toBeTruthy();
+    expect(ar.apiKeys.create).toBeTruthy();
+    expect(en.apiKeys.createdWarning).toBeTruthy();
+    expect(ar.apiKeys.createdWarning).toBeTruthy();
+    expect(en.apiKeys.status.revoked).toBeTruthy();
+    expect(ar.apiKeys.status.expired).toBeTruthy();
+    expect(en.apiUsage.rateLimitTitle).toBeTruthy();
+    expect(ar.apiUsage.viewFullUsage).toBeTruthy();
+    expect(en.apiUsage.requestsPerMinute).toContain('{{value}}');
+    expect(Object.keys(en.apiKeys).sort()).toEqual(Object.keys(ar.apiKeys).sort());
+    expect(Object.keys(en.apiUsage).sort()).toEqual(Object.keys(ar.apiUsage).sort());
   });
 
   it('has expert error codes in both locales', () => {

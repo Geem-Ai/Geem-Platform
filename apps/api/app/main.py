@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import documents, health, query
+from app.api.v1.openai_compat import (
+    is_openai_compat_path,
+    openai_error_response,
+    openai_validation_response,
+)
 from app.api.v1.router import router as public_v1_router
 from app.common.middleware import RequestContextMiddleware
 from app.core.config import get_settings
@@ -17,6 +24,7 @@ from app.platform_admin.router import router as platform_router
 from app.billing.router import router as subscription_router
 from app.billing.checkout_router import router as billing_router
 from app.entitlements.router import router as entitlements_router
+from app.usage.api_activity_router import router as api_usage_router
 from app.usage.router import router as usage_router
 from app.workspaces.router import router as workspaces_router
 from app.api_keys.router import router as api_keys_router
@@ -55,13 +63,16 @@ app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(entitlements_router)
 app.include_router(usage_router)
+app.include_router(api_usage_router)
 app.include_router(api_keys_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
 
 
 @app.exception_handler(AppError)
-async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    if is_openai_compat_path(request.url.path):
+        return openai_error_response(exc)
     code = HTTP_STATUS_BY_CATEGORY.get(exc.category.value, 500)
     if code == 500 and (
         exc.category.value.endswith("_failed") or "rate" in exc.category.value
@@ -78,6 +89,17 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
             if key in exc.details:
                 payload[key] = exc.details[key]
     return JSONResponse(status_code=code, content=payload, headers=exc.headers or None)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    if is_openai_compat_path(request.url.path):
+        return openai_validation_response(exc)
+    return JSONResponse(
+        status_code=422, content={"detail": jsonable_encoder(exc.errors())}
+    )
 
 
 @app.get("/")

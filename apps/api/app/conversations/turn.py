@@ -1,6 +1,6 @@
 """Shared Chat execution core (Phase 7B).
 
-Workspace Chat persists around this. Public ``/api/v1/chat`` is stateless.
+Workspace Chat persists around this. Public ``/api/v1/chat/completions`` is stateless.
 Neither path reimplements RAG, Expert auth, or AI metering.
 """
 

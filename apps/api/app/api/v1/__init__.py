@@ -1,1 +1,1 @@
-"""Public Workspace API (Phase 7B). Authenticated by Workspace API key only."""
+"""Public Workspace API. Authenticated by Workspace API key only."""
