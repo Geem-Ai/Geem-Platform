@@ -125,8 +125,11 @@ class ChatTurnExecutor:
                     accumulated += text
                     yield {"event": "delta", "data": {"content": text}}
                 elif event == "replace":
+                    # RAG/OpenRouter emits replace as a full-buffer reset
+                    # (empty on fallback, or the complete answer). Mapping
+                    # that onto concatenative delta.content duplicates text.
                     accumulated = data.get("text") or ""
-                    yield {"event": "delta", "data": {"content": accumulated}}
+                    yield {"event": "replace", "data": {"content": accumulated}}
                 elif event == "final":
                     citations = ConversationService.normalize_citations(
                         data.get("citations") or []

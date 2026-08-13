@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,6 +11,7 @@ from app.rate_limits.service import (
     ApiRateLimiter,
     api_key_bucket_key,
     reset_memory_rate_limit_buckets,
+    reset_shared_redis_client,
     workspace_bucket_key,
 )
 
@@ -111,3 +112,26 @@ def test_redis_key_shapes_use_workspace_and_key_ids() -> None:
     key = uuid.uuid4()
     assert workspace_bucket_key(ws, 1) == f"rate:api:ws:{ws}:1"
     assert api_key_bucket_key(key, 1) == f"rate:api:key:{key}:1"
+
+
+def test_rate_limiter_reuses_process_redis_client() -> None:
+    reset_shared_redis_client()
+    mock_redis = MagicMock()
+    mock_redis.eval.return_value = [1, 1, 60]
+    quota = MagicMock()
+    quota.get_api_requests_per_minute.return_value = 10
+    ws = uuid.uuid4()
+    key = uuid.uuid4()
+    try:
+        with patch("app.rate_limits.service.Redis.from_url", return_value=mock_redis) as from_url:
+            first = ApiRateLimiter(db=MagicMock(), allow_memory_fallback=False)
+            first.quota = quota
+            first.consume(workspace_id=ws, api_key_id=key)
+            first.consume(workspace_id=ws, api_key_id=key)
+            second = ApiRateLimiter(db=MagicMock(), allow_memory_fallback=False)
+            second.quota = quota
+            second.consume(workspace_id=ws, api_key_id=key)
+            assert from_url.call_count == 1
+            assert mock_redis.eval.call_count == 3
+    finally:
+        reset_shared_redis_client()

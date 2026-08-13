@@ -23,7 +23,6 @@ from app.api.v1.schemas import PublicChatRequest, PublicChatResponse, PublicChat
 from app.api_keys.dependencies import require_api_scope
 from app.api_keys.principal import ApiKeyPrincipal
 from app.api_keys.scopes import SCOPE_CHAT_WRITE
-from app.common.request_context import get_request_context
 from app.conversations.invocation import ChatInvocationContext
 from app.conversations.turn import ChatTurnExecutor
 from app.core.errors import AppError, ErrorCategory
@@ -39,14 +38,6 @@ router = APIRouter(prefix="/api/v1", tags=["public-chat"])
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
-
-
-def _request_id(request: Request) -> str:
-    ctx = get_request_context()
-    if ctx.request_id:
-        return ctx.request_id
-    raw = getattr(request.state, "request_id", None)
-    return str(raw) if raw else str(uuid.uuid4())
 
 
 def _workspace(request: Request, principal: ApiKeyPrincipal, db: Session) -> Workspace:
@@ -67,7 +58,9 @@ def _workspace(request: Request, principal: ApiKeyPrincipal, db: Session) -> Wor
             "description": (
                 "JSON answer when ``stream=false``. When ``stream=true`` the "
                 "response is ``text/event-stream`` with message_start, delta, "
-                "message_complete, and error events."
+                "replace (full-buffer reset from the RAG engine), "
+                "message_complete, and error events. Quota and credit failures "
+                "are HTTP errors even for ``stream=true``."
             ),
         },
         401: {"description": "Missing or invalid API key."},
@@ -98,7 +91,10 @@ def public_chat(
     only — never a real key). Workspace is derived from the key alone.
     """
     started = time.perf_counter()
-    request_id = _request_id(request)
+    # Server-owned turn id — never the client/middleware X-Request-Id.
+    # AI reservation is idempotent on (workspace_id, request_id); reusing a
+    # client header would skip a new hold and under-bill retries.
+    turn_id = str(uuid.uuid4())
     workspace = _workspace(request, principal, db)
     rate_headers: dict[str, str] = {}
 
@@ -121,20 +117,8 @@ def public_chat(
         workspace_id=workspace.id,
         api_key_id=principal.api_key_id,
         expert_id=body.expert_id,
-        request_id=request_id,
+        request_id=turn_id,
     )
-
-    if body.stream:
-        return _stream_chat(
-            workspace=workspace,
-            principal=principal,
-            expert_id=body.expert_id,
-            question=question,
-            invocation=invocation,
-            request_id=request_id,
-            rate_headers=rate_headers,
-            started=started,
-        )
 
     meter = MeteredWorkspaceGeneration(
         db,
@@ -144,10 +128,36 @@ def public_chat(
         conversation_id=None,
         message_id=None,
         api_key_id=principal.api_key_id,
-        request_id=request_id,
+        request_id=turn_id,
     )
     try:
         meter.reserve()
+    except Exception:
+        meter.release()
+        _log_request(
+            request_id=turn_id,
+            workspace_id=workspace.id,
+            api_key_id=principal.api_key_id,
+            expert_id=body.expert_id,
+            stream=body.stream,
+            status="error",
+            started=started,
+        )
+        raise
+
+    if body.stream:
+        return _stream_chat(
+            workspace=workspace,
+            principal=principal,
+            expert_id=body.expert_id,
+            question=question,
+            invocation=invocation,
+            request_id=turn_id,
+            rate_headers=rate_headers,
+            started=started,
+        )
+
+    try:
         result = executor.execute(
             workspace=workspace,
             expert_id=body.expert_id,
@@ -158,7 +168,7 @@ def public_chat(
     except Exception:
         meter.release()
         _log_request(
-            request_id=request_id,
+            request_id=turn_id,
             workspace_id=workspace.id,
             api_key_id=principal.api_key_id,
             expert_id=body.expert_id,
@@ -169,14 +179,14 @@ def public_chat(
         raise
 
     payload = PublicChatResponse(
-        id=request_id,
+        id=turn_id,
         expert_id=body.expert_id,
         answer=result["answer"],
         citations=[Citation.model_validate(c) for c in result["citations"]],
         usage=PublicChatUsage(billed_tokens=int(result["billed_tokens"])),
     )
     _log_request(
-        request_id=request_id,
+        request_id=turn_id,
         workspace_id=workspace.id,
         api_key_id=principal.api_key_id,
         expert_id=body.expert_id,
@@ -206,6 +216,8 @@ def _stream_chat(
         meter: MeteredWorkspaceGeneration | None = None
         status = "ok"
         try:
+            # Hold was taken on the request session before StreamingResponse
+            # so quota/credits are HTTP 402/429, not an SSE error after 200.
             meter = MeteredWorkspaceGeneration(
                 db,
                 workspace_id=workspace.id,
@@ -216,7 +228,6 @@ def _stream_chat(
                 api_key_id=principal.api_key_id,
                 request_id=request_id,
             )
-            meter.reserve()
             executor = ChatTurnExecutor(db)
             for item in executor.stream(
                 workspace=workspace,
