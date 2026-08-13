@@ -12,7 +12,8 @@ vi.mock('@/services/api/conversations', () => ({
   retryConversationMessageStream: (...args: unknown[]) => retryMock(...args),
 }));
 
-import { useChatStream, titlePollConfig } from './useChatStream';
+import { useChatStream, titlePollConfig, shouldRetainUnpersistedTurn } from './useChatStream';
+import type { ChatUiMessage } from '../types';
 import {
   clearActiveChatTurn,
   ensureActiveChatTurn,
@@ -349,5 +350,115 @@ describe('useChatStream', () => {
     // Simulate a mistaken late seed (old render-path bug): without pending,
     // ChatPage will not recreate a thinking card after title poll.
     expect(peekPendingChatMessage('c1')).toBeNull();
+  });
+
+  it('surfaces quota_exceeded instead of a generic generation failure', async () => {
+    streamMock.mockImplementation(
+      async (
+        _id: string,
+        _content: string,
+        handlers: {
+          onEvent?: (event: string, data: unknown) => void;
+          onError?: (message: string, code?: string) => void;
+        },
+      ) => {
+        handlers.onEvent?.('error', {
+          error: 'quota_exceeded',
+          message: 'AI quota exceeded',
+        });
+        handlers.onError?.('AI quota exceeded', 'quota_exceeded');
+        throw new ApiError('AI quota exceeded', {
+          status: 0,
+          code: 'quota_exceeded',
+        });
+      },
+    );
+
+    const { result } = renderHook(
+      () =>
+        useChatStream({
+          workspaceId: 'ws1',
+          conversationId: 'c1',
+          initialMessages: [],
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.send('Need an answer');
+    });
+
+    expect(result.current.errorCode).toBe('quota_exceeded');
+    const assistant = result.current.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.status).toBe('failed');
+    expect(assistant?.errorCode).toBe('quota_exceeded');
+    expect(assistant?.content).toBe('');
+    expect(result.current.messages.find((m) => m.role === 'user')?.content).toBe(
+      'Need an answer',
+    );
+  });
+
+  it('keeps an unpersisted quota-failed turn when prior server history refetches', async () => {
+    const prior: ChatUiMessage[] = [
+      {
+        id: 'u-old',
+        role: 'user',
+        content: 'Earlier question',
+        citations: [],
+        status: 'completed',
+        created_at: '2026-08-01T00:00:00Z',
+      },
+      {
+        id: 'a-old',
+        role: 'assistant',
+        content: 'Earlier answer',
+        citations: [],
+        status: 'completed',
+        created_at: '2026-08-01T00:00:01Z',
+      },
+    ];
+
+    streamMock.mockImplementation(
+      async (
+        _id: string,
+        _content: string,
+        handlers: {
+          onEvent?: (event: string, data: unknown) => void;
+          onError?: (message: string, code?: string) => void;
+        },
+      ) => {
+        handlers.onError?.('AI quota exceeded', 'quota_exceeded');
+        throw new ApiError('AI quota exceeded', {
+          status: 0,
+          code: 'quota_exceeded',
+        });
+      },
+    );
+
+    const { result } = renderHook(
+      () =>
+        useChatStream({
+          workspaceId: 'ws1',
+          conversationId: 'c1',
+          initialMessages: prior,
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await act(async () => {
+      await result.current.send('Need an answer');
+    });
+
+    expect(shouldRetainUnpersistedTurn(result.current.messages)).toBe(true);
+    expect(
+      result.current.messages.find((m) => m.content === 'Earlier question'),
+    ).toBeTruthy();
+    expect(
+      result.current.messages.find((m) => m.content === 'Need an answer'),
+    ).toBeTruthy();
+    const assistant = result.current.messages.find(
+      (m) => m.role === 'assistant' && m.status === 'failed',
+    );
+    expect(assistant?.errorCode).toBe('quota_exceeded');
   });
 });

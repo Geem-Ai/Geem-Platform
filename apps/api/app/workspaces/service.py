@@ -21,6 +21,17 @@ from app.workspaces.repository import MembershipRepository, WorkspaceRepository
 from app.workspaces.slug import validate_workspace_slug
 
 
+def _is_slug_unique_violation(exc: IntegrityError) -> bool:
+    """True only for the active-slug unique index, not plan/subscription uniques."""
+    orig = getattr(exc, "orig", None)
+    diag = getattr(orig, "diag", None)
+    constraint = (getattr(diag, "constraint_name", None) or "") if diag is not None else ""
+    if "slug" in constraint.lower():
+        return True
+    blob = str(orig or exc).lower()
+    return "uq_workspaces_slug" in blob or "workspaces_slug" in blob
+
+
 class WorkspaceService:
     def __init__(self, db: Session, settings: Settings | None = None) -> None:
         self.db = db
@@ -58,16 +69,19 @@ class WorkspaceService:
             role=WorkspaceRole.OWNER.value,
         )
         try:
-            # Single commit: workspace + owner membership succeed or roll back together.
+            # Single commit: workspace + owner membership + bootstrap billing succeed or roll back.
             self.workspaces.create(workspace)
             self.memberships.create(membership)
+            self._provision_tenant_billing(workspace)
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
-            raise AppError(
-                ErrorCategory.WORKSPACE_SLUG_TAKEN,
-                "Workspace slug is already taken.",
-            ) from exc
+            if _is_slug_unique_violation(exc):
+                raise AppError(
+                    ErrorCategory.WORKSPACE_SLUG_TAKEN,
+                    "Workspace slug is already taken.",
+                ) from exc
+            raise
         except Exception:
             self.db.rollback()
             raise
@@ -267,13 +281,14 @@ class WorkspaceService:
                 )
                 if existing.created_by is None:
                     existing.created_by = created_by
-                self.db.commit()
                 security_log(
                     "workspace.migration_owner_attached",
                     workspace_id=str(existing.id),
                     slug=slug,
                     actor_id=str(created_by),
                 )
+            self._provision_tenant_billing(existing)
+            self.db.commit()
             return existing
 
         workspace = Workspace(
@@ -293,6 +308,7 @@ class WorkspaceService:
                     role=WorkspaceRole.OWNER.value,
                 )
             )
+        self._provision_tenant_billing(workspace)
         self.db.commit()
         security_log("workspace.migration_bootstrap", workspace_id=str(workspace.id), slug=slug)
         return workspace
@@ -350,3 +366,11 @@ class WorkspaceService:
     def get_platform_knowledge_workspace(self) -> Workspace:
         """Resolve the Platform Knowledge Workspace; create if missing."""
         return self.ensure_platform_knowledge_workspace()
+
+    def _provision_tenant_billing(self, workspace: Workspace) -> None:
+        """Attach bootstrap subscription + credit account. Caller owns commit."""
+        if workspace.kind != WorkspaceKind.TENANT.value:
+            return
+        from app.billing.provisioning import provision_tenant_workspace
+
+        provision_tenant_workspace(self.db, workspace.id, settings=self.settings)

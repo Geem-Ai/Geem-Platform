@@ -170,8 +170,8 @@ def test_sanitize_generated_title_strips_wrappers() -> None:
 
 
 @patch(
-    "app.conversations.title.generate_conversation_title",
-    return_value="Policy question",
+    "app.conversations.title.generate_conversation_title_call",
+    return_value=("Policy question", None),
 )
 @patch(
     "app.conversations.chat_orchestrator.schedule_conversation_title",

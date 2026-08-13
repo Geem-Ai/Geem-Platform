@@ -1,14 +1,11 @@
 import { useEffect, useMemo } from 'react';
-import {
-  useLocation,
-  useNavigate,
-  useParams,
-} from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
-import { ApiError, errorMessageKey } from '@/services/api/errors';
+import { ApiError, errorMessageKey, isQuotaErrorCode } from '@/services/api/errors';
+import { QuotaAlert } from '@/features/usage/components/QuotaAlert';
 import { ChatComposer } from '../components/ChatComposer';
 import { ChatMessages } from '../components/ChatMessages';
 import { ChatToolbar } from '../components/ChatToolbar';
@@ -158,11 +155,7 @@ export function ChatPage() {
       className="flex flex-col h-[calc(100vh-var(--header-height-mobile)-3.5rem)] lg:h-[calc(100vh-2.5rem)]"
       data-testid="chat-page"
     >
-      <Helmet>
-        <title>
-          {title} — {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={title} />
 
       <ChatToolbar title={title} expert={conversation?.expert} />
 
@@ -177,7 +170,10 @@ export function ChatPage() {
       />
 
       <div className="p-4 pb-6 shrink-0">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-3">
+          {errorCode && isQuotaErrorCode(errorCode) ? (
+            <QuotaAlert code={errorCode} />
+          ) : null}
           <ChatComposer
             variant="compact"
             onSubmit={(q) => void send(q)}

@@ -5,12 +5,19 @@ type ProgressProps = React.ComponentProps<'div'> & {
   value?: number;
   /** Accessible label describing the progress. */
   label?: string;
+  indicatorClassName?: string;
 };
 
 /**
  * Lightweight progress bar (0–100). No third-party dependency.
  */
-function Progress({ value = 0, label, className, ...props }: ProgressProps) {
+function Progress({
+  value = 0,
+  label,
+  className,
+  indicatorClassName,
+  ...props
+}: ProgressProps) {
   const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
   return (
@@ -29,7 +36,10 @@ function Progress({ value = 0, label, className, ...props }: ProgressProps) {
     >
       <div
         data-slot="progress-indicator"
-        className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+        className={cn(
+          'h-full rounded-full bg-primary transition-[width] duration-500 ease-out',
+          indicatorClassName,
+        )}
         style={{ width: `${clamped}%` }}
       />
     </div>

@@ -31,4 +31,21 @@ export const queryKeys = {
     workspaceQueryKey(workspaceId, 'conversations', conversationId),
   conversationMessages: (workspaceId: string, conversationId: string) =>
     workspaceQueryKey(workspaceId, 'conversations', conversationId, 'messages'),
+  usageSummary: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'usage', 'summary'),
+  usageHistory: (
+    workspaceId: string,
+    params?: {
+      limit: number;
+      offset: number;
+      kind?: string;
+      from?: string;
+      to?: string;
+    },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'usage', 'history', params)
+      : workspaceQueryKey(workspaceId, 'usage', 'history'),
+  subscription: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'subscription'),
 };

@@ -1,6 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { QuotaAlert } from '@/features/usage/components/QuotaAlert';
+import { useUsageSummary } from '@/features/usage/hooks/useUsageQueries';
+import { meterWarningLevel } from '@/features/usage/lib/quota';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -55,6 +58,13 @@ export function ExpertFormSheet({
   const expertQuery = useExpert(isCreate ? undefined : expertId);
   const createMutation = useCreateExpert();
   const updateMutation = useUpdateExpert(expertId ?? '');
+  const usageQuery = useUsageSummary();
+  const expertsMeter = usageQuery.data?.experts;
+  const expertsExhausted =
+    isCreate && expertsMeter != null && meterWarningLevel(expertsMeter) === 'exhausted';
+  const [createQuotaCode, setCreateQuotaCode] = useState<'expert_limit_reached' | null>(
+    null,
+  );
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -70,6 +80,7 @@ export function ExpertFormSheet({
       setDescription('');
       setInstructions('');
       setRagConfig(parseRagConfig(null));
+      setCreateQuotaCode(null);
       return;
     }
     const expert = expertQuery.data;
@@ -102,6 +113,9 @@ export function ExpertFormSheet({
           },
           onError: (err: unknown) => {
             if (err instanceof ApiError) {
+              if (err.code === 'expert_limit_reached') {
+                setCreateQuotaCode('expert_limit_reached');
+              }
               toast.error(t(errorMessageKey(err.code)));
             } else {
               toast.error(t('errors.generic'));
@@ -159,6 +173,12 @@ export function ExpertFormSheet({
             {!loadingEdit && !editError && (
               <ScrollArea className="h-[calc(100dvh-12rem)]">
                 <div className="space-y-5 p-5">
+                  {isCreate && (expertsExhausted || createQuotaCode) ? (
+                    <QuotaAlert
+                      code="expert_limit_reached"
+                      level="exhausted"
+                    />
+                  ) : null}
                   <Card className="rounded-md">
                     <CardHeader className="min-h-[38px] bg-accent/50">
                       <CardTitle className="text-sm">{t('experts.basicInfo')}</CardTitle>
@@ -210,6 +230,9 @@ export function ExpertFormSheet({
 
                   {!isCreate && (
                     <Card className="rounded-md">
+                      <CardHeader className="min-h-[38px] bg-accent/50">
+                        <CardTitle className="text-sm">{t('experts.advancedSettings')}</CardTitle>
+                      </CardHeader>
                       <CardContent className="pt-4">
                         <RagConfigFields
                           value={ragConfig}
@@ -233,7 +256,7 @@ export function ExpertFormSheet({
             >
               {t('common.cancel')}
             </Button>
-            <Button type="submit" disabled={!name.trim() || pending || loadingEdit || Boolean(editError)}>
+            <Button type="submit" disabled={!name.trim() || pending || loadingEdit || Boolean(editError) || expertsExhausted || Boolean(createQuotaCode)}>
               {pending
                 ? t('experts.saving')
                 : isCreate

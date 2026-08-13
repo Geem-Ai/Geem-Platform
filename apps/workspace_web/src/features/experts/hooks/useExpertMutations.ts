@@ -24,6 +24,8 @@ export function useCreateExpert() {
     mutationFn: (input: ExpertCreateInput) => createExpert(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.experts(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageSummary(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageHistory(workspaceId) });
     },
   });
 }
@@ -49,6 +51,8 @@ export function useDeleteExpert() {
     mutationFn: (expertId: string) => deleteExpert(expertId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.experts(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageSummary(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageHistory(workspaceId) });
     },
   });
 }
@@ -75,6 +79,8 @@ export function useUploadExpertDocument(expertId: string) {
         queryKey: queryKeys.expert(workspaceId, expertId),
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.experts(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageSummary(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageHistory(workspaceId) });
     },
   });
 }
@@ -93,6 +99,8 @@ export function useUnlinkExpertDocument(expertId: string) {
         queryKey: queryKeys.expert(workspaceId, expertId),
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.experts(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageSummary(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.usageHistory(workspaceId) });
     },
   });
 }

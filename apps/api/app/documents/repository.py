@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Document, DocumentPage, IngestionJob
@@ -59,6 +59,16 @@ class DocumentRepository:
         self.db.add(document)
         self.db.flush()
         return document
+
+    def sum_active_byte_size(self, workspace_id: uuid.UUID) -> int:
+        """Billable logical storage: active Workspace documents only."""
+        value = self.db.scalar(
+            select(func.coalesce(func.sum(Document.byte_size), 0)).where(
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+            )
+        )
+        return int(value or 0)
 
     # --- Legacy MVP (workspace_id IS NULL only) ---
 

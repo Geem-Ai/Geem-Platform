@@ -1,9 +1,9 @@
-import { ApiError } from './errors';
+import { ApiError, isKnownApiErrorCode, type ApiErrorCode } from './errors';
 import { buildHeaders, getApiBaseUrl, parseError } from './client';
 
 export type SseHandlers = {
   onEvent?: (event: string, data: unknown) => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: ApiErrorCode) => void;
 };
 
 function parseSseBlock(block: string): { event: string; data: string } | null {
@@ -92,15 +92,19 @@ export async function streamSse(
       }
 
       if (parsed.event === 'error') {
+        const obj =
+          typeof payload === 'object' && payload !== null
+            ? (payload as Record<string, unknown>)
+            : {};
         const message =
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message' in payload &&
-          typeof (payload as { message: unknown }).message === 'string'
-            ? (payload as { message: string }).message
-            : 'Stream error';
-        handlers.onError?.(message);
-        throw new ApiError(message, { status: 0, code: 'unknown' });
+          typeof obj.message === 'string' ? obj.message : 'Stream error';
+        const rawCode = obj.error ?? obj.code;
+        const code: ApiErrorCode = isKnownApiErrorCode(rawCode)
+          ? rawCode
+          : 'unknown';
+        handlers.onEvent?.(parsed.event, payload);
+        handlers.onError?.(message, code);
+        throw new ApiError(message, { status: 0, code });
       }
 
       handlers.onEvent?.(parsed.event, payload);

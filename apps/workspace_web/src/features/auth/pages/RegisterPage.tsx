@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
@@ -42,11 +42,7 @@ export function RegisterPage() {
 
   return (
     <AuthLayout>
-      <Helmet>
-        <title>
-          {t('auth.registerTitle')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t('auth.registerTitle')} />
       <Card>
         <CardHeader>
           <CardTitle>{t('auth.registerTitle')}</CardTitle>

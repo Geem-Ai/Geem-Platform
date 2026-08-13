@@ -20,6 +20,10 @@ _BLOCKED_KEYS = frozenset(
         "raw_refresh_token",
         "system_instructions",
         "credentials",
+        "server_key",
+        "client_key",
+        "profile_id",
+        "secrets_encryption_key",
     }
 )
 

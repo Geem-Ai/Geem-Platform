@@ -259,6 +259,10 @@ class ExpertService:
         if st not in {s.value for s in ExpertStatus}:
             raise AppError(ErrorCategory.VALIDATION, "Invalid Expert status.")
 
+        from app.entitlements.experts import ExpertQuotaService
+
+        ExpertQuotaService(self.db, self.settings).acquire_slot(workspace.id)
+
         expert = Expert(
             workspace_id=workspace.id,
             type=ExpertType.WORKSPACE.value,
@@ -386,6 +390,44 @@ class ExpertService:
         )
         for doc_id in linked_doc_ids:
             self._sync_document_membership(doc_id)
+
+    def restore_workspace_expert(
+        self,
+        *,
+        workspace: Workspace,
+        membership: WorkspaceMembership,
+        actor: User,
+        expert_id: uuid.UUID,
+    ) -> Expert:
+        """Undo logical deletion after re-checking Workspace Expert allowance."""
+        ExpertPolicy.require(membership.role, ExpertAction.CREATE)
+        if workspace.kind != WorkspaceKind.TENANT.value:
+            raise AppError(ErrorCategory.VALIDATION, "Experts require a tenant Workspace.")
+        expert = self.repo.get_workspace_expert(
+            workspace.id, expert_id, include_deleted=True
+        )
+        if expert is None:
+            raise AppError(ErrorCategory.EXPERT_NOT_FOUND, "Expert not found")
+        if expert.deleted_at is None:
+            raise AppError(ErrorCategory.CONFLICT, "Expert is not deleted")
+
+        from app.entitlements.experts import ExpertQuotaService
+
+        linked_doc_ids = [link.document_id for link in self.repo.list_document_links(expert.id)]
+        ExpertQuotaService(self.db, self.settings).acquire_slot(workspace.id)
+        expert.restore()
+        self.db.commit()
+        security_log(
+            "expert.restored",
+            expert_id=str(expert.id),
+            workspace_id=str(workspace.id),
+            actor_id=str(actor.id),
+            action="restore",
+        )
+        for doc_id in linked_doc_ids:
+            self._sync_document_membership(doc_id)
+        self._reconcile_status(expert.id)
+        return expert
 
     def link_document(
         self,

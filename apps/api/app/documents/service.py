@@ -107,6 +107,12 @@ class DocumentService:
             file_bytes, filename, declared_mime_type=declared_mime_type
         )
 
+        from app.usage.storage import StorageQuotaService
+
+        quota = StorageQuotaService(self.db, self.settings)
+        if not workspace.is_system:
+            quota.heal_stale_committed(workspace.id)
+            quota.lock(workspace.id)
         existing = self.repo.find_active_by_sha256_for_workspace(workspace.id, inspection.sha256)
         if existing and existing.status != "deleting":
             raise AppError(
@@ -115,11 +121,12 @@ class DocumentService:
                 details={"id": str(existing.id), "status": existing.status},
             )
 
-        document = self._persist_new_document(
+        document = self._charge_and_persist(
+            workspace=workspace,
             file_bytes=file_bytes,
             inspection=inspection,
             title=title,
-            workspace_id=workspace.id,
+            quota=quota,
         )
         security_log(
             "document.uploaded",
@@ -151,6 +158,12 @@ class DocumentService:
             file_bytes, filename, declared_mime_type=declared_mime_type
         )
 
+        from app.usage.storage import StorageQuotaService
+
+        quota = StorageQuotaService(self.db, self.settings)
+        if not workspace.is_system:
+            quota.heal_stale_committed(workspace.id)
+            quota.lock(workspace.id)
         existing = self.repo.find_active_by_sha256_for_workspace(workspace.id, inspection.sha256)
         if existing and existing.status != "deleting":
             security_log(
@@ -162,11 +175,12 @@ class DocumentService:
             )
             return WorkspaceUploadResult(document=existing, reused=True)
 
-        document = self._persist_new_document(
+        document = self._charge_and_persist(
+            workspace=workspace,
             file_bytes=file_bytes,
             inspection=inspection,
             title=title,
-            workspace_id=workspace.id,
+            quota=quota,
         )
         security_log(
             "document.uploaded",
@@ -208,11 +222,22 @@ class DocumentService:
         return data, document.original_filename
 
     def delete_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> None:
-        """Soft-delete workspace document. MinIO/Qdrant purge deferred to Phase 2B/2C."""
+        """Soft-delete a Workspace document and release billable logical storage.
+
+        Physical MinIO/Qdrant objects are not purged here (later lifecycle).
+        Restoring the same row re-checks storage quota.
+        """
+        from app.usage.storage import StorageQuotaService
+
         document = self.get_for_workspace(workspace, document_id)
         if document.deleted_at is not None:
             raise AppError(ErrorCategory.DOCUMENT_DELETED, "Document is already deleted")
         document.soft_delete()
+        StorageQuotaService(self.db, self.settings).record_logical_delete(
+            workspace.id,
+            document_id=document.id,
+            byte_size=int(document.byte_size or 0),
+        )
         self.db.commit()
         security_log(
             "document.soft_deleted",
@@ -220,6 +245,46 @@ class DocumentService:
             document_id=str(document_id),
             action="delete",
         )
+
+    def restore_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> Document:
+        """Undo logical deletion after re-checking Workspace storage quota."""
+        from sqlalchemy.exc import IntegrityError
+
+        from app.usage.storage import StorageQuotaService
+
+        self._require_active_workspace(workspace)
+        document = self.repo.get_for_workspace(workspace.id, document_id, include_deleted=True)
+        if document is None:
+            raise AppError(ErrorCategory.DOCUMENT_NOT_FOUND, "Document not found")
+        if document.deleted_at is None:
+            raise AppError(ErrorCategory.CONFLICT, "Document is not deleted")
+
+        quota = StorageQuotaService(self.db, self.settings)
+        quota.heal_stale_committed(workspace.id)
+        quota.lock(workspace.id)
+        quota.consume_restore(
+            workspace,
+            document_id=document.id,
+            byte_size=int(document.byte_size or 0),
+        )
+        document.restore()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise AppError(
+                ErrorCategory.DOCUMENT_ALREADY_EXISTS,
+                "An active document with the same hash already exists in this workspace",
+            ) from exc
+        self.db.refresh(document)
+        security_log(
+            "document.restored",
+            workspace_id=str(workspace.id),
+            document_id=str(document.id),
+            action="restore",
+            byte_size=document.byte_size,
+        )
+        return document
 
     def reprocess_for_workspace(
         self, workspace: Workspace, document_id: uuid.UUID, mode: str = "failed_pages"
@@ -374,6 +439,60 @@ class DocumentService:
             sha256=digest,
         )
 
+    def _charge_and_persist(
+        self,
+        *,
+        workspace: Workspace,
+        file_bytes: bytes,
+        inspection: UploadInspection,
+        title: str | None,
+        quota: object | None = None,
+    ) -> Document:
+        """Reserve storage (tenant Workspaces), persist blob+row, finalize or release.
+
+        Hash reuse must be decided by the caller *under the same storage lock*
+        before this method runs. SYSTEM workspaces skip quota.
+        """
+        from app.usage.storage import StorageHold, StorageQuotaService
+
+        storage_quota = quota if isinstance(quota, StorageQuotaService) else StorageQuotaService(
+            self.db, self.settings
+        )
+        hold: StorageHold | None = None
+        try:
+            hold = storage_quota.reserve(workspace, len(file_bytes))
+            document = self._persist_new_document(
+                file_bytes=file_bytes,
+                inspection=inspection,
+                title=title,
+                workspace_id=workspace.id,
+                commit=False,
+            )
+            storage_quota.finalize(hold, document_id=document.id)
+            self.db.commit()
+            self.db.refresh(document)
+            return document
+        except AppError:
+            if hold is None:
+                raise
+            self.db.rollback()
+            if not hold.skipped:
+                try:
+                    storage_quota.release(hold)
+                    self.db.commit()
+                except Exception:
+                    self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            if hold is not None and not hold.skipped:
+                try:
+                    storage_quota.release(hold)
+                    self.db.commit()
+                except Exception:
+                    self.db.rollback()
+            raise
+
     def _persist_new_document(
         self,
         *,
@@ -381,6 +500,7 @@ class DocumentService:
         inspection: UploadInspection,
         title: str | None,
         workspace_id: uuid.UUID,
+        commit: bool = True,
     ) -> Document:
         if workspace_id is None:
             raise AppError(
@@ -419,8 +539,11 @@ class DocumentService:
         )
         self.repo.create(document)
         self.db.add(job)
-        self.db.commit()
-        self.db.refresh(document)
+        if commit:
+            self.db.commit()
+            self.db.refresh(document)
+        else:
+            self.db.flush()
         return document
 
     def _enqueue_reprocess_job(self, document: Document) -> IngestionJob:
@@ -438,3 +561,20 @@ class DocumentService:
         self.db.add(job)
         self.db.commit()
         return job
+
+    def _record_storage_delta(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        delta_bytes: int,
+        document_id: uuid.UUID,
+        reason: str,
+    ) -> None:
+        from app.usage.meters import StorageUsageService
+
+        StorageUsageService(self.db, self.settings).record_delta(
+            workspace_id,
+            delta_bytes=delta_bytes,
+            reason=reason,
+            document_id=document_id,
+        )

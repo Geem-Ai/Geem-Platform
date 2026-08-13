@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/tooltip';
 import { geemAvatarUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
-import { errorMessageKey } from '@/services/api/errors';
+import { errorMessageKey, isQuotaErrorCode } from '@/services/api/errors';
 import type { ApiErrorCode } from '@/services/api/errors';
 import {
   formatMessageDateTime,
@@ -47,10 +47,15 @@ export function ChatMessage({
   const failed =
     message.status === 'failed' || Boolean(message.errorMessage);
   const cancelled = message.status === 'cancelled';
+  const quotaFailed = isQuotaErrorCode(message.errorCode);
+  const failedLabel = quotaFailed
+    ? t(errorMessageKey(message.errorCode!))
+    : message.errorMessage || t('chat.responseFailed');
   const showRetry =
     !isUser &&
     (failed || cancelled) &&
     onRetry &&
+    !quotaFailed &&
     !message.id.startsWith('client-');
   const timestamp = formatMessageDateTime(message.created_at, i18n.language);
   const timestampExact = formatMessageDateTimeExact(message.created_at);
@@ -103,8 +108,13 @@ export function ChatMessage({
               {message.content}
             </p>
           ) : failed && !message.content ? (
-            <p className="text-destructive leading-7" role="alert">
-              {message.errorMessage || t('chat.responseFailed')}
+            <p
+              className="text-destructive leading-7"
+              role="alert"
+              data-testid={quotaFailed ? 'chat-quota-error' : undefined}
+              data-error-code={message.errorCode ?? undefined}
+            >
+              {failedLabel}
             </p>
           ) : (
             <>
@@ -130,8 +140,13 @@ export function ChatMessage({
                 </p>
               )}
               {failed && message.content && (
-                <p className="text-xs text-destructive mt-2" role="alert">
-                  {message.errorMessage || t('chat.responseFailed')}
+                <p
+                  className="text-xs text-destructive mt-2"
+                  role="alert"
+                  data-testid={quotaFailed ? 'chat-quota-error' : undefined}
+                  data-error-code={message.errorCode ?? undefined}
+                >
+                  {failedLabel}
                 </p>
               )}
               {!isStreaming && message.citations.length > 0 && (

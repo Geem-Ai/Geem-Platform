@@ -4,7 +4,12 @@ import {
   retryConversationMessageStream,
   streamConversationMessage,
 } from '@/services/api/conversations';
-import { ApiError, type ApiErrorCode } from '@/services/api/errors';
+import {
+  ApiError,
+  isKnownApiErrorCode,
+  isQuotaErrorCode,
+  type ApiErrorCode,
+} from '@/services/api/errors';
 import { queryKeys } from '@/services/api/query-keys';
 import type {
   ChatFinalEvent,
@@ -28,6 +33,19 @@ import { clearPendingChatMessage } from '../lib/pendingChatMessage';
 import { provisionalConversationTitle, isUsableConversationTitle } from '../lib/conversationTitle';
 
 const EMPTY_MESSAGES: ChatUiMessage[] = [];
+
+/** Pre-commit quota/cancel turns keep client-* ids and must survive history refetch. */
+export function shouldRetainUnpersistedTurn(local: ChatUiMessage[]): boolean {
+  return local.some((m) => {
+    const clientOwned = m.id.startsWith('client-') || Boolean(m.clientId?.startsWith('client-'));
+    return (
+      clientOwned &&
+      (m.status === 'failed' ||
+        m.status === 'cancelled' ||
+        isQuotaErrorCode(m.errorCode))
+    );
+  });
+}
 
 /** Soft-poll delays while a parallel LLM title job commits. Mutable for tests. */
 export const titlePollConfig: { delaysMs: number[] } = {
@@ -174,6 +192,8 @@ export function useChatStream({
     // Avoid wiping optimistic/local transcript when the messages query is still empty
     // (common right after abort/send before refetch settles).
     if (initialMessages.length === 0 && messagesRef.current.length > 0) return;
+    // Pre-commit quota/cancel never persisted the turn — keep the local bubbles.
+    if (shouldRetainUnpersistedTurn(messagesRef.current)) return;
     setMessagesState(initialMessages);
     // fingerprint captures identity/content of server history; avoid depending on array identity
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,14 +388,17 @@ export function useChatStream({
                   content: ctx.accumulate.text,
                   status: 'failed',
                   errorMessage: payload.message ?? 'Generation failed.',
+                  errorCode: isKnownApiErrorCode(payload.error)
+                    ? payload.error
+                    : 'generation_failed',
                 }
               : m,
           ),
         );
         setError(payload.message ?? 'Generation failed.');
         setErrorCode(
-          typeof payload.error === 'string'
-            ? (payload.error as ApiErrorCode)
+          isKnownApiErrorCode(payload.error)
+            ? payload.error
             : 'generation_failed',
         );
       }
@@ -478,9 +501,11 @@ export function useChatStream({
                 accumulate,
               });
             },
-            onError(message) {
+            onError(message, code) {
+              const nextCode =
+                code && code !== 'unknown' ? code : 'generation_failed';
               setError(message);
-              setErrorCode('generation_failed');
+              setErrorCode(nextCode);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.clientId === assistantClientId || m.id === assistantClientId
@@ -489,6 +514,7 @@ export function useChatStream({
                         content: accumulate.text,
                         status: 'failed',
                         errorMessage: message,
+                        errorCode: nextCode,
                       }
                     : m,
                 ),
@@ -519,7 +545,8 @@ export function useChatStream({
                 ? err.message
                 : 'Unknown error';
           setError(message);
-          setErrorCode(mapApiErrorCode(err));
+          const nextCode = mapApiErrorCode(err);
+          setErrorCode(nextCode);
           setMessages((prev) =>
             prev.map((m) =>
               m.clientId === assistantClientId || m.id === assistantClientId
@@ -528,6 +555,7 @@ export function useChatStream({
                     content: accumulate.text,
                     status: 'failed',
                     errorMessage: message,
+                    errorCode: nextCode,
                   }
                 : m,
             ),
@@ -542,6 +570,12 @@ export function useChatStream({
         clearPendingChatMessage(conversationId);
         clearActiveChatTurn(conversationId);
         await invalidateConversationCaches();
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.usageSummary(workspaceId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.usageHistory(workspaceId),
+        });
       }
     },
     [
@@ -614,9 +648,11 @@ export function useChatStream({
                 accumulate,
               });
             },
-            onError(message) {
+            onError(message, code) {
+              const nextCode =
+                code && code !== 'unknown' ? code : 'generation_failed';
               setError(message);
-              setErrorCode('generation_failed');
+              setErrorCode(nextCode);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.clientId === assistantClientId || m.id === assistantMessageId
@@ -625,6 +661,7 @@ export function useChatStream({
                         content: accumulate.text,
                         status: 'failed',
                         errorMessage: message,
+                        errorCode: nextCode,
                       }
                     : m,
                 ),
@@ -654,7 +691,8 @@ export function useChatStream({
                 ? err.message
                 : 'Unknown error';
           setError(message);
-          setErrorCode(mapApiErrorCode(err));
+          const nextCode = mapApiErrorCode(err);
+          setErrorCode(nextCode);
           setMessages((prev) =>
             prev.map((m) =>
               m.clientId === assistantClientId || m.id === assistantMessageId
@@ -663,6 +701,7 @@ export function useChatStream({
                     content: accumulate.text,
                     status: 'failed',
                     errorMessage: message,
+                    errorCode: nextCode,
                   }
                 : m,
             ),
@@ -672,6 +711,12 @@ export function useChatStream({
         setIsStreaming(false);
         abortRef.current = null;
         await invalidateConversationCaches();
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.usageSummary(workspaceId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.usageHistory(workspaceId),
+        });
       }
     },
     [

@@ -16,6 +16,8 @@ import { CreateWorkspacePage } from '@/features/workspaces/pages/CreateWorkspace
 import { OnboardingPage } from '@/features/workspaces/pages/OnboardingPage';
 import { OverviewPage } from '@/features/workspaces/pages/OverviewPage';
 import { SettingsPage } from '@/features/workspaces/pages/SettingsPage';
+import { UsageHistoryPage } from '@/features/usage/pages/UsageHistoryPage';
+import { UsagePage } from '@/features/usage/pages/UsagePage';
 
 export function AppRouter() {
   return (
@@ -61,12 +63,10 @@ export function AppRouter() {
             />
             <Route
               path="billing/subscription"
-              element={<PlaceholderPage titleKey="nav.subscription" />}
+              element={<Navigate to="/billing/usage" replace />}
             />
-            <Route
-              path="billing/usage"
-              element={<PlaceholderPage titleKey="nav.usage" />}
-            />
+            <Route path="billing/usage" element={<UsagePage />} />
+            <Route path="billing/usage/history" element={<UsageHistoryPage />} />
             <Route
               path="billing/credits"
               element={<PlaceholderPage titleKey="nav.credits" />}

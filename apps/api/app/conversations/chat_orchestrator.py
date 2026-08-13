@@ -32,6 +32,9 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.query_service import ExpertQueryService
 from app.identity.models import User
+from app.usage.ai_usage import AiUsageService
+from app.usage.attribution import GenerationUsageContext
+from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace, WorkspaceMembership
 from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
 
@@ -95,18 +98,14 @@ class ChatOrchestrator:
         assistant: Message | None = None
         user_msg: Message | None = None
         settled = False
+        usage_closed = False
+        turn_committed = False
+        request_id: str | None = None
         accumulated = ""
+        usage_ctx: GenerationUsageContext | None = None
 
         try:
-            # Heal abandoned streaming rows (worker crash after insert, lock TTL expired).
-            stale_before = datetime.now(timezone.utc) - timedelta(
-                seconds=self.lock.ttl_seconds
-            )
-            cancelled = self.repo.cancel_stale_generations(
-                conversation.id, older_than=stale_before
-            )
-            if cancelled:
-                self.db.commit()
+            self._heal_stale_generations(conversation, workspace)
 
             if self.repo.has_active_generation(conversation.id):
                 raise AppError(
@@ -147,7 +146,15 @@ class ChatOrchestrator:
             )
             self.repo.create_message(assistant)
             conversation.updated_at = now + timedelta(microseconds=1000)
+            self._reserve_turn(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
             self.db.commit()
+            turn_committed = True
+            request_id = str(assistant.id)
             self.db.refresh(user_msg)
             self.db.refresh(assistant)
 
@@ -170,6 +177,12 @@ class ChatOrchestrator:
                 )
 
             history = self._history_payload(conversation.id, before_message_id=user_msg.id)
+            usage_ctx = self._usage_context(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
 
             try:
                 for item in self.expert_query.query_stream(
@@ -179,6 +192,7 @@ class ChatOrchestrator:
                     expert_id=conversation.expert_id,
                     question=question,
                     history=history,
+                    usage_context=usage_ctx,
                 ):
                     event = item.get("event")
                     data = item.get("data") or {}
@@ -198,13 +212,19 @@ class ChatOrchestrator:
                         usage_id = (
                             uuid.UUID(str(usage_raw)) if usage_raw else None
                         )
-                        self._complete_assistant(
+                        self._complete_and_settle(
                             conversation,
                             assistant,
                             content=answer,
                             citations=citations,
                             usage_event_id=usage_id,
+                            workspace_id=workspace.id,
+                            request_id=request_id,
+                            actual_tokens=self._actual_tokens(
+                                data, extra_billed=usage_ctx.extra_billed_tokens
+                            ),
                         )
+                        usage_closed = True
                         settled = True
                         final_data = {
                             **data,
@@ -228,6 +248,11 @@ class ChatOrchestrator:
                     else:
                         yield item
             except AppError as exc:
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id, request_id, extra=usage_ctx.extra_billed_tokens
+                    )
+                    usage_closed = True
                 if assistant is not None and not settled:
                     self._fail_assistant(conversation, assistant, accumulated=accumulated)
                     settled = True
@@ -246,6 +271,11 @@ class ChatOrchestrator:
                 return
             except Exception:  # noqa: BLE001
                 logger.exception("chat_orchestrator_turn_failed")
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id, request_id, extra=usage_ctx.extra_billed_tokens
+                    )
+                    usage_closed = True
                 if assistant is not None and not settled:
                     self._fail_assistant(conversation, assistant, accumulated=accumulated)
                     settled = True
@@ -262,15 +292,34 @@ class ChatOrchestrator:
                 }
                 return
         except GeneratorExit:
+            if request_id is not None and not usage_closed:
+                self._close_usage(
+                    workspace.id,
+                    request_id,
+                    extra=usage_ctx.extra_billed_tokens if usage_ctx else 0,
+                )
+                usage_closed = True
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
                 settled = True
             raise
         except AppError:
-            # Pre-stream validation failures (busy / expert / auth) — no assistant yet
-            # or already raised before yield. Ensure any streaming row is settled.
-            if assistant is not None and not settled:
-                self._fail_assistant(conversation, assistant, accumulated=accumulated)
+            # Pre-stream validation / quota: do not persist a turn if we never committed.
+            if turn_committed:
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id,
+                        request_id,
+                        extra=usage_ctx.extra_billed_tokens if usage_ctx else 0,
+                    )
+                    usage_closed = True
+                if assistant is not None and not settled:
+                    self._fail_assistant(conversation, assistant, accumulated=accumulated)
+            else:
+                try:
+                    self.db.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
             raise
         finally:
             self.lock.release(conversation_id)
@@ -307,18 +356,15 @@ class ChatOrchestrator:
         assistant: Message | None = None
         user_msg: Message | None = None
         settled = False
+        usage_closed = False
+        turn_committed = False
+        request_id: str | None = None
         accumulated = ""
+        usage_ctx: GenerationUsageContext | None = None
         needs_title = not bool((conversation.title or "").strip())
 
         try:
-            stale_before = datetime.now(timezone.utc) - timedelta(
-                seconds=self.lock.ttl_seconds
-            )
-            cancelled = self.repo.cancel_stale_generations(
-                conversation.id, older_than=stale_before
-            )
-            if cancelled:
-                self.db.commit()
+            self._heal_stale_generations(conversation, workspace)
 
             if self.repo.has_active_generation(conversation.id):
                 raise AppError(
@@ -379,7 +425,15 @@ class ChatOrchestrator:
             )
             self.repo.create_message(assistant)
             conversation.updated_at = now
+            self._reserve_turn(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
             self.db.commit()
+            turn_committed = True
+            request_id = str(assistant.id)
             self.db.refresh(assistant)
 
             yield {
@@ -403,6 +457,12 @@ class ChatOrchestrator:
                 )
 
             history = self._history_payload(conversation.id, before_message_id=user_msg.id)
+            usage_ctx = self._usage_context(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
 
             try:
                 for item in self.expert_query.query_stream(
@@ -412,6 +472,7 @@ class ChatOrchestrator:
                     expert_id=conversation.expert_id,
                     question=question,
                     history=history,
+                    usage_context=usage_ctx,
                 ):
                     event = item.get("event")
                     data = item.get("data") or {}
@@ -430,13 +491,19 @@ class ChatOrchestrator:
                         usage_id = (
                             uuid.UUID(str(usage_raw)) if usage_raw else None
                         )
-                        self._complete_assistant(
+                        self._complete_and_settle(
                             conversation,
                             assistant,
                             content=answer,
                             citations=citations,
                             usage_event_id=usage_id,
+                            workspace_id=workspace.id,
+                            request_id=request_id,
+                            actual_tokens=self._actual_tokens(
+                                data, extra_billed=usage_ctx.extra_billed_tokens
+                            ),
                         )
+                        usage_closed = True
                         settled = True
                         final_data = {
                             **data,
@@ -460,6 +527,11 @@ class ChatOrchestrator:
                     else:
                         yield item
             except AppError as exc:
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id, request_id, extra=usage_ctx.extra_billed_tokens
+                    )
+                    usage_closed = True
                 if assistant is not None and not settled:
                     self._fail_assistant(conversation, assistant, accumulated=accumulated)
                     settled = True
@@ -478,6 +550,11 @@ class ChatOrchestrator:
                 return
             except Exception:
                 logger.exception("chat_orchestrator_retry_failed")
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id, request_id, extra=usage_ctx.extra_billed_tokens
+                    )
+                    usage_closed = True
                 if assistant is not None and not settled:
                     self._fail_assistant(conversation, assistant, accumulated=accumulated)
                     settled = True
@@ -495,13 +572,33 @@ class ChatOrchestrator:
                 return
 
         except GeneratorExit:
+            if request_id is not None and not usage_closed:
+                self._close_usage(
+                    workspace.id,
+                    request_id,
+                    extra=usage_ctx.extra_billed_tokens if usage_ctx else 0,
+                )
+                usage_closed = True
             if assistant is not None and not settled:
                 self._cancel_assistant(conversation, assistant, accumulated=accumulated)
                 settled = True
             raise
         except AppError:
-            if assistant is not None and not settled:
-                self._fail_assistant(conversation, assistant, accumulated=accumulated)
+            if turn_committed:
+                if request_id is not None and not usage_closed:
+                    self._close_usage(
+                        workspace.id,
+                        request_id,
+                        extra=usage_ctx.extra_billed_tokens if usage_ctx else 0,
+                    )
+                    usage_closed = True
+                if assistant is not None and not settled:
+                    self._fail_assistant(conversation, assistant, accumulated=accumulated)
+            else:
+                try:
+                    self.db.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
             raise
         finally:
             self.lock.release(conversation_id)
@@ -509,6 +606,159 @@ class ChatOrchestrator:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _usage_context(
+        self,
+        *,
+        workspace: Workspace,
+        actor: User,
+        conversation: Conversation,
+        assistant: Message,
+    ) -> GenerationUsageContext:
+        return GenerationUsageContext(
+            workspace_id=workspace.id,
+            user_id=actor.id,
+            expert_id=conversation.expert_id,
+            conversation_id=conversation.id,
+            message_id=assistant.id,
+            request_id=str(assistant.id),
+        )
+
+    def _reserve_turn(
+        self,
+        *,
+        workspace: Workspace,
+        actor: User,
+        conversation: Conversation,
+        assistant: Message,
+    ) -> None:
+        AiUsageService(self.db, self.settings).reserve_ai_usage(
+            workspace.id,
+            str(assistant.id),
+            self.settings.effective_ai_usage_reservation_tokens,
+            conversation_id=conversation.id,
+            message_id=assistant.id,
+            user_id=actor.id,
+            expert_id=conversation.expert_id,
+        )
+
+    def _heal_stale_generations(self, conversation: Conversation, workspace: Workspace) -> None:
+        stale_before = datetime.now(timezone.utc) - timedelta(seconds=self.lock.ttl_seconds)
+        stale = self.repo.cancel_stale_generations(
+            conversation.id, older_than=stale_before
+        )
+        if not stale:
+            return
+        self.db.commit()
+        for msg in stale:
+            self._release_usage(workspace.id, str(msg.id))
+
+    def _actual_tokens(
+        self, final_data: dict[str, Any], extra_billed: int = 0
+    ) -> int:
+        return settled_tokens_from_payload(
+            self.settings, final_data, extra_billed=extra_billed
+        )
+
+    def _close_usage(
+        self, workspace_id: uuid.UUID, request_id: str, extra: int = 0
+    ) -> None:
+        if extra > 0:
+            try:
+                self.db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                self._settle_usage(workspace_id, request_id, extra)
+                self.db.commit()
+                return
+            except Exception:  # noqa: BLE001
+                logger.exception("chat_orchestrator_extra_settle_failed")
+                try:
+                    self.db.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
+        self._release_usage(workspace_id, request_id)
+
+    def _settle_usage(
+        self, workspace_id: uuid.UUID, request_id: str, actual: int
+    ) -> None:
+        AiUsageService(self.db, self.settings).settle_ai_usage(
+            workspace_id, request_id, actual
+        )
+
+    def _complete_and_settle(
+        self,
+        conversation: Conversation,
+        assistant: Message,
+        *,
+        content: str,
+        citations: list[dict[str, Any]],
+        usage_event_id: uuid.UUID | None,
+        workspace_id: uuid.UUID,
+        request_id: str | None,
+        actual_tokens: int,
+    ) -> None:
+        """Persist the completed assistant row and settle usage in one commit."""
+        self._apply_complete_fields(
+            conversation,
+            assistant,
+            content=content,
+            citations=citations,
+            usage_event_id=usage_event_id,
+        )
+        if request_id is not None:
+            self._settle_usage(workspace_id, request_id, actual_tokens)
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("chat_orchestrator_complete_commit_failed")
+            self._apply_complete_fields(
+                conversation,
+                assistant,
+                content=content,
+                citations=citations,
+                usage_event_id=None,
+            )
+            if request_id is not None:
+                self._settle_usage(workspace_id, request_id, actual_tokens)
+            self.db.commit()
+
+    def _apply_complete_fields(
+        self,
+        conversation: Conversation,
+        assistant: Message,
+        *,
+        content: str,
+        citations: list[dict[str, Any]],
+        usage_event_id: uuid.UUID | None,
+    ) -> None:
+        assistant.content = content
+        assistant.citations = citations
+        assistant.status = MessageStatus.COMPLETED.value
+        assistant.usage_event_id = usage_event_id
+        assistant.updated_at = datetime.now(timezone.utc)
+        conversation.updated_at = datetime.now(timezone.utc)
+
+    def _release_usage(self, workspace_id: uuid.UUID, request_id: str) -> None:
+        try:
+            self.db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            AiUsageService(self.db, self.settings).release_ai_usage(
+                workspace_id, request_id
+            )
+            self.db.commit()
+        except AppError as exc:
+            if exc.category == ErrorCategory.NOT_FOUND:
+                return
+            self.db.rollback()
+            logger.exception("chat_orchestrator_release_failed")
+        except Exception:  # noqa: BLE001
+            self.db.rollback()
+            logger.exception("chat_orchestrator_release_failed")
 
     def _require_owned(
         self,
@@ -545,35 +795,6 @@ class ChatOrchestrator:
             for m in rows
             if (m.content or "").strip()
         ]
-
-    def _complete_assistant(
-        self,
-        conversation: Conversation,
-        assistant: Message,
-        *,
-        content: str,
-        citations: list[dict[str, Any]],
-        usage_event_id: uuid.UUID | None,
-    ) -> None:
-        assistant.content = content
-        assistant.citations = citations
-        assistant.status = MessageStatus.COMPLETED.value
-        assistant.usage_event_id = usage_event_id
-        assistant.updated_at = datetime.now(timezone.utc)
-        conversation.updated_at = datetime.now(timezone.utc)
-        try:
-            self.db.commit()
-        except Exception:
-            # Usage FK / transient flush errors must not leave status=streaming.
-            self.db.rollback()
-            logger.exception("chat_orchestrator_complete_commit_failed")
-            assistant.content = content
-            assistant.citations = citations
-            assistant.status = MessageStatus.COMPLETED.value
-            assistant.usage_event_id = None
-            assistant.updated_at = datetime.now(timezone.utc)
-            conversation.updated_at = datetime.now(timezone.utc)
-            self.db.commit()
 
     def _fail_assistant(
         self,

@@ -25,3 +25,7 @@ class SoftDeleteMixin:
 
     def soft_delete(self, when: datetime | None = None) -> None:
         self.deleted_at = when or datetime.now(timezone.utc)
+
+    def restore(self) -> None:
+        """Clear logical deletion. Callers must re-check resource quotas first."""
+        self.deleted_at = None

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Geem — Arabic-first AI workspace" />
     <meta name="author" content="Geem" />
-    <title>جيم | منصة الذكاء المؤسسي للمنشآت في السعودية</title>
+    <title>Geem | Arabic-first AI workspace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -27,6 +27,10 @@
           const locale = localStorage.getItem('geem-locale') || 'en';
           document.documentElement.lang = locale;
           document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+          document.title =
+            locale === 'ar'
+              ? 'Geem | مساحة عمل ذكاء اصطناعي بالعربية أولاً'
+              : 'Geem | Arabic-first AI workspace';
         } catch (e) {}
       })();
     </script>

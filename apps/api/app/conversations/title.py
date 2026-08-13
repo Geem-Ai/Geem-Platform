@@ -105,6 +105,23 @@ def generate_conversation_title(
     client: OpenRouterClient | None = None,
 ) -> str:
     """Call the LLM for a short title; fall back to deterministic trim on failure."""
+    titled, _meta = generate_conversation_title_call(
+        user_message=user_message,
+        assistant_message=assistant_message,
+        settings=settings,
+        client=client,
+    )
+    return titled
+
+
+def generate_conversation_title_call(
+    *,
+    user_message: str,
+    assistant_message: str | None = None,
+    settings: Settings | None = None,
+    client: OpenRouterClient | None = None,
+) -> tuple[str, dict | None]:
+    """Return ``(title, openrouter_meta_or_none)``."""
     cfg = settings or get_settings()
     max_len = int(cfg.conversation_title_max_length or DEFAULT_TITLE_MAX_LENGTH)
     fallback = derive_conversation_title(user_message, max_length=max_len)
@@ -129,7 +146,7 @@ def generate_conversation_title(
             "temperature": 0.3,
             "provider": or_client.provider_preferences(),
         }
-        body, _meta, status = or_client.request(
+        body, meta, status = or_client.request(
             "POST",
             "/chat/completions",
             json_body=payload,
@@ -138,16 +155,16 @@ def generate_conversation_title(
         )
         if status >= 400 or not body:
             logger.warning("conversation_title_llm_http status=%s", status)
-            return fallback
+            return fallback, None
         choices = body.get("choices") or []
         if not choices:
-            return fallback
+            return fallback, None
         content = (choices[0].get("message", {}) or {}).get("content") or ""
         titled = sanitize_generated_title(content, max_length=max_len)
-        return titled or fallback
+        return titled or fallback, meta
     except Exception:  # noqa: BLE001 — never fail the chat turn for titling
         logger.exception("conversation_title_llm_failed")
-        return fallback
+        return fallback, None
 
 
 def persist_generated_conversation_title(
@@ -177,15 +194,41 @@ def persist_generated_conversation_title(
             return None
         if (conv.title or "").strip():
             return conv.title
-        titled = generate_conversation_title(
+        cfg = settings or get_settings()
+        titled, meta = generate_conversation_title_call(
             user_message=user_message,
             assistant_message=assistant_message,
-            settings=settings or get_settings(),
+            settings=cfg,
         )
         if not titled:
             return None
         conv.title = titled
         conv.updated_at = datetime.now(timezone.utc)
+        if meta is not None:
+            from app.usage.openrouter_billing import record_openrouter_event
+            from app.usage.weights import OpenRouterFamily
+
+            try:
+                record_openrouter_event(
+                    db,
+                    cfg,
+                    family=OpenRouterFamily.TITLE,
+                    operation_type="title",
+                    provider_usage=meta.get("usage"),
+                    model=meta.get("model")
+                    or (cfg.openrouter_general_model or "").strip()
+                    or cfg.openrouter_chat_model,
+                    request_id=meta.get("request_id") or f"title:{conversation_id}",
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    charge_now=True,
+                )
+            except Exception:  # noqa: BLE001 — title must still persist
+                logger.exception(
+                    "conversation_title_billing_failed conversation_id=%s",
+                    conversation_id,
+                )
         db.commit()
         return titled
     except Exception:  # noqa: BLE001 — background job must not raise to callers
@@ -255,6 +298,7 @@ __all__ = [
     "DEFAULT_TITLE_MAX_LENGTH",
     "derive_conversation_title",
     "generate_conversation_title",
+    "generate_conversation_title_call",
     "persist_generated_conversation_title",
     "sanitize_generated_title",
     "schedule_conversation_title",

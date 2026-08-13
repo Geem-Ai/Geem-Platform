@@ -143,12 +143,13 @@ class ConversationRepository:
         conversation_id: uuid.UUID,
         *,
         older_than: datetime,
-    ) -> int:
+    ) -> list[Message]:
         """Mark abandoned pending/streaming assistants as cancelled.
 
         Used when a worker crashes after inserting ``streaming`` but before
         settle — otherwise ``has_active_generation`` blocks the conversation
-        forever after the Redis lock TTL expires.
+        forever after the Redis lock TTL expires. Callers must release any
+        AI reservation keyed by ``str(message.id)`` after committing.
         """
         rows = list(
             self.db.scalars(
@@ -163,13 +164,13 @@ class ConversationRepository:
             )
         )
         if not rows:
-            return 0
+            return []
         now = datetime.now(timezone.utc)
         for msg in rows:
             msg.status = MessageStatus.CANCELLED.value
             msg.updated_at = now
         self.db.flush()
-        return len(rows)
+        return rows
 
     def get_latest_assistant_message(self, conversation_id: uuid.UUID) -> Message | None:
         return self.db.scalar(

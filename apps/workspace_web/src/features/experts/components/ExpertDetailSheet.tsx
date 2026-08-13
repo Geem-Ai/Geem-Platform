@@ -36,6 +36,7 @@ import { DeleteExpertDialog } from './DeleteExpertDialog';
 import { ExpertAvatar } from './ExpertAvatar';
 import { ExpertStatusBadge } from './ExpertStatusBadge';
 import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel';
+import { RagConfigFields } from './RagConfigFields';
 
 /** Metronic store-inventory ProductDetails sheet — floating inset panel. */
 const SHEET_PANEL =
@@ -198,23 +199,8 @@ export function ExpertDetailSheet({
                         {t('experts.advancedSettings')}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-4 text-xs text-muted-foreground space-y-1">
-                      {expert.rag_config.top_k != null && (
-                        <p>
-                          {t('experts.topK')}: {expert.rag_config.top_k}
-                        </p>
-                      )}
-                      {expert.rag_config.rerank_top_n != null && (
-                        <p>
-                          {t('experts.rerankTopN')}: {expert.rag_config.rerank_top_n}
-                        </p>
-                      )}
-                      {expert.rag_config.similarity_threshold != null && (
-                        <p>
-                          {t('experts.similarityThreshold')}:{' '}
-                          {expert.rag_config.similarity_threshold}
-                        </p>
-                      )}
+                    <CardContent className="pt-4">
+                      <RagConfigFields value={expert.rag_config} readOnly />
                     </CardContent>
                   </Card>
                 )}

@@ -41,6 +41,10 @@ class JsonFormatter(logging.Formatter):
             "role",
             "revoked_count",
             "old_session_id",
+            "purchase_id",
+            "kind",
+            "gateway_config_id",
+            "action",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)

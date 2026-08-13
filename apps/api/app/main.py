@@ -15,6 +15,10 @@ from app.conversations.router import router as conversations_router
 from app.experts.router import router as experts_router
 from app.identity.router import router as auth_router
 from app.platform_admin.router import router as platform_router
+from app.billing.router import router as subscription_router
+from app.billing.checkout_router import router as billing_router
+from app.entitlements.router import router as entitlements_router
+from app.usage.router import router as usage_router
 from app.workspaces.router import router as workspaces_router
 
 setup_logging()
@@ -62,6 +66,10 @@ app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(experts_router)
 app.include_router(conversations_router)
+app.include_router(subscription_router)
+app.include_router(billing_router)
+app.include_router(entitlements_router)
+app.include_router(usage_router)
 app.include_router(platform_router)
 
 
@@ -72,15 +80,17 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
         exc.category.value.endswith("_failed") or "rate" in exc.category.value
     ):
         code = 502
-    return JSONResponse(
-        status_code=code,
-        content={
-            "error": exc.category.value,
-            "code": exc.category.value,
-            "message": exc.message,
-            "details": exc.details,
-        },
-    )
+    payload: dict = {
+        "error": exc.category.value,
+        "code": exc.category.value,
+        "message": exc.message,
+        "details": exc.details,
+    }
+    if isinstance(exc.details, dict):
+        for key in ("metric", "limit", "used", "remaining"):
+            if key in exc.details:
+                payload[key] = exc.details[key]
+    return JSONResponse(status_code=code, content=payload)
 
 
 @app.get("/")

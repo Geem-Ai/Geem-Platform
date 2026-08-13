@@ -30,16 +30,20 @@ class ExpertRepository:
         return self.db.scalar(stmt)
 
     def get_workspace_expert(
-        self, workspace_id: uuid.UUID, expert_id: uuid.UUID
+        self,
+        workspace_id: uuid.UUID,
+        expert_id: uuid.UUID,
+        *,
+        include_deleted: bool = False,
     ) -> Expert | None:
-        return self.db.scalar(
-            select(Expert).where(
-                Expert.id == expert_id,
-                Expert.type == ExpertType.WORKSPACE.value,
-                Expert.workspace_id == workspace_id,
-                Expert.deleted_at.is_(None),
-            )
+        stmt = select(Expert).where(
+            Expert.id == expert_id,
+            Expert.type == ExpertType.WORKSPACE.value,
+            Expert.workspace_id == workspace_id,
         )
+        if not include_deleted:
+            stmt = stmt.where(Expert.deleted_at.is_(None))
+        return self.db.scalar(stmt)
 
     def list_workspace_experts(self, workspace_id: uuid.UUID) -> list[Expert]:
         return list(

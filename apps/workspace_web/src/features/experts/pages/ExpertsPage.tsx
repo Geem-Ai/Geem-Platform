@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useMatch } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { Plus, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,6 +91,21 @@ export function ExpertsPage() {
   const platformCount = allExperts.filter((e) => e.ownership === 'platform').length;
   const visibleExperts = tab === 'workspace' ? workspaceExperts : platformExperts;
 
+  const activeExpert = useMemo(
+    () => allExperts.find((e) => e.id === activeExpertId) ?? null,
+    [allExperts, activeExpertId],
+  );
+  const activeExpertName = activeExpert
+    ? localizeExpertDisplay(activeExpert, t).name
+    : null;
+  const documentTitle = createOpen
+    ? t('experts.createTitle')
+    : editOpen
+      ? t('experts.editTitle')
+      : viewOpen
+        ? (activeExpertName ?? t('experts.title'))
+        : t('experts.title');
+
   function closeSheets() {
     void navigate('/experts');
   }
@@ -105,11 +120,7 @@ export function ExpertsPage() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 w-full max-w-6xl space-y-6 ms-auto me-auto">
-      <Helmet>
-        <title>
-          {t('experts.title')} · {t('app.name')}
-        </title>
-      </Helmet>
+      <DocumentTitle title={documentTitle} />
 
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

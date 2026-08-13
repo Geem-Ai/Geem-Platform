@@ -15,6 +15,7 @@ class OpenRouterRerankProvider:
     ) -> None:
         self.settings = settings or get_settings()
         self.client = client or OpenRouterClient(self.settings)
+        self.last_meta: dict[str, Any] | None = None
 
     def rerank(
         self,
@@ -23,6 +24,7 @@ class OpenRouterRerankProvider:
         top_n: int,
     ) -> list[dict]:
         if not candidates:
+            self.last_meta = None
             return []
 
         documents = []
@@ -48,12 +50,21 @@ class OpenRouterRerankProvider:
             timeout=60.0,
         )
         if status >= 400 or not body:
+            self.last_meta = None
             raise AppError(
                 ErrorCategory.RERANK_FAILED,
                 f"Rerank request failed with status {status}",
                 details={"openrouter_id": (meta or {}).get("openrouter_id")},
                 retryable=status in {429, 500, 502, 503, 504, 529},
             )
+
+        self.last_meta = {
+            "usage": (meta or {}).get("usage") or (body or {}).get("usage"),
+            "request_id": (meta or {}).get("request_id"),
+            "model": (meta or {}).get("model")
+            or (body or {}).get("model")
+            or self.settings.openrouter_rerank_model,
+        }
 
         results = body.get("results") or body.get("data") or []
         ranked: list[dict] = []

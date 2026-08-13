@@ -20,4 +20,12 @@ describe('conversation query keys workspace isolation', () => {
       queryKeys.conversation('ws-b', 'c1'),
     );
   });
+
+  it('scopes usage summary, history, and subscription per workspace', () => {
+    expect(queryKeys.usageSummary('ws-a')).not.toEqual(queryKeys.usageSummary('ws-b'));
+    expect(queryKeys.usageHistory('ws-a')).not.toEqual(queryKeys.usageHistory('ws-b'));
+    expect(queryKeys.subscription('ws-a')).not.toEqual(queryKeys.subscription('ws-b'));
+    expect(queryKeys.usageSummary('ws-a')[0]).toBe('workspace');
+    expect(queryKeys.usageSummary('ws-a')[1]).toBe('ws-a');
+  });
 });

@@ -5,6 +5,9 @@ export type ApiErrorCode =
   | 'conflict'
   | 'validation'
   | 'quota_exceeded'
+  | 'insufficient_credits'
+  | 'expert_limit_reached'
+  | 'storage_quota_exceeded'
   | 'billing_required'
   | 'rate_limited'
   | 'invalid_credentials'
@@ -48,6 +51,9 @@ const KNOWN_CODES = new Set<string>([
   'conflict',
   'validation',
   'quota_exceeded',
+  'insufficient_credits',
+  'expert_limit_reached',
+  'storage_quota_exceeded',
   'billing_required',
   'rate_limited',
   'invalid_credentials',
@@ -99,10 +105,17 @@ export class ApiError extends Error {
   }
 }
 
+export function isKnownApiErrorCode(value: unknown): value is ApiErrorCode {
+  return typeof value === 'string' && KNOWN_CODES.has(value);
+}
+
 export function mapStatusToCode(status: number, body?: Record<string, unknown>): ApiErrorCode {
-  const explicit = typeof body?.code === 'string' ? body.code : undefined;
-  if (explicit && KNOWN_CODES.has(explicit)) {
-    return explicit as ApiErrorCode;
+  const explicit =
+    (typeof body?.code === 'string' && body.code) ||
+    (typeof body?.error === 'string' && body.error) ||
+    undefined;
+  if (isKnownApiErrorCode(explicit)) {
+    return explicit;
   }
 
   switch (status) {
@@ -164,6 +177,19 @@ export function errorMessageKey(code: ApiErrorCode): string {
     message_not_found: 'errors.messageNotFound',
     conversation_busy: 'errors.conversationBusy',
     generation_failed: 'errors.generationFailed',
+    quota_exceeded: 'errors.quotaExceeded',
+    insufficient_credits: 'errors.insufficientCredits',
+    expert_limit_reached: 'errors.expertLimitReached',
+    storage_quota_exceeded: 'errors.storageQuotaExceeded',
   };
   return map[code] ?? 'errors.generic';
+}
+
+export function isQuotaErrorCode(code: string | null | undefined): boolean {
+  return (
+    code === 'quota_exceeded' ||
+    code === 'insufficient_credits' ||
+    code === 'expert_limit_reached' ||
+    code === 'storage_quota_exceeded'
+  );
 }

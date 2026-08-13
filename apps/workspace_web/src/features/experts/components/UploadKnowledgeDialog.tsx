@@ -14,6 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
+import { QuotaAlert } from '@/features/usage/components/QuotaAlert';
+import { QuotaMeter } from '@/features/usage/components/QuotaMeter';
+import { useUsageSummary } from '@/features/usage/hooks/useUsageQueries';
+import { meterWarningLevel } from '@/features/usage/lib/quota';
 import { acceptedFileTypes, validateExpertFile } from '../lib/file-validation';
 import { useUploadExpertDocument } from '../hooks/useExpertMutations';
 import { isProcessingDocStatus } from '../lib/status';
@@ -41,6 +45,22 @@ export function UploadKnowledgeDialog({
   const [uploadDone, setUploadDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const mutation = useUploadExpertDocument(expertId);
+  const usageQuery = useUsageSummary();
+  const storage = usageQuery.data?.storage;
+  const storageBytes = usageQuery.data?.storage_bytes;
+  const storageExhausted =
+    storage != null &&
+    meterWarningLevel({
+      limit: storage.limit_bytes,
+      used: storage.used_bytes,
+      reserved: storage.reserved_bytes,
+      remaining: storage.remaining_bytes,
+      period_start: storageBytes?.period_start ?? null,
+      period_end: storageBytes?.period_end ?? null,
+    }) === 'exhausted';
+  const [storageQuotaCode, setStorageQuotaCode] = useState<
+    'storage_quota_exceeded' | null
+  >(null);
 
   const trackedItem = trackingDocId
     ? knowledgeItems.find((item) => item.document_id === trackingDocId)
@@ -58,6 +78,7 @@ export function UploadKnowledgeDialog({
       setUploadDone(false);
       setDragging(false);
       toastedStatusRef.current = null;
+      setStorageQuotaCode(null);
     }
   }, [open]);
 
@@ -115,6 +136,9 @@ export function UploadKnowledgeDialog({
         },
         onError: (err: unknown) => {
           if (err instanceof ApiError) {
+            if (err.code === 'storage_quota_exceeded') {
+              setStorageQuotaCode('storage_quota_exceeded');
+            }
             toast.error(t(errorMessageKey(err.code)));
           } else {
             toast.error(t('errors.generic'));
@@ -198,6 +222,25 @@ export function UploadKnowledgeDialog({
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-4">
+            {storage ? (
+              <QuotaMeter
+                title={t('quota.storageCurrent')}
+                meter={{
+                  limit: storage.limit_bytes,
+                  used: storage.used_bytes,
+                  reserved: storage.reserved_bytes,
+                  remaining: storage.remaining_bytes,
+                  period_start: storageBytes?.period_start ?? null,
+                  period_end: storageBytes?.period_end ?? null,
+                }}
+                testId="upload-storage-meter"
+                format="bytes"
+                compact
+              />
+            ) : null}
+            {storageExhausted || storageQuotaCode ? (
+              <QuotaAlert code="storage_quota_exceeded" level="exhausted" />
+            ) : null}
             <div
               className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${dragging ? 'border-ring bg-accent/30' : 'border-border hover:border-muted-foreground/40'}`}
               onDragOver={(e) => {
