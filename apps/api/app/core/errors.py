@@ -79,6 +79,12 @@ class ErrorCategory(StrEnum):
     EXPERT_LIMIT_REACHED = "expert_limit_reached"
     STORAGE_QUOTA_EXCEEDED = "storage_quota_exceeded"
 
+    # API keys (Phase 7A) — cross-workspace misses use api_key_not_found (404)
+    API_KEY_NOT_FOUND = "api_key_not_found"
+
+    # Public API rate limiting (Phase 7B)
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+
     # Billing / checkout (Phase 6A)
     BILLING_GATEWAY_UNAVAILABLE = "billing_gateway_unavailable"
     BILLING_GATEWAY_ERROR = "billing_gateway_error"
@@ -156,6 +162,10 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "credit_pack_unavailable": 404,
     "plan_unavailable": 404,
     "system_workspace_checkout_forbidden": 403,
+    # Phase 7A — API keys
+    "api_key_not_found": 404,
+    # Phase 7B — public API rate limiting
+    "rate_limit_exceeded": 429,
 }
 
 
@@ -166,11 +176,13 @@ class AppError(Exception):
         message: str,
         details: dict | None = None,
         retryable: bool = False,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.category = category
         self.message = message
         self.details = details
         self.retryable = retryable
+        self.headers = headers or {}
         super().__init__(f"{category}: {message}")
 
 
@@ -192,5 +204,33 @@ def raise_resource_quota(
             "limit": int(limit),
             "used": int(used),
             "remaining": int(remaining),
+        },
+    )
+
+
+def raise_rate_limit_exceeded(
+    *,
+    limit: int,
+    remaining: int,
+    retry_after: int,
+    reset_at: int,
+) -> None:
+    """Raise a typed public-API rate-limit error with safe metadata + headers."""
+    safe_remaining = max(0, int(remaining))
+    safe_retry = max(0, int(retry_after))
+    raise AppError(
+        ErrorCategory.RATE_LIMIT_EXCEEDED,
+        "API rate limit exceeded. Please retry later.",
+        details={
+            "limit": int(limit),
+            "remaining": safe_remaining,
+            "retry_after": safe_retry,
+        },
+        retryable=True,
+        headers={
+            "Retry-After": str(safe_retry),
+            "X-RateLimit-Limit": str(int(limit)),
+            "X-RateLimit-Remaining": str(safe_remaining),
+            "X-RateLimit-Reset": str(int(reset_at)),
         },
     )

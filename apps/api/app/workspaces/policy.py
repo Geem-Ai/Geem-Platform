@@ -20,6 +20,8 @@ class WorkspaceAction(StrEnum):
     UPLOAD_DOCUMENT = "upload_document"
     DELETE_DOCUMENT = "delete_document"
     REPROCESS_DOCUMENT = "reprocess_document"
+    # API keys (Phase 7A) — owner/admin only
+    MANAGE_API_KEYS = "manage_api_keys"
 
 
 _DOCUMENT_ACTIONS = frozenset(
@@ -44,6 +46,7 @@ _ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[WorkspaceAction]] = {
             WorkspaceAction.MANAGE_MEMBERS,
             WorkspaceAction.CHANGE_MEMBER_ROLES,
             WorkspaceAction.PROMOTE_TO_OWNER,
+            WorkspaceAction.MANAGE_API_KEYS,
             *_DOCUMENT_ACTIONS,
         }
     ),
@@ -54,6 +57,7 @@ _ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[WorkspaceAction]] = {
             WorkspaceAction.VIEW_MEMBERS,
             WorkspaceAction.MANAGE_MEMBERS,
             WorkspaceAction.CHANGE_MEMBER_ROLES,
+            WorkspaceAction.MANAGE_API_KEYS,
             *_DOCUMENT_ACTIONS,
         }
     ),

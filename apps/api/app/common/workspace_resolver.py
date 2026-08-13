@@ -15,10 +15,13 @@ class WorkspaceResolutionHint:
     Resolution sources leave room for future API-key path (Phase 7) without
     competing context systems.
 
-    Precedence (first match wins):
+    Precedence (first match wins) for *session* Workspace UX:
       1. Host subdomain slug (if not reserved / infra)
       2. X-Workspace-Slug — ONLY when Settings.is_local
       3. X-Workspace-Id — routing hint in all envs (membership still required)
+
+    API-key authentication (Phase 7A) does **not** use this hint. Public API
+    routes bind ``workspace_resolution="api_key"`` from the key itself.
     """
 
     slug: str | None = None

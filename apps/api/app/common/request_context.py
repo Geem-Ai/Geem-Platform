@@ -24,11 +24,16 @@ class RequestContext:
     session_id: UUID | None = None
     workspace_resolution: str | None = None
     auth_required: bool = False
+    api_key_id: UUID | None = None
     extras: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_authenticated(self) -> bool:
         return self.user_id is not None
+
+    @property
+    def is_api_key_authenticated(self) -> bool:
+        return self.api_key_id is not None
 
     @property
     def has_workspace(self) -> bool:

@@ -21,6 +21,8 @@
 - Phase 5B: `0010_ai_usage_reservations.py` — `ai_usage_reservations` (reserve/settle/release + request_id idempotency), `usage_events` Workspace/User/Expert/conversation/message attribution, CHECK `credit_accounts.balance >= 0` and grant `remaining_amount >= 0`. Token reservation is application-enforced with `SELECT … FOR UPDATE` + advisory locks. No payment gateways.
 - Phase 5C: `0011_storage_expert_quota.py` — `workspace_resource_usage` (in-flight `reserved_bytes`) + `storage_reservations`. Expert allowance is live COUNT of active Workspace Experts (`type=workspace`, not deleted). Billable storage is live SUM of active `documents.byte_size`; logical delete releases it; restore re-checks quota. Physical MinIO/Qdrant purge remains a later lifecycle concern.
 - Phase 6A: `0012_billing_gateways_purchases.py` — `plans.price_amount`/`currency`, `payment_gateway_configs` (encrypted credentials, at most one enabled), `credit_packs`, `purchases` (immutable payload, `cart_id`/`tran_ref` uniqueness, return token hash). Checkout is hosted-page redirect + server-side query; no webhooks. Local/dev demo plans + credit packs are seeded in application code (`app.billing.seed.ensure_local_demo_catalog`), not SQL.
+- Phase 7A: `0013_api_keys.py` — `api_keys` (HMAC-SHA256 hashed secrets, scopes, persistent `revoked_at`) + nullable `usage_events.api_key_id`. Public `/api/v1/chat` is Phase 7B.
+- Phase 7B: no Alembic — `POST /api/v1/chat` (API-key auth, entitlement key `api_requests_per_minute` seeded on bootstrap/demo plans, Redis rate limiter). Workspace Chat persistence is unchanged.
 
 ### Document tenancy (Phase 2C final)
 
@@ -46,7 +48,8 @@
 |-------------|----------|
 | `/api/auth/login`, `/register`, `/refresh` | Public |
 | `/api/auth/*` (authenticated) + `/api/workspaces/*` | Always authenticated |
-| `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*`, `/api/subscription`, `/api/entitlements`, `/api/usage/*`, `/api/billing/*` (except return) | Authenticated Workspace required |
+| `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*`, `/api/subscription`, `/api/entitlements`, `/api/usage/*`, `/api/billing/*` (except return), `/api/api-keys/*` | Authenticated Workspace required |
+| `/api/v1/chat` | Workspace API key (`Authorization: Bearer geem_sk_…`, scope `chat:write`). Session cookies are ignored. |
 | `/api/billing/return/{gateway}/{purchase_id}` | Opaque return token (`rt`); server-side gateway query. Not payment proof. |
 | `/api/health/*` | Public |
 

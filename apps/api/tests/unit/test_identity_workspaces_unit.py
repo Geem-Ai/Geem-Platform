@@ -71,6 +71,9 @@ def test_workspace_policy_matrix() -> None:
     assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.UPLOAD_DOCUMENT)
     assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.LIST_DOCUMENTS)
     assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.DELETE_DOCUMENT)
+    assert WorkspacePolicy.can(WorkspaceRole.OWNER, WorkspaceAction.MANAGE_API_KEYS)
+    assert WorkspacePolicy.can(WorkspaceRole.ADMIN, WorkspaceAction.MANAGE_API_KEYS)
+    assert not WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.MANAGE_API_KEYS)
 
     with pytest.raises(AppError):
         WorkspacePolicy.require(WorkspaceRole.MEMBER, WorkspaceAction.DELETE_WORKSPACE)

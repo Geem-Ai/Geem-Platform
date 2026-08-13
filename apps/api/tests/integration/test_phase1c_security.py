@@ -179,6 +179,7 @@ def test_prod_ignores_x_workspace_slug(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("JWT_SECRET", "a" * 40)
     monkeypatch.setenv("CORS_ORIGINS", "https://app.geem.ai")
+    monkeypatch.setenv("API_KEY_HASH_PEPPER", "b" * 40)
     get_settings.cache_clear()
     try:
         req = Request(

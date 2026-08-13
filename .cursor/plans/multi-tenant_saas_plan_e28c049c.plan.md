@@ -24,8 +24,8 @@ todos:
     content: "Phase 6: 6A PASS + 6B PASS (Workspace billing UI: subscription, credits, history, payment return). Do not start Phase 7 until requested."
     status: completed
   - id: phase-7
-    content: "Phase 7: Workspace API keys + public /api/v1/chat + API Keys/Usage UI"
-    status: pending
+    content: "Phase 7: 7A PASS + 7B PASS (public /api/v1/chat + rate limit + API-key metering). Remaining: 7C API Keys/Usage UI. Do not start 7C until requested."
+    status: in_progress
   - id: phase-8
     content: "Phase 8: Platform Admin APIs + apps/dashboard_web (separate from workspace_web)"
     status: pending
@@ -1022,11 +1022,27 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 7 — API keys + public Chat API + API UI
 
-**Status:** pending
+**Status:** **7A PASS + 7B PASS** (workspace API keys + public `/api/v1/chat`). Do not start 7C until requested.
 
 **Goal:** `/api/v1/chat` + workspace keys; Keys/Usage pages in shell.
 
 **Acceptance:** Key auth, revocation, metering attribution; UI for create/revoke/copy-once.
+
+#### 7A — Backend API-key foundation — **PASS**
+
+- `api_keys` table (HMAC-SHA256 hashed secrets, scopes, persistent revocation)
+- Session management: `GET/POST /api/api-keys`, `POST /api/api-keys/{id}/revoke` (owner/admin)
+- `ApiKeyPrincipal` + Bearer API-key dependency; Workspace is taken from the key only
+- Nullable `usage_events.api_key_id` prepared for 7B metering
+- **Not in 7A:** `POST /api/v1/chat`, rate-limit enforcement, Workspace API Keys/Usage UI
+
+#### 7B — Public Chat API + rate limiting + API-key metering — **PASS**
+
+- `POST /api/v1/chat` authenticated only by Workspace API key (`chat:write`); Workspace derived from the key
+- Stateless Expert turn (no Conversation/Message); shared `ChatTurnExecutor` + `ExpertQueryService`
+- Entitlement key `api_requests_per_minute` (Redis atomic Workspace + API-key buckets)
+- Phase 5 AI token pool reused; `usage_events.api_key_id` attribution (`user_id` null)
+- **Not in 7B:** API Keys/Usage UI, public conversations, SDKs, per-key quotas (7C+)
 
 ---
 

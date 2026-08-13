@@ -72,6 +72,9 @@ class PlanService:
             EntitlementKey.AI_TOKENS_MONTHLY: self.settings.bootstrap_ai_tokens_monthly,
             EntitlementKey.EXPERTS_LIMIT: self.settings.bootstrap_experts_limit,
             EntitlementKey.STORAGE_BYTES: self.settings.bootstrap_storage_bytes,
+            EntitlementKey.API_REQUESTS_PER_MINUTE: (
+                self.settings.bootstrap_api_requests_per_minute
+            ),
         }
         for key, value in defaults.items():
             if self.plans.get_entitlement(plan.id, key.value) is not None:

@@ -135,6 +135,70 @@ class ExpertQueryService:
             usage_context=usage_context,
         )
 
+    def query_for_workspace(
+        self,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        question: str,
+        top_k: int | None = None,
+        history: list[dict[str, str]] | None = None,
+        usage_context: Any | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Expert query for a Workspace consumer (API key) — no User actor."""
+        knowledge = self.resolve_knowledge_for_workspace(
+            workspace=workspace,
+            expert_id=expert_id,
+            actor_id=actor_id,
+        )
+        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            return self._rag.query_general_expert(
+                question=question,
+                knowledge=knowledge,
+                history=history,
+                usage_context=usage_context,
+            )
+        return self._rag.query_expert(
+            question=question,
+            knowledge=knowledge,
+            top_k=top_k,
+            history=history,
+            usage_context=usage_context,
+        )
+
+    def query_stream_for_workspace(
+        self,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        question: str,
+        top_k: int | None = None,
+        history: list[dict[str, str]] | None = None,
+        usage_context: Any | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        knowledge = self.resolve_knowledge_for_workspace(
+            workspace=workspace,
+            expert_id=expert_id,
+            actor_id=actor_id,
+        )
+        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+            yield from self._rag.query_general_expert_stream(
+                question=question,
+                knowledge=knowledge,
+                history=history,
+                usage_context=usage_context,
+            )
+            return
+        yield from self._rag.query_expert_stream(
+            question=question,
+            knowledge=knowledge,
+            top_k=top_k,
+            history=history,
+            usage_context=usage_context,
+        )
+
     def resolve_knowledge(
         self,
         *,
@@ -149,6 +213,27 @@ class ExpertQueryService:
             membership=membership,
             actor=actor,
             expert_id=expert_id,
+        )
+
+    def resolve_knowledge_for_workspace(
+        self,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+    ) -> ResolvedExpertKnowledge:
+        """Authorize an Expert for a Workspace without a session User."""
+        authorized = self.access.resolve_for_workspace_consumer(
+            workspace=workspace,
+            expert_id=expert_id,
+            action=ExpertAction.USE,
+            actor_id=actor_id,
+        )
+        return self._finish_prepare(
+            authorized,
+            workspace=workspace,
+            expert_id=expert_id,
+            actor_id=actor_id,
         )
 
     # ------------------------------------------------------------------
@@ -173,9 +258,23 @@ class ExpertQueryService:
             action=ExpertAction.USE,
             actor_id=actor.id,
         )
+        return self._finish_prepare(
+            authorized,
+            workspace=workspace,
+            expert_id=expert_id,
+            actor_id=actor.id,
+        )
 
+    def _finish_prepare(
+        self,
+        authorized: AuthorizedExpert,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
+    ) -> ResolvedExpertKnowledge:
         # 2. Enforce Expert lifecycle preconditions BEFORE resolving knowledge.
-        self._require_serviceable(authorized, actor_id=actor.id)
+        self._require_serviceable(authorized, actor_id=actor_id)
 
         # 3. Resolve knowledge (scope + system_instructions + rag_config +
         # ready docs) — never before the checks above.
@@ -193,7 +292,7 @@ class ExpertQueryService:
                 "expert.query_denied",
                 expert_id=str(expert_id),
                 workspace_id=str(workspace.id),
-                actor_id=str(actor.id),
+                actor_id=str(actor_id) if actor_id else None,
                 reason="no_ready_knowledge",
             )
             raise AppError(
@@ -203,12 +302,13 @@ class ExpertQueryService:
         return knowledge
 
     def _require_serviceable(
-        self, authorized: AuthorizedExpert, *, actor_id: uuid.UUID
+        self, authorized: AuthorizedExpert, *, actor_id: uuid.UUID | None
     ) -> None:
         expert = authorized.expert
         status = expert.status
         expert_id = expert.id
         workspace_id = authorized.workspace.id
+        actor = str(actor_id) if actor_id else None
 
         if status == ExpertStatus.DISABLED.value:
             # Workspace-owned Experts advertise "disabled" to their tenant so
@@ -222,7 +322,7 @@ class ExpertQueryService:
                     "expert.query_denied",
                     expert_id=str(expert_id),
                     workspace_id=str(workspace_id),
-                    actor_id=str(actor_id),
+                    actor_id=actor,
                     reason="platform_disabled_race",
                 )
                 raise AppError(ErrorCategory.EXPERT_NOT_FOUND, "Expert not found.")
@@ -230,7 +330,7 @@ class ExpertQueryService:
                 "expert.query_denied",
                 expert_id=str(expert_id),
                 workspace_id=str(workspace_id),
-                actor_id=str(actor_id),
+                actor_id=actor,
                 reason="disabled",
             )
             raise AppError(
@@ -243,7 +343,7 @@ class ExpertQueryService:
                 "expert.query_denied",
                 expert_id=str(expert_id),
                 workspace_id=str(workspace_id),
-                actor_id=str(actor_id),
+                actor_id=actor,
                 reason="processing",
             )
             raise AppError(
@@ -256,7 +356,7 @@ class ExpertQueryService:
                 "expert.query_denied",
                 expert_id=str(expert_id),
                 workspace_id=str(workspace_id),
-                actor_id=str(actor_id),
+                actor_id=actor,
                 reason="draft_no_knowledge",
             )
             raise AppError(
@@ -269,7 +369,7 @@ class ExpertQueryService:
                 "expert.query_denied",
                 expert_id=str(expert_id),
                 workspace_id=str(workspace_id),
-                actor_id=str(actor_id),
+                actor_id=actor,
                 reason="failed",
             )
             raise AppError(

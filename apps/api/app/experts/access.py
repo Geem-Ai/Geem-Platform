@@ -24,12 +24,15 @@ from app.workspaces.models import Workspace, WorkspaceMembership
 
 @dataclass(frozen=True, slots=True)
 class AuthorizedExpert:
-    """Expert authorized for a specific Workspace actor + action."""
+    """Expert authorized for a specific Workspace actor + action.
+
+    ``membership`` is None for Workspace API-key (machine) consumers.
+    """
 
     expert: Expert
     ownership: str  # "workspace" | "platform"
     workspace: Workspace
-    membership: WorkspaceMembership
+    membership: WorkspaceMembership | None
     action: ExpertAction
 
     @property
@@ -52,7 +55,51 @@ class ExpertAccessService:
         actor_id: uuid.UUID | None = None,
     ) -> AuthorizedExpert:
         ExpertPolicy.require(membership.role, action)
+        return self._resolve_expert(
+            workspace=workspace,
+            expert_id=expert_id,
+            action=action,
+            actor_id=actor_id,
+            membership=membership,
+        )
 
+    def resolve_for_workspace_consumer(
+        self,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        action: ExpertAction = ExpertAction.USE,
+        actor_id: uuid.UUID | None = None,
+    ) -> AuthorizedExpert:
+        """Authorize an Expert for a Workspace without a User membership.
+
+        Used by Workspace API keys (Phase 7B). HTTP scope checks replace
+        membership roles. Visibility, grants, and cross-workspace isolation
+        are identical to the session path — no fake User is created.
+        """
+        if action not in {ExpertAction.VIEW, ExpertAction.USE}:
+            self._deny(expert_id, workspace.id, actor_id, reason="api_manage_denied")
+            raise AppError(
+                ErrorCategory.FORBIDDEN,
+                "API keys cannot manage Experts.",
+            )
+        return self._resolve_expert(
+            workspace=workspace,
+            expert_id=expert_id,
+            action=action,
+            actor_id=actor_id,
+            membership=None,
+        )
+
+    def _resolve_expert(
+        self,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        action: ExpertAction,
+        actor_id: uuid.UUID | None,
+        membership: WorkspaceMembership | None,
+    ) -> AuthorizedExpert:
         expert = self.repo.get_by_id(expert_id)
         if expert is None or expert.deleted_at is not None:
             self._deny(expert_id, workspace.id, actor_id, reason="missing")

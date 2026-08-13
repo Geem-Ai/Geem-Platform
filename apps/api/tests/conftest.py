@@ -15,6 +15,7 @@ os.environ.setdefault("APP_ROOT_DOMAIN", "geem.dm")
 os.environ["AUTH_REQUIRED"] = "true"
 os.environ["LEGACY_MVP_WRITES_ENABLED"] = "false"
 os.environ["JWT_SECRET"] = "test-jwt-secret-not-for-production"
+os.environ["API_KEY_HASH_PEPPER"] = "test-api-key-hash-pepper-not-for-production"
 # Avoid shared Redis IP buckets flaking identity tests when the suite is re-run within 60s.
 os.environ.setdefault("AUTH_RATE_LIMIT_PER_MINUTE", "10000")
 os.environ["DATABASE_URL"] = os.environ.get(
@@ -64,7 +65,7 @@ def clean_tables() -> Generator[None, None, None]:
                 "messages, conversations, "
                 "expert_documents, expert_sources, workspace_expert_grants, experts, "
                 "usage_events, chunks, document_pages, ingestion_jobs, documents, "
-                "sessions, workspace_memberships, workspaces, users "
+                "api_keys, sessions, workspace_memberships, workspaces, users "
                 "RESTART IDENTITY CASCADE"
             )
         )

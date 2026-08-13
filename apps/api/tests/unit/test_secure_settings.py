@@ -62,6 +62,40 @@ def test_workspace_web_url_falls_back_to_localhost_only_when_local() -> None:
     assert explicit.effective_workspace_web_url == "https://app.geem.ai"
 
 
+def test_assert_secure_settings_rejects_insecure_api_key_pepper() -> None:
+    with pytest.raises(RuntimeError, match="API_KEY_HASH_PEPPER"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="",
+            )
+        )
+    with pytest.raises(RuntimeError, match="API_KEY_HASH_PEPPER"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="a" * 40,
+            )
+        )
+    ok = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret="a" * 40,
+        cors_origins="https://app.geem.ai",
+        api_key_hash_pepper="b" * 40,
+    )
+    assert_secure_settings(ok)
+    dumped = ok.model_dump()
+    assert "api_key_hash_pepper" not in dumped
+    assert "api_key_hash_pepper" not in repr(ok)
+
+
 def test_assert_secure_settings_rejects_star_cors_in_production() -> None:
     settings = Settings(
         _env_file=None,

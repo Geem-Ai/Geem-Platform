@@ -47,6 +47,10 @@ class QuotaService:
     def get_expert_limit(self, workspace_id: uuid.UUID) -> int:
         return self._int_or_zero(workspace_id, EntitlementKey.EXPERTS_LIMIT)
 
+    def get_api_requests_per_minute(self, workspace_id: uuid.UUID) -> int:
+        """Missing key fails closed (0) — never unlimited public API usage."""
+        return self._int_or_zero(workspace_id, EntitlementKey.API_REQUESTS_PER_MINUTE)
+
     def get_credit_balance(self, workspace_id: uuid.UUID) -> int:
         return self.credits.get_balance(workspace_id)
 

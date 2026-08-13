@@ -50,6 +50,7 @@ from app.usage.models import (  # noqa: E402
     UsagePeriodCounter,
     WorkspaceResourceUsage,
 )
+from app.api_keys.models import ApiKey  # noqa: E402
 
 __all__ = [
     "Document",
@@ -80,6 +81,7 @@ __all__ = [
     "StorageReservation",
     "WorkspaceResourceUsage",
     "AiUsageReservation",
+    "ApiKey",
 ]
 
 
@@ -269,6 +271,12 @@ class UsageEvent(Base):
             name="fk_usage_events_message_id",
             use_alter=True,
         ),
+        nullable=True,
+        index=True,
+    )
+    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("api_keys.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
