@@ -59,6 +59,38 @@ return {ws_count, key_count, ttl}
 _memory_guard = threading.Lock()
 _memory_buckets: dict[str, tuple[int, float]] = {}
 
+_shared_redis: Redis | None = None
+_shared_redis_url: str | None = None
+_shared_redis_guard = threading.Lock()
+
+
+def _shared_redis_client(url: str) -> Redis:
+    """Lazy process-wide Redis client — avoids connect/close per consume()."""
+    global _shared_redis, _shared_redis_url
+    with _shared_redis_guard:
+        if _shared_redis is None or _shared_redis_url != url:
+            if _shared_redis is not None:
+                try:
+                    _shared_redis.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            _shared_redis = Redis.from_url(url, socket_connect_timeout=1)
+            _shared_redis_url = url
+        return _shared_redis
+
+
+def reset_shared_redis_client() -> None:
+    """Test helper — drop the cached Redis connection."""
+    global _shared_redis, _shared_redis_url
+    with _shared_redis_guard:
+        if _shared_redis is not None:
+            try:
+                _shared_redis.close()
+            except Exception:  # noqa: BLE001
+                pass
+        _shared_redis = None
+        _shared_redis_url = None
+
 
 @dataclass(frozen=True, slots=True)
 class ApiRateLimitResult:
@@ -186,7 +218,7 @@ class ApiRateLimiter:
     def _client(self) -> Redis:
         if self.redis_factory is not None:
             return self.redis_factory()
-        return Redis.from_url(self.settings.redis_url, socket_connect_timeout=1)
+        return _shared_redis_client(self.settings.redis_url)
 
     @staticmethod
     def _memory_incr_both(ws_key: str, key_key: str, ttl: int) -> tuple[int, int, int]:

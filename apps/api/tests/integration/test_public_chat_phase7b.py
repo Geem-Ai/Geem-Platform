@@ -221,6 +221,39 @@ def test_valid_key_can_chat(client, register_user, db) -> None:
     assert key["key"] not in res.text
 
 
+def test_client_x_request_id_is_not_reservation_key(client, register_user, db) -> None:
+    user = register_user(email="7b-xid@example.com")
+    ws = _create_workspace(client, user, "p7b-xid")
+    key = _create_key(client, user, ws)
+    expert = _create_workspace_expert(client, _ws_headers(user, ws))
+    _force_expert_ready(db, expert["id"])
+    client_rid = "client-replay-id"
+    p_resolve, p_query, p_stream = _generation_patches()
+    with p_resolve, p_query, p_stream:
+        first = client.post(
+            "/api/v1/chat",
+            headers=_auth(key["key"], **{"X-Request-Id": client_rid}),
+            json={"expert_id": expert["id"], "message": "One"},
+        )
+        second = client.post(
+            "/api/v1/chat",
+            headers=_auth(key["key"], **{"X-Request-Id": client_rid}),
+            json={"expert_id": expert["id"], "message": "Two"},
+        )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["id"] != second.json()["id"]
+    assert first.json()["id"] != client_rid
+    assert second.json()["id"] != client_rid
+    db.expire_all()
+    rows = db.scalars(select(AiUsageReservation)).all()
+    ids = {row.request_id for row in rows}
+    assert first.json()["id"] in ids
+    assert second.json()["id"] in ids
+    assert client_rid not in ids
+    assert all(row.status == AiUsageReservationStatus.SETTLED.value for row in rows)
+
+
 def test_missing_and_invalid_auth(client, register_user, db) -> None:
     user = register_user(email="7b-auth@example.com")
     ws = _create_workspace(client, user, "p7b-auth")
@@ -537,6 +570,71 @@ def test_sse_chat_lifecycle_and_no_persistence(client, register_user, db) -> Non
     assert db.query(Message).count() == 0
 
 
+def test_sse_replace_is_not_flattened_to_delta(client, register_user, db) -> None:
+    user = register_user(email="7b-sse-rep@example.com")
+    ws = _create_workspace(client, user, "p7b-sse-rep")
+    key = _create_key(client, user, ws)
+    expert = _create_workspace_expert(client, _ws_headers(user, ws))
+    _force_expert_ready(db, expert["id"])
+
+    def fake_stream(*args: Any, **kwargs: Any) -> Iterator[dict[str, Any]]:
+        yield {"event": "token", "data": {"text": "Hi"}}
+        yield {"event": "replace", "data": {"text": ""}}
+        yield {"event": "replace", "data": {"text": "Final answer"}}
+        yield {
+            "event": "final",
+            "data": {
+                "answer": "Final answer",
+                "insufficient_context": False,
+                "citations": [_CITE],
+                "model": "test-model",
+                "billed_chat_tokens": 6,
+                "usage": {
+                    "prompt_tokens": 4,
+                    "completion_tokens": 2,
+                    "total_tokens": 6,
+                    "source": "provider",
+                },
+            },
+        }
+
+    with (
+        patch(
+            "app.experts.query_service.ExpertQueryService.resolve_knowledge_for_workspace",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.experts.query_service.ExpertQueryService.query_for_workspace",
+            side_effect=_fake_query,
+        ),
+        patch(
+            "app.experts.query_service.ExpertQueryService.query_stream_for_workspace",
+            side_effect=fake_stream,
+        ),
+    ):
+        with client.stream(
+            "POST",
+            "/api/v1/chat",
+            headers=_auth(key["key"]),
+            json={"expert_id": expert["id"], "message": "Reset me", "stream": True},
+        ) as res:
+            assert res.status_code == 200
+            raw = "".join(res.iter_text())
+    events = _parse_sse(raw)
+    names = [n for n, _ in events]
+    assert names == [
+        "message_start",
+        "delta",
+        "replace",
+        "replace",
+        "message_complete",
+    ]
+    assert events[1][1]["content"] == "Hi"
+    assert events[2][1]["content"] == ""
+    assert events[3][1]["content"] == "Final answer"
+    assert events[4][1]["answer"] == "Final answer"
+
+
 # ---------------------------------------------------------------------------
 # Usage attribution
 # ---------------------------------------------------------------------------
@@ -765,6 +863,46 @@ def test_public_chat_quota_exceeded_skips_provider(client, register_user, db) ->
         )
     ).all()
     assert reserved == []
+
+
+def test_sse_quota_exceeded_is_http_error_not_sse(client, register_user, db) -> None:
+    user = register_user(email="7b-quota-sse@example.com")
+    ws = _create_workspace(client, user, "p7b-quota-sse")
+    key = _create_key(client, user, ws)
+    expert = _create_workspace_expert(client, _ws_headers(user, ws))
+    _force_expert_ready(db, expert["id"])
+    _assign_plan(
+        db,
+        uuid.UUID(ws["id"]),
+        {
+            EntitlementKey.AI_TOKENS_DAILY.value: 1,
+            EntitlementKey.AI_TOKENS_WEEKLY.value: 1,
+            EntitlementKey.AI_TOKENS_MONTHLY.value: 1,
+            EntitlementKey.EXPERTS_LIMIT.value: 10,
+            EntitlementKey.STORAGE_BYTES.value: 10_000_000,
+            EntitlementKey.API_REQUESTS_PER_MINUTE.value: 60,
+        },
+        code="p7b_quota_sse",
+    )
+    with (
+        patch(
+            "app.experts.query_service.ExpertQueryService.resolve_knowledge_for_workspace",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.experts.query_service.ExpertQueryService.query_stream_for_workspace",
+            side_effect=_fake_stream,
+        ) as provider,
+    ):
+        res = client.post(
+            "/api/v1/chat",
+            headers=_auth(key["key"]),
+            json={"expert_id": expert["id"], "message": "blocked", "stream": True},
+        )
+    assert res.status_code == 429, res.text
+    assert res.json()["code"] == "quota_exceeded"
+    assert "text/event-stream" not in res.headers.get("content-type", "")
+    provider.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
