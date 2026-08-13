@@ -35,6 +35,7 @@ import { useDeleteExpert } from '../hooks/useExpertMutations';
 import { DeleteExpertDialog } from './DeleteExpertDialog';
 import { ExpertAvatar } from './ExpertAvatar';
 import { ExpertStatusBadge } from './ExpertStatusBadge';
+import { ExpertApiIdField } from './ExpertApiIdField';
 import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel';
 import { RagConfigFields } from './RagConfigFields';
 
@@ -148,6 +149,12 @@ export function ExpertDetailSheet({
                     </span>
                   )}
                 </div>
+
+                <Card className="rounded-md">
+                  <CardContent className="pt-4">
+                    <ExpertApiIdField expertId={expert.id} />
+                  </CardContent>
+                </Card>
 
                 {expert.ownership === 'workspace' && (
                   <Card className="rounded-md">

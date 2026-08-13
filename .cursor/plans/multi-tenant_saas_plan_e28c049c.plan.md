@@ -24,8 +24,8 @@ todos:
     content: "Phase 6: 6A PASS + 6B PASS (Workspace billing UI: subscription, credits, history, payment return). Do not start Phase 7 until requested."
     status: completed
   - id: phase-7
-    content: "Phase 7: 7A PASS + 7B PASS (public /api/v1/chat + rate limit + API-key metering). Remaining: 7C API Keys/Usage UI. Do not start 7C until requested."
-    status: in_progress
+    content: "Phase 7: 7A PASS + 7B PASS + 7C PASS (API Keys + OpenAI-compatible Chat Completions + API Usage UI). Do not start Phase 8 until requested."
+    status: completed
   - id: phase-8
     content: "Phase 8: Platform Admin APIs + apps/dashboard_web (separate from workspace_web)"
     status: pending
@@ -680,9 +680,9 @@ Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SEL
 
 ## 15–16. API auth/metering and Chat integration
 
-**Public API:** `POST /api/v1/chat` with workspace API keys (hashed), scopes, rate limits, shared `ChatOrchestrator`.
+**Public API:** OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` + `GET /api/v1/models/{id}` with workspace API keys (hashed), scopes, rate limits on completions, Expert via `X-Geem-Expert-Id` (not `model`), shared `ChatTurnExecutor`. No public Conversations/Messages.
 
-**Internal chat:** Metronic AI Chat UX + persisted conversations + Expert selection + existing SSE; one orchestration path for UI and API.
+**Internal chat:** Metronic AI Chat UX + persisted conversations + Expert selection + existing Geem named SSE; same `ChatTurnExecutor` / `ExpertQueryService` engine, different wire format.
 
 ---
 
@@ -1022,11 +1022,11 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 7 — API keys + public Chat API + API UI
 
-**Status:** **7A PASS + 7B PASS** (workspace API keys + public `/api/v1/chat`). Do not start 7C until requested.
+**Status:** **7A PASS + 7B PASS + 7C PASS** (workspace API keys + OpenAI-compatible public Chat Completions + Keys/Usage UI). Do not start Phase 8 until requested.
 
-**Goal:** `/api/v1/chat` + workspace keys; Keys/Usage pages in shell.
+**Goal:** OpenAI-compatible public Chat Completions + Models + workspace keys; Keys/Usage pages in shell.
 
-**Acceptance:** Key auth, revocation, metering attribution; UI for create/revoke/copy-once.
+**Acceptance:** Key auth, revocation, metering attribution; UI for create/revoke/copy-once; Expert selected by header, not `model`.
 
 #### 7A — Backend API-key foundation — **PASS**
 
@@ -1034,15 +1034,28 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Session management: `GET/POST /api/api-keys`, `POST /api/api-keys/{id}/revoke` (owner/admin)
 - `ApiKeyPrincipal` + Bearer API-key dependency; Workspace is taken from the key only
 - Nullable `usage_events.api_key_id` prepared for 7B metering
-- **Not in 7A:** `POST /api/v1/chat`, rate-limit enforcement, Workspace API Keys/Usage UI
+- **Not in 7A:** public Chat Completions, rate-limit enforcement, Workspace API Keys/Usage UI
 
 #### 7B — Public Chat API + rate limiting + API-key metering — **PASS**
 
-- `POST /api/v1/chat` authenticated only by Workspace API key (`chat:write`); Workspace derived from the key
+- `POST /api/v1/chat/completions` authenticated only by Workspace API key (`chat:write`); Workspace derived from the key
+- Expert from `X-Geem-Expert-Id` (alias `X-Expert-Id`); `model` is echoed only and is **not** used for routing
+- `GET /api/v1/models` + `GET /api/v1/models/{id}`: same auth; ready Experts the Workspace can see (`list_for_workspace` + `status=ready`); 404 if not usable; no instructions/`rag_config`. Header not required on Models. Chat still enforces full `USE` (lifecycle + knowledge)
+- OpenAI Chat Completions JSON + concatenative SSE (`data: {...}` / `data: [DONE]`); Geem `citations` extra top-level field; Geem `code` inside OpenAI `error.code` on these paths only (session APIs unchanged). `RequestValidationError` on these paths is also OpenAI-shaped (400)
+- Tools/temperature/vision/function-calling are ignored (`extra="ignore"`); client `system` messages ignored (server-owned Expert instructions)
 - Stateless Expert turn (no Conversation/Message); shared `ChatTurnExecutor` + `ExpertQueryService`
-- Entitlement key `api_requests_per_minute` (Redis atomic Workspace + API-key buckets)
-- Phase 5 AI token pool reused; `usage_events.api_key_id` attribution (`user_id` null)
-- **Not in 7B:** API Keys/Usage UI, public conversations, SDKs, per-key quotas (7C+)
+- Entitlement key `api_requests_per_minute` (Redis atomic Workspace + API-key buckets) applies to **completions**, not GET `/models`
+- Phase 5 AI token pool reused; reserve before SSE; `usage_events.api_key_id` attribution (`user_id` null)
+- **Not in 7B:** API Keys/Usage UI (7C), public conversations, SDKs, per-key quotas, embeddings/images/Assistants, `/v1` without the `/api` prefix
+
+#### 7C — Workspace API Keys + API Usage UI — **PASS**
+
+- `/api/keys` and `/api/usage` in `apps/workspace_web` (owner/admin create/revoke; members see inaccessible Keys state)
+- Copy-once plaintext secret in ephemeral component state (`gcTime: 0`); list DTO never includes `key`
+- `GET /api/api-usage/summary` + `GET /api/api-usage/history` (session auth, Workspace-scoped); `api_key_id IS NOT NULL` only
+- Rate limit from `QuotaService.get_api_requests_per_minute`; same Workspace AI pool as Chat; link to `/billing/usage`
+- Expert detail “Copy API ID” (`X-Geem-Expert-Id`); compact `/api/v1/chat/completions` cURL with `YOUR_API_KEY` + header; `stream=true` documented as OpenAI SSE chunks, not Geem named events
+- **Not in 7C:** key rotation, per-key quotas, SDKs, playground, developer portal, Platform Admin
 
 ---
 
@@ -1092,6 +1105,7 @@ Soft-delete purges, audit completeness, OTEL, Playwright smoke (auth→expert→
 | Workspace routing | Subdomain slug + API-key workspace for public API |
 | Billing | Multi-gateway registry, **exactly one enabled**; Phase 6 = ClickPay hosted redirect + query-on-return (**no webhooks**) |
 | Auth | Email/password + JWT/session; API keys for machine access |
+| Public machine API | OpenAI Chat Completions wire format at `/api/v1/chat/completions` + `/api/v1/models`; Expert via `X-Geem-Expert-Id`; do **not** route by `model`; no public conversation persistence |
 | RAG product unit | Expert (not raw file lists) |
 | Chat UX | Metronic AI Chat adapted to FastAPI SSE |
 | i18n | EN + AR with RTL/LTR; strings outside components |

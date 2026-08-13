@@ -68,4 +68,21 @@ export const queryKeys = {
       : workspaceQueryKey(workspaceId, 'billing', 'purchases'),
   billingPurchase: (workspaceId: string, purchaseId: string) =>
     workspaceQueryKey(workspaceId, 'billing', 'purchases', purchaseId),
+  apiKeys: (workspaceId: string) => workspaceQueryKey(workspaceId, 'api-keys'),
+  apiUsageSummary: (workspaceId: string, period?: string) =>
+    period
+      ? workspaceQueryKey(workspaceId, 'api-usage', 'summary', period)
+      : workspaceQueryKey(workspaceId, 'api-usage', 'summary'),
+  apiUsageHistory: (
+    workspaceId: string,
+    params?: {
+      limit: number;
+      offset: number;
+      period: string;
+      api_key_id?: string;
+    },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'api-usage', 'history', params)
+      : workspaceQueryKey(workspaceId, 'api-usage', 'history'),
 };

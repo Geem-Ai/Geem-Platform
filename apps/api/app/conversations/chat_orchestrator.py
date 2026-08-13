@@ -3,7 +3,7 @@
 Owns persistence (conversations, messages, title, generation lock) around a
 chat turn. Generation itself is ExpertQueryService → RagService.
 
-Public ``/api/v1/chat`` uses ``ChatTurnExecutor`` against the same ExpertQuery
+Public ``/api/v1/chat/completions`` uses ``ChatTurnExecutor`` against the same ExpertQuery
 path without persistence. Attribution is ``ChatInvocationContext`` so Workspace
 Chat never inherits an API key.
 """

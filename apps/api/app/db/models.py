@@ -229,6 +229,15 @@ class IngestionJob(Base):
 
 class UsageEvent(Base):
     __tablename__ = "usage_events"
+    __table_args__ = (
+        Index(
+            "ix_usage_events_workspace_api_key_created",
+            "workspace_id",
+            "api_key_id",
+            "created_at",
+            postgresql_where=text("api_key_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     operation_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

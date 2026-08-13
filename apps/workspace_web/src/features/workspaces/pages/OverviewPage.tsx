@@ -11,10 +11,7 @@ import { ExpertCard } from '@/features/experts/components/ExpertCard';
 import { OverviewUsageSummary } from '@/features/usage/components/OverviewUsageSummary';
 import { geemAvatarUrl } from '@/lib/helpers';
 
-const upcoming = [
-  { key: 'nav.apiKeys', to: '/api/keys' },
-  { key: 'nav.apps', to: '/apps' },
-] as const;
+const upcoming = [{ key: 'nav.apps', to: '/apps' }] as const;
 
 export function OverviewPage() {
   const { t } = useTranslation();
