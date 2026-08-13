@@ -118,6 +118,7 @@ def record_openrouter_event(
     eid = usage_context.expert_id if usage_context else expert_id
     cid = usage_context.conversation_id if usage_context else conversation_id
     mid = usage_context.message_id if usage_context else message_id
+    kid = usage_context.api_key_id if usage_context else None
     rid = request_id or (usage_context.request_id if usage_context else None)
 
     db.add(
@@ -134,6 +135,7 @@ def record_openrouter_event(
             expert_id=eid,
             conversation_id=cid,
             message_id=mid,
+            api_key_id=kid,
             document_id=document_id,
             page_number=page_number,
         )

@@ -60,6 +60,7 @@ DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
             EntitlementKey.AI_TOKENS_MONTHLY: 1_000_000,
             EntitlementKey.EXPERTS_LIMIT: 3,
             EntitlementKey.STORAGE_BYTES: 1 * _GIB,
+            EntitlementKey.API_REQUESTS_PER_MINUTE: 60,
         },
     ),
     DemoPlanSpec(
@@ -73,6 +74,7 @@ DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
             EntitlementKey.AI_TOKENS_MONTHLY: 4_000_000,
             EntitlementKey.EXPERTS_LIMIT: 15,
             EntitlementKey.STORAGE_BYTES: 10 * _GIB,
+            EntitlementKey.API_REQUESTS_PER_MINUTE: 120,
         },
     ),
     DemoPlanSpec(
@@ -86,6 +88,7 @@ DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
             EntitlementKey.AI_TOKENS_MONTHLY: 20_000_000,
             EntitlementKey.EXPERTS_LIMIT: 50,
             EntitlementKey.STORAGE_BYTES: 50 * _GIB,
+            EntitlementKey.API_REQUESTS_PER_MINUTE: 300,
         },
     ),
 )

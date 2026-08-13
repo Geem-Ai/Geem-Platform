@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import documents, health, query
+from app.api.v1.router import router as public_v1_router
 from app.common.middleware import RequestContextMiddleware
 from app.core.config import get_settings
 from app.core.errors import HTTP_STATUS_BY_CATEGORY, AppError
@@ -18,6 +19,7 @@ from app.billing.checkout_router import router as billing_router
 from app.entitlements.router import router as entitlements_router
 from app.usage.router import router as usage_router
 from app.workspaces.router import router as workspaces_router
+from app.api_keys.router import router as api_keys_router
 
 setup_logging()
 settings = get_settings()
@@ -53,6 +55,8 @@ app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(entitlements_router)
 app.include_router(usage_router)
+app.include_router(api_keys_router)
+app.include_router(public_v1_router)
 app.include_router(platform_router)
 
 
@@ -70,10 +74,10 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
         "details": exc.details,
     }
     if isinstance(exc.details, dict):
-        for key in ("metric", "limit", "used", "remaining"):
+        for key in ("metric", "limit", "used", "remaining", "retry_after"):
             if key in exc.details:
                 payload[key] = exc.details[key]
-    return JSONResponse(status_code=code, content=payload)
+    return JSONResponse(status_code=code, content=payload, headers=exc.headers or None)
 
 
 @app.get("/")

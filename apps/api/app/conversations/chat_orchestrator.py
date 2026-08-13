@@ -1,10 +1,11 @@
 """ChatOrchestrator — persisted Conversation turn streaming (Phase 4B).
 
-Owns the application workflow around a chat turn. Does not implement vector
-search; delegates to ExpertQueryService → RagService.
+Owns persistence (conversations, messages, title, generation lock) around a
+chat turn. Generation itself is ExpertQueryService → RagService.
 
-Future Phase 7 ``/api/v1/chat`` should call into this orchestrator rather than
-re-implementing persistence + SSE framing.
+Public ``/api/v1/chat`` uses ``ChatTurnExecutor`` against the same ExpertQuery
+path without persistence. Attribution is ``ChatInvocationContext`` so Workspace
+Chat never inherits an API key.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.conversations.invocation import ChatInvocationContext
 from app.conversations.locks import ConversationGenerationLock
 from app.conversations.models import (
     Conversation,
@@ -28,6 +30,7 @@ from app.conversations.policy import ConversationAction, ConversationPolicy
 from app.conversations.repository import ConversationRepository
 from app.conversations.service import ConversationService
 from app.conversations.title import schedule_conversation_title
+from app.conversations.validation import validate_chat_message
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.query_service import ExpertQueryService
@@ -73,15 +76,7 @@ class ChatOrchestrator:
         WorkspacePolicy.require(membership.role, WorkspaceAction.READ_DOCUMENT)
         ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
 
-        question = (content or "").strip()
-        if not question:
-            raise AppError(ErrorCategory.VALIDATION, "Message content is required.")
-        max_chars = self.settings.max_chat_message_chars
-        if len(question) > max_chars:
-            raise AppError(
-                ErrorCategory.VALIDATION,
-                f"Message exceeds maximum length of {max_chars} characters.",
-            )
+        question = validate_chat_message(content, settings=self.settings)
 
         conversation = self._require_owned(
             conversation_id=conversation_id,
@@ -615,14 +610,14 @@ class ChatOrchestrator:
         conversation: Conversation,
         assistant: Message,
     ) -> GenerationUsageContext:
-        return GenerationUsageContext(
+        return ChatInvocationContext.workspace_user(
             workspace_id=workspace.id,
             user_id=actor.id,
             expert_id=conversation.expert_id,
             conversation_id=conversation.id,
             message_id=assistant.id,
             request_id=str(assistant.id),
-        )
+        ).to_usage_context()
 
     def _reserve_turn(
         self,

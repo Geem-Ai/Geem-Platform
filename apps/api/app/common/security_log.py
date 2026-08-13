@@ -24,6 +24,10 @@ _BLOCKED_KEYS = frozenset(
         "client_key",
         "profile_id",
         "secrets_encryption_key",
+        "api_key_hash_pepper",
+        "api_key",
+        "plaintext",
+        "secret_hash",
     }
 )
 

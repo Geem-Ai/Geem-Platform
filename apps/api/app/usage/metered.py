@@ -29,6 +29,7 @@ class MeteredWorkspaceGeneration:
         expert_id: uuid.UUID | None = None,
         conversation_id: uuid.UUID | None = None,
         message_id: uuid.UUID | None = None,
+        api_key_id: uuid.UUID | None = None,
         request_id: str | None = None,
         settings: Settings | None = None,
     ) -> None:
@@ -39,6 +40,7 @@ class MeteredWorkspaceGeneration:
         self.expert_id = expert_id
         self.conversation_id = conversation_id
         self.message_id = message_id
+        self.api_key_id = api_key_id
         self.request_id = (request_id or str(uuid.uuid4())).strip()
         self._closed = False
         self._context = GenerationUsageContext(
@@ -47,6 +49,7 @@ class MeteredWorkspaceGeneration:
             expert_id=expert_id,
             conversation_id=conversation_id,
             message_id=message_id,
+            api_key_id=api_key_id,
             request_id=self.request_id,
         )
 

@@ -1,0 +1,97 @@
+"""Chat actor / attribution context (Phase 7B).
+
+One invocation never claims both a session User and an API key.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+
+from app.usage.attribution import GenerationUsageContext
+
+SOURCE_WORKSPACE = "workspace"
+SOURCE_API = "api"
+
+
+@dataclass(slots=True, frozen=True)
+class ChatInvocationContext:
+    """Who is invoking Chat for which Workspace.
+
+    Workspace UI: user_id set, api_key_id None, source=workspace.
+    Public API: api_key_id set, user_id None, source=api.
+    """
+
+    workspace_id: uuid.UUID
+    source: str
+    user_id: uuid.UUID | None = None
+    api_key_id: uuid.UUID | None = None
+    expert_id: uuid.UUID | None = None
+    conversation_id: uuid.UUID | None = None
+    message_id: uuid.UUID | None = None
+    request_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.source == SOURCE_API:
+            if self.api_key_id is None or self.user_id is not None:
+                raise ValueError("API Chat invocations require api_key_id and no user_id.")
+        elif self.source == SOURCE_WORKSPACE:
+            if self.user_id is None or self.api_key_id is not None:
+                raise ValueError(
+                    "Workspace Chat invocations require user_id and no api_key_id."
+                )
+        else:
+            raise ValueError(f"Unknown Chat invocation source: {self.source}")
+
+    @classmethod
+    def workspace_user(
+        cls,
+        *,
+        workspace_id: uuid.UUID,
+        user_id: uuid.UUID,
+        expert_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None,
+        message_id: uuid.UUID | None = None,
+        request_id: str | None = None,
+    ) -> ChatInvocationContext:
+        return cls(
+            workspace_id=workspace_id,
+            source=SOURCE_WORKSPACE,
+            user_id=user_id,
+            api_key_id=None,
+            expert_id=expert_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            request_id=request_id,
+        )
+
+    @classmethod
+    def api_key(
+        cls,
+        *,
+        workspace_id: uuid.UUID,
+        api_key_id: uuid.UUID,
+        expert_id: uuid.UUID | None = None,
+        request_id: str | None = None,
+    ) -> ChatInvocationContext:
+        return cls(
+            workspace_id=workspace_id,
+            source=SOURCE_API,
+            user_id=None,
+            api_key_id=api_key_id,
+            expert_id=expert_id,
+            conversation_id=None,
+            message_id=None,
+            request_id=request_id,
+        )
+
+    def to_usage_context(self) -> GenerationUsageContext:
+        return GenerationUsageContext(
+            workspace_id=self.workspace_id,
+            user_id=self.user_id,
+            expert_id=self.expert_id,
+            conversation_id=self.conversation_id,
+            message_id=self.message_id,
+            api_key_id=self.api_key_id,
+            request_id=self.request_id,
+        )

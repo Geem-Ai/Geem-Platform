@@ -74,6 +74,7 @@ def test_canonical_keys_are_stable() -> None:
     assert EntitlementKey.AI_TOKENS_MONTHLY.value == "ai_tokens_monthly"
     assert EntitlementKey.EXPERTS_LIMIT.value == "experts_limit"
     assert EntitlementKey.STORAGE_BYTES.value == "storage_bytes"
+    assert EntitlementKey.API_REQUESTS_PER_MINUTE.value == "api_requests_per_minute"
 
 
 def test_entitlement_display_order_is_daily_weekly_monthly() -> None:
@@ -83,6 +84,7 @@ def test_entitlement_display_order_is_daily_weekly_monthly() -> None:
         EntitlementKey.AI_TOKENS_DAILY.value,
         EntitlementKey.EXPERTS_LIMIT.value,
         EntitlementKey.AI_TOKENS_WEEKLY.value,
+        EntitlementKey.API_REQUESTS_PER_MINUTE.value,
     ]
     ordered = sorted(keys, key=entitlement_display_sort_key)
     assert ordered == [
@@ -91,4 +93,5 @@ def test_entitlement_display_order_is_daily_weekly_monthly() -> None:
         EntitlementKey.AI_TOKENS_MONTHLY.value,
         EntitlementKey.EXPERTS_LIMIT.value,
         EntitlementKey.STORAGE_BYTES.value,
+        EntitlementKey.API_REQUESTS_PER_MINUTE.value,
     ]

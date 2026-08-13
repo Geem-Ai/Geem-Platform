@@ -84,6 +84,7 @@ def test_new_workspace_gets_bootstrap_entitlements(client, register_user, db) ->
     assert items[EntitlementKey.AI_TOKENS_DAILY.value]["value_type"] == "integer"
     assert items[EntitlementKey.EXPERTS_LIMIT.value]["value"] == 100
     assert items[EntitlementKey.STORAGE_BYTES.value]["value"] == 10 * 1024 * 1024 * 1024
+    assert items[EntitlementKey.API_REQUESTS_PER_MINUTE.value]["value"] == 60
 
     resolved = EntitlementService(db).get_effective_entitlements(uuid.UUID(ws["id"]))
     assert resolved.plan_code == "bootstrap_dev"
@@ -102,6 +103,7 @@ def test_quota_service_reads_entitlement_keys_not_plan_name(client, register_use
     assert limits.monthly == 20_000_000
     assert quota.get_expert_limit(workspace_id) == 100
     assert quota.get_storage_limit(workspace_id) == 10 * 1024 * 1024 * 1024
+    assert quota.get_api_requests_per_minute(workspace_id) == 60
     assert quota.get_credit_balance(workspace_id) == 0
 
 

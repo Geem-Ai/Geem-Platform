@@ -19,7 +19,9 @@ def test_request_context_defaults() -> None:
     ctx = get_request_context()
     assert ctx.user_id is None
     assert ctx.workspace_id is None
+    assert ctx.api_key_id is None
     assert ctx.is_authenticated is False
+    assert ctx.is_api_key_authenticated is False
     assert ctx.has_workspace is False
 
 

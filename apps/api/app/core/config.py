@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
 
     # Phase 2C+: Document/Query/Jobs HTTP always require authenticated Workspace.
     # Public: /api/auth/login|register|refresh, /api/health/*, OpenAPI in local.
+    # /api/api-keys is session-authenticated Workspace management (owner/admin).
     # This flag documents production expectation and is echoed on GET /.
     auth_required: bool = True
 
@@ -133,6 +135,8 @@ class Settings(BaseSettings):
     bootstrap_ai_tokens_monthly: int = 20_000_000
     bootstrap_experts_limit: int = 100
     bootstrap_storage_bytes: int = 10 * 1024 * 1024 * 1024  # 10 GiB
+    # Development-safe public API RPM. Not Geem commercial pricing.
+    bootstrap_api_requests_per_minute: int = 60
 
     # Phase 5B — tokens held before an LLM call. 0 means max_context_tokens.
     ai_usage_reservation_tokens: int = 0
@@ -157,6 +161,10 @@ class Settings(BaseSettings):
     # Phase 6A — secret-at-rest key for payment_gateway_configs credentials.
     # Empty → derived from JWT_SECRET. Set a dedicated key in non-local env.
     secrets_encryption_key: str = ""
+
+    # Phase 7A — HMAC-SHA256 pepper for API-key lookup hashes (not a password hasher).
+    # Empty in local/test derives from JWT_SECRET. Non-local must set a dedicated value.
+    api_key_hash_pepper: str = Field(default="", repr=False, exclude=True)
 
     # Phase 6A — ClickPay hosted-page (used when DB credentials are empty).
     clickpay_profile_id: str = ""
@@ -252,6 +260,23 @@ class Settings(BaseSettings):
         return not self.is_local
 
     @property
+    def effective_api_key_hash_pepper(self) -> str:
+        raw = (self.api_key_hash_pepper or "").strip()
+        if raw:
+            return raw
+        if self.is_local:
+            jwt = (self.jwt_secret or "").strip()
+            if not jwt:
+                raise RuntimeError(
+                    "API_KEY_HASH_PEPPER is missing and JWT_SECRET is empty."
+                )
+            return f"geem-api-key-pepper:{jwt}"
+        raise RuntimeError(
+            "API_KEY_HASH_PEPPER is required in non-local environments. "
+            "Set a dedicated random secret (≥32 chars), distinct from JWT_SECRET."
+        )
+
+    @property
     def reserved_slugs(self) -> frozenset[str]:
         extras = {s.strip().lower() for s in self.reserved_workspace_slugs.split(",") if s.strip()}
         # Always reserve the platform-knowledge slug even if env overrides the setting.
@@ -269,6 +294,16 @@ INSECURE_JWT_SECRETS = frozenset(
     }
 )
 
+INSECURE_API_KEY_PEPPERS = frozenset(
+    {
+        "",
+        "change-me",
+        "pepper",
+        "api-key-pepper",
+        "change-me-api-key-pepper",
+    }
+)
+
 
 def assert_secure_settings(settings: Settings) -> None:
     """Fail fast in non-local environments when auth secrets are unsafe."""
@@ -282,6 +317,17 @@ def assert_secure_settings(settings: Settings) -> None:
     if "*" in settings.cors_origins:
         raise RuntimeError(
             "CORS_ORIGINS must not use '*' when credentialed cookies are enabled."
+        )
+    pepper = (settings.api_key_hash_pepper or "").strip()
+    if (
+        pepper in INSECURE_API_KEY_PEPPERS
+        or len(pepper) < 32
+        or pepper == settings.jwt_secret.strip()
+    ):
+        raise RuntimeError(
+            "API_KEY_HASH_PEPPER is missing, insecure, or reused from JWT_SECRET. "
+            "Set a dedicated random secret (≥32 chars) before starting Geem "
+            "in non-local environments."
         )
 
 

@@ -23,6 +23,7 @@ class EntitlementKey(StrEnum):
     AI_TOKENS_MONTHLY = "ai_tokens_monthly"
     EXPERTS_LIMIT = "experts_limit"
     STORAGE_BYTES = "storage_bytes"
+    API_REQUESTS_PER_MINUTE = "api_requests_per_minute"
 
 
 QUOTA_INTEGER_KEYS: frozenset[EntitlementKey] = frozenset(
@@ -42,6 +43,7 @@ ENTITLEMENT_DISPLAY_ORDER: tuple[str, ...] = (
     EntitlementKey.AI_TOKENS_MONTHLY.value,
     EntitlementKey.EXPERTS_LIMIT.value,
     EntitlementKey.STORAGE_BYTES.value,
+    EntitlementKey.API_REQUESTS_PER_MINUTE.value,
 )
 
 

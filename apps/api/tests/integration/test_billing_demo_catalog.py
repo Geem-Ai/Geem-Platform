@@ -43,6 +43,7 @@ def test_seed_demo_catalog_is_idempotent(db) -> None:
     keys = {row.key for row in starter.entitlements}
     assert EntitlementKey.AI_TOKENS_DAILY.value in keys
     assert EntitlementKey.EXPERTS_LIMIT.value in keys
+    assert EntitlementKey.API_REQUESTS_PER_MINUTE.value in keys
 
     second_plans, second_packs = seed_demo_catalog(db)
     assert [plan.id for plan in first_plans] == [plan.id for plan in second_plans]

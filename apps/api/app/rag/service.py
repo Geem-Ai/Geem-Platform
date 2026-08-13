@@ -1009,6 +1009,7 @@ class RagService:
         expert_id = usage_context.expert_id if usage_context else None
         conversation_id = usage_context.conversation_id if usage_context else None
         message_id = usage_context.message_id if usage_context else None
+        api_key_id = usage_context.api_key_id if usage_context else None
         commercial_request_id = usage_context.request_id if usage_context else None
 
         if isinstance(scope, ExpertRagScope):
@@ -1083,6 +1084,7 @@ class RagService:
                 expert_id=expert_id,
                 conversation_id=conversation_id,
                 message_id=message_id,
+                api_key_id=api_key_id,
             )
         )
         merged = parse_provider_usage(validated.get("usage"))
