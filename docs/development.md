@@ -46,7 +46,7 @@ Set at least:
 
 Keep `AUTH_REQUIRED=true` and `LEGACY_MVP_WRITES_ENABLED=false`. Document / Query / Jobs require a logged-in Workspace user.
 
-Local billing checkout (Phase 6A/6B) uses the **Noop** gateway automatically when `APP_ENV=local`/`test`. After payment verification the API redirects browsers (`Accept: text/html`) to `WORKSPACE_WEB_URL` (`/billing/payment/success|failed|pending?purchase=…`). Empty `WORKSPACE_WEB_URL` falls back to `http://localhost:5174` only in local/test; in production it disables the HTML redirect instead of sending users to localhost. The SPA re-fetches the purchase; it does not trust provider query parameters. ClickPay credentials (`CLICKPAY_PROFILE_ID`, `CLICKPAY_SERVER_KEY`) are optional until a ClickPay config is enabled. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
+Local billing checkout (Phase 6A/6B) needs **exactly one enabled** `payment_gateway_configs` row. Seed/bootstrap/workspace provision enable **ClickPay** when `CLICKPAY_PROFILE_ID` and `CLICKPAY_SERVER_KEY` are set; otherwise they seed **Noop** (`APP_ENV=local`/`test`). After payment verification the API redirects browsers (`Accept: text/html`) to `WORKSPACE_WEB_URL` (`/billing/payment/success|failed|pending?purchase=…`). Empty `WORKSPACE_WEB_URL` falls back to `http://localhost:5174` only in local/test; in production it disables the HTML redirect instead of sending users to localhost. The SPA re-fetches the purchase; it does not trust provider query parameters. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
 
 Local/dev (`APP_ENV=local`/`dev`/`development`) also seeds a **demo catalog**: Starter / Pro / Business plans plus three credit packs (not commercial pricing; bootstrap plan stays unpriced and is not listed for checkout). Insert missing rows with `python -m app.billing.seed`, by re-running `python -m app.identity.bootstrap`, or by creating a Workspace. Existing demo rows are never overwritten.
 
@@ -134,7 +134,7 @@ Requires `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. Safe 
 
 This also ensures the default Workspace, the internal Platform Knowledge Workspace, the Geem General Expert, and (when `APP_ENV` is local/dev) the demo billing catalog.
 
-Or register from the Workspace UI (`/api/auth/register`) and skip bootstrap. To seed only the demo plans/credit packs later:
+Or register from the Workspace UI (`/api/auth/register`) and skip bootstrap. To seed demo plans/credit packs and the local checkout gateway later:
 
 ```bash
 docker compose exec api python -m app.billing.seed

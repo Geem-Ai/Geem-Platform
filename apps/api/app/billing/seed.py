@@ -2,6 +2,8 @@
 
 Not Geem commercial pricing. Never seeded in test or production.
 Existing rows are not overwritten so operators can tune them.
+`ensure_local_demo_catalog` / `python -m app.billing.seed` also enable a
+checkout gateway (ClickPay from env, otherwise Noop).
 """
 
 from __future__ import annotations
@@ -136,7 +138,11 @@ def ensure_local_demo_catalog(
     cfg = settings or get_settings()
     if not demo_catalog_enabled(cfg):
         return None
-    return seed_demo_catalog(db, cfg)
+    plans, packs = seed_demo_catalog(db, cfg)
+    from app.billing.provisioning import ensure_local_checkout_gateway
+
+    ensure_local_checkout_gateway(db, settings=cfg)
+    return plans, packs
 
 
 def _ensure_demo_plan(db: Session, settings: Settings, spec: DemoPlanSpec) -> Plan:
@@ -214,7 +220,10 @@ def main() -> None:
 
     db = SessionLocal()
     try:
+        from app.billing.provisioning import ensure_local_checkout_gateway
+
         plans, packs = seed_demo_catalog(db, settings)
+        gateway = ensure_local_checkout_gateway(db, settings=settings)
         db.commit()
         print("Demo billing catalog ready:")
         for plan in plans:
@@ -224,6 +233,8 @@ def main() -> None:
                 f"  pack {pack.code}  {pack.name}  "
                 f"{pack.credits} credits / {pack.price_amount} {pack.currency}"
             )
+        if gateway is not None:
+            print(f"  gateway {gateway.code}  enabled={gateway.enabled}  test_mode={gateway.test_mode}")
     finally:
         db.close()
 
