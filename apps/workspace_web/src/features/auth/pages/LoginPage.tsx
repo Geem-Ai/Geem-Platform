@@ -1,12 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { continueAfterAuth } from '@/app/router/guards';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { Button } from '@/components/ui/button';
+import { AuthAlert } from '@/features/auth/components/AuthAlert';
+import {
+  AuthEmailField,
+  AuthFormHeader,
+  AuthPasswordField,
+} from '@/features/auth/components/AuthFields';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 
 export function LoginPage() {
@@ -16,13 +22,13 @@ export function LoginPage() {
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errorKey, setErrorKey] = useState<string | null>(
-    sessionExpired ? 'errors.sessionExpired' : null,
-  );
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const from = (location.state as { from?: string } | null)?.from;
+
   if (status === 'authenticated') {
-    return <Navigate to="/" replace />;
+    return <Navigate to={continueAfterAuth(from)} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -32,11 +38,10 @@ export function LoginPage() {
     clearSessionExpired();
     try {
       const me = await login(email.trim(), password);
-      const from = (location.state as { from?: string } | null)?.from;
       if (me.workspaces.length === 0) {
-        navigate('/onboarding', { replace: true });
+        navigate('/onboarding', { replace: true, state: { from } });
       } else {
-        navigate(from && from !== '/login' ? from : '/', { replace: true });
+        navigate(continueAfterAuth(from), { replace: true });
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -52,60 +57,48 @@ export function LoginPage() {
   return (
     <AuthLayout>
       <DocumentTitle title={t('auth.loginTitle')} />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('auth.loginTitle')}</CardTitle>
-        </CardHeader>
-        <form onSubmit={onSubmit}>
-          <CardContent className="space-y-4">
-            {errorKey && (
-              <p className="text-sm text-destructive" role="alert">
-                {t(errorKey)}
-              </p>
-            )}
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                {t('auth.email')}
-              </label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                {t('auth.password')}
-              </label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                minLength={1}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? t('auth.signingIn') : t('auth.signIn')}
-            </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              {t('auth.noAccount')}{' '}
-              <Link to="/register" className="text-primary hover:underline">
-                {t('auth.registerLink')}
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+      <AuthFormHeader
+        title={t('auth.loginTitle')}
+        subtitle={t('auth.loginSubtitle')}
+      />
+      <form
+        onSubmit={onSubmit}
+        className="space-y-5"
+        data-testid="login-form"
+        aria-busy={submitting}
+      >
+        {sessionExpired && !errorKey && (
+          <AuthAlert tone="warning">{t('errors.sessionExpired')}</AuthAlert>
+        )}
+        {errorKey && <AuthAlert>{t(errorKey)}</AuthAlert>}
+        <AuthEmailField
+          id="email"
+          value={email}
+          onChange={setEmail}
+          disabled={submitting}
+          autoFocus
+        />
+        <AuthPasswordField
+          id="password"
+          value={password}
+          onChange={setPassword}
+          disabled={submitting}
+          autoComplete="current-password"
+          minLength={1}
+        />
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          {submitting ? (
+            <LoaderCircle className="animate-spin" aria-hidden />
+          ) : null}
+          {submitting ? t('auth.signingIn') : t('auth.signIn')}
+        </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          {t('auth.noAccount')}{' '}
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            {t('auth.registerLink')}
+          </Link>
+        </p>
+      </form>
     </AuthLayout>
   );
 }

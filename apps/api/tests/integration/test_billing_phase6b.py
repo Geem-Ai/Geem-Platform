@@ -146,6 +146,55 @@ def test_purchase_list_filters_and_pagination(client, register_user, db) -> None
     assert {row["status"] for row in pending.json()["items"]} <= {"pending", "redirected"}
 
 
+def test_html_return_uses_checkout_origin_when_allowed(client, register_user, db) -> None:
+    user = register_user(email="6b-origin@example.com")
+    ws = _create_workspace(client, user["access_token"], "Origin", "p6b-origin")
+    headers = {
+        **_ws_headers(user["access_token"], ws),
+        "Origin": "http://app.geem.dm:5174",
+    }
+    pack = _create_pack(db, code="p6b_origin_pack")
+    db.commit()
+    checkout = client.post(
+        "/api/billing/checkout/credit-packs",
+        headers=headers,
+        json={"credit_pack_id": str(pack.id)},
+    )
+    assert checkout.status_code == 200, checkout.text
+    res = client.get(
+        _as_test_path(checkout.json()["redirect_url"]),
+        headers={"Accept": "text/html"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert res.headers["location"].startswith(
+        "http://app.geem.dm:5174/billing/payment/success?"
+    )
+
+
+def test_html_return_ignores_disallowed_checkout_origin(client, register_user, db) -> None:
+    user = register_user(email="6b-evil@example.com")
+    ws = _create_workspace(client, user["access_token"], "Evil", "p6b-evil")
+    headers = {
+        **_ws_headers(user["access_token"], ws),
+        "Origin": "http://evil.example:5174",
+    }
+    pack = _create_pack(db, code="p6b_evil_pack")
+    db.commit()
+    checkout = client.post(
+        "/api/billing/checkout/credit-packs",
+        headers=headers,
+        json={"credit_pack_id": str(pack.id)},
+    )
+    res = client.get(
+        _as_test_path(checkout.json()["redirect_url"]),
+        headers={"Accept": "text/html"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert not res.headers["location"].startswith("http://evil.example")
+
+
 def test_html_return_redirects_to_spa_without_trusted_status(client, register_user, db) -> None:
     user = register_user(email="6b-redir@example.com")
     ws = _create_workspace(client, user["access_token"], "Redir", "p6b-redir")

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -31,28 +29,13 @@ app = FastAPI(
 )
 
 
-def _local_cors_origin_regex() -> str | None:
-    """Allow http(s)://{optional-subdomain.}{APP_ROOT_DOMAIN}{:port} in local/dev only.
-
-    Never enabled in production — production must use an explicit CORS_ORIGINS allowlist
-    (or same-origin reverse proxy). Regex is anchored to APP_ROOT_DOMAIN, not a bare suffix.
-    """
-    if not settings.is_local:
-        return None
-    root = settings.app_root_domain.strip().lower().lstrip(".")
-    if not root or root in {"localhost", "127.0.0.1"}:
-        return None
-    escaped = re.escape(root)
-    return rf"^https?://([a-z0-9-]+\.)?{escaped}(:\d+)?$"
-
-
 _cors_kwargs: dict = {
     "allow_origins": settings.cors_origin_list,
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
 }
-_regex = _local_cors_origin_regex()
+_regex = settings.local_spa_origin_regex()
 if _regex:
     _cors_kwargs["allow_origin_regex"] = _regex
 

@@ -14,6 +14,7 @@ import type { ByteUnitKey } from '@/features/usage/lib/quota';
 import type { PurchasablePlan } from '@/services/api/billing';
 import { ApiError } from '@/services/api/errors';
 import { BillingPageHeader } from '../components/BillingPageHeader';
+import { PaymentOutcomeDialog } from '../components/PaymentOutcomeDialog';
 import { CheckoutConfirmDialog } from '../components/CheckoutConfirmDialog';
 import { CurrentSubscriptionCard } from '../components/CurrentSubscriptionCard';
 import { PlanCard } from '../components/PlanCard';
@@ -82,6 +83,7 @@ export function SubscriptionPage() {
   return (
     <div className="p-4 sm:p-6 md:p-8 w-full max-w-6xl space-y-8 ms-auto me-auto">
       <DocumentTitle title={t('billing.subscriptionTitle')} />
+      <PaymentOutcomeDialog />
       <BillingPageHeader
         eyebrow={t('billing.eyebrow')}
         title={t('billing.subscriptionTitle')}

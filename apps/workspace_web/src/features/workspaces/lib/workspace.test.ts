@@ -26,6 +26,8 @@ describe('hostname slug extraction', () => {
 
   it('rejects reserved infrastructure hosts', () => {
     expect(extractHostWorkspaceSlug('api.geem.ai', 'geem.ai')).toBeNull();
+    expect(extractHostWorkspaceSlug('app-uat.geem.ai', 'geem.ai')).toBeNull();
+    expect(extractHostWorkspaceSlug('api-uat.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('admin.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('www.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('www.localhost', 'localhost')).toBeNull();
@@ -76,6 +78,12 @@ describe('i18n coverage', () => {
   it('keeps auth and shell keys in en and ar', () => {
     expect(en.auth.loginTitle).toBeTruthy();
     expect(ar.auth.loginTitle).toBeTruthy();
+    expect(en.auth.loginSubtitle).toBeTruthy();
+    expect(ar.auth.loginSubtitle).toBeTruthy();
+    expect(en.auth.brandHeadline).toBeTruthy();
+    expect(ar.auth.brandHeadline).toBeTruthy();
+    expect(en.auth.showPassword).toBeTruthy();
+    expect(ar.auth.hidePassword).toBeTruthy();
     expect(en.shell.createWorkspace).toBeTruthy();
     expect(ar.shell.createWorkspace).toBeTruthy();
     expect(en.errors.invalidCredentials).toBeTruthy();

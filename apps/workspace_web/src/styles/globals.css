@@ -263,4 +263,109 @@ html[lang='ar'] .tracking-tighter {
     animation: none;
     background-position: 0% 50%;
   }
+
+  .auth-brand-orb,
+  .auth-brand-light,
+  .auth-brand-panel {
+    animation: none !important;
+  }
+}
+
+/* Auth split pane — Geem navy brand panel */
+.auth-brand-panel {
+  /* Stay Geem navy in both themes so the brand wall does not wash out in dark mode */
+  background-color: #0e2f44;
+  background-image: linear-gradient(
+    125deg,
+    #0e2f44 0%,
+    #214b68 42%,
+    #367d9e 78%,
+    #214b68 100%
+  );
+  background-size: 180% 180%;
+  animation: auth-brand-wash 18s ease-in-out infinite;
+}
+
+.auth-brand-light,
+.auth-brand-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.auth-brand-light {
+  top: -8rem;
+  inset-inline-end: -6rem;
+  width: 28rem;
+  height: 28rem;
+  background: radial-gradient(
+    circle,
+    rgb(106 182 216 / 0.7) 0%,
+    rgb(54 125 158 / 0.35) 42%,
+    transparent 70%
+  );
+  filter: blur(8px);
+  opacity: 0.85;
+  animation: auth-light-drift 12s ease-in-out infinite;
+}
+
+.auth-brand-orb {
+  filter: blur(48px);
+}
+
+.auth-brand-orb-a {
+  top: 18%;
+  inset-inline-end: -3rem;
+  width: 16rem;
+  height: 16rem;
+  background: #6ab6d8;
+  opacity: 0.45;
+  animation: auth-orb-drift 14s ease-in-out infinite;
+}
+
+.auth-brand-orb-b {
+  bottom: 6%;
+  inset-inline-start: -5rem;
+  width: 18rem;
+  height: 18rem;
+  background: color-mix(in srgb, white 35%, #214b68);
+  opacity: 0.35;
+  animation: auth-orb-drift 18s ease-in-out infinite reverse;
+}
+
+@keyframes auth-brand-wash {
+  0%,
+  100% {
+    background-position: 0% 40%;
+  }
+  50% {
+    background-position: 80% 60%;
+  }
+}
+
+@keyframes auth-light-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.72;
+  }
+  35% {
+    transform: translate(-22%, 28%) scale(1.18);
+    opacity: 1;
+  }
+  65% {
+    transform: translate(10%, 46%) scale(0.9);
+    opacity: 0.6;
+  }
+}
+
+@keyframes auth-orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(14%, -18%) scale(1.12);
+  }
 }

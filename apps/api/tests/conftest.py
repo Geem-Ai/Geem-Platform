@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 # Ensure test settings before app import.
 os.environ["APP_ENV"] = "test"
+os.environ.setdefault("APP_ROOT_DOMAIN", "geem.dm")
 os.environ["AUTH_REQUIRED"] = "true"
 os.environ["LEGACY_MVP_WRITES_ENABLED"] = "false"
 os.environ["JWT_SECRET"] = "test-jwt-secret-not-for-production"

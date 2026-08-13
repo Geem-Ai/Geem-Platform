@@ -87,6 +87,7 @@ class BillingService:
         plan_id: uuid.UUID,
         *,
         customer_ip: str | None = None,
+        spa_origin: str | None = None,
     ) -> tuple[Purchase, str]:
         self._assert_tenant_workspace(workspace)
         plan = self.plans.get_by_id(plan_id)
@@ -116,6 +117,7 @@ class BillingService:
             payload=payload,
             description=description,
             customer_ip=customer_ip,
+            spa_origin=spa_origin,
         )
 
     def create_credit_pack_checkout(
@@ -125,6 +127,7 @@ class BillingService:
         credit_pack_id: uuid.UUID,
         *,
         customer_ip: str | None = None,
+        spa_origin: str | None = None,
     ) -> tuple[Purchase, str]:
         self._assert_tenant_workspace(workspace)
         pack = self.packs.get_by_id(credit_pack_id)
@@ -154,6 +157,7 @@ class BillingService:
             payload=payload,
             description=description,
             customer_ip=customer_ip,
+            spa_origin=spa_origin,
         )
 
     def get_purchase_for_workspace(
@@ -285,10 +289,15 @@ class BillingService:
         payload: dict[str, Any],
         description: str,
         customer_ip: str | None,
+        spa_origin: str | None = None,
     ) -> tuple[Purchase, str]:
         enabled = self._require_enabled_gateway()
         raw_token = secrets.token_urlsafe(32)
         cart_id = str(uuid.uuid4())
+        extra: dict[str, Any] = {"gateway_code": enabled.code}
+        origin = (spa_origin or "").strip().rstrip("/")
+        if origin and self.settings.is_allowed_spa_origin(origin):
+            extra["spa_origin"] = origin
         purchase = Purchase(
             workspace_id=workspace.id,
             actor_id=user.id,
@@ -300,7 +309,7 @@ class BillingService:
             cart_id=cart_id,
             return_token_hash=hash_return_token(raw_token),
             payload=payload,
-            extra={"gateway_code": enabled.code},
+            extra=extra,
         )
         self.purchases.create(purchase)
         return_url = self._return_url(enabled.code, purchase.id, raw_token)

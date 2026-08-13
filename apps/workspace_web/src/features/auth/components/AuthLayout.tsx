@@ -2,34 +2,46 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geemAvatarUrl } from '@/lib/helpers';
+import { AuthBrandPanel } from './AuthBrandPanel';
+import { AuthChrome } from './AuthChrome';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
+  const year = new Date().getFullYear();
 
   return (
-    // body/#root are Metronic flex row; grow + w-full so auth fills the viewport
-    <div className="grow w-full min-h-dvh flex flex-col bg-muted">
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-6">
-          <div className="flex flex-col items-center gap-3 text-center">
+    <div
+      className="flex min-h-dvh w-full grow flex-col bg-background lg:flex-row"
+      data-testid="auth-layout"
+    >
+      <AuthBrandPanel />
+
+      <div className="flex min-h-dvh flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 px-5 py-4 sm:px-8 lg:justify-end">
+          <Link
+            to="/login"
+            className="flex items-center gap-2.5 lg:hidden"
+          >
             <img
               src={geemAvatarUrl()}
-              alt={t('app.name')}
-              className="size-14 rounded-full shadow-sm"
+              alt=""
+              className="size-9 rounded-full shadow-sm"
             />
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">{t('app.name')}</h1>
-              <p className="text-sm text-muted-foreground">{t('app.tagline')}</p>
-            </div>
-          </div>
-          {children}
-        </div>
+            <span className="text-sm font-semibold tracking-tight">
+              {t('app.name')}
+            </span>
+          </Link>
+          <AuthChrome />
+        </header>
+
+        <main className="flex flex-1 flex-col items-center justify-center px-5 py-8 sm:px-8">
+          <div className="w-full max-w-[400px] space-y-8">{children}</div>
+        </main>
+
+        <p className="px-5 pb-6 text-center text-xs text-muted-foreground lg:hidden">
+          {t('auth.copyright', { year })}
+        </p>
       </div>
-      <p className="pb-6 text-center text-xs text-muted-foreground">
-        <Link to="/login" className="hover:underline">
-          {t('app.name')}
-        </Link>
-      </p>
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { queryKeys } from '@/services/api/query-keys';
 import type { Purchase } from '@/services/api/billing';
 import { PaymentResultPage } from './PaymentResultPage';
+import { PaymentOutcomeDialog } from '../components/PaymentOutcomeDialog';
 
 const workspaceState = { id: 'ws-a' };
 
@@ -67,8 +68,27 @@ function renderResult(search: string) {
     ...render(
       <QueryClientProvider client={client}>
         <I18nextProvider i18n={i18n}>
-          <MemoryRouter initialEntries={[`/billing/payment/success${search}`]}>
-            <PaymentResultPage />
+          <MemoryRouter initialEntries={[`/billing/payment/failed${search}`]}>
+            <Routes>
+              <Route path="/billing/payment/failed" element={<PaymentResultPage />} />
+              <Route path="/billing/payment/success" element={<PaymentResultPage />} />
+              <Route
+                path="/billing/subscription"
+                element={
+                  <div data-testid="subscription-dest">
+                    <PaymentOutcomeDialog />
+                  </div>
+                }
+              />
+              <Route
+                path="/billing/credits"
+                element={
+                  <div data-testid="credits-dest">
+                    <PaymentOutcomeDialog />
+                  </div>
+                }
+              />
+            </Routes>
           </MemoryRouter>
         </I18nextProvider>
       </QueryClientProvider>,
@@ -87,54 +107,53 @@ describe('PaymentResultPage', () => {
     await i18n.changeLanguage('en');
   });
 
-  it('renders success from the authoritative purchase API', async () => {
-    getPurchase.mockResolvedValue(purchase());
-    renderResult('?purchase=pur-1');
-    await waitFor(() => {
-      expect(screen.getByTestId('billing-payment-result')).toHaveAttribute(
-        'data-status',
-        'paid',
-      );
-    });
-    expect(screen.getByTestId('billing-payment-item')).toHaveTextContent('Growth');
-    expect(getPurchase).toHaveBeenCalledWith('pur-1');
-  });
-
-  it('renders failure and cancelled from backend status', async () => {
+  it('redirects a failed purchase to subscription with an outcome dialog', async () => {
     getPurchase.mockResolvedValue(purchase({ status: 'failed', paid_at: null }));
     renderResult('?purchase=pur-1');
     await waitFor(() => {
-      expect(screen.getByTestId('billing-payment-status')).toHaveAttribute(
-        'data-status',
-        'failed',
-      );
+      expect(screen.getByTestId('subscription-dest')).toBeInTheDocument();
     });
-    expect(screen.getByText('Try again')).toBeInTheDocument();
+    expect(screen.getByTestId('billing-payment-outcome-dialog')).toHaveAttribute(
+      'data-notice',
+      'failed',
+    );
+    expect(screen.getByText('Payment not completed')).toBeInTheDocument();
+    expect(getPurchase).toHaveBeenCalledWith('pur-1');
   });
 
-  it('renders cancelled state from backend status', async () => {
-    getPurchase.mockResolvedValue(purchase({ status: 'cancelled', paid_at: null }));
+  it('redirects a paid subscription to subscription with a success dialog', async () => {
+    getPurchase.mockResolvedValue(purchase());
     renderResult('?purchase=pur-1');
     await waitFor(() => {
-      expect(screen.getByTestId('billing-payment-status')).toHaveAttribute(
-        'data-status',
-        'cancelled',
-      );
+      expect(screen.getByTestId('subscription-dest')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('billing-payment-outcome-dialog')).toHaveAttribute(
+      'data-notice',
+      'success',
+    );
+    expect(screen.getByText('Payment successful')).toBeInTheDocument();
   });
 
-  it('renders pending without treating provider query params as success', async () => {
+  it('redirects a paid credit pack to credits', async () => {
     getPurchase.mockResolvedValue(
-      purchase({ status: 'redirected', paid_at: null, item_name: 'Starter pack' }),
+      purchase({ kind: 'credit_pack', item_name: 'Starter pack' }),
     );
+    renderResult('?purchase=pur-1');
+    await waitFor(() => {
+      expect(screen.getByTestId('credits-dest')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('billing-payment-outcome-dialog')).toHaveAttribute(
+      'data-notice',
+      'success',
+    );
+  });
+
+  it('does not treat provider query params as the purchase id', async () => {
+    getPurchase.mockResolvedValue(purchase({ status: 'failed', paid_at: null }));
     renderResult('?purchase=pur-1&respStatus=A&tranRef=secret');
     await waitFor(() => {
-      expect(screen.getByTestId('billing-payment-result')).toHaveAttribute(
-        'data-status',
-        'redirected',
-      );
+      expect(screen.getByTestId('subscription-dest')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Payment successful')).not.toBeInTheDocument();
     expect(getPurchase).toHaveBeenCalledWith('pur-1');
     expect(getPurchase).not.toHaveBeenCalledWith(expect.stringContaining('respStatus'));
   });

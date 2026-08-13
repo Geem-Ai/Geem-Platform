@@ -1,0 +1,27 @@
+# Locally-managed Cloudflare Tunnel (UAT).
+# Credentials are gitignored: infra/cloudflared/credentials.json
+#
+# Create / refresh (once, on the host):
+#   cloudflared tunnel login
+#   cloudflared tunnel create geem-uat
+#   cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
+#   cloudflared tunnel route dns geem-uat app-uat.geem.ai
+#   cloudflared tunnel route dns geem-uat api-uat.geem.ai
+
+# name: geem-uat
+tunnel: ff3689b0-3e00-44b1-bc9a-893bc84d37ad
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: app-uat.geem.ai
+    service: http://workspace_web:5174
+    originRequest:
+      httpHostHeader: app-uat.geem.ai
+  - hostname: api-uat.geem.ai
+    service: http://api:8000
+    originRequest:
+      httpHostHeader: api-uat.geem.ai
+      # Chat SSE + large uploads
+      connectTimeout: 30s
+      keepAliveTimeout: 90s
+  - service: http_status:404

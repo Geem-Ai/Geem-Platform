@@ -16,6 +16,7 @@ import { formatCount } from '@/features/usage/lib/quota';
 import type { CreditPack } from '@/services/api/billing';
 import { ApiError } from '@/services/api/errors';
 import { BillingPageHeader } from '../components/BillingPageHeader';
+import { PaymentOutcomeDialog } from '../components/PaymentOutcomeDialog';
 import { CheckoutConfirmDialog } from '../components/CheckoutConfirmDialog';
 import { CreditPackCard } from '../components/CreditPackCard';
 import { useCreditPackCheckout, useCreditPacks } from '../hooks/useBillingQueries';
@@ -68,6 +69,7 @@ export function CreditsPage() {
   return (
     <div className="p-4 sm:p-6 md:p-8 w-full max-w-6xl space-y-8 ms-auto me-auto">
       <DocumentTitle title={t('billing.creditsTitle')} />
+      <PaymentOutcomeDialog />
       <BillingPageHeader
         eyebrow={t('billing.eyebrow')}
         title={t('billing.creditsTitle')}

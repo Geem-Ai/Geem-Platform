@@ -412,6 +412,8 @@ def _start_clickpay_subscription(client, register_user, db, *, email: str, slug:
     assert payload["tran_type"] == "sale"
     assert route.calls.last.request.headers["authorization"] == "sk_clickpay_secret"
     return_url = payload["return"]
+    assert payload["callback"] is None
+    assert "/api/billing/return/clickpay/" in return_url
     return user, ws, headers, checkout.json(), return_url
 
 
@@ -427,6 +429,26 @@ def test_clickpay_authorized_fulfills(client, register_user, db) -> None:
     assert (
         client.get("/api/subscription", headers=headers).json()["plan"]["code"]
         == "p6a-cp-ok_plan"
+    )
+
+
+def test_clickpay_callback_post_fulfills_via_query_not_body(client, register_user, db) -> None:
+    _user, ws, headers, checkout, return_url = _start_clickpay_subscription(
+        client, register_user, db, email="6a-cp-cb@example.com", slug="p6a-cp-cb"
+    )
+    with respx.mock(base_url=CLICKPAY_BASE) as router:
+        query = router.post("/payment/query").mock(return_value=_clickpay_query("A"))
+        done = client.post(
+            _as_test_path(return_url),
+            json={"respStatus": "D", "tranRef": "forged"},
+            headers={"Accept": "application/json"},
+        )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "paid"
+    assert query.called
+    assert (
+        client.get("/api/subscription", headers=headers).json()["plan"]["code"]
+        == "p6a-cp-cb_plan"
     )
 
 
