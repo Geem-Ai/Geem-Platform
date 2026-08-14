@@ -33,7 +33,7 @@ todos:
     content: "Phase 9: App Store foundations + Apps UI in AI Concept visual language"
     status: pending
   - id: phase-10
-    content: "Phase 10: Hardening — other-entity soft-delete purge, audit, isolation/load/UI tests"
+    content: "Phase 10: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
     status: pending
   - id: phase-11
     content: "Phase 11: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
@@ -1084,9 +1084,20 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 10 — Hardening
 
-**Status:** pending
+**Status:** pending — do not start until Phase 9 is complete and this phase is explicitly requested.
 
 Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
+
+**Usage metering scale (saved plan):** [usage_events_scale.plan.md](usage_events_scale.plan.md) — execute in this phase, not earlier.
+
+- Composite `(workspace_id, created_at)` indexes on `usage_events`
+- Monthly RANGE partitioning of `usage_events` (Alembic on API boot)
+- `usage_daily_workspace` rollups; API usage summary reads rollups
+- Celery Beat service: ensure partitions, daily rollup, drop partitions older than 13 months
+- `cost_metadata` allowlist + history API max date window
+- Quotas remain on `usage_period_counters` (O(1)); no ClickHouse
+
+**Acceptance (scale slice):** API usage 30d summary stays fast with ≥1M fixture events; history paginated via indexes; `docker compose up` applies schema + Beat with no manual SQL/cron.
 
 ---
 
