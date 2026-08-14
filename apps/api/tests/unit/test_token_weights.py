@@ -46,6 +46,7 @@ def test_history_kind_for_operation() -> None:
     assert history_kind_for_operation("rerank") == "rerank_tokens"
     assert history_kind_for_operation("pdf_parse") == "ocr_tokens"
     assert history_kind_for_operation("title") == "title_tokens"
+    assert history_kind_for_operation("speech_to_text") == "stt_tokens"
 
 
 def test_settled_tokens_prefers_billed_fields() -> None:
@@ -66,6 +67,14 @@ def test_title_fallback_reads_settings() -> None:
 
     settings = Settings(ai_token_fallback_title=80)
     assert fallback_tokens_for(settings, OpenRouterFamily.TITLE) == 80
+
+
+def test_stt_fallback_reads_settings() -> None:
+    from app.usage.weights import fallback_tokens_for
+
+    settings = Settings(ai_token_fallback_stt=777)
+    assert fallback_tokens_for(settings, OpenRouterFamily.STT) == 777
+    assert family_multiplier(Settings(ai_token_multiplier_stt=2.5), OpenRouterFamily.STT) == 2.5
 
 
 def test_settled_tokens_weights_chat_when_billed_missing() -> None:

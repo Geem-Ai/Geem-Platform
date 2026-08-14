@@ -7,6 +7,7 @@ export * from './auth';
 export * from './workspaces';
 export * from './documents';
 export * from './chat-attachments';
+export * from './chat-transcribe';
 export * from './experts';
 export * from './conversations';
 export * from './query';

@@ -36,6 +36,7 @@ export type ApiErrorCode =
   | 'expert_knowledge_unavailable'
   | 'upload_type_rejected'
   | 'upload_too_large'
+  | 'unsupported_audio_type'
   | 'chat_attachment_not_found'
   | 'conversation_not_found'
   | 'message_not_found'
@@ -94,6 +95,7 @@ const KNOWN_CODES = new Set<string>([
   'expert_knowledge_unavailable',
   'upload_type_rejected',
   'upload_too_large',
+  'unsupported_audio_type',
   'chat_attachment_not_found',
   'conversation_not_found',
   'message_not_found',
@@ -199,6 +201,7 @@ export function errorMessageKey(code: ApiErrorCode): string {
     expert_knowledge_unavailable: 'errors.expertKnowledgeUnavailable',
     upload_type_rejected: 'errors.uploadTypeRejected',
     upload_too_large: 'errors.uploadTooLarge',
+    unsupported_audio_type: 'errors.unsupportedAudioType',
     chat_attachment_not_found: 'errors.chatAttachmentNotFound',
     conversation_not_found: 'errors.conversationNotFound',
     message_not_found: 'errors.messageNotFound',

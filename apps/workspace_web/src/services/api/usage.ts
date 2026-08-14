@@ -43,6 +43,7 @@ export type UsageHistoryKind =
   | 'rerank_tokens'
   | 'ocr_tokens'
   | 'title_tokens'
+  | 'stt_tokens'
   | 'credit_grant'
   | 'credit_consume'
   | 'credit_adjust'
@@ -56,6 +57,7 @@ export const AI_HISTORY_KINDS = new Set<string>([
   'rerank_tokens',
   'ocr_tokens',
   'title_tokens',
+  'stt_tokens',
 ]);
 
 export function isAiHistoryKind(kind: string): boolean {
