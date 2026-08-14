@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.common.public_model import public_model_or_none
 from app.conversations.invocation import ChatInvocationContext
 from app.conversations.service import ConversationService
 from app.conversations.validation import validate_chat_message
@@ -87,7 +88,7 @@ class ChatTurnExecutor:
             "citations": citations,
             "billed_tokens": billed,
             "insufficient_context": bool(result.get("insufficient_context")),
-            "model": result.get("model"),
+            "model": public_model_or_none(result.get("model")),
         }
 
     def stream(

@@ -153,6 +153,8 @@ describe('ApiUsagePage', () => {
       '/api/keys',
     );
     expect(screen.queryByText(/geem_sk_[a-zA-Z0-9_-]{20,}/)).not.toBeInTheDocument();
+    expect(screen.queryByText('test-model')).not.toBeInTheDocument();
+    expect(screen.getByText('dalseen/geem-1.0')).toBeInTheDocument();
   });
 
   it('shows empty usage history', async () => {

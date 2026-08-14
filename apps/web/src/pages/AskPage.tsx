@@ -7,6 +7,7 @@ import {
   queryDocumentsStream,
 } from "../api";
 import MarkdownAnswer from "../components/MarkdownAnswer";
+import { PUBLIC_MODEL_ID } from "../publicModel";
 
 const STATUS_LABELS: Record<string, string> = {
   retrieving: "Retrieving…",
@@ -27,8 +28,8 @@ export default function AskPage() {
   const [insufficient, setInsufficient] = useState(false);
   const [usedGeneral, setUsedGeneral] = useState(false);
   const [citations, setCitations] = useState<Citation[]>([]);
-  const [model, setModel] = useState<string | null>(null);
-  const [generalModel, setGeneralModel] = useState<string | null>(null);
+  const [showModel, setShowModel] = useState(false);
+  const [showGeneralModel, setShowGeneralModel] = useState(false);
 
   useEffect(() => {
     void listDocuments().then((d) => setDocs(d.filter((x) => x.status === "ready")));
@@ -45,8 +46,8 @@ export default function AskPage() {
     setInsufficient(false);
     setUsedGeneral(false);
     setCitations([]);
-    setModel(null);
-    setGeneralModel(null);
+    setShowModel(false);
+    setShowGeneralModel(false);
     try {
       await queryDocumentsStream(question, selected, {
         onStatus: (stage) => {
@@ -64,10 +65,10 @@ export default function AskPage() {
           setAnswer(res.answer);
           setInsufficient(res.insufficient_context);
           setCitations(res.citations);
-          setModel(res.model);
+          setShowModel(Boolean(res.model));
           setGeneralAnswer(res.general_answer ?? null);
           setUsedGeneral(Boolean(res.used_general_knowledge));
-          setGeneralModel(res.general_model ?? null);
+          setShowGeneralModel(Boolean(res.general_model));
           setStatus(null);
         },
       });
@@ -138,7 +139,7 @@ export default function AskPage() {
             content={answer || ""}
             placeholder={loading ? "…" : ""}
           />
-          {model && <p className="muted">Model: {model}</p>}
+          {showModel && <p className="muted">Model: {PUBLIC_MODEL_ID}</p>}
 
           {(usedGeneral || generalAnswer) && (
             <>
@@ -154,7 +155,7 @@ export default function AskPage() {
                 content={generalAnswer || ""}
                 placeholder={loading ? "…" : ""}
               />
-              {generalModel && <p className="muted">Model: {generalModel}</p>}
+              {showGeneralModel && <p className="muted">Model: {PUBLIC_MODEL_ID}</p>}
             </>
           )}
 

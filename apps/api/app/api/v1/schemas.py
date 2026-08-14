@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.schemas import Citation
+from app.common.public_model import PUBLIC_MODEL_ID
 
 
 class ChatCompletionMessage(BaseModel):
@@ -21,7 +22,7 @@ class ChatCompletionRequest(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    model: str = "geem"
+    model: str = PUBLIC_MODEL_ID
     messages: list[ChatCompletionMessage] = Field(default_factory=list)
     stream: bool = False
 

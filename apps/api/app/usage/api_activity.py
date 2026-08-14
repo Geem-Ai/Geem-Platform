@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api_keys.models import ApiKey
 from app.billing.schemas import MeterOut
+from app.common.public_model import public_model_or_none
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import UsageEvent
 from app.entitlements.quota import QuotaService
@@ -250,7 +251,7 @@ class ApiActivityService:
                 last_four=row.last_four or None,
                 expert_id=row.expert_id,
                 family=_family_for_row(row.family, row.operation_type),
-                model=row.model,
+                model=public_model_or_none(row.model),
                 billed_tokens=max(0, int(row.billed_tokens or 0)),
                 operation_type=row.operation_type,
             )
