@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { ArrowUp, ChevronDown, Mic, Paperclip, Sparkles, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,14 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
+import {
+  ApiError,
+  CHAT_ATTACHMENT_ACCEPT,
+  CHAT_ATTACHMENT_MAX_BYTES,
+  deleteChatAttachment,
+  errorMessageKey,
+  uploadChatAttachment,
+} from '@/services/api';
 import { ExpertPickerDialog } from './ExpertPickerDialog';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
 import {
@@ -29,8 +38,6 @@ import {
 } from './ComposerAttachmentPreview';
 
 const VOICE_TRANSCRIBE_MS = 1600;
-const FAKE_UPLOAD_TICK_MS = 80;
-const ACCEPT_ATTACHMENTS = '.pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown';
 
 interface ChatComposerProps {
   onSubmit: (question: string) => void;
@@ -83,7 +90,12 @@ export function ChatComposer({
   /** Ignore the next onFocus from programmatic autoFocus so sample prompts can type. */
   const suppressFocusNotifyRef = useRef(false);
   const transcribeTimerRef = useRef<number | null>(null);
-  const uploadTimerRef = useRef<number | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const attachmentRef = useRef<ComposerAttachment | null>(null);
+
+  useEffect(() => {
+    attachmentRef.current = attachment;
+  }, [attachment]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -102,9 +114,7 @@ export function ChatComposer({
       if (transcribeTimerRef.current !== null) {
         window.clearTimeout(transcribeTimerRef.current);
       }
-      if (uploadTimerRef.current !== null) {
-        window.clearInterval(uploadTimerRef.current);
-      }
+      uploadAbortRef.current?.abort();
     };
   }, []);
 
@@ -124,13 +134,6 @@ export function ChatComposer({
     if (transcribeTimerRef.current !== null) {
       window.clearTimeout(transcribeTimerRef.current);
       transcribeTimerRef.current = null;
-    }
-  }
-
-  function clearUploadTimer() {
-    if (uploadTimerRef.current !== null) {
-      window.clearInterval(uploadTimerRef.current);
-      uploadTimerRef.current = null;
     }
   }
 
@@ -174,34 +177,86 @@ export function ChatComposer({
     beginTranscribe();
   }
 
-  function removeAttachment() {
-    clearUploadTimer();
+  async function removeAttachment() {
+    const current = attachmentRef.current;
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
     setAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (current?.serverId) {
+      try {
+        await deleteChatAttachment(current.serverId);
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'aborted') return;
+        // Already dismissed in UI; surface unexpected delete failures.
+        if (err instanceof ApiError && err.code !== 'chat_attachment_not_found') {
+          toast.error(t(errorMessageKey(err.code)));
+        }
+      }
+    }
   }
 
-  function startFakeUpload(file: File) {
-    clearUploadTimer();
-    const next: ComposerAttachment = {
-      id: `${file.name}-${file.size}-${Date.now()}`,
+  async function startUpload(file: File) {
+    await removeAttachment();
+
+    if (file.size > CHAT_ATTACHMENT_MAX_BYTES) {
+      toast.error(t('chat.attachmentTooLarge'));
+      return;
+    }
+
+    const localId = `local-${Date.now()}`;
+    const draft: ComposerAttachment = {
+      id: localId,
+      serverId: null,
       name: file.name,
       typeLabel: attachmentTypeLabel(file.name),
-      progress: 8,
+      progress: 0,
     };
-    setAttachment(next);
+    setAttachment(draft);
 
-    uploadTimerRef.current = window.setInterval(() => {
-      setAttachment((prev) => {
-        if (!prev || prev.id !== next.id) return prev;
-        const bump = 6 + Math.floor(Math.random() * 14);
-        const progress = Math.min(100, prev.progress + bump);
-        if (progress >= 100) {
-          clearUploadTimer();
-          return { ...prev, progress: 100 };
-        }
-        return { ...prev, progress };
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+
+    try {
+      const uploaded = await uploadChatAttachment(file, {
+        signal: controller.signal,
+        onProgress: (percent) => {
+          setAttachment((prev) =>
+            prev && prev.id === localId ? { ...prev, progress: percent } : prev,
+          );
+        },
       });
-    }, FAKE_UPLOAD_TICK_MS);
+      if (controller.signal.aborted) {
+        // User dismissed mid-upload — best-effort delete if server already finished.
+        void deleteChatAttachment(uploaded.id).catch(() => undefined);
+        return;
+      }
+      setAttachment({
+        id: localId,
+        serverId: uploaded.id,
+        name: uploaded.original_filename || file.name,
+        typeLabel: attachmentTypeLabel(uploaded.original_filename || file.name),
+        progress: 100,
+      });
+    } catch (err) {
+      if (controller.signal.aborted || (err instanceof ApiError && err.code === 'aborted')) {
+        return;
+      }
+      setAttachment(null);
+      if (err instanceof ApiError && err.code === 'upload_too_large') {
+        toast.error(t('chat.attachmentTooLarge'));
+        return;
+      }
+      if (err instanceof ApiError) {
+        toast.error(t(errorMessageKey(err.code)));
+        return;
+      }
+      toast.error(t('chat.attachmentUploadFailed'));
+    } finally {
+      if (uploadAbortRef.current === controller) {
+        uploadAbortRef.current = null;
+      }
+    }
   }
 
   function openFilePicker() {
@@ -211,18 +266,18 @@ export function ChatComposer({
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    startFakeUpload(file);
     // Allow re-selecting the same file later.
     e.target.value = '';
+    if (!file) return;
+    void startUpload(file);
   }
 
   function submit() {
     const q = value.trim();
     if (!q || disabled || isStreaming || voicePhase) return;
+    // Keep uploaded attachment id for a later chat turn — do not delete on send yet.
     onSubmit(q);
     setValue('');
-    removeAttachment();
     requestAnimationFrame(() => {
       if (textareaRef.current) {
         suppressFocusNotifyRef.current = true;
@@ -272,7 +327,7 @@ export function ChatComposer({
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPT_ATTACHMENTS}
+          accept={CHAT_ATTACHMENT_ACCEPT}
           className="sr-only"
           tabIndex={-1}
           data-testid="chat-attach-input"

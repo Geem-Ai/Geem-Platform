@@ -65,6 +65,9 @@ class ErrorCategory(StrEnum):
     MESSAGE_NOT_FOUND = "message_not_found"
     # Conversations (Phase 4B) — overlapping generation
     CONVERSATION_BUSY = "conversation_busy"
+    # Chat composer attachments
+    CHAT_ATTACHMENT_NOT_FOUND = "chat_attachment_not_found"
+    UPLOAD_TOO_LARGE = "upload_too_large"
 
     # Entitlements / subscriptions (Phase 5A)
     ENTITLEMENT_NOT_FOUND = "entitlement_not_found"
@@ -142,6 +145,8 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "message_not_found": 404,
     # Phase 4B
     "conversation_busy": 409,
+    "chat_attachment_not_found": 404,
+    "upload_too_large": 413,
     # Phase 5A
     "entitlement_not_found": 404,
     "entitlement_invalid": 422,

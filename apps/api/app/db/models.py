@@ -33,6 +33,7 @@ from app.experts.models import (  # noqa: E402
     WorkspaceExpertGrant,
 )
 from app.conversations.models import Conversation, Message  # noqa: E402
+from app.chat_attachments.models import ChatAttachment  # noqa: E402
 from app.billing.models import (  # noqa: E402
     CreditPack,
     PaymentGatewayConfig,
@@ -68,6 +69,7 @@ __all__ = [
     "WorkspaceExpertGrant",
     "Conversation",
     "Message",
+    "ChatAttachment",
     "Plan",
     "PlanEntitlement",
     "Subscription",

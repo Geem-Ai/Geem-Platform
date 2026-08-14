@@ -3,11 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 export type ComposerAttachment = {
+  /** Local UI id (stable while uploading). */
   id: string;
+  /** Server id after successful upload; null while uploading. */
+  serverId: string | null;
   name: string;
   /** Extension / type label, e.g. PDF */
   typeLabel: string;
-  /** 0–100 fake upload progress */
+  /** 0–100 upload progress */
   progress: number;
 };
 

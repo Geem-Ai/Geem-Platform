@@ -182,6 +182,9 @@ class Settings(BaseSettings):
     conversation_title_max_length: int = 80
     conversation_generation_lock_ttl_seconds: int = 300
     max_chat_message_chars: int = 32_000
+    # Chat composer attachments (ephemeral — not Expert knowledge Documents)
+    chat_attachment_max_mb: int = 5
+    chat_attachment_ttl_hours: int = 12
 
     max_upload_mb: int = 100
     max_pdf_pages: int = 1000
@@ -217,6 +220,15 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def chat_attachment_max_bytes(self) -> int:
+        return self.chat_attachment_max_mb * 1024 * 1024
+
+    @property
+    def chat_attachment_ttl_seconds(self) -> int:
+        hours = max(1, int(self.chat_attachment_ttl_hours))
+        return hours * 3600
 
     @property
     def is_local(self) -> bool:

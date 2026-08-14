@@ -22,4 +22,12 @@ celery_app.conf.update(
     task_track_started=True,
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    beat_schedule={
+        # Safety net for ETA misses / worker downtime (TTL is 12h by default).
+        "purge-expired-chat-attachments": {
+            "task": "purge_expired_chat_attachments",
+            "schedule": 900.0,  # every 15 minutes
+            "kwargs": {"limit": 200},
+        },
+    },
 )

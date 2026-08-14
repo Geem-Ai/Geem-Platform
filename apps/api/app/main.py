@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.core.errors import HTTP_STATUS_BY_CATEGORY, AppError
 from app.core.logging import setup_logging
 from app.conversations.router import router as conversations_router
+from app.chat_attachments.router import router as chat_attachments_router
 from app.experts.router import router as experts_router
 from app.identity.router import router as auth_router
 from app.platform_admin.router import router as platform_router
@@ -59,6 +60,7 @@ app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(experts_router)
 app.include_router(conversations_router)
+app.include_router(chat_attachments_router)
 app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(entitlements_router)

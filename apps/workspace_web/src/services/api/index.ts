@@ -6,6 +6,7 @@ export * from './types';
 export * from './auth';
 export * from './workspaces';
 export * from './documents';
+export * from './chat-attachments';
 export * from './experts';
 export * from './conversations';
 export * from './query';
