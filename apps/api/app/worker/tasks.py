@@ -201,3 +201,54 @@ def generate_conversation_title_task(
         "title": titled,
         "task_id": getattr(self.request, "id", None),
     }
+
+
+@celery_app.task(name="purge_expired_chat_attachments", bind=True, max_retries=1)
+def purge_expired_chat_attachments(self, limit: int = 200) -> dict:
+    """Periodic sweep — delete chat attachments past expires_at."""
+    from app.chat_attachments.service import ChatAttachmentService
+
+    db = SessionLocal()
+    try:
+        purged = ChatAttachmentService(db).purge_expired(limit=limit)
+        return {"purged": purged, "task_id": getattr(self.request, "id", None)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="purge_chat_attachment_if_expired", bind=True, max_retries=2)
+def purge_chat_attachment_if_expired(self, attachment_id: str) -> dict:
+    """ETA task scheduled at upload time (TTL countdown)."""
+    from app.chat_attachments.service import ChatAttachmentService
+
+    db = SessionLocal()
+    try:
+        deleted = ChatAttachmentService(db).purge_by_id_if_expired(uuid.UUID(attachment_id))
+        return {
+            "attachment_id": attachment_id,
+            "deleted": deleted,
+            "task_id": getattr(self.request, "id", None),
+        }
+    finally:
+        db.close()
+
+
+def schedule_chat_attachment_expiry(attachment_id: str, *, countdown_seconds: int) -> str | None:
+    """Enqueue a one-shot TTL purge for a newly uploaded attachment.
+
+    Returns the Celery task id, or ``None`` if the broker is unavailable.
+    Callers must not treat scheduling failure as upload failure — Beat sweep
+    still purges by ``expires_at``.
+    """
+    try:
+        result = purge_chat_attachment_if_expired.apply_async(
+            args=[attachment_id],
+            countdown=max(1, int(countdown_seconds)),
+        )
+        return result.id
+    except Exception:
+        logger.exception(
+            "chat_attachment.ttl_schedule_failed",
+            extra={"attachment_id": attachment_id},
+        )
+        return None

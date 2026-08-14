@@ -36,6 +36,7 @@ export type ApiErrorCode =
   | 'expert_knowledge_unavailable'
   | 'upload_type_rejected'
   | 'upload_too_large'
+  | 'chat_attachment_not_found'
   | 'conversation_not_found'
   | 'message_not_found'
   | 'conversation_busy'
@@ -93,6 +94,7 @@ const KNOWN_CODES = new Set<string>([
   'expert_knowledge_unavailable',
   'upload_type_rejected',
   'upload_too_large',
+  'chat_attachment_not_found',
   'conversation_not_found',
   'message_not_found',
   'conversation_busy',
@@ -153,6 +155,8 @@ export function mapStatusToCode(status: number, body?: Record<string, unknown>):
       return 'validation';
     case 402:
       return 'billing_required';
+    case 413:
+      return 'upload_too_large';
     case 429:
       return 'rate_limited';
     default:
@@ -195,6 +199,7 @@ export function errorMessageKey(code: ApiErrorCode): string {
     expert_knowledge_unavailable: 'errors.expertKnowledgeUnavailable',
     upload_type_rejected: 'errors.uploadTypeRejected',
     upload_too_large: 'errors.uploadTooLarge',
+    chat_attachment_not_found: 'errors.chatAttachmentNotFound',
     conversation_not_found: 'errors.conversationNotFound',
     message_not_found: 'errors.messageNotFound',
     conversation_busy: 'errors.conversationBusy',

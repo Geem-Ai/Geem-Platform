@@ -1,8 +1,9 @@
 """Workspace storage quota — reserve / finalize / release (Phase 5C).
 
-Billable used = SUM(byte_size) of active (not soft-deleted) Documents in the
-Workspace. ``storage_usage_events`` remain the append-only audit trail.
-``workspace_resource_usage.reserved_bytes`` holds in-flight chargeable uploads.
+Billable used = SUM(byte_size) of active Documents **plus** remaining chat
+attachments in the Workspace. ``storage_usage_events`` remain the append-only
+audit trail. ``workspace_resource_usage.reserved_bytes`` holds in-flight
+chargeable uploads.
 
 Platform Knowledge (SYSTEM workspaces) never consume tenant storage quota.
 """
@@ -16,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.chat_attachments.repository import ChatAttachmentRepository
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory, raise_resource_quota
 from app.documents.repository import DocumentRepository
@@ -66,12 +68,19 @@ class StorageQuotaService:
         self.counters = WorkspaceResourceUsageRepository(db)
         self.reservations = StorageReservationRepository(db)
         self.documents = DocumentRepository(db)
+        self.chat_attachments = ChatAttachmentRepository(db)
+
+    def billable_used_bytes(self, workspace_id: uuid.UUID) -> int:
+        """Documents + chat attachments still stored for this Workspace."""
+        return self.documents.sum_active_byte_size(workspace_id) + self.chat_attachments.sum_byte_size(
+            workspace_id
+        )
 
     def snapshot(self, workspace_id: uuid.UUID) -> StorageSnapshot:
         counter = self.counters.get(workspace_id, UsageMetric.STORAGE_BYTES.value)
         return StorageSnapshot(
             limit_bytes=self.quota.get_storage_limit(workspace_id),
-            used_bytes=self.documents.sum_active_byte_size(workspace_id),
+            used_bytes=self.billable_used_bytes(workspace_id),
             reserved_bytes=int(counter.reserved_bytes) if counter is not None else 0,
         )
 
@@ -141,7 +150,7 @@ class StorageQuotaService:
             )
 
         counter = self._lock_counter(workspace.id)
-        used = self.documents.sum_active_byte_size(workspace.id)
+        used = self.billable_used_bytes(workspace.id)
         reserved = int(counter.reserved_bytes)
         limit = self.quota.get_storage_limit(workspace.id)
         remaining = max(0, limit - used - reserved)
@@ -178,11 +187,17 @@ class StorageQuotaService:
         self,
         hold: StorageHold,
         *,
-        document_id: uuid.UUID,
+        document_id: uuid.UUID | None = None,
+        chat_attachment_id: uuid.UUID | None = None,
         reason: StorageUsageReason | str = StorageUsageReason.UPLOAD,
     ) -> None:
         if hold.skipped or hold.byte_size == 0:
             return
+        if document_id is None and chat_attachment_id is None:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "finalize requires document_id or chat_attachment_id.",
+            )
         self.lock(hold.workspace_id)
         row = self.reservations.get_by_request_id_for_update(
             hold.workspace_id, hold.request_id
@@ -199,13 +214,21 @@ class StorageQuotaService:
         counter = self._lock_counter(hold.workspace_id)
         counter.reserved_bytes = max(0, int(counter.reserved_bytes) - int(row.byte_size))
         row.status = StorageReservationStatus.FINALIZED.value
-        row.document_id = document_id
+        if document_id is not None:
+            row.document_id = document_id
+        extra: dict = {}
+        if chat_attachment_id is not None:
+            extra["chat_attachment_id"] = str(chat_attachment_id)
+            merged = dict(row.extra or {})
+            merged.update(extra)
+            row.extra = merged
         self.events.record_delta(
             hold.workspace_id,
             delta_bytes=int(row.byte_size),
             reason=parsed,
             document_id=document_id,
             request_id=hold.request_id,
+            extra=extra or None,
         )
 
     def release(self, hold: StorageHold) -> None:
@@ -232,21 +255,33 @@ class StorageQuotaService:
         self,
         workspace_id: uuid.UUID,
         *,
-        document_id: uuid.UUID,
+        document_id: uuid.UUID | None = None,
+        chat_attachment_id: uuid.UUID | None = None,
         byte_size: int,
         request_id: str | None = None,
     ) -> None:
-        """Soft-delete has already set ``deleted_at``; billable used drops via SUM."""
+        """Blob row is gone / soft-deleted; billable used drops via SUM."""
         size = int(byte_size or 0)
         if size == 0:
             return
+        if document_id is None and chat_attachment_id is None:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "record_logical_delete requires document_id or chat_attachment_id.",
+            )
         self.lock(workspace_id)
+        extra = (
+            {"chat_attachment_id": str(chat_attachment_id)}
+            if chat_attachment_id is not None
+            else None
+        )
         self.events.record_delta(
             workspace_id,
             delta_bytes=-size,
             reason=StorageUsageReason.DELETE,
             document_id=document_id,
             request_id=request_id,
+            extra=extra,
         )
 
     def consume_restore(
