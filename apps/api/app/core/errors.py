@@ -68,6 +68,8 @@ class ErrorCategory(StrEnum):
     # Chat composer attachments
     CHAT_ATTACHMENT_NOT_FOUND = "chat_attachment_not_found"
     UPLOAD_TOO_LARGE = "upload_too_large"
+    # Chat voice STT
+    UNSUPPORTED_AUDIO_TYPE = "unsupported_audio_type"
 
     # Entitlements / subscriptions (Phase 5A)
     ENTITLEMENT_NOT_FOUND = "entitlement_not_found"
@@ -147,6 +149,7 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "conversation_busy": 409,
     "chat_attachment_not_found": 404,
     "upload_too_large": 413,
+    "unsupported_audio_type": 400,
     # Phase 5A
     "entitlement_not_found": 404,
     "entitlement_invalid": 422,

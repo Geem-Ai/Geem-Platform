@@ -21,8 +21,11 @@ import {
   ApiError,
   CHAT_ATTACHMENT_ACCEPT,
   CHAT_ATTACHMENT_MAX_BYTES,
+  CHAT_TRANSCRIBE_MAX_BYTES,
+  CHAT_VOICE_MAX_MS,
   deleteChatAttachment,
   errorMessageKey,
+  transcribeChatAudio,
   uploadChatAttachment,
 } from '@/services/api';
 import { ExpertPickerDialog } from './ExpertPickerDialog';
@@ -37,7 +40,15 @@ import {
   type ComposerAttachment,
 } from './ComposerAttachmentPreview';
 
-const VOICE_TRANSCRIBE_MS = 1600;
+function pickRecorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return undefined;
+  }
+  for (const type of ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg']) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return undefined;
+}
 
 interface ChatComposerProps {
   onSubmit: (question: string) => void;
@@ -78,7 +89,7 @@ export function ChatComposer({
   onFocus,
   expertPicker,
 }: ChatComposerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [uncontrolledValue, setUncontrolledValue] = useState('');
   const isControlled = controlledValue !== undefined;
   const value = isControlled ? controlledValue : uncontrolledValue;
@@ -89,16 +100,30 @@ export function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Ignore the next onFocus from programmatic autoFocus so sample prompts can type. */
   const suppressFocusNotifyRef = useRef(false);
-  const transcribeTimerRef = useRef<number | null>(null);
   /** When true, an in-flight upload should delete the server object on completion. */
   const dismissUploadRef = useRef(false);
   /** Server id observed for the current upload (for dismiss-after-commit cleanup). */
   const pendingUploadServerIdRef = useRef<string | null>(null);
   const attachmentRef = useRef<ComposerAttachment | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const audioBlobRef = useRef<Blob | null>(null);
+  const voiceMaxTimerRef = useRef<number | null>(null);
+  const voicePhaseRef = useRef<VoiceRecordingPhase | null>(null);
+  const transcribeAbortRef = useRef<AbortController | null>(null);
+  /** Blocks double-tap while getUserMedia / recorder setup is in flight. */
+  const voiceStartingRef = useRef(false);
+  /** Shared stop promise so Stop → Send waits for MediaRecorder.onstop blob. */
+  const recorderStopPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     attachmentRef.current = attachment;
   }, [attachment]);
+
+  useEffect(() => {
+    voicePhaseRef.current = voicePhase;
+  }, [voicePhase]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -114,11 +139,10 @@ export function ChatComposer({
 
   useEffect(() => {
     return () => {
-      if (transcribeTimerRef.current !== null) {
-        window.clearTimeout(transcribeTimerRef.current);
-      }
-      // Prefer completion+delete over abort so we never lose the server id.
       dismissUploadRef.current = true;
+      clearVoiceMaxTimer();
+      transcribeAbortRef.current?.abort();
+      stopMediaTracks();
     };
   }, []);
 
@@ -134,51 +158,226 @@ export function ChatComposer({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 
-  function clearTranscribeTimer() {
-    if (transcribeTimerRef.current !== null) {
-      window.clearTimeout(transcribeTimerRef.current);
-      transcribeTimerRef.current = null;
+  function clearVoiceMaxTimer() {
+    if (voiceMaxTimerRef.current !== null) {
+      window.clearTimeout(voiceMaxTimerRef.current);
+      voiceMaxTimerRef.current = null;
     }
   }
 
+  function stopMediaTracks() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    mediaRecorderRef.current = null;
+    const stream = mediaStreamRef.current;
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+    }
+    mediaStreamRef.current = null;
+  }
+
+  function discardVoiceCapture() {
+    clearVoiceMaxTimer();
+    stopMediaTracks();
+    audioChunksRef.current = [];
+    audioBlobRef.current = null;
+    recorderStopPromiseRef.current = null;
+  }
+
+  function focusComposerInput() {
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      suppressFocusNotifyRef.current = true;
+      el.focus({ preventScroll: true });
+      resize();
+    });
+  }
+
+  /** Stop the recorder once and resolve after onstop has written audioBlobRef. */
+  function stopRecorderAndAwaitBlob(): Promise<void> {
+    if (recorderStopPromiseRef.current) {
+      return recorderStopPromiseRef.current;
+    }
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      return Promise.resolve();
+    }
+    recorderStopPromiseRef.current = new Promise<void>((resolve) => {
+      const prev = recorder.onstop;
+      recorder.onstop = (event) => {
+        try {
+          if (typeof prev === 'function') {
+            prev.call(recorder, event);
+          }
+        } finally {
+          resolve();
+        }
+      };
+      try {
+        recorder.stop();
+      } catch {
+        resolve();
+      }
+    });
+    return recorderStopPromiseRef.current;
+  }
+
   function cancelVoice() {
-    clearTranscribeTimer();
+    transcribeAbortRef.current?.abort();
+    transcribeAbortRef.current = null;
+    discardVoiceCapture();
     setVoicePhase(null);
   }
 
-  function startVoice() {
-    if (disabled || isStreaming || voicePhase) return;
-    clearTranscribeTimer();
-    setVoicePhase('recording');
+  async function startVoice() {
+    if (disabled || isStreaming || voicePhase || voiceStartingRef.current) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      toast.error(t('chat.voiceUnsupported'));
+      return;
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      toast.error(t('chat.voiceUnsupported'));
+      return;
+    }
+
+    voiceStartingRef.current = true;
+    discardVoiceCapture();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      audioBlobRef.current = null;
+      recorderStopPromiseRef.current = null;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.onstop = () => {
+        const type = recorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type });
+        audioChunksRef.current = [];
+        audioBlobRef.current = blob.size > 0 ? blob : null;
+        const streamTracks = mediaStreamRef.current;
+        if (streamTracks) {
+          for (const track of streamTracks.getTracks()) {
+            track.stop();
+          }
+          mediaStreamRef.current = null;
+        }
+      };
+
+      recorder.start(250);
+      setVoicePhase('recording');
+      clearVoiceMaxTimer();
+      voiceMaxTimerRef.current = window.setTimeout(() => {
+        voiceMaxTimerRef.current = null;
+        if (voicePhaseRef.current === 'recording') {
+          toast.message(t('chat.voiceMaxDuration'));
+          stopVoice();
+        }
+      }, CHAT_VOICE_MAX_MS);
+    } catch (err) {
+      discardVoiceCapture();
+      setVoicePhase(null);
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        toast.error(t('chat.voicePermissionDenied'));
+        return;
+      }
+      toast.error(t('chat.voiceStartFailed'));
+    } finally {
+      voiceStartingRef.current = false;
+    }
   }
 
   function stopVoice() {
-    if (voicePhase !== 'recording') return;
+    if (voicePhaseRef.current !== 'recording') return;
+    clearVoiceMaxTimer();
+    void stopRecorderAndAwaitBlob();
     setVoicePhase('stopped');
   }
 
-  function beginTranscribe() {
-    if (!voicePhase || voicePhase === 'transcribing') return;
-    setVoicePhase('transcribing');
-    clearTranscribeTimer();
-    const existing = value.trim();
-    transcribeTimerRef.current = window.setTimeout(() => {
-      transcribeTimerRef.current = null;
-      const transcript = t('chat.voiceFakeTranscript');
-      setValue(existing ? `${existing} ${transcript}` : transcript);
+  async function beginTranscribe() {
+    if (!voicePhaseRef.current || voicePhaseRef.current === 'transcribing') return;
+    clearVoiceMaxTimer();
+    // Always await stop completion — Stop → Send must not race onstop.
+    await stopRecorderAndAwaitBlob();
+    if (!voicePhaseRef.current) {
+      // Cancelled while waiting for the final audio chunk.
+      return;
+    }
+
+    const blob = audioBlobRef.current;
+    if (!blob || blob.size === 0) {
+      discardVoiceCapture();
       setVoicePhase(null);
-      requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (!el) return;
-        suppressFocusNotifyRef.current = true;
-        el.focus({ preventScroll: true });
-        resize();
+      toast.error(t('chat.voiceEmptyRecording'));
+      return;
+    }
+    if (blob.size > CHAT_TRANSCRIBE_MAX_BYTES) {
+      discardVoiceCapture();
+      setVoicePhase(null);
+      toast.error(t('chat.voiceTooLarge'));
+      return;
+    }
+
+    setVoicePhase('transcribing');
+    const existing = value.trim();
+    const abort = new AbortController();
+    transcribeAbortRef.current = abort;
+    try {
+      const result = await transcribeChatAudio(blob, {
+        signal: abort.signal,
+        language: i18n.language,
       });
-    }, VOICE_TRANSCRIBE_MS);
+      if (!voicePhaseRef.current) return;
+      const transcript = (result.text || '').trim();
+      if (!transcript) {
+        toast.error(t('chat.voiceTranscribeFailed'));
+        setVoicePhase('stopped');
+        return;
+      }
+      setValue(existing ? `${existing} ${transcript}` : transcript);
+      discardVoiceCapture();
+      setVoicePhase(null);
+      focusComposerInput();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'aborted') {
+        return;
+      }
+      if (!voicePhaseRef.current) return;
+      if (err instanceof ApiError) {
+        toast.error(t(errorMessageKey(err.code)));
+      } else {
+        toast.error(t('chat.voiceTranscribeFailed'));
+      }
+      // Keep blob so the user can retry Send from the stopped bar.
+      setVoicePhase('stopped');
+    } finally {
+      if (transcribeAbortRef.current === abort) {
+        transcribeAbortRef.current = null;
+      }
+    }
   }
 
   function finishVoice() {
-    beginTranscribe();
+    void beginTranscribe();
   }
 
   async function deleteServerAttachment(serverId: string) {
@@ -446,7 +645,7 @@ export function ChatComposer({
                       aria-label={t('chat.voice')}
                       data-testid="chat-voice-button"
                       disabled={disabled || isStreaming}
-                      onClick={startVoice}
+                      onClick={() => void startVoice()}
                     >
                       <Mic className="size-4" />
                     </Button>

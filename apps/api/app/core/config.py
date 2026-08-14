@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_pdf_trigger_model: str = "openai/gpt-5.6-luna"
     openrouter_pdf_engine: str = "mistral-ocr"
+    openrouter_stt_model: str = "google/chirp-3"
     openrouter_embedding_model: str = "qwen/qwen3-embedding-8b"
     openrouter_rerank_model: str = "cohere/rerank-v3.5"
     openrouter_chat_model: str = "qwen/qwen3.8-max"
@@ -148,12 +149,16 @@ class Settings(BaseSettings):
     ai_token_multiplier_rerank: float = 1.0
     ai_token_multiplier_ocr: float = 3.0
     ai_token_multiplier_title: float = 1.0
+    ai_token_multiplier_stt: float = 2.0
     # Optional JSON object: {"openai/gpt-5.6-luna": 3, "cohere/rerank-v3.5": 2}
     ai_token_model_multipliers: str = ""
     ai_token_fallback_embed: int = 100
     ai_token_fallback_rerank: int = 50
     ai_token_fallback_ocr_per_page: int = 500
     ai_token_fallback_title: int = 64
+    # STT: when provider omits token totals, prefer duration * per-second rate.
+    ai_token_stt_per_second: int = 50
+    ai_token_fallback_stt: int = 500
 
     # Phase 5C — stale storage holds (crashed upload before finalize/release).
     storage_reservation_ttl_seconds: int = 900
@@ -185,6 +190,8 @@ class Settings(BaseSettings):
     # Chat composer attachments (ephemeral — not Expert knowledge Documents)
     chat_attachment_max_mb: int = 5
     chat_attachment_ttl_hours: int = 12
+    # Chat voice STT upload cap (OpenRouter allows up to 25 MiB; keep lower for mic clips)
+    chat_transcribe_max_mb: int = 10
 
     max_upload_mb: int = 100
     max_pdf_pages: int = 1000
@@ -229,6 +236,10 @@ class Settings(BaseSettings):
     def chat_attachment_ttl_seconds(self) -> int:
         hours = max(1, int(self.chat_attachment_ttl_hours))
         return hours * 3600
+
+    @property
+    def chat_transcribe_max_bytes(self) -> int:
+        return max(1, int(self.chat_transcribe_max_mb)) * 1024 * 1024
 
     @property
     def is_local(self) -> bool:

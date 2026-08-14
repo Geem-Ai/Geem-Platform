@@ -8,6 +8,7 @@ import {
   historyPageHref,
   isKnownHistoryKind,
   matchDatePreset,
+  operationLabelKey,
   parseHistoryKind,
   presetDateRange,
   shortenId,
@@ -38,8 +39,11 @@ describe('usage history helpers', () => {
     expect(isKnownHistoryKind('rerank_tokens')).toBe(true);
     expect(isKnownHistoryKind('ocr_tokens')).toBe(true);
     expect(isKnownHistoryKind('title_tokens')).toBe(true);
+    expect(isKnownHistoryKind('stt_tokens')).toBe(true);
     expect(historyKindLabelKey('embed_tokens')).toBe('usage.kind.embed_tokens');
     expect(historyKindLabelKey('ocr_tokens')).toBe('usage.kind.ocr_tokens');
+    expect(historyKindLabelKey('stt_tokens')).toBe('usage.kind.stt_tokens');
+    expect(operationLabelKey('speech_to_text')).toBe('usage.operation.speech_to_text');
   });
 
   it('keeps kind in paginated history URLs', () => {

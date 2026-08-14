@@ -33,6 +33,7 @@ AI_OPERATION_KIND = case(
     (UsageEvent.operation_type == "rerank", literal("rerank_tokens")),
     (UsageEvent.operation_type == "pdf_parse", literal("ocr_tokens")),
     (UsageEvent.operation_type == "title", literal("title_tokens")),
+    (UsageEvent.operation_type == "speech_to_text", literal("stt_tokens")),
     else_=literal("chat_tokens"),
 )
 

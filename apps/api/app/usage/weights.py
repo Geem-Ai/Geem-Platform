@@ -28,6 +28,7 @@ class OpenRouterFamily(StrEnum):
     RERANK = "rerank"
     OCR = "ocr"
     TITLE = "title"
+    STT = "stt"
 
 
 HISTORY_KIND_BY_FAMILY: dict[OpenRouterFamily, str] = {
@@ -36,6 +37,7 @@ HISTORY_KIND_BY_FAMILY: dict[OpenRouterFamily, str] = {
     OpenRouterFamily.RERANK: "rerank_tokens",
     OpenRouterFamily.OCR: "ocr_tokens",
     OpenRouterFamily.TITLE: "title_tokens",
+    OpenRouterFamily.STT: "stt_tokens",
 }
 
 AI_HISTORY_KINDS: frozenset[str] = frozenset(
@@ -54,6 +56,7 @@ OPERATION_FAMILY: dict[str, OpenRouterFamily] = {
     "rerank": OpenRouterFamily.RERANK,
     "pdf_parse": OpenRouterFamily.OCR,
     "title": OpenRouterFamily.TITLE,
+    "speech_to_text": OpenRouterFamily.STT,
 }
 
 
@@ -105,6 +108,7 @@ def family_multiplier(
         OpenRouterFamily.RERANK: settings.ai_token_multiplier_rerank,
         OpenRouterFamily.OCR: settings.ai_token_multiplier_ocr,
         OpenRouterFamily.TITLE: settings.ai_token_multiplier_title,
+        OpenRouterFamily.STT: settings.ai_token_multiplier_stt,
     }
     return max(0.0, float(mapping[family]))
 
@@ -118,6 +122,8 @@ def fallback_tokens_for(settings: Settings, family: OpenRouterFamily) -> int:
         return max(0, int(settings.ai_token_fallback_ocr_per_page))
     if family == OpenRouterFamily.TITLE:
         return max(0, int(settings.ai_token_fallback_title))
+    if family == OpenRouterFamily.STT:
+        return max(0, int(settings.ai_token_fallback_stt))
     return max(0, int(settings.effective_ai_usage_reservation_tokens))
 
 
