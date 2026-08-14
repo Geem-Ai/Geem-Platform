@@ -526,7 +526,7 @@ def test_usage_history_filters_by_kind_and_returns_counts(client, register_user,
     assert body["counts"]["credits"] >= 1
     ai_row = next(row for row in body["items"] if row["kind"] == "chat_tokens")
     assert ai_row["operation_type"] == "chat"
-    assert ai_row["model"] == "test-model"
+    assert ai_row["model"] == "dalseen/geem-1.0"
     assert ai_row["input_tokens"] == 10
     assert ai_row["output_tokens"] == 5
 

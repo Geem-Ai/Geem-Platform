@@ -35,6 +35,7 @@ from app.api.v1.schemas import (
 from app.api_keys.dependencies import require_api_scope
 from app.api_keys.principal import ApiKeyPrincipal
 from app.api_keys.scopes import SCOPE_CHAT_WRITE
+from app.common.public_model import PUBLIC_MODEL_ID
 from app.conversations.invocation import ChatInvocationContext
 from app.conversations.turn import ChatTurnExecutor
 from app.core.errors import AppError, ErrorCategory
@@ -128,7 +129,8 @@ def chat_completions(
     expert_id = parse_expert_id(request)
     workspace = _workspace(request, principal, db)
     rate_headers: dict[str, str] = {}
-    echoed_model = body.model or "geem"
+    # Never echo provider model ids — Geem presents one brand model to users.
+    echoed_model = PUBLIC_MODEL_ID
 
     executor = ChatTurnExecutor(db)
     question = executor.validate_message(messages_to_question(body.messages))

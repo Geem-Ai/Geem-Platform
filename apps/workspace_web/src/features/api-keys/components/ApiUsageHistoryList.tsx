@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/tooltip';
 import { formatCount, formatPeriodDate, formatPeriodDateTime, formatRelativeTime } from '@/features/usage/lib/quota';
 import type { ApiUsageHistoryItem, ApiUsagePeriodKey } from '@/services/api/api-keys';
+import { PUBLIC_MODEL_ID } from '@/lib/public-model';
 import { apiUsageDayBucket, groupApiUsageByDay } from '../lib/history';
 import { apiUsageHref } from '../lib/period';
 import { maskedApiKey } from '../lib/status';
@@ -201,7 +202,7 @@ function HistoryRow({ item }: { item: ApiUsageHistoryItem }) {
         ) : null}
         {item.model ? (
           <p className="font-mono text-[11px] text-muted-foreground/80" dir="ltr">
-            {item.model}
+            {PUBLIC_MODEL_ID}
           </p>
         ) : null}
       </div>

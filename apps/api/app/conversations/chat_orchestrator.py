@@ -18,6 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.common.public_model import redact_public_models
 from app.conversations.invocation import ChatInvocationContext
 from app.conversations.locks import ConversationGenerationLock
 from app.conversations.models import (
@@ -221,14 +222,16 @@ class ChatOrchestrator:
                         )
                         usage_closed = True
                         settled = True
-                        final_data = {
-                            **data,
-                            "conversation_id": str(conversation.id),
-                            "user_message_id": str(user_msg.id),
-                            "assistant_message_id": str(assistant.id),
-                            "status": MessageStatus.COMPLETED.value,
-                            "citations": citations,
-                        }
+                        final_data = redact_public_models(
+                            {
+                                **data,
+                                "conversation_id": str(conversation.id),
+                                "user_message_id": str(user_msg.id),
+                                "assistant_message_id": str(assistant.id),
+                                "status": MessageStatus.COMPLETED.value,
+                                "citations": citations,
+                            }
+                        )
                         yield {"event": "final", "data": final_data}
                         yield {
                             "event": "message_complete",
@@ -500,14 +503,16 @@ class ChatOrchestrator:
                         )
                         usage_closed = True
                         settled = True
-                        final_data = {
-                            **data,
-                            "conversation_id": str(conversation.id),
-                            "user_message_id": str(user_msg.id),
-                            "assistant_message_id": str(assistant.id),
-                            "status": MessageStatus.COMPLETED.value,
-                            "citations": citations,
-                        }
+                        final_data = redact_public_models(
+                            {
+                                **data,
+                                "conversation_id": str(conversation.id),
+                                "user_message_id": str(user_msg.id),
+                                "assistant_message_id": str(assistant.id),
+                                "status": MessageStatus.COMPLETED.value,
+                                "citations": citations,
+                            }
+                        )
                         yield {"event": "final", "data": final_data}
                         yield {
                             "event": "message_complete",

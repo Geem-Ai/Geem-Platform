@@ -7,7 +7,7 @@ describe('public Chat quick start', () => {
     expect(snippet).toContain('POST "https://api.geem.ai/api/v1/chat/completions"');
     expect(snippet).toContain('Authorization: Bearer YOUR_API_KEY');
     expect(snippet).toContain('X-Geem-Expert-Id: YOUR_EXPERT_ID');
-    expect(snippet).toContain('"model": "geem"');
+    expect(snippet).toContain('"model": "dalseen/geem-1.0"');
     expect(snippet).toContain('"stream": false');
     expect(snippet).not.toContain('expert_id');
     expect(snippet).not.toContain('geem_sk_');
@@ -17,7 +17,7 @@ describe('public Chat quick start', () => {
   it('explains OpenAI SSE via stream=true JSON', () => {
     const body = publicChatStreamBodyExample();
     expect(body).toContain('"stream": true');
-    expect(body).toContain('"model": "geem"');
+    expect(body).toContain('"model": "dalseen/geem-1.0"');
     expect(body).toContain('Hello Geem');
   });
 });

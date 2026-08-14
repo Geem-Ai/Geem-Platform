@@ -63,7 +63,7 @@ def _chat_body(
     message: str = "Hello",
     *,
     stream: bool = False,
-    model: str = "geem",
+    model: str = "dalseen/geem-1.0",
     messages: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -269,7 +269,7 @@ def test_valid_key_can_chat(client, register_user, db) -> None:
     body = res.json()
     assert body["object"] == "chat.completion"
     assert body["id"].startswith("chatcmpl-")
-    assert body["model"] == "geem"
+    assert body["model"] == "dalseen/geem-1.0"
     assert _assistant(body) == "Hello world"
     assert body["citations"][0]["snippet"] == "safe snippet"
     assert body["usage"]["total_tokens"] == 6
@@ -278,7 +278,7 @@ def test_valid_key_can_chat(client, register_user, db) -> None:
     assert "expert_id" not in body
 
 
-def test_model_is_echoed_not_used_for_routing(client, register_user, db) -> None:
+def test_model_ignored_for_routing_and_branded_in_response(client, register_user, db) -> None:
     user = register_user(email="7b-echo@example.com")
     ws = _create_workspace(client, user, "p7b-echo")
     key = _create_key(client, user, ws)
@@ -306,7 +306,7 @@ def test_model_is_echoed_not_used_for_routing(client, register_user, db) -> None
             json=_chat_body("Hello", model="gpt-4o"),
         )
     assert res.status_code == 200, res.text
-    assert res.json()["model"] == "gpt-4o"
+    assert res.json()["model"] == "dalseen/geem-1.0"
     assert captured["expert_id"] == uuid.UUID(expert["id"])
 
 
@@ -372,7 +372,7 @@ def test_tools_and_temperature_are_ignored(client, register_user, db) -> None:
             CHAT,
             headers=_chat_headers(key["key"], expert["id"]),
             json={
-                "model": "geem",
+                "model": "dalseen/geem-1.0",
                 "messages": [{"role": "user", "content": "Hello"}],
                 "stream": False,
                 "temperature": 0.2,
@@ -380,6 +380,7 @@ def test_tools_and_temperature_are_ignored(client, register_user, db) -> None:
             },
         )
     assert res.status_code == 200, res.text
+    assert res.json()["model"] == "dalseen/geem-1.0"
 
 
 def test_legacy_chat_path_is_gone(client, register_user, db) -> None:

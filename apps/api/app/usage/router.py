@@ -19,6 +19,7 @@ from app.billing.schemas import (
     UsageHistoryTokensOut,
     UsageSummaryOut,
 )
+from app.common.public_model import public_model_or_none
 from app.db.session import get_db
 from app.usage.history import UsageHistoryService
 from app.usage.summary import MeterSnapshot, UsageSummaryService
@@ -103,7 +104,7 @@ def get_usage_history(
                 credits=item.credits,
                 created_at=item.created_at,
                 operation_type=item.operation_type,
-                model=item.model,
+                model=public_model_or_none(item.model),
                 input_tokens=item.input_tokens,
                 output_tokens=item.output_tokens,
                 request_id=item.request_id,

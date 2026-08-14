@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import iterate_in_threadpool
 
 from app.api.schemas import Citation, JobResponse, QueryRequest, QueryResponse
+from app.common.public_model import public_model_id, public_model_or_none, redact_public_models
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import Document, IngestionJob
 from app.db.session import SessionLocal, get_db
@@ -64,10 +65,10 @@ def query(
         answer=result["answer"],
         insufficient_context=result["insufficient_context"],
         citations=[Citation(**c) for c in result["citations"]],
-        model=result["model"],
+        model=public_model_id(result.get("model")),
         general_answer=result.get("general_answer"),
         used_general_knowledge=bool(result.get("used_general_knowledge")),
-        general_model=result.get("general_model"),
+        general_model=public_model_or_none(result.get("general_model")),
     )
 
 
@@ -104,9 +105,11 @@ async def query_stream(
                 top_k=top_k,
                 usage_context=usage_context,
             ):
+                payload = item.get("data") or {}
                 if item.get("event") == "final":
-                    meter.settle(item.get("data") or {})
-                yield _sse(item["event"], item["data"])
+                    meter.settle(payload)
+                    payload = redact_public_models(payload)
+                yield _sse(item["event"], payload)
             if not meter.closed:
                 meter.release()
         except AppError as exc:
