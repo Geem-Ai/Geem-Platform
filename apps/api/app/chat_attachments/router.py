@@ -56,21 +56,13 @@ async def upload_chat_attachment(
         declared_mime_type=file.content_type,
     )
     # Exact TTL delete; Beat sweep covers missed ETAs / worker downtime.
-    # Never fail the HTTP success path after quota was charged.
-    try:
-        from app.worker.tasks import schedule_chat_attachment_expiry
+    # Scheduling must never fail the HTTP success path after quota was charged.
+    from app.worker.tasks import schedule_chat_attachment_expiry
 
-        schedule_chat_attachment_expiry(
-            str(row.id),
-            countdown_seconds=settings.chat_attachment_ttl_seconds,
-        )
-    except Exception:
-        import logging
-
-        logging.getLogger(__name__).exception(
-            "Failed to schedule chat attachment TTL purge; Beat sweep will cover it",
-            extra={"attachment_id": str(row.id)},
-        )
+    schedule_chat_attachment_expiry(
+        str(row.id),
+        countdown_seconds=settings.chat_attachment_ttl_seconds,
+    )
     return ChatAttachmentOut.model_validate(row)
 
 

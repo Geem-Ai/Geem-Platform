@@ -90,7 +90,10 @@ export function ChatComposer({
   /** Ignore the next onFocus from programmatic autoFocus so sample prompts can type. */
   const suppressFocusNotifyRef = useRef(false);
   const transcribeTimerRef = useRef<number | null>(null);
-  const uploadAbortRef = useRef<AbortController | null>(null);
+  /** When true, an in-flight upload should delete the server object on completion. */
+  const dismissUploadRef = useRef(false);
+  /** Server id observed for the current upload (for dismiss-after-commit cleanup). */
+  const pendingUploadServerIdRef = useRef<string | null>(null);
   const attachmentRef = useRef<ComposerAttachment | null>(null);
 
   useEffect(() => {
@@ -114,7 +117,8 @@ export function ChatComposer({
       if (transcribeTimerRef.current !== null) {
         window.clearTimeout(transcribeTimerRef.current);
       }
-      uploadAbortRef.current?.abort();
+      // Prefer completion+delete over abort so we never lose the server id.
+      dismissUploadRef.current = true;
     };
   }, []);
 
@@ -177,27 +181,37 @@ export function ChatComposer({
     beginTranscribe();
   }
 
+  async function deleteServerAttachment(serverId: string) {
+    try {
+      await deleteChatAttachment(serverId);
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === 'aborted' || err.code === 'chat_attachment_not_found')) {
+        return;
+      }
+      if (err instanceof ApiError) {
+        toast.error(t(errorMessageKey(err.code)));
+      }
+    }
+  }
+
   async function removeAttachment() {
     const current = attachmentRef.current;
-    uploadAbortRef.current?.abort();
-    uploadAbortRef.current = null;
+    // Do not abort XHR — let it finish so we always learn the server id, then delete.
+    dismissUploadRef.current = true;
     setAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
-    if (current?.serverId) {
-      try {
-        await deleteChatAttachment(current.serverId);
-      } catch (err) {
-        if (err instanceof ApiError && err.code === 'aborted') return;
-        // Already dismissed in UI; surface unexpected delete failures.
-        if (err instanceof ApiError && err.code !== 'chat_attachment_not_found') {
-          toast.error(t(errorMessageKey(err.code)));
-        }
-      }
+
+    const serverId = current?.serverId ?? pendingUploadServerIdRef.current;
+    pendingUploadServerIdRef.current = null;
+    if (serverId) {
+      await deleteServerAttachment(serverId);
     }
   }
 
   async function startUpload(file: File) {
     await removeAttachment();
+    dismissUploadRef.current = false;
+    pendingUploadServerIdRef.current = null;
 
     if (file.size > CHAT_ATTACHMENT_MAX_BYTES) {
       toast.error(t('chat.attachmentTooLarge'));
@@ -214,23 +228,22 @@ export function ChatComposer({
     };
     setAttachment(draft);
 
-    const controller = new AbortController();
-    uploadAbortRef.current = controller;
-
     try {
       const uploaded = await uploadChatAttachment(file, {
-        signal: controller.signal,
         onProgress: (percent) => {
           setAttachment((prev) =>
             prev && prev.id === localId ? { ...prev, progress: percent } : prev,
           );
         },
       });
-      if (controller.signal.aborted) {
-        // User dismissed mid-upload — best-effort delete if server already finished.
-        void deleteChatAttachment(uploaded.id).catch(() => undefined);
+      pendingUploadServerIdRef.current = uploaded.id;
+
+      if (dismissUploadRef.current) {
+        pendingUploadServerIdRef.current = null;
+        void deleteServerAttachment(uploaded.id);
         return;
       }
+
       setAttachment({
         id: localId,
         serverId: uploaded.id,
@@ -238,8 +251,12 @@ export function ChatComposer({
         typeLabel: attachmentTypeLabel(uploaded.original_filename || file.name),
         progress: 100,
       });
+      pendingUploadServerIdRef.current = null;
     } catch (err) {
-      if (controller.signal.aborted || (err instanceof ApiError && err.code === 'aborted')) {
+      const orphanId = pendingUploadServerIdRef.current;
+      pendingUploadServerIdRef.current = null;
+      if (orphanId || dismissUploadRef.current) {
+        if (orphanId) void deleteServerAttachment(orphanId);
         return;
       }
       setAttachment(null);
@@ -252,10 +269,6 @@ export function ChatComposer({
         return;
       }
       toast.error(t('chat.attachmentUploadFailed'));
-    } finally {
-      if (uploadAbortRef.current === controller) {
-        uploadAbortRef.current = null;
-      }
     }
   }
 
@@ -274,8 +287,11 @@ export function ChatComposer({
 
   function submit() {
     const q = value.trim();
-    if (!q || disabled || isStreaming || voicePhase) return;
-    // Keep uploaded attachment id for a later chat turn — do not delete on send yet.
+    const attachmentUploading = Boolean(
+      attachment && (!attachment.serverId || attachment.progress < 100),
+    );
+    if (!q || disabled || isStreaming || voicePhase || attachmentUploading) return;
+    // Keep ready attachment in the composer for a later chat-turn wiring.
     onSubmit(q);
     setValue('');
     requestAnimationFrame(() => {
@@ -299,7 +315,15 @@ export function ChatComposer({
     }
   }
 
-  const canSend = Boolean(value.trim()) && !disabled && !isStreaming && !voicePhase;
+  const attachmentUploading = Boolean(
+    attachment && (!attachment.serverId || attachment.progress < 100),
+  );
+  const canSend =
+    Boolean(value.trim()) &&
+    !disabled &&
+    !isStreaming &&
+    !voicePhase &&
+    !attachmentUploading;
   const selectedExpert = expertPicker?.selectedId
     ? expertPicker.experts.find((e) => e.id === expertPicker.selectedId)
     : null;

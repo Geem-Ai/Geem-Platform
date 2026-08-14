@@ -106,6 +106,16 @@ function xhrUpload(
 
     xhr.onabort = () => {
       options.signal?.removeEventListener('abort', onAbort);
+      // If the response already landed, prefer success over abort (dismiss race).
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+        try {
+          options.onProgress?.(100);
+          resolve(JSON.parse(xhr.responseText) as ChatAttachmentResponse);
+          return;
+        } catch {
+          /* fall through to abort */
+        }
+      }
       reject(new ApiError('Upload aborted', { status: 0, code: 'aborted' }));
     };
 
