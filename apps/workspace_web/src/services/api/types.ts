@@ -249,10 +249,18 @@ export type ConversationMessage = {
   role: MessageRole | string;
   content: string;
   citations: Citation[];
+  attachments?: MessageAttachment[];
   status: MessageStatus | string;
   usage_event_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type MessageAttachment = {
+  id: string;
+  filename: string;
+  mime_type: string;
+  byte_size: number;
 };
 
 /** SSE payloads from ChatOrchestrator (Phase 4B). */

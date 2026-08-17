@@ -8,6 +8,8 @@ export type ComposerAttachment = {
   /** Server id after successful upload; null while uploading. */
   serverId: string | null;
   name: string;
+  mimeType?: string;
+  byteSize?: number;
   /** Extension / type label, e.g. PDF */
   typeLabel: string;
   /** 0–100 upload progress */

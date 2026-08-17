@@ -72,12 +72,27 @@ class ChatOrchestrator:
         actor: User,
         conversation_id: uuid.UUID,
         content: str,
+        attachment_id: uuid.UUID | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Persist user + assistant messages and stream Expert-scoped RAG."""
         WorkspacePolicy.require(membership.role, WorkspaceAction.READ_DOCUMENT)
         ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
 
-        question = validate_chat_message(content, settings=self.settings)
+        turn_attachment = None
+        if attachment_id is not None:
+            from app.chat_attachments.service import ChatAttachmentService
+
+            turn_attachment = ChatAttachmentService(self.db, self.settings).load_for_turn(
+                workspace=workspace,
+                actor=actor,
+                attachment_id=attachment_id,
+            )
+
+        question = validate_chat_message(
+            content,
+            settings=self.settings,
+            allow_empty=turn_attachment is not None,
+        )
 
         conversation = self._require_owned(
             conversation_id=conversation_id,
@@ -120,11 +135,13 @@ class ChatOrchestrator:
             needs_title = not bool((conversation.title or "").strip())
 
             now = datetime.now(timezone.utc)
+            attachment_snapshot = [turn_attachment.snapshot()] if turn_attachment else []
             user_msg = Message(
                 conversation_id=conversation.id,
                 role=MessageRole.USER.value,
                 content=question,
                 citations=[],
+                attachments=attachment_snapshot,
                 status=MessageStatus.COMPLETED.value,
                 created_at=now,
                 updated_at=now,
@@ -136,6 +153,7 @@ class ChatOrchestrator:
                 role=MessageRole.ASSISTANT.value,
                 content="",
                 citations=[],
+                attachments=[],
                 status=MessageStatus.STREAMING.value,
                 created_at=now + timedelta(microseconds=1000),
                 updated_at=now + timedelta(microseconds=1000),
@@ -164,11 +182,14 @@ class ChatOrchestrator:
             # Title from the first user message — run in parallel with answer streaming
             # (not after the reply finishes). Idempotent if a title already exists.
             if needs_title:
+                title_seed = question or (
+                    turn_attachment.filename if turn_attachment is not None else ""
+                )
                 schedule_conversation_title(
                     conversation_id=conversation.id,
                     workspace_id=workspace.id,
                     user_id=actor.id,
-                    user_message=user_msg.content,
+                    user_message=title_seed,
                     assistant_message="",
                 )
 
@@ -189,6 +210,7 @@ class ChatOrchestrator:
                     question=question,
                     history=history,
                     usage_context=usage_ctx,
+                    attachment=turn_attachment,
                 ):
                     event = item.get("event")
                     data = item.get("data") or {}
@@ -417,6 +439,7 @@ class ChatOrchestrator:
                 role=MessageRole.ASSISTANT.value,
                 content="",
                 citations=[],
+                attachments=[],
                 status=MessageStatus.STREAMING.value,
                 created_at=now,
                 updated_at=now,

@@ -13,11 +13,23 @@ import { ApiError, mapStatusToCode } from './errors';
  */
 const _maxMbRaw = Number(import.meta.env.VITE_CHAT_ATTACHMENT_MAX_MB);
 export const CHAT_ATTACHMENT_MAX_MB =
-  Number.isFinite(_maxMbRaw) && _maxMbRaw > 0 ? _maxMbRaw : 5;
+  Number.isFinite(_maxMbRaw) && _maxMbRaw > 0 ? _maxMbRaw : 20;
 export const CHAT_ATTACHMENT_MAX_BYTES = CHAT_ATTACHMENT_MAX_MB * 1024 * 1024;
 
-export const CHAT_ATTACHMENT_ACCEPT =
-  '.pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown';
+export type ChatAttachmentKind = 'images' | 'pdf' | 'text';
+
+export const CHAT_ATTACHMENT_ACCEPT_BY_KIND: Record<ChatAttachmentKind, string> = {
+  images: 'image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif',
+  pdf: 'application/pdf,.pdf',
+  text: 'text/plain,text/markdown,.txt,.md,.markdown',
+};
+
+/** Union accept for legacy / fallback. Prefer kind-specific accept from the picker. */
+export const CHAT_ATTACHMENT_ACCEPT = [
+  CHAT_ATTACHMENT_ACCEPT_BY_KIND.images,
+  CHAT_ATTACHMENT_ACCEPT_BY_KIND.pdf,
+  CHAT_ATTACHMENT_ACCEPT_BY_KIND.text,
+].join(',');
 
 export type ChatAttachmentResponse = {
   id: string;
@@ -124,7 +136,7 @@ function xhrUpload(
 }
 
 /**
- * Upload a chat composer attachment (Workspace-scoped, 5 MiB max).
+ * Upload a chat composer attachment (Workspace-scoped, ephemeral).
  * Uses XHR so upload progress can drive the ChatGPT-style ring.
  */
 export async function uploadChatAttachment(

@@ -76,10 +76,15 @@ export function streamConversationMessage(
   content: string,
   handlers: SseHandlers,
   signal?: AbortSignal,
+  options?: { attachmentId?: string },
 ) {
+  const body: { content: string; attachment_id?: string } = { content };
+  if (options?.attachmentId) {
+    body.attachment_id = options.attachmentId;
+  }
   return streamSse(
     `/api/conversations/${conversationId}/messages/stream`,
-    { content },
+    body,
     handlers,
     signal,
   );

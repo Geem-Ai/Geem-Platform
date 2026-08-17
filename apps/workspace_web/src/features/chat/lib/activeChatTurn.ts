@@ -1,4 +1,4 @@
-import type { ChatUiMessage } from '../types';
+import type { ChatUiMessage, ChatUiAttachment } from '../types';
 import { newClientId } from '../types';
 
 export type ActiveChatTurn = {
@@ -8,6 +8,7 @@ export type ActiveChatTurn = {
   userClientId: string;
   assistantClientId: string;
   content: string;
+  attachmentId?: string;
 };
 
 let active: ActiveChatTurn | null = null;
@@ -34,6 +35,7 @@ export function getActiveChatTurn(
 export function buildOptimisticTurnMessages(
   content: string,
   ids?: { userClientId?: string; assistantClientId?: string },
+  attachments?: ChatUiAttachment[],
 ): {
   messages: ChatUiMessage[];
   userClientId: string;
@@ -53,6 +55,7 @@ export function buildOptimisticTurnMessages(
         role: 'user',
         content,
         citations: [],
+        attachments: attachments ?? [],
         status: 'completed',
         created_at: now,
       },
@@ -62,6 +65,7 @@ export function buildOptimisticTurnMessages(
         role: 'assistant',
         content: '',
         citations: [],
+        attachments: [],
         status: 'streaming',
         created_at: now,
       },
@@ -80,19 +84,26 @@ export function publishActiveChatTurn(input: ActiveChatTurn): ActiveChatTurn {
 export function ensureActiveChatTurn(
   conversationId: string,
   content: string,
+  options?: {
+    attachmentId?: string;
+    attachments?: ChatUiAttachment[];
+  },
 ): ActiveChatTurn {
   const trimmed = content.trim();
+  const attachmentId = options?.attachmentId;
   if (
     active &&
     active.conversationId === conversationId &&
-    active.content === trimmed
+    active.content === trimmed &&
+    (active.attachmentId || undefined) === (attachmentId || undefined)
   ) {
     return active;
   }
-  const built = buildOptimisticTurnMessages(trimmed);
+  const built = buildOptimisticTurnMessages(trimmed, undefined, options?.attachments);
   return publishActiveChatTurn({
     conversationId,
     content: trimmed,
+    attachmentId,
     messages: built.messages,
     isStreaming: true,
     userClientId: built.userClientId,

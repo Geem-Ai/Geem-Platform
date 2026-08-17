@@ -54,6 +54,18 @@ describe('conversations API client', () => {
     );
   });
 
+  it('includes attachment_id when provided', async () => {
+    await streamConversationMessage('c1', 'See file', {}, undefined, {
+      attachmentId: 'att-9',
+    });
+    expect(streamSseMock).toHaveBeenCalledWith(
+      '/api/conversations/c1/messages/stream',
+      { content: 'See file', attachment_id: 'att-9' },
+      {},
+      undefined,
+    );
+  });
+
   it('retries via the assistant retry stream endpoint', async () => {
     await retryConversationMessageStream('c1', 'a1', {});
     expect(streamSseMock).toHaveBeenCalledWith(

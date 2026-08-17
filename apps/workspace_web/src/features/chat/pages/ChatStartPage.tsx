@@ -10,12 +10,16 @@ import { useExperts } from '@/features/experts/hooks/useExperts';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { Expert } from '@/services/api/types';
 import { ChatStarter } from '../components/ChatStarter';
+import type { ChatComposerSubmitOptions } from '../components/ChatComposer';
 import { useCreateConversation } from '../hooks/useConversationMutations';
 import { ensureActiveChatTurn } from '../lib/activeChatTurn';
-import { setPendingChatMessage } from '../lib/pendingChatMessage';
+import {
+  setPendingChatMessage,
+  type PendingChatPayload,
+} from '../lib/pendingChatMessage';
 
 export type ChatPendingLocationState = {
-  pendingMessage?: string;
+  pendingMessage?: string | PendingChatPayload;
 };
 
 export function ChatStartPage() {
@@ -95,16 +99,35 @@ export function ChatStartPage() {
     else askHint = t('chat.askDisabled');
   }
 
-  async function handleSubmit(content: string) {
+  async function handleSubmit(content: string, options?: ChatComposerSubmitOptions) {
     if (!selectedExpert || !askEnabled || createConversation.isPending) return;
+    if (!content.trim() && !options?.attachmentId) return;
     try {
       const conversation = await createConversation.mutateAsync({
         expert_id: selectedExpert.id,
       });
-      setPendingChatMessage(conversation.id, content);
-      ensureActiveChatTurn(conversation.id, content);
+      const payload: PendingChatPayload = {
+        content: content.trim(),
+        attachmentId: options?.attachmentId,
+        attachmentMeta: options?.attachmentMeta,
+      };
+      setPendingChatMessage(conversation.id, payload);
+      ensureActiveChatTurn(conversation.id, payload.content, {
+        attachmentId: payload.attachmentId,
+        attachments:
+          payload.attachmentId && payload.attachmentMeta
+            ? [
+                {
+                  id: payload.attachmentId,
+                  filename: payload.attachmentMeta.filename,
+                  mime_type: payload.attachmentMeta.mimeType,
+                  byte_size: payload.attachmentMeta.byteSize ?? 0,
+                },
+              ]
+            : undefined,
+      });
       void navigate(`/chat/${conversation.id}`, {
-        state: { pendingMessage: content } satisfies ChatPendingLocationState,
+        state: { pendingMessage: payload } satisfies ChatPendingLocationState,
       });
     } catch (err) {
       const key =
@@ -124,7 +147,7 @@ export function ChatStartPage() {
         experts={allExperts}
         selectedExpertId={selectedExpertId}
         onSelectExpert={handleSelectExpert}
-        onSubmit={(c) => void handleSubmit(c)}
+        onSubmit={(c, opts) => void handleSubmit(c, opts)}
         expertsLoading={expertsQuery.isLoading}
         submitting={createConversation.isPending}
         disabled={!askEnabled}

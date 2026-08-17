@@ -4,14 +4,14 @@ import { GeemAnimatedMascot } from '@/components/brand/GeemAnimatedMascot';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
-import { ChatComposer } from './ChatComposer';
+import { ChatComposer, type ChatComposerSubmitOptions } from './ChatComposer';
 import { SamplePromptSuggestions } from './SamplePromptSuggestions';
 
 interface ChatStarterProps {
   experts: Expert[];
   selectedExpertId: string | null;
   onSelectExpert: (expertId: string) => void;
-  onSubmit: (content: string) => void;
+  onSubmit: (content: string, options?: ChatComposerSubmitOptions) => void;
   expertsLoading?: boolean;
   submitting?: boolean;
   disabled?: boolean;
@@ -81,9 +81,9 @@ export function ChatStarter({
           )}
           <ChatComposer
             variant="starter"
-            onSubmit={(content) => {
+            onSubmit={(content, options) => {
               pausePrompts();
-              onSubmit(content);
+              onSubmit(content, options);
             }}
             disabled={disabled || !selected || submitting}
             isStreaming={submitting}
