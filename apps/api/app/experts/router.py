@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.documents.dependencies import DocumentAccess, get_document_access
 from app.experts.models import Expert, ExpertType
 from app.experts.policy import ExpertAction
+from app.experts.generate_instructions import generate_expert_instructions_for_workspace
 from app.experts.schemas import (
     AddConnectorSourcesRequest,
     AddConnectorSourcesResponse,
@@ -21,6 +22,8 @@ from app.experts.schemas import (
     ExpertSourceOut,
     ExpertUpdateRequest,
     ExpertUploadResponse,
+    GenerateExpertInstructionsRequest,
+    GenerateExpertInstructionsResponse,
 )
 from app.experts.service import ExpertService
 
@@ -98,6 +101,32 @@ def create_expert(
         icon_url=body.icon_url,
     )
     return _expert_out(expert, "workspace", knowledge_document_count=0)
+
+
+@router.post(
+    "/generate-instructions",
+    response_model=GenerateExpertInstructionsResponse,
+)
+def generate_expert_instructions(
+    body: GenerateExpertInstructionsRequest,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> GenerateExpertInstructionsResponse:
+    """Draft system instructions via OpenRouter; bills workspace AI tokens (CHAT)."""
+    instructions = generate_expert_instructions_for_workspace(
+        db,
+        workspace=access.workspace,
+        membership=access.membership,
+        actor=access.user,
+        brief=body.brief,
+        persona=body.persona,
+        audience=body.audience,
+        tone=body.tone,
+        constraints=body.constraints,
+        name=body.name,
+        description=body.description,
+    )
+    return GenerateExpertInstructionsResponse(system_instructions=instructions)
 
 
 @router.get("/{expert_id}", response_model=ExpertOut)

@@ -107,6 +107,19 @@ export type ConnectionCapabilities = {
   can_reconnect: boolean;
 };
 
+export type WhatsAppConnectMode = 'qr' | 'pairing';
+
+export type WhatsAppProviderStatus =
+  | 'created'
+  | 'initializing'
+  | 'qr_ready'
+  | 'authenticating'
+  | 'ready'
+  | 'disconnected'
+  | 'action_required'
+  | 'failed'
+  | string;
+
 export type AppConnection = {
   id: string;
   workspace_id: string;
@@ -132,6 +145,33 @@ export type AppConnection = {
   capabilities: ConnectionCapabilities;
   /** Present when starting an OAuth connection — navigate the browser here. */
   authorization_url?: string | null;
+};
+
+export type WhatsAppConnection = AppConnection & {
+  provider_status?: WhatsAppProviderStatus | null;
+  connect_mode?: WhatsAppConnectMode | string | null;
+  phone?: string | null;
+  expert_id?: string | null;
+  enabled?: boolean;
+  auto_reply_enabled?: boolean;
+  respond_to_groups?: boolean;
+};
+
+export type WhatsAppQrResponse = {
+  status: string;
+  qr_code: string;
+};
+
+export type WhatsAppPairingCodeResponse = {
+  status: string;
+  pairing_code: string;
+};
+
+export type WhatsAppChannelSettingsInput = {
+  expert_id?: string | null;
+  auto_reply_enabled?: boolean;
+  respond_to_groups?: boolean;
+  enabled?: boolean;
 };
 
 export type AppConnectionList = {
@@ -312,6 +352,7 @@ export async function startAppConnection(
     display_name?: string;
     connection_id?: string;
     return_path?: string;
+    connect_mode?: WhatsAppConnectMode;
   },
 ): Promise<AppConnection> {
   return apiRequest<AppConnection>(
@@ -322,6 +363,26 @@ export async function startAppConnection(
         display_name: body?.display_name ?? null,
         connection_id: body?.connection_id ?? null,
         return_path: body?.return_path ?? null,
+        connect_mode: body?.connect_mode ?? 'qr',
+      },
+    },
+  );
+}
+
+export async function startWhatsAppConnection(
+  slug: string,
+  body?: {
+    connection_id?: string;
+    connect_mode?: WhatsAppConnectMode;
+  },
+): Promise<WhatsAppConnection> {
+  return apiRequest<WhatsAppConnection>(
+    `/api/apps/${encodeURIComponent(slug)}/connections`,
+    {
+      method: 'POST',
+      json: {
+        connection_id: body?.connection_id ?? null,
+        connect_mode: body?.connect_mode ?? 'qr',
       },
     },
   );
@@ -391,6 +452,67 @@ export async function getAppConnection(
 ): Promise<AppConnection> {
   return apiRequest<AppConnection>(
     `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}`,
+  );
+}
+
+export async function getWhatsAppStatus(
+  slug: string,
+  connectionId: string,
+): Promise<WhatsAppConnection> {
+  return apiRequest<WhatsAppConnection>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/openwa/status`,
+  );
+}
+
+export async function getWhatsAppQr(
+  slug: string,
+  connectionId: string,
+): Promise<WhatsAppQrResponse> {
+  return apiRequest<WhatsAppQrResponse>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/openwa/qr`,
+  );
+}
+
+export async function requestWhatsAppPairingCode(
+  slug: string,
+  connectionId: string,
+  body: { phone_number: string },
+): Promise<WhatsAppPairingCodeResponse> {
+  return apiRequest<WhatsAppPairingCodeResponse>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/openwa/pairing-code`,
+    {
+      method: 'POST',
+      json: { phone_number: body.phone_number },
+    },
+  );
+}
+
+export async function updateChannelSettings(
+  slug: string,
+  connectionId: string,
+  body: WhatsAppChannelSettingsInput,
+): Promise<WhatsAppConnection> {
+  return apiRequest<WhatsAppConnection>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/channel-settings`,
+    {
+      method: 'PATCH',
+      json: {
+        expert_id: body.expert_id ?? null,
+        auto_reply_enabled: body.auto_reply_enabled,
+        respond_to_groups: body.respond_to_groups,
+        enabled: body.enabled,
+      },
+    },
+  );
+}
+
+export async function reconnectWhatsApp(
+  slug: string,
+  connectionId: string,
+): Promise<WhatsAppConnection> {
+  return apiRequest<WhatsAppConnection>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/openwa/reconnect`,
+    { method: 'POST' },
   );
 }
 

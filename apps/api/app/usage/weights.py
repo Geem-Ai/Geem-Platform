@@ -51,6 +51,7 @@ OPERATION_FAMILY: dict[str, OpenRouterFamily] = {
     "general_expert": OpenRouterFamily.CHAT,
     "general_fallback": OpenRouterFamily.CHAT,
     "general_chat": OpenRouterFamily.CHAT,
+    "expert_instructions": OpenRouterFamily.CHAT,
     "embedding": OpenRouterFamily.EMBED,
     "embed_query": OpenRouterFamily.EMBED,
     "rerank": OpenRouterFamily.RERANK,

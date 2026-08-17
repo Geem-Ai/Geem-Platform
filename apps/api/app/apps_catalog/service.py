@@ -343,6 +343,8 @@ class AppInstallationService:
             self.db.refresh(existing)
             row = self.repo.get_installation_for_workspace(workspace.id, existing.id)
             assert row is not None
+            self._run_install_hooks(workspace_id=workspace.id, installation=row, app=app)
+            self.db.commit()
             security_log(
                 "app_installed",
                 workspace_id=str(workspace.id),
@@ -368,6 +370,8 @@ class AppInstallationService:
         self.db.commit()
         loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
         assert loaded is not None
+        self._run_install_hooks(workspace_id=workspace.id, installation=loaded, app=app)
+        self.db.commit()
         security_log(
             "app_installed",
             workspace_id=str(workspace.id),
@@ -544,15 +548,40 @@ class AppInstallationService:
             return ensure_utc(sub.current_period_end) > datetime.now(timezone.utc)
         return False
 
-    @staticmethod
-    def _run_uninstall_hooks(
+    def _run_install_hooks(
+        self,
         *,
         workspace_id: uuid.UUID,
         installation: AppInstallation,
         app: CatalogApp,
     ) -> None:
-        """Placeholder for future connector/source cleanup (9C+)."""
-        _ = (workspace_id, installation, app)
+        """Best-effort connector follow-up after install (e.g. OpenWA webhook register)."""
+        if app.connector_key != "openwa":
+            return
+        from app.connectors.providers.openwa.service import OpenWAChannelService
+
+        OpenWAChannelService(self.db).register_webhooks_for_installation(
+            workspace_id=workspace_id,
+            installation_id=installation.id,
+            app_slug=app.slug,
+        )
+
+    def _run_uninstall_hooks(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        installation: AppInstallation,
+        app: CatalogApp,
+    ) -> None:
+        """Best-effort connector cleanup on uninstall (keeps licenses/subscriptions)."""
+        if app.connector_key != "openwa":
+            return
+        from app.connectors.providers.openwa.service import OpenWAChannelService
+
+        OpenWAChannelService(self.db).remove_webhooks_for_installation(
+            workspace_id=workspace_id,
+            installation_id=installation.id,
+        )
 
     @staticmethod
     def _require_tenant(workspace: Workspace) -> None:

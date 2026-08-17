@@ -110,6 +110,20 @@ export type ApiErrorCode =
   | 'microsoft_onedrive_delta_resync_required'
   | 'microsoft_onedrive_subscription_failed'
   | 'microsoft_onedrive_sync_failed'
+  | 'openwa_not_configured'
+  | 'openwa_unavailable'
+  | 'openwa_unauthorized'
+  | 'openwa_timeout'
+  | 'openwa_request_invalid'
+  | 'openwa_session_not_found'
+  | 'openwa_session_conflict'
+  | 'openwa_qr_not_ready'
+  | 'openwa_pairing_failed'
+  | 'openwa_phone_invalid'
+  | 'openwa_webhook_failed'
+  | 'openwa_send_failed'
+  | 'channel_binding_required'
+  | 'channel_expert_invalid'
   | 'api_key_not_found'
   | 'unknown';
 
@@ -223,6 +237,20 @@ const KNOWN_CODES = new Set<string>([
   'microsoft_onedrive_delta_resync_required',
   'microsoft_onedrive_subscription_failed',
   'microsoft_onedrive_sync_failed',
+  'openwa_not_configured',
+  'openwa_unavailable',
+  'openwa_unauthorized',
+  'openwa_timeout',
+  'openwa_request_invalid',
+  'openwa_session_not_found',
+  'openwa_session_conflict',
+  'openwa_qr_not_ready',
+  'openwa_pairing_failed',
+  'openwa_phone_invalid',
+  'openwa_webhook_failed',
+  'openwa_send_failed',
+  'channel_binding_required',
+  'channel_expert_invalid',
   'api_key_not_found',
 ]);
 
@@ -396,6 +424,20 @@ export function errorMessageKey(code: string): string {
     microsoft_onedrive_subscription_failed:
       'errors.microsoftOneDriveSubscriptionFailed',
     microsoft_onedrive_sync_failed: 'errors.microsoftOneDriveSyncFailed',
+    openwa_not_configured: 'errors.openwaNotConfigured',
+    openwa_unavailable: 'errors.openwaUnavailable',
+    openwa_unauthorized: 'errors.openwaUnauthorized',
+    openwa_timeout: 'errors.openwaTimeout',
+    openwa_request_invalid: 'errors.openwaRequestInvalid',
+    openwa_session_not_found: 'errors.openwaSessionNotFound',
+    openwa_session_conflict: 'errors.openwaSessionConflict',
+    openwa_qr_not_ready: 'errors.openwaQrNotReady',
+    openwa_pairing_failed: 'errors.openwaPairingFailed',
+    openwa_phone_invalid: 'errors.openwaPhoneInvalid',
+    openwa_webhook_failed: 'errors.openwaWebhookFailed',
+    openwa_send_failed: 'errors.openwaSendFailed',
+    channel_binding_required: 'errors.channelBindingRequired',
+    channel_expert_invalid: 'errors.channelExpertInvalid',
   };
   return map[code as ApiErrorCode] ?? 'errors.generic';
 }

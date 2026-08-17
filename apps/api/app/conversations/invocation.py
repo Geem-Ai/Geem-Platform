@@ -1,6 +1,7 @@
-"""Chat actor / attribution context (Phase 7B).
+"""Chat actor / attribution context (Phase 7B / 9F channel).
 
 One invocation never claims both a session User and an API key.
+Channel invocations have neither — tenancy comes from the connection.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from app.usage.attribution import GenerationUsageContext
 
 SOURCE_WORKSPACE = "workspace"
 SOURCE_API = "api"
+SOURCE_CHANNEL = "channel"
 
 
 @dataclass(slots=True, frozen=True)
@@ -20,6 +22,7 @@ class ChatInvocationContext:
 
     Workspace UI: user_id set, api_key_id None, source=workspace.
     Public API: api_key_id set, user_id None, source=api.
+    Channel (WhatsApp): both None, source=channel, connection_id set.
     """
 
     workspace_id: uuid.UUID
@@ -30,6 +33,7 @@ class ChatInvocationContext:
     conversation_id: uuid.UUID | None = None
     message_id: uuid.UUID | None = None
     request_id: str | None = None
+    connection_id: uuid.UUID | None = None
 
     def __post_init__(self) -> None:
         if self.source == SOURCE_API:
@@ -40,6 +44,13 @@ class ChatInvocationContext:
                 raise ValueError(
                     "Workspace Chat invocations require user_id and no api_key_id."
                 )
+        elif self.source == SOURCE_CHANNEL:
+            if self.user_id is not None or self.api_key_id is not None:
+                raise ValueError(
+                    "Channel Chat invocations must not set user_id or api_key_id."
+                )
+            if self.connection_id is None:
+                raise ValueError("Channel Chat invocations require connection_id.")
         else:
             raise ValueError(f"Unknown Chat invocation source: {self.source}")
 
@@ -83,6 +94,29 @@ class ChatInvocationContext:
             conversation_id=None,
             message_id=None,
             request_id=request_id,
+        )
+
+    @classmethod
+    def channel(
+        cls,
+        *,
+        workspace_id: uuid.UUID,
+        connection_id: uuid.UUID,
+        expert_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None,
+        message_id: uuid.UUID | None = None,
+        request_id: str | None = None,
+    ) -> ChatInvocationContext:
+        return cls(
+            workspace_id=workspace_id,
+            source=SOURCE_CHANNEL,
+            user_id=None,
+            api_key_id=None,
+            expert_id=expert_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            request_id=request_id,
+            connection_id=connection_id,
         )
 
     def to_usage_context(self) -> GenerationUsageContext:

@@ -39,6 +39,7 @@ from app.connectors.providers.google_drive import register_google_drive_connecto
 from app.connectors.providers.microsoft_onedrive import (
     register_microsoft_onedrive_connector,
 )
+from app.connectors.providers.openwa import register_openwa_connector
 
 setup_logging()
 settings = get_settings()
@@ -46,6 +47,7 @@ settings = get_settings()
 # Phase 9D/9E — always register; available=False until OAuth env is configured.
 register_google_drive_connector()
 register_microsoft_onedrive_connector()
+register_openwa_connector()
 
 app = FastAPI(
     title=settings.app_name,

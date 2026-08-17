@@ -453,7 +453,9 @@ class AppCommerceService:
             )
             try:
                 with self.db.begin_nested():
-                    return self.repo.create_installation(row)
+                    return self._finalize_activated_installation(
+                        self.repo.create_installation(row)
+                    )
             except IntegrityError:
                 existing = self.repo.get_installation_for_update(workspace_id, app_id)
                 if existing is None:
@@ -464,7 +466,21 @@ class AppCommerceService:
             existing.installed_at = now
             existing.uninstalled_at = None
             self.db.flush()
-        return existing
+        return self._finalize_activated_installation(existing)
+
+    def _finalize_activated_installation(
+        self, installation: AppInstallation
+    ) -> AppInstallation:
+        app = self.repo.get_app_by_id(installation.app_id)
+        if app is not None and app.connector_key == "openwa":
+            from app.connectors.providers.openwa.service import OpenWAChannelService
+
+            OpenWAChannelService(self.db).register_webhooks_for_installation(
+                workspace_id=installation.workspace_id,
+                installation_id=installation.id,
+                app_slug=app.slug,
+            )
+        return installation
 
     def _assert_no_open_checkout(
         self,

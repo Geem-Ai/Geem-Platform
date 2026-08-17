@@ -29,6 +29,22 @@ class ExpertUpdateRequest(BaseModel):
     availability_mode: str | None = None
 
 
+class GenerateExpertInstructionsRequest(BaseModel):
+    """Draft system instructions from a brief + optional structured fields."""
+
+    brief: str = Field(min_length=1, max_length=4000)
+    persona: str | None = Field(default=None, max_length=2000)
+    audience: str | None = Field(default=None, max_length=2000)
+    tone: str | None = Field(default=None, max_length=2000)
+    constraints: str | None = Field(default=None, max_length=2000)
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+
+
+class GenerateExpertInstructionsResponse(BaseModel):
+    system_instructions: str
+
+
 class ExpertOut(BaseModel):
     id: uuid.UUID
     type: str

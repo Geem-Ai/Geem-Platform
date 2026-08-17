@@ -63,6 +63,8 @@ from app.apps_catalog.models import (  # noqa: E402
 )
 from app.connectors.models import (  # noqa: E402
     AppConnection,
+    ChannelBinding,
+    ChannelConversationBinding,
     ConnectorItem,
     ConnectorSyncRun,
     ConnectorWebhookEvent,
@@ -107,6 +109,8 @@ __all__ = [
     "AppLicense",
     "AppSubscription",
     "AppConnection",
+    "ChannelBinding",
+    "ChannelConversationBinding",
     "ConnectorSyncRun",
     "ConnectorItem",
     "ConnectorWebhookEvent",

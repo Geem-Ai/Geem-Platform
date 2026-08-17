@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -85,6 +85,38 @@ class StartConnectionRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     connection_id: uuid.UUID | None = None  # reconnect existing
     return_path: str | None = Field(default=None, max_length=512)
+    connect_mode: Literal["qr", "pairing"] | None = "qr"
+
+
+class OpenWAQrOut(BaseModel):
+    status: str
+    qr_code: str
+
+
+class OpenWAPairingCodeRequest(BaseModel):
+    phone_number: str = Field(min_length=6, max_length=32)
+
+
+class OpenWAPairingCodeOut(BaseModel):
+    status: str
+    pairing_code: str
+
+
+class ChannelSettingsUpdateRequest(BaseModel):
+    expert_id: uuid.UUID | None = None
+    auto_reply_enabled: bool | None = None
+    respond_to_groups: bool | None = None
+    enabled: bool | None = None
+
+
+class WhatsAppConnectionOut(AppConnectionOut):
+    provider_status: str | None = None
+    connect_mode: str | None = None
+    phone: str | None = None
+    expert_id: uuid.UUID | None = None
+    enabled: bool = True
+    auto_reply_enabled: bool = True
+    respond_to_groups: bool = False
 
 
 class GoogleDrivePickerSessionOut(BaseModel):

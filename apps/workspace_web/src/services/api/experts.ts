@@ -26,6 +26,20 @@ export type ExpertCreateInput = {
 
 export type ExpertUpdateInput = Partial<ExpertCreateInput>;
 
+export type GenerateExpertInstructionsInput = {
+  brief: string;
+  persona?: string | null;
+  audience?: string | null;
+  tone?: string | null;
+  constraints?: string | null;
+  name?: string | null;
+  description?: string | null;
+};
+
+export type GenerateExpertInstructionsResult = {
+  system_instructions: string;
+};
+
 export function listExperts() {
   return apiRequest<Expert[]>('/api/experts');
 }
@@ -43,6 +57,25 @@ export function updateExpert(expertId: string, input: ExpertUpdateInput) {
     method: 'PATCH',
     json: input,
   });
+}
+
+/** Draft system instructions via OpenRouter (bills workspace AI chat tokens). */
+export function generateExpertInstructions(input: GenerateExpertInstructionsInput) {
+  return apiRequest<GenerateExpertInstructionsResult>(
+    '/api/experts/generate-instructions',
+    {
+      method: 'POST',
+      json: {
+        brief: input.brief,
+        persona: input.persona ?? null,
+        audience: input.audience ?? null,
+        tone: input.tone ?? null,
+        constraints: input.constraints ?? null,
+        name: input.name ?? null,
+        description: input.description ?? null,
+      },
+    },
+  );
 }
 
 export function deleteExpert(expertId: string) {

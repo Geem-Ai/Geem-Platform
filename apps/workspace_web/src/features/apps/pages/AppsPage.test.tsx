@@ -526,6 +526,125 @@ describe('Apps feature', () => {
     expect(screen.queryByText(/auto renew/i)).not.toBeInTheDocument();
   });
 
+  it('uninstalled connector app with plans opens the plans tab', async () => {
+    useApp.mockReturnValue(
+      querySuccess(
+        catalogApp({
+          slug: 'whatsapp',
+          name: 'WhatsApp',
+          billing_type: 'subscription',
+          status: 'published',
+          can_install: false,
+          access_requirement: 'subscription',
+          installation_status: null,
+          plans: [
+            {
+              id: 'line',
+              code: 'line',
+              name: 'WhatsApp Line',
+              description: null,
+              billing_interval: 'monthly',
+              price_amount: '79.00',
+              currency: 'SAR',
+              is_default: true,
+              entitlements: { connections: 1 },
+            },
+          ],
+          access: {
+            status: 'not_entitled',
+            plan_id: null,
+            plan_code: null,
+            plan_name: null,
+            current_period_start: null,
+            current_period_end: null,
+            commercially_entitled: false,
+            can_purchase: true,
+            can_renew: false,
+            can_install: false,
+            can_uninstall: false,
+          },
+          connector: {
+            key: 'openwa',
+            kind: 'channel',
+            available: true,
+            auth_mode: 'custom',
+            can_connect: true,
+            supports_sync: false,
+            supports_webhooks: true,
+            supports_health_check: true,
+          },
+        }),
+      ),
+    );
+    renderAt('/apps/whatsapp');
+    expect(await screen.findByTestId('app-detail-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('app-tab-plans')).toHaveAttribute('data-state', 'active');
+    expect(screen.getByTestId('app-plan-line')).toBeInTheDocument();
+    expect(screen.getByTestId('app-tab-connections')).toHaveAttribute(
+      'data-state',
+      'inactive',
+    );
+  });
+
+  it('installed connector app with plans opens the connections tab', async () => {
+    useApp.mockReturnValue(
+      querySuccess(
+        catalogApp({
+          slug: 'whatsapp',
+          name: 'WhatsApp',
+          billing_type: 'subscription',
+          status: 'published',
+          can_install: false,
+          can_uninstall: true,
+          installation_status: 'active',
+          access_requirement: 'subscription',
+          plans: [
+            {
+              id: 'line',
+              code: 'line',
+              name: 'WhatsApp Line',
+              description: null,
+              billing_interval: 'monthly',
+              price_amount: '79.00',
+              currency: 'SAR',
+              is_default: true,
+              entitlements: { connections: 1 },
+            },
+          ],
+          access: {
+            status: 'active',
+            plan_id: 'line',
+            plan_code: 'line',
+            plan_name: 'WhatsApp Line',
+            current_period_start: '2026-08-01T00:00:00Z',
+            current_period_end: '2026-09-01T00:00:00Z',
+            commercially_entitled: true,
+            can_purchase: true,
+            can_renew: true,
+            can_install: false,
+            can_uninstall: true,
+          },
+          connector: {
+            key: 'openwa',
+            kind: 'channel',
+            available: true,
+            auth_mode: 'custom',
+            can_connect: true,
+            supports_sync: false,
+            supports_webhooks: true,
+            supports_health_check: true,
+          },
+        }),
+      ),
+    );
+    renderAt('/apps/whatsapp');
+    expect(await screen.findByTestId('app-detail-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('app-tab-connections')).toHaveAttribute(
+      'data-state',
+      'active',
+    );
+  });
+
   it('active subscription shows renew and period end', async () => {
     useApp.mockReturnValue(
       querySuccess(

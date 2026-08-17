@@ -227,6 +227,8 @@ export function ExpertFormSheet({
                         onChange={setInstructions}
                         disabled={pending}
                         id={isCreate ? 'create-instructions' : 'edit-instructions'}
+                        expertName={name}
+                        expertDescription={description}
                       />
                     </CardContent>
                   </Card>

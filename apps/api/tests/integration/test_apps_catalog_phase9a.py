@@ -83,9 +83,24 @@ def test_list_published_and_coming_soon_apps(client, register_user, db) -> None:
     whatsapp = next(i for i in body["items"] if i["slug"] == "whatsapp")
     assert whatsapp["name"] == "WhatsApp"
     assert whatsapp["billing_type"] == "subscription"
-    assert whatsapp["status"] == "coming_soon"
+    assert whatsapp["status"] == "published"
     assert whatsapp["can_install"] is False
-    assert whatsapp["access_requirement"] == "unavailable"
+    assert whatsapp["access_requirement"] == "subscription"
+    assert whatsapp["access"]["can_purchase"] is True
+    plan_codes = {p["code"] for p in whatsapp["plans"]}
+    assert plan_codes == {"line", "desk", "ops"}
+    line = next(p for p in whatsapp["plans"] if p["code"] == "line")
+    assert line["price_amount"] == "79.00"
+    assert line["currency"] == "SAR"
+    assert line["billing_interval"] == "monthly"
+    assert line["is_default"] is True
+    assert line["entitlements"]["connections"] == 1
+    desk = next(p for p in whatsapp["plans"] if p["code"] == "desk")
+    assert desk["price_amount"] == "199.00"
+    assert desk["entitlements"]["connections"] == 3
+    ops = next(p for p in whatsapp["plans"] if p["code"] == "ops")
+    assert ops["price_amount"] == "449.00"
+    assert ops["entitlements"]["connections"] == 10
 
 
 def test_draft_and_disabled_apps_hidden(client, register_user, db) -> None:
@@ -268,15 +283,28 @@ def test_paid_and_coming_soon_cannot_install(client, register_user, db) -> None:
     ws = _create_workspace(client, user, "apps-paid")
     headers = _ws_headers(user, ws)
 
-    coming = client.post("/api/apps/whatsapp/install", headers=headers)
-    assert coming.status_code == 409
-    assert coming.json()["code"] == "app_not_available"
+    # Published subscription app requires purchase before install
+    billing_wa = client.post("/api/apps/whatsapp/install", headers=headers)
+    assert billing_wa.status_code == 402
+    assert billing_wa.json()["code"] == "app_subscription_required"
 
-    # Inject a published subscription app without inventing WhatsApp prices
     from app.apps_catalog.repository import AppCatalogRepository
 
     cat = AppCatalogRepository(db).get_category_by_slug("communication")
     assert cat is not None
+    coming = CatalogApp(
+        slug="coming-demo",
+        name="Coming Demo",
+        short_description="not yet",
+        description=None,
+        category_id=cat.id,
+        billing_type=AppBillingType.SUBSCRIPTION.value,
+        status=AppStatus.COMING_SOON.value,
+        is_featured=False,
+        sort_order=91,
+        extra={},
+    )
+    db.add(coming)
     paid = CatalogApp(
         slug="paid-demo",
         name="Paid Demo",
@@ -291,6 +319,10 @@ def test_paid_and_coming_soon_cannot_install(client, register_user, db) -> None:
     )
     db.add(paid)
     db.commit()
+
+    coming_res = client.post("/api/apps/coming-demo/install", headers=headers)
+    assert coming_res.status_code == 409
+    assert coming_res.json()["code"] == "app_not_available"
 
     billing = client.post("/api/apps/paid-demo/install", headers=headers)
     assert billing.status_code == 402

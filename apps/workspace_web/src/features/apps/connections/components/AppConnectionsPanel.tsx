@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,9 @@ import {
 } from '../hooks/useConnectionQueries';
 import { ConnectionCard } from './ConnectionCard';
 import { SyncHistory } from './SyncHistory';
+import { WhatsAppConnectDialog } from '@/features/apps/whatsapp/components/WhatsAppConnectDialog';
+import { WhatsAppConnectionCard } from '@/features/apps/whatsapp/components/WhatsAppConnectionCard';
+import { getAppConnectionLimit, isWhatsAppApp } from '@/features/apps/whatsapp/lib';
 
 function oauthReturnPath(slug: string): string {
   return `/apps/${slug}`;
@@ -33,6 +36,7 @@ export function AppConnectionsPanel({
   const { t } = useTranslation();
   const connector = app.connector;
   const installed = app.installation_status === 'active';
+  const whatsappApp = isWhatsAppApp(app);
   const connectionsQuery = useAppConnections(app.slug, Boolean(connector));
   const healthMut = useHealthCheckConnection();
   const syncMut = useRequestConnectionSync();
@@ -40,8 +44,18 @@ export function AppConnectionsPanel({
   const [oauthNotice, setOauthNotice] = useState<'success' | 'error' | null>(
     null,
   );
+  const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
+  const [resumeConnection, setResumeConnection] = useState<
+    import('@/services/api/apps').WhatsAppConnection | null
+  >(null);
+
+  const connectionLimit = useMemo(() => getAppConnectionLimit(app), [app]);
+  const connectionCount = connectionsQuery.data?.items.length ?? 0;
+  const limitReached = connectionLimit !== null && connectionCount >= connectionLimit;
+  const hideSyncHistory = connector?.kind === 'channel' || whatsappApp;
 
   useEffect(() => {
+    if (whatsappApp) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('connector') !== (connector?.key ?? '')) return;
     const oauth = params.get('oauth');
@@ -71,7 +85,7 @@ export function AppConnectionsPanel({
   const syncQuery = useConnectionSyncRuns(
     app.slug,
     firstConnection?.id,
-    Boolean(firstConnection) && showSyncHistory,
+    Boolean(firstConnection) && showSyncHistory && !hideSyncHistory,
   );
 
   if (!connector) {
@@ -151,7 +165,7 @@ export function AppConnectionsPanel({
         </p>
       ) : null}
 
-      {startMut.isError ? (
+      {startMut.isError && !whatsappApp ? (
         <p className="text-sm text-destructive" data-testid="connection-start-error">
           {t(
             errorMessageKey(
@@ -161,7 +175,88 @@ export function AppConnectionsPanel({
         </p>
       ) : null}
 
-      {installed &&
+      {whatsappApp && connectionsQuery.data ? (
+        <>
+          {connectionsQuery.data.items.length === 0 ? (
+            <div className="space-y-2" data-testid="connections-empty">
+              <p className="text-sm text-muted-foreground">
+                {t('apps.connections.empty')}
+              </p>
+              {canStart ? (
+                <Button
+                  size="sm"
+                  disabled={limitReached}
+                  data-testid="connection-connect"
+                  onClick={() => {
+                    setResumeConnection(null);
+                    setWhatsAppDialogOpen(true);
+                  }}
+                >
+                  {t('apps.connections.connect')}
+                </Button>
+              ) : null}
+              {limitReached ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="whatsapp-limit-reached"
+                >
+                  {t('apps.connections.limitReached')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {connectionsQuery.data.items.map((connection) => (
+            <WhatsAppConnectionCard
+              key={connection.id}
+              connection={connection}
+              canManage={canManage}
+              onResumeConnect={(conn) => {
+                setResumeConnection(conn);
+                setWhatsAppDialogOpen(true);
+              }}
+            />
+          ))}
+
+          {connectionsQuery.data.items.length > 0 && canStart ? (
+            <div className="space-y-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={limitReached}
+                data-testid="whatsapp-connect-another"
+                onClick={() => {
+                  setResumeConnection(null);
+                  setWhatsAppDialogOpen(true);
+                }}
+              >
+                {t('apps.whatsapp.connect.connectAnother')}
+              </Button>
+              {limitReached ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="whatsapp-limit-reached"
+                >
+                  {t('apps.connections.limitReached')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <WhatsAppConnectDialog
+            appSlug={app.slug}
+            open={whatsAppDialogOpen}
+            resumeConnection={resumeConnection}
+            onOpenChange={(next) => {
+              setWhatsAppDialogOpen(next);
+              if (!next) setResumeConnection(null);
+            }}
+          />
+        </>
+      ) : null}
+
+      {!whatsappApp &&
+      installed &&
       connector.available &&
       connectionsQuery.data &&
       connectionsQuery.data.items.length === 0 ? (
@@ -182,7 +277,8 @@ export function AppConnectionsPanel({
         </div>
       ) : null}
 
-      {connectionsQuery.data?.items.map((connection) => (
+      {!whatsappApp &&
+      connectionsQuery.data?.items.map((connection) => (
         <ConnectionCard
           key={connection.id}
           connection={connection}
@@ -206,7 +302,7 @@ export function AppConnectionsPanel({
         />
       ))}
 
-      {showSyncHistory && firstConnection ? (
+      {showSyncHistory && !hideSyncHistory && firstConnection ? (
         <div className="space-y-2">
           <h4 className="text-sm font-medium">
             {t('apps.connections.syncHistory')}

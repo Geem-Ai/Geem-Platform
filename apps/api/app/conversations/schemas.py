@@ -125,7 +125,7 @@ class ConversationOut(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     expert_id: uuid.UUID
-    user_id: uuid.UUID
+    user_id: uuid.UUID | None
     title: str | None
     is_pinned: bool
     pinned_at: datetime | None

@@ -185,7 +185,8 @@ export function operationLabelKey(operationType: string | null | undefined): str
     operationType === 'embed_query' ||
     operationType === 'rerank' ||
     operationType === 'title' ||
-    operationType === 'speech_to_text'
+    operationType === 'speech_to_text' ||
+    operationType === 'expert_instructions'
   ) {
     return `usage.operation.${operationType}`;
   }

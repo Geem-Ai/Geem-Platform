@@ -180,6 +180,22 @@ class ErrorCategory(StrEnum):
     MICROSOFT_ONEDRIVE_SUBSCRIPTION_FAILED = "microsoft_onedrive_subscription_failed"
     MICROSOFT_ONEDRIVE_SYNC_FAILED = "microsoft_onedrive_sync_failed"
 
+    # OpenWA / WhatsApp (Phase 9F)
+    OPENWA_NOT_CONFIGURED = "openwa_not_configured"
+    OPENWA_UNAVAILABLE = "openwa_unavailable"
+    OPENWA_UNAUTHORIZED = "openwa_unauthorized"
+    OPENWA_TIMEOUT = "openwa_timeout"
+    OPENWA_REQUEST_INVALID = "openwa_request_invalid"
+    OPENWA_SESSION_NOT_FOUND = "openwa_session_not_found"
+    OPENWA_SESSION_CONFLICT = "openwa_session_conflict"
+    OPENWA_QR_NOT_READY = "openwa_qr_not_ready"
+    OPENWA_PAIRING_FAILED = "openwa_pairing_failed"
+    OPENWA_PHONE_INVALID = "openwa_phone_invalid"
+    OPENWA_WEBHOOK_FAILED = "openwa_webhook_failed"
+    OPENWA_SEND_FAILED = "openwa_send_failed"
+    CHANNEL_BINDING_REQUIRED = "channel_binding_required"
+    CHANNEL_EXPERT_INVALID = "channel_expert_invalid"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -323,6 +339,21 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "microsoft_onedrive_delta_resync_required": 409,
     "microsoft_onedrive_subscription_failed": 502,
     "microsoft_onedrive_sync_failed": 502,
+    # Phase 9F — OpenWA / WhatsApp
+    "openwa_not_configured": 409,
+    "openwa_unavailable": 503,
+    "openwa_unauthorized": 502,
+    "openwa_timeout": 504,
+    "openwa_request_invalid": 422,
+    "openwa_session_not_found": 404,
+    "openwa_session_conflict": 409,
+    "openwa_qr_not_ready": 409,
+    "openwa_pairing_failed": 422,
+    "openwa_phone_invalid": 422,
+    "openwa_webhook_failed": 502,
+    "openwa_send_failed": 502,
+    "channel_binding_required": 422,
+    "channel_expert_invalid": 422,
 }
 
 

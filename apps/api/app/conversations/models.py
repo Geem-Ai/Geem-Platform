@@ -1,9 +1,9 @@
-"""Conversation + Message domain models (Phase 4A).
+"""Conversation + Message domain models (Phase 4A / 9F channel).
 
 Hierarchy
 ---------
 Workspace (consumer tenant)
-  └── User
+  └── User (workspace Chat) *or* channel binding (WhatsApp)
        └── Conversation
             ├── Expert (Workspace Expert *or* granted Platform Expert)
             └── Messages
@@ -13,8 +13,9 @@ Experts this is *not* equal to the Expert's knowledge Workspace (Platform
 Knowledge system Workspace). Never assume ``conversation.workspace_id ==
 expert.workspace_id``.
 
-Conversations are private to ``user_id`` within the consumer Workspace for
-Phase 4 — not globally visible to other Workspace members.
+Workspace Chat conversations are private to ``user_id`` within the consumer
+Workspace. Channel conversations use ``source=channel`` with ``user_id`` null and
+must not appear in personal Chat history listings.
 """
 
 from __future__ import annotations
@@ -55,6 +56,12 @@ class MessageStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class ConversationSource(str, enum.Enum):
+    WORKSPACE = "workspace"
+    CHANNEL = "channel"
+    API = "api"
+
+
 MAX_CONVERSATION_TITLE_LENGTH = 200
 PREVIEW_CONTENT_MAX_CHARS = 240
 
@@ -81,6 +88,7 @@ class Conversation(Base, SoftDeleteMixin):
             "user_id",
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index("ix_conversations_workspace_source", "workspace_id", "source"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -94,10 +102,17 @@ class Conversation(Base, SoftDeleteMixin):
         ForeignKey("experts.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable for channel conversations (WhatsApp senders are not Geem users).
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    source: Mapped[str] = mapped_column(
+        String(32),
         nullable=False,
+        default=ConversationSource.WORKSPACE.value,
+        server_default=ConversationSource.WORKSPACE.value,
     )
     title: Mapped[str | None] = mapped_column(String(MAX_CONVERSATION_TITLE_LENGTH), nullable=True)
     pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

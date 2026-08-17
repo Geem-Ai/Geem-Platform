@@ -30,7 +30,7 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: 9A–9E + 9E.1 PASS. Remaining 9F–9G (OpenWA, E2E). Do not start 9F or Phase 10 until requested."
+    content: "Phase 9: 9A–9F PASS (WhatsApp/OpenWA channel + published SAR plans line/desk/ops). Remaining 9G (Apps management + E2E). Do not start Phase 10 until requested."
     status: in_progress
   - id: phase-10
     content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
@@ -745,7 +745,7 @@ Exactly three commercial models. Do not invent a fourth without a plan revision.
 - `billing_interval`: `none` (free / one-time SKUs) or `monthly` (subscription SKUs). Yearly / weekly intervals are **out of scope** for Phase 9.
 - `app_plan_entitlements` — key/value JSONB per plan (e.g. `connections: 1`). Resolved via `AppEntitlementService` — **not** Workspace `plan_entitlements`.
 - Do not hardcode `if app.slug == "…"` for limits; read entitlement keys.
-- WhatsApp / OpenWA: seed as `subscription` + `coming_soon` with **no invented prices** until commercial plans are decided in 9F.
+- WhatsApp / OpenWA: seed as `subscription` + `published` with monthly SAR plans `line` / `desk` / `ops` (`connections` 1 / 3 / 10).
 
 ### Catalog status (`apps.status`)
 
@@ -756,7 +756,7 @@ Exactly three commercial models. Do not invent a fourth without a plan revision.
 | `coming_soon` | Discoverable; cannot install or pay |
 | `disabled` | Unavailable (existing installs may uninstall only) |
 
-Categories (`app_categories`): knowledge, communication, productivity, analytics, automation (i18n name keys). Starter seeds: **Google Drive** + **Microsoft OneDrive** (`free`, `knowledge_source`) + **WhatsApp / OpenWA** (`subscription`, `coming_soon`, `channel`).
+Categories (`app_categories`): knowledge, communication, productivity, analytics, automation (i18n name keys). Starter seeds: **Google Drive** + **Microsoft OneDrive** (`free`, `knowledge_source`) + **WhatsApp / OpenWA** (`subscription`, `published`, `channel`).
 
 ### Access snapshot (`AppAccessService`) — locked UX contract
 
@@ -950,6 +950,12 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 - Enriched Expert knowledge items + `knowledge_document_count`
 - Stateless `/chat?expert=` SSE Ask Expert (no Conversations); Expert selector; citations metadata-safe
 - EN/AR + workspace-scoped React Query keys; vitest coverage for capabilities/polling/file validation/query body
+
+**Addendum (post–Phase 3) — AI-assisted system instructions:**
+- Sparkles control on Expert create/edit `InstructionsEditor` opens a brief + structured-fields dialog
+- `POST /api/experts/generate-instructions` (Owner/Admin) drafts `system_instructions` via OpenRouter; does not auto-persist the Expert
+- Bills workspace AI tokens with `OpenRouterFamily.CHAT` / `operation_type=expert_instructions` (same pool + chat multiplier as chat)
+- Unit/integration + workspace_web vitest coverage for auth, billing family, and dialog flow
 
 **Phase 3B delivered:**
 - Product `/api/query` requires `expert_id` (extra fields including `document_ids` forbidden)
@@ -1183,7 +1189,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** (personal + work/school File Picker). Do not start 9F–9G or Phase 10 until requested.
+**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** + **9F PASS** (OpenWA/WhatsApp channel; catalog published with SAR plans `line`/`desk`/`ops`). Do not start 9G or Phase 10 until requested.
 
 **Canonical model:** §17 App Store foundations (billing types, plans, licenses, install vs connect, out of scope).
 
@@ -1196,7 +1202,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9D — Google Drive            ✅ PASS
 9E — Microsoft OneDrive      ✅ PASS
 9E.1 — OneDrive dual accounts ✅ PASS
-9F — OpenWA / WhatsApp
+9F — OpenWA / WhatsApp       ✅ PASS (channel + published SAR plans line/desk/ops)
 9G — App Management + E2E Gate
 ```
 
@@ -1213,11 +1219,11 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 | Roles | Browse: any member; install/checkout/renew/connect/disconnect: owner/admin |
 | Secrets | Encrypted at rest; never in API responses |
 | UI routes | `/apps`, `/apps/:slug`, `/apps/installed` (+ payment-result reuse from Billing) |
-| Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/coming_soon** (no fake prices until 9F) |
+| Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/published** (`line`/`desk`/`ops` SAR) |
 
 **9A Goal:** global catalog (`app_categories`, `apps`, `app_plans`, `app_plan_entitlements`), workspace `app_installations`, encrypted config boundary, free install/uninstall, Workspace App Store UI (`/apps`, `/apps/:slug`, `/apps/installed`), role-aware controls, EN/AR.
 
-**9A Acceptance:** Install/uninstall recorded for free published apps; paid/coming-soon cannot bypass billing; config encrypted at rest and never exposed via API; no connector sync yet; starter seeds: Google Drive + Microsoft OneDrive (free) + OpenWA (subscription/coming_soon).
+**9A Acceptance:** Install/uninstall recorded for free published apps; paid/coming-soon cannot bypass billing; config encrypted at rest and never exposed via API; no connector sync yet; starter seeds: Google Drive + Microsoft OneDrive (free) + OpenWA (subscription; later published with SAR plans in 9F).
 
 **9B Goal:** App commerce on existing `BillingGateway` — one-time `app_licenses`, monthly `app_subscriptions` (manual renewal), purchase kinds `app_one_time` / `app_subscription` / `app_subscription_renewal`, `AppAccessService` + plan entitlement resolver, checkout/renew APIs, Apps payment-result UX, billing history labels. No recurring charges, no connectors.
 
@@ -1241,13 +1247,13 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9F Goal:** OpenWA / WhatsApp as first production `channel` connector — publish catalog app with real subscription `app_plans` (no invented pricing until commercial numbers are locked), session/QR (or documented auth mode) connect under installed app, bind channel ↔ Expert, inbound/outbound message path into existing chat/executor boundaries, webhook/idempotency via connector foundation. Remains gated by `AppAccessService` (subscription period).
 
-**9F Acceptance:** `openwa` (or seeded `whatsapp` slug) adapter registered; `coming_soon` lifted only when plans + env are ready; install requires active App subscription; connection counts toward `connections`; Expert can be reached from WhatsApp per product rules documented in `docs/apps/`; disconnect/revoke fails closed; Drive/OneDrive regression green; no auto-recurring charges.
+**9F Acceptance:** `openwa` (seeded `whatsapp` slug) adapter registered; catalog **published** with approved SAR `app_plans` (`line`/`desk`/`ops`); install requires active App subscription; connection counts toward `connections`; Expert binding via `channel_bindings`; inbound webhook HMAC + idempotency → ChatTurnExecutor → send-text; disconnect/revoke fails closed; Drive/OneDrive regression green; no auto-recurring charges; docs in `docs/apps/whatsapp-openwa.md`.
 
-**9G Goal:** App Management polish + Phase 9 E2E gate — Installed apps management (status, plan/period, renew CTA, connections health), catalog edge cases (expired, entitled-not-installed, coming-soon), billing history labels for App purchase kinds, EN/AR + RTL, isolation tests across workspaces, smoke E2E for free install→connect→Expert source and (when 9F live) paid subscribe→install→connect.
+**9G Goal:** App Management polish + Phase 9 E2E gate — Installed apps management (status, plan/period, renew CTA, connections health), catalog edge cases (expired, entitled-not-installed, coming-soon), billing history labels for App purchase kinds, EN/AR + RTL, isolation tests across workspaces, smoke E2E for free install→connect→Expert source and (when WhatsApp published) paid subscribe→install→connect.
 
 **9G Acceptance:** No catalog/commerce/connector regressions; owner/admin vs member matrix verified; encrypted secrets absent from all App DTOs; Phase 9 acceptance checklist signed off before Phase 10.
 
-**Next:** Phase 9F (OpenWA / WhatsApp) when explicitly requested — not Phase 10 yet.
+**Next:** Phase 9G when explicitly requested — not Phase 10 yet.
 
 ---
 

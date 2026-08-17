@@ -281,6 +281,25 @@
     "instructions": "تعليمات النظام",
     "instructionsPlaceholder": "كيف يجب أن يجيب هذا الخبير ويتصرف؟",
     "instructionsHint": "تحدد هذه التعليمات كيف يجيب الخبير ويتصرف. الحد الأقصى يُفرض من الخادم.",
+    "generateInstructions": {
+      "open": "توليد تعليمات النظام بالذكاء الاصطناعي",
+      "title": "توليد تعليمات النظام",
+      "brief": "نبذة",
+      "briefPlaceholder": "صف ما يجب أن يفعله هذا الخبير…",
+      "persona": "الشخصية / الدور",
+      "personaPlaceholder": "مثال: مستشار قانوني أول",
+      "audience": "الجمهور",
+      "audiencePlaceholder": "مثال: الفريق القانوني الداخلي",
+      "tone": "النبرة",
+      "tonePlaceholder": "مثال: دقيقة، حذرة، بلغة واضحة",
+      "constraints": "القيود",
+      "constraintsPlaceholder": "افعل / لا تفعل — مثال: لا تقدّم استشارة قانونية ملزمة…",
+      "billingHint": "يُخصم من رصيد رموز الذكاء الاصطناعي لمساحة العمل (نفس خصم المحادثة).",
+      "overwriteWarning": "سيؤدي هذا إلى استبدال تعليمات النظام الحالية.",
+      "generate": "توليد",
+      "generating": "جارٍ التوليد…",
+      "success": "تم توليد تعليمات النظام"
+    },
     "advancedSettings": "إعدادات متقدمة",
     "advancedSettingsHint": "تتحكم هذه القيم في كيفية إيجاد الخبير للمقاطع في معرفته قبل الإجابة.",
     "ragRange": "{{min}}–{{max}}",
@@ -517,6 +536,7 @@
       "embed_query": "تضمين الاستعلام",
       "rerank": "إعادة ترتيب",
       "title": "عنوان",
+      "expert_instructions": "تعليمات الخبير",
       "other": "نشاط"
     },
     "source": {
@@ -1055,6 +1075,67 @@
     "toasts": {
       "installed": "تم تثبيت {{name}}",
       "uninstalled": "تم إلغاء تثبيت {{name}}"
+    },
+    "whatsapp": {
+      "connect": {
+        "title": "ربط واتساب",
+        "description": "اختر طريقة ربط جلسة واتساب هذه مع Geem.",
+        "followInstructions": "أكمل الخطوات في واتساب، ثم اترك هذه النافذة مفتوحة بينما يتحقق Geem من الاتصال.",
+        "qrTitle": "مسح QR",
+        "qrDescription": "استخدم الأجهزة المرتبطة في واتساب لمسح رمز QR من هذا المتصفح.",
+        "pairingTitle": "رمز اقتران",
+        "pairingDescription": "أدخل رقم الهاتف ثم اربط الحساب باستخدام رمز اقتران من 8 أحرف.",
+        "connectAnother": "ربط جلسة أخرى",
+        "resume": "متابعة الربط"
+      },
+      "status": {
+        "connecting": "جارٍ الاتصال",
+        "waitingForQr": "بانتظار QR",
+        "authenticating": "جارٍ التحقق",
+        "connected": "متصل",
+        "disconnected": "مفصول",
+        "actionRequired": "يلزم إجراء",
+        "failed": "فشل"
+      },
+      "qr": {
+        "title": "امسح عبر الأجهزة المرتبطة",
+        "instructions": "افتح واتساب على هاتفك واستخدم الأجهزة المرتبطة لإكمال الاتصال.",
+        "step1": "افتح واتساب على هاتفك.",
+        "step2": "اذهب إلى الإعدادات أو القائمة ثم الأجهزة المرتبطة.",
+        "step3": "اضغط ربط جهاز وامسح رمز QR هذا.",
+        "loading": "جارٍ تحميل رمز QR…",
+        "alt": "رمز QR لواتساب",
+        "connected": "تم ربط واتساب. يمكنك إغلاق هذه النافذة.",
+        "waiting": "بانتظار جاهزية واتساب لعرض رمز QR."
+      },
+      "pairing": {
+        "title": "اطلب رمز اقتران",
+        "instructions": "أدخل رقم الهاتف لهذا الحساب، ثم استخدم رمز الاقتران على جهازك.",
+        "phoneLabel": "رقم الهاتف",
+        "phonePlaceholder": "9665XXXXXXXX",
+        "phoneHint": "استخدم الرقم الدولي الكامل مع رمز الدولة.",
+        "request": "الحصول على رمز الاقتران",
+        "requesting": "جارٍ الطلب…",
+        "codeLabel": "رمز الاقتران",
+        "copy": "نسخ الرمز",
+        "copySuccess": "تم نسخ رمز الاقتران",
+        "copyFailed": "تعذّر نسخ رمز الاقتران"
+      },
+      "connection": {
+        "phone": "الهاتف: {{phone}}",
+        "providerStatus": "حالة المزود: {{status}}",
+        "expert": "الخبير",
+        "unassignedExpert": "لا يوجد خبير محدد",
+        "settings": "إعدادات القناة",
+        "enabled": "مفعّل",
+        "autoReply": "الرد التلقائي",
+        "respondToGroups": "الرد على المجموعات",
+        "readOnly": "يمكن للأعضاء عرض إعدادات اتصال واتساب فقط دون تعديلها."
+      },
+      "toasts": {
+        "settingsSaved": "تم حفظ إعدادات واتساب",
+        "reconnecting": "جارٍ محاولة إعادة ربط واتساب"
+      }
     }
   },
   "errors": {
@@ -1166,6 +1247,20 @@
     "microsoftOneDriveRateLimited": "تم بلوغ حد معدل طلبات Microsoft Graph — حاول لاحقاً",
     "microsoftOneDriveDeltaResyncRequired": "يجب إعادة ضبط مزامنة OneDrive",
     "microsoftOneDriveSubscriptionFailed": "فشل إعداد إشعارات تغييرات OneDrive",
-    "microsoftOneDriveSyncFailed": "فشلت مزامنة OneDrive"
+    "microsoftOneDriveSyncFailed": "فشلت مزامنة OneDrive",
+    "openwaNotConfigured": "واتساب غير مضبوط على هذا الخادم",
+    "openwaUnavailable": "واتساب غير متاح مؤقتاً",
+    "openwaUnauthorized": "رفض مزود واتساب هذا الإعداد",
+    "openwaTimeout": "انتهت مهلة مزود واتساب. حاول بعد قليل.",
+    "openwaRequestInvalid": "رفض واتساب هذا الطلب",
+    "openwaSessionNotFound": "جلسة واتساب هذه غير موجودة",
+    "openwaSessionConflict": "لا يزال واتساب ينظف جلسة سابقة. حاول بعد قليل.",
+    "openwaQrNotReady": "رمز QR غير جاهز بعد",
+    "openwaPairingFailed": "تعذّر إنشاء رمز اقتران واتساب",
+    "openwaPhoneInvalid": "أدخل رقم هاتف صحيحاً مع رمز الدولة",
+    "openwaWebhookFailed": "تعذّر على واتساب إكمال إعداد webhook",
+    "openwaSendFailed": "تعذّر إرسال رد واتساب",
+    "channelBindingRequired": "اختر خبيراً قبل أن يرد واتساب",
+    "channelExpertInvalid": "لا يمكن استخدام هذا الخبير مع قناة واتساب"
   }
 }

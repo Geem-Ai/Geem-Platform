@@ -94,7 +94,14 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
     : '';
   const access = app?.access;
   const showPlans = app ? shouldShowPlans(app) : false;
-  const useConnectorTabs = Boolean(app?.connector);
+  const showSyncTab = Boolean(
+    app?.connector &&
+      app.connector.kind !== 'channel' &&
+      app.connector.supports_sync,
+  );
+  const useConnectorTabs = Boolean(app?.connector && (showSyncTab || showPlans));
+  const installed = app?.installation_status === 'active';
+  const defaultTab = !installed && showPlans ? 'plans' : 'connections';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -175,7 +182,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </p>
                   </div>
 
-                  {app.installation_status === 'active' && !app.connector ? (
+                  {installed && !app.connector ? (
                     <div
                       role="note"
                       className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
@@ -188,7 +195,8 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
 
                   {useConnectorTabs ? (
                     <Tabs
-                      defaultValue="connections"
+                      key={`${app.slug}-${defaultTab}`}
+                      defaultValue={defaultTab}
                       className="gap-3"
                       data-testid="app-detail-tabs"
                     >
@@ -199,12 +207,14 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                         >
                           {t('apps.connections.title')}
                         </TabsTrigger>
-                        <TabsTrigger
-                          value="sync"
-                          data-testid="app-tab-sync"
-                        >
-                          {t('apps.connections.syncHistory')}
-                        </TabsTrigger>
+                        {showSyncTab ? (
+                          <TabsTrigger
+                            value="sync"
+                            data-testid="app-tab-sync"
+                          >
+                            {t('apps.connections.syncHistory')}
+                          </TabsTrigger>
+                        ) : null}
                         {showPlans ? (
                           <TabsTrigger
                             value="plans"
@@ -226,9 +236,11 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                         />
                       </TabsContent>
 
-                      <TabsContent value="sync" className="space-y-3">
-                        <AppSyncHistoryPanel app={app} />
-                      </TabsContent>
+                      {showSyncTab ? (
+                        <TabsContent value="sync" className="space-y-3">
+                          <AppSyncHistoryPanel app={app} />
+                        </TabsContent>
+                      ) : null}
 
                       {showPlans ? (
                         <TabsContent value="plans" className="space-y-3">
@@ -240,6 +252,8 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                         </TabsContent>
                       ) : null}
                     </Tabs>
+                  ) : app?.connector ? (
+                    <AppConnectionsPanel app={app} canManage={canManage} />
                   ) : (
                     <AppPlansSection app={app} canManage={canManage} />
                   )}

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -19,9 +18,9 @@ from app.apps_catalog.access import AppAccessService
 from app.apps_catalog.models import AppInstallationStatus
 from app.apps_catalog.repository import AppCatalogRepository
 from app.common.security_log import security_log
-from app.connectors.adapters import WebhookConnectorAdapter, WebhookRequestContext
+from app.connectors.adapters import WebhookRequestContext
 from app.connectors.credentials import ConnectorCredentialService
-from app.connectors.models import ConnectorWebhookEvent
+from app.connectors.models import AppConnection, ConnectorWebhookEvent
 from app.connectors.registry import ConnectorRegistry, connector_registry
 from app.connectors.repository import ConnectorRepository, hash_routing_token
 from app.connectors.sanitize import sanitize_error_message
@@ -29,6 +28,8 @@ from app.connectors.types import CONNECTION_USABLE_STATUSES, WebhookEventStatus
 from app.core.errors import AppError, ErrorCategory
 
 logger = logging.getLogger(__name__)
+
+_OPENWA_CONNECTOR_KEY = "openwa"
 
 
 class ConnectorWebhookDispatcher:
@@ -84,12 +85,24 @@ class ConnectorWebhookDispatcher:
             or installation.workspace_id != connection.workspace_id
             or installation.status != AppInstallationStatus.ACTIVE.value
         ):
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="installation_inactive",
+            )
             raise AppError(
                 ErrorCategory.CONNECTOR_INSTALLATION_REQUIRED,
                 "App installation is not active.",
             )
         app = self.catalog.get_app_by_id(installation.app_id)
         if app is None:
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="app_missing",
+            )
             raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
 
         try:
@@ -103,9 +116,21 @@ class ConnectorWebhookDispatcher:
                     "connection_id": str(connection.id),
                 },
             )
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="access_denied",
+            )
             raise
 
         if connection.status not in CONNECTION_USABLE_STATUSES:
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="connection_unusable",
+            )
             raise AppError(
                 ErrorCategory.CONNECTOR_WEBHOOK_INVALID,
                 "Connection is not usable for webhooks.",
@@ -279,3 +304,58 @@ class ConnectorWebhookDispatcher:
             result.response_body or b"{}",
             dict(result.response_headers),
         )
+
+    def _maybe_revoke_openwa_webhooks(
+        self,
+        connection: AppConnection,
+        *,
+        raw_body: bytes,
+        headers: dict[str, str],
+        reason: str,
+    ) -> None:
+        """On expired/inactive OpenWA deliveries, best-effort delete provider webhooks.
+
+        Requires a valid HMAC when a webhook secret is present so a token-only
+        caller cannot force teardown.
+        """
+        if connection.connector_key != _OPENWA_CONNECTOR_KEY:
+            return
+        creds = self.credentials.get_credentials(connection) or {}
+        secret = str(creds.get("webhook_secret") or "").strip()
+        if secret:
+            from app.connectors.providers.openwa.webhook import (
+                HEADER_SIGNATURE,
+                verify_openwa_signature,
+            )
+
+            signature = headers.get(HEADER_SIGNATURE)
+            if not verify_openwa_signature(
+                raw_body=raw_body,
+                signature=signature,
+                secret=secret,
+            ):
+                return
+        try:
+            from app.connectors.providers.openwa.service import OpenWAChannelService
+
+            OpenWAChannelService(self.db, registry=self.registry).ensure_webhook_removed(
+                connection
+            )
+            self.db.flush()
+            logger.info(
+                "openwa_webhook_revoked_on_reject",
+                extra={
+                    "reason": reason,
+                    "workspace_id": str(connection.workspace_id),
+                    "connection_id": str(connection.id),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "openwa_webhook_revoke_failed",
+                extra={
+                    "reason": reason,
+                    "connection_id": str(connection.id),
+                    "error": sanitize_error_message(str(exc)),
+                },
+            )

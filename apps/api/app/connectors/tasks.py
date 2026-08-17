@@ -196,6 +196,7 @@ def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
 
             connector_key = str(payload.get("connector_key") or "")
             sync_run_id = None
+            channel_result: dict[str, Any] | None = None
             caps = connector_registry.capabilities(connector_key)
             if caps is not None and caps.supports_sync and caps.supports_webhooks:
                 out = ConnectorSyncService(db).request_webhook_sync(
@@ -205,6 +206,21 @@ def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
                 )
                 if out is not None:
                     sync_run_id = str(out.id)
+            elif caps is not None and caps.supports_webhooks and not caps.supports_sync:
+                from app.connectors.providers.openwa.channel import OpenWAChannelProcessor
+
+                channel_result = OpenWAChannelProcessor(db).process_adapter_payload(
+                    workspace_id=ws_id,
+                    connection_id=conn_id,
+                    payload=dict(payload.get("adapter_payload") or {}),
+                )
+                # Outbound send failed after a successful generation — retry task.
+                if isinstance(channel_result, dict) and channel_result.get("status") == "send_failed":
+                    raise AppError(
+                        ErrorCategory.OPENWA_SEND_FAILED,
+                        "OpenWA outbound send failed after generation.",
+                        retryable=True,
+                    )
 
             event_id = _parse_uuid(payload.get("webhook_event_id"))
             if event_id is not None:
@@ -220,6 +236,9 @@ def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
                     "connection_id": str(conn_id),
                     "webhook_event_id": str(event_id) if event_id else None,
                     "sync_run_id": sync_run_id,
+                    "channel_status": (
+                        channel_result.get("status") if isinstance(channel_result, dict) else None
+                    ),
                 },
             )
             return {
@@ -228,6 +247,15 @@ def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
                 "status": "processed",
                 "sync_run_id": sync_run_id,
             }
+    except AppError as exc:
+        db.rollback()
+        if exc.retryable or exc.category in {
+            ErrorCategory.CONVERSATION_BUSY,
+            ErrorCategory.OPENWA_SEND_FAILED,
+        }:
+            countdown = min(30, 2 ** int(getattr(self.request, "retries", 0) or 0))
+            raise self.retry(exc=exc, countdown=countdown) from exc
+        raise
     except Exception:
         db.rollback()
         raise
