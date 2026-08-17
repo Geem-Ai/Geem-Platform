@@ -110,12 +110,10 @@ class MicrosoftOneDriveClient:
         refresh_token: str,
         resource: str,
     ) -> dict[str, Any]:
-        """Mint a short-lived token for File Picker v8 SharePoint resource.
+        """Mint a short-lived token for File Picker v8 SharePoint (work/school).
 
-        ODSP / work-school hosts expect ``{resource}/.default`` (MSAL samples).
-        Fall back to MyFiles.Read / Files.Read for tenants that expose those.
-        Personal MSA hosts cannot mint SharePoint-audience tokens this way —
-        callers must fail closed before invoking this helper.
+        ODSP hosts expect ``{resource}/.default`` (MSAL samples). Fall back to
+        MyFiles.Read / Files.Read for tenants that expose those.
         """
         resource = (resource or "").rstrip("/")
         if not resource.startswith("https://"):
@@ -137,6 +135,47 @@ class MicrosoftOneDriveClient:
             except AppError as exc:
                 last_error = exc
                 continue
+        if last_error is not None:
+            raise last_error
+        raise AppError(
+            ErrorCategory.MICROSOFT_ONEDRIVE_AUTHORIZATION_FAILED,
+            "Microsoft authorization failed.",
+        )
+
+    def acquire_personal_picker_token(
+        self,
+        *,
+        refresh_token: str,
+    ) -> dict[str, Any]:
+        """Mint OneDrive.ReadOnly token for personal MSA File Picker v8."""
+        from app.connectors.providers.microsoft_onedrive.scopes import (
+            PERSONAL_PICKER_SCOPE,
+        )
+
+        scopes = (
+            f"{PERSONAL_PICKER_SCOPE} offline_access",
+            PERSONAL_PICKER_SCOPE,
+        )
+        last_error: AppError | None = None
+        saw_invalid_scope = False
+        for scope in scopes:
+            try:
+                return self.refresh_access_token(
+                    refresh_token=refresh_token, scope=scope
+                )
+            except AppError as exc:
+                last_error = exc
+                details = getattr(exc, "details", None) or {}
+                oauth_err = str(details.get("oauth_error") or "")
+                if oauth_err == "invalid_scope":
+                    saw_invalid_scope = True
+                continue
+        if saw_invalid_scope:
+            raise AppError(
+                ErrorCategory.MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED,
+                "Reconnect Microsoft OneDrive to grant personal File Picker access.",
+                details={"oauth_error": "invalid_scope"},
+            ) from last_error
         if last_error is not None:
             raise last_error
         raise AppError(
@@ -497,12 +536,31 @@ class MicrosoftOneDriveClient:
 
     def _map_token_error(self, resp: httpx.Response) -> AppError:
         code = ""
+        description = ""
         try:
             body = resp.json()
             code = str(body.get("error") or "")
+            description = str(body.get("error_description") or "")
         except Exception:  # noqa: BLE001
             body = {}
-        if code in {"invalid_grant", "interaction_required", "consent_required"}:
+        # Never log tokens; oauth error codes + AADSTS ids are safe diagnostics.
+        logger.warning(
+            "microsoft_onedrive_token_error",
+            extra={
+                "oauth_error": code or None,
+                "status": resp.status_code,
+                "aadsts": (
+                    description.split(":", 1)[0].strip()
+                    if description.startswith("AADSTS")
+                    else None
+                ),
+            },
+        )
+        if code in {
+            "invalid_grant",
+            "interaction_required",
+            "consent_required",
+        }:
             return AppError(
                 ErrorCategory.MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED,
                 "Microsoft authorization must be renewed.",

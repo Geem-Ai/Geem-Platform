@@ -101,6 +101,8 @@ class MicrosoftOneDrivePickerSessionOut(BaseModel):
     client_id: str | None = None
     tenant: str | None = None
     drive_id: str | None = None
+    account_kind: str = "work_school"
+    picker_mode: str | None = None
 
 
 class MicrosoftOneDrivePickerTokenRequest(BaseModel):

@@ -92,6 +92,22 @@ class FakeMicrosoftOneDriveClient:
             payload["refresh_token"] = f"rotated-{refresh_token}"
         return payload
 
+    def acquire_personal_picker_token(
+        self, *, refresh_token: str
+    ) -> dict[str, Any]:
+        token = self.resource_tokens.get(
+            "https://onedrive.live.com/picker", "msa-picker-token"
+        )
+        payload: dict[str, Any] = {
+            "access_token": token,
+            "expires_in": 3600,
+            "token_type": "Bearer",
+            "scope": "OneDrive.ReadOnly",
+        }
+        if getattr(self, "rotate_refresh", False):
+            payload["refresh_token"] = f"rotated-{refresh_token}"
+        return payload
+
     def get_me(self, *, access_token: str | None = None) -> dict[str, Any]:
         _ = access_token
         return dict(self.me)

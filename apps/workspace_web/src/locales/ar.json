@@ -314,10 +314,10 @@
     "oneDrive": {
       "add": "إضافة من Microsoft OneDrive",
       "addTitle": "إضافة من Microsoft OneDrive",
-      "addHint": "اختر ملفات من حساب Microsoft OneDrive متصل. المدعوم: PDF وTXT وMarkdown ومستندات Office (تُحوَّل إلى PDF).",
+      "addHint": "اختر ملفات من حساب Microsoft OneDrive متصل (عمل/مدرسة أو شخصي). المدعوم: PDF وTXT وMarkdown ومستندات Office (تُحوَّل إلى PDF).",
       "added": "تمت إضافة ملفات OneDrive إلى قائمة المزامنة.",
       "installFirst": "ثبّت تطبيق Microsoft OneDrive من المتجر أولاً.",
-      "connectFirst": "اربط حساب Microsoft قبل إضافة الملفات.",
+      "connectFirst": "اربط حساب Microsoft قبل إضافة الملفات. حسابات العمل/المدرسة والشخصية مدعومة عندما يسمح الخادم بكليهما.",
       "goToAppStore": "فتح تطبيق Microsoft OneDrive",
       "connect": "ربط Microsoft OneDrive",
       "chooseAccount": "حساب Microsoft OneDrive",
@@ -330,6 +330,7 @@
       "syncing": "جارٍ المزامنة",
       "lastSynced": "آخر مزامنة",
       "reconnect": "إعادة ربط Microsoft OneDrive",
+      "reconnectForPicker": "أعد ربط OneDrive لمنح صلاحية منتقي الملفات (مطلوب بعد تفعيل الحسابات الشخصية).",
       "authorizationExpired": "انتهت صلاحية تفويض Microsoft",
       "reauthorizationRequired": "يلزم إعادة التفويض",
       "syncNow": "مزامنة الآن",
@@ -1036,7 +1037,7 @@
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
         "shortDescription": "اربط محتوى Microsoft OneDrive المحدد بخبراء Geem.",
-        "description": "اربط ملفات OneDrive للعمل أو المدرسة بخبراء Geem. بعد التثبيت، صل حساب Microsoft ثم أضف الملفات من مصادر معرفة الخبير. Geem يقرأ الملفات المختارة فقط — دون تعديل OneDrive."
+        "description": "اربط ملفات OneDrive للعمل/المدرسة أو الحساب الشخصي بخبراء Geem. بعد التثبيت، صل حساب Microsoft ثم أضف الملفات من مصادر معرفة الخبير. Geem يقرأ الملفات المختارة فقط — دون تعديل OneDrive."
       },
       "whatsapp": {
         "name": "WhatsApp",
@@ -1148,8 +1149,8 @@
     "googleDriveSyncFailed": "فشلت مزامنة Drive",
     "microsoftOneDriveNotConfigured": "Microsoft OneDrive غير مضبوط على هذا الخادم",
     "microsoftOneDriveAuthorizationFailed": "فشل تفويض Microsoft OneDrive",
-    "microsoftOneDriveReauthorizationRequired": "يلزم إعادة التفويض لـ Microsoft OneDrive",
-    "microsoftOneDriveDriveNotSupported": "حسابات Microsoft الشخصية غير مدعومة لاختيار الملفات. اربط حساب OneDrive للعمل أو المدرسة.",
+    "microsoftOneDriveReauthorizationRequired": "أعد ربط Microsoft OneDrive لتجديد الوصول (مطلوب لمنتقي الملفات الشخصي بعد تفعيل الحسابات المزدوجة)",
+    "microsoftOneDriveDriveNotSupported": "موقع OneDrive هذا غير مدعوم لاختيار الملفات",
     "microsoftOneDriveItemNotFound": "ملف OneDrive غير موجود",
     "microsoftOneDriveAccessDenied": "ملف OneDrive لم يعد متاحاً",
     "microsoftOneDriveFileTypeUnsupported": "نوع ملف غير مدعوم من OneDrive",

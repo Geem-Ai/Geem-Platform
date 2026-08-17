@@ -30,7 +30,7 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: 9A–9E PASS. Remaining 9F–9G (OpenWA, E2E). Do not start 9F or Phase 10 until requested."
+    content: "Phase 9: 9A–9E + 9E.1 PASS. Remaining 9F–9G (OpenWA, E2E). Do not start 9F or Phase 10 until requested."
     status: in_progress
   - id: phase-10
     content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
@@ -1080,7 +1080,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** (Microsoft OneDrive knowledge connector). Do not start 9F–9G or Phase 10 until requested.
+**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** (personal + work/school File Picker). Do not start 9F–9G or Phase 10 until requested.
 
 **Revised slices:**
 
@@ -1090,6 +1090,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9C — Connector Foundation    ✅ PASS
 9D — Google Drive            ✅ PASS
 9E — Microsoft OneDrive      ✅ PASS
+9E.1 — OneDrive dual accounts ✅ PASS
 9F — OpenWA / WhatsApp
 9G — App Management + E2E Gate
 ```
@@ -1113,6 +1114,10 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 **9E Goal:** Microsoft OneDrive as second production `KNOWLEDGE_SOURCE` connector — Entra OAuth + Files.Read, File Picker v8, Graph download/Office→PDF conversion, Expert connector sources via shared knowledge domain, Graph delta + root-drive subscriptions with Beat renewal.
 
 **9E Acceptance:** `microsoft_onedrive` adapter registered; unavailable until Entra env configured; work/school OAuth + encrypted refresh; Picker v8 with server-side revalidation; PDF/TXT/MD + Office via Graph PDF conversion through existing ingest; delta + webhook validation/notifications; Google Drive regression green; no OpenWA.
+
+**9E.1 Goal:** Dual-account File Picker — work/school ODSP path plus personal MSA (`OneDrive.ReadOnly` + `onedrive.live.com/picker`) with backend token mint; shared Graph ingest.
+
+**9E.1 Acceptance:** `account_kind` persisted; authorize stays Graph-only (no mixed `OneDrive.ReadOnly`); personal picker mints `OneDrive.ReadOnly` via `consumers`; personal picker-session returns live picker base URL; work/school regression green; reconnect documented when picker mint needs consent; no OpenWA.
 
 **Next:** Phase 9F (OpenWA / WhatsApp) when explicitly requested — not Phase 10 yet.
 

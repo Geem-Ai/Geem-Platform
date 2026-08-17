@@ -200,6 +200,7 @@ class Settings(BaseSettings):
     # Empty → derive from app_url + /api/connectors/oauth/microsoft_onedrive/callback
     microsoft_onedrive_redirect_uri: str = ""
     # organizations | common | consumers | specific tenant GUID
+    # Use common for work/school + personal File Picker (9E.1); organizations for work-only.
     microsoft_onedrive_tenant: str = "organizations"
     # Graph subscription lifetime minutes (must stay below provider max ~42300).
     microsoft_onedrive_subscription_minutes: int = 4000

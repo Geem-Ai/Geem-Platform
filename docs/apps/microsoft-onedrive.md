@@ -1,10 +1,11 @@
 # Microsoft OneDrive app — configuration A–Z
 
-End-to-end setup for Geem’s **Microsoft OneDrive** knowledge connector (Phase 9E): Entra app registration → Graph OAuth → File Picker v8 → Geem env → Workspace install → Expert knowledge.
+End-to-end setup for Geem’s **Microsoft OneDrive** knowledge connector (Phase 9E / **9E.1**): Entra app registration → Graph OAuth → File Picker v8 (work/school **and** personal) → Geem env → Workspace install → Expert knowledge.
 
 Without `MICROSOFT_ONEDRIVE_CLIENT_ID` and `MICROSOFT_ONEDRIVE_CLIENT_SECRET`, the adapter stays registered but `available=false` (`microsoft_onedrive_not_configured`). Install/browse still work; Connect and OAuth do not.
 
-**9E scope:** Microsoft **work/school** OneDrive (tenant default `organizations`). Personal Microsoft accounts may connect via Graph when `MICROSOFT_ONEDRIVE_TENANT=common`, but **File Picker v8 is work/school only** (SharePoint-audience tokens). SharePoint document libraries, Teams files, and site crawling are **out of scope**.
+**9E scope:** Work/school OneDrive + Graph ingest/delta (PASS).  
+**9E.1:** Personal Microsoft accounts (MSA) File Picker via `OneDrive.ReadOnly` + `https://onedrive.live.com/picker`. SharePoint document libraries, Teams files, and site crawling remain **out of scope**.
 
 ---
 
@@ -14,9 +15,11 @@ Without `MICROSOFT_ONEDRIVE_CLIENT_ID` and `MICROSOFT_ONEDRIVE_CLIENT_SECRET`, t
 |------------|----------|
 | App catalog | Free published app slug `microsoft-onedrive`, connector key `microsoft_onedrive` |
 | Auth | OAuth 2.0 authorization code + PKCE (Entra), offline refresh |
-| Scopes | `openid profile offline_access User.Read Files.Read` (read-only) |
-| File pick | Microsoft File Picker **v8** (popup + postMessage) |
-| Ingest | PDF, TXT, Markdown; Office (doc/docx/ppt/pptx/xls/xlsx) via Graph PDF conversion |
+| Scopes (work-only tenant) | `openid profile offline_access User.Read Files.Read` |
+| Scopes (`common` / `consumers`) | Same Graph scopes on connect (do **not** mix `OneDrive.ReadOnly` into authorize) |
+| File pick (work/school) | File Picker v8 on `{tenant}-my.sharepoint.com` + SharePoint-audience token |
+| File pick (personal) | File Picker v8 at `https://onedrive.live.com/picker` + separately minted `OneDrive.ReadOnly` token |
+| Ingest | PDF, TXT, Markdown; Office via Graph PDF conversion |
 | Sync | Graph driveItem **delta** + root-drive change notifications; Celery Beat renews subscriptions |
 
 ---
@@ -34,7 +37,9 @@ Without `MICROSOFT_ONEDRIVE_CLIENT_ID` and `MICROSOFT_ONEDRIVE_CLIENT_SECRET`, t
 
 1. Azure Portal → **Microsoft Entra ID → App registrations → New registration**.
 2. Name: e.g. `Geem OneDrive`.
-3. Supported account types: **Accounts in any organizational directory** (matches `MICROSOFT_ONEDRIVE_TENANT=organizations`). Use `common` / `consumers` / a specific tenant ID later without code redesign.
+3. Supported account types:
+   - **Dual-account (9E.1):** Accounts in any organizational directory **and** personal Microsoft accounts.
+   - **Work-only:** Accounts in any organizational directory (matches `MICROSOFT_ONEDRIVE_TENANT=organizations`).
 4. Redirect URI (Web):
    - `{APP_URL}/api/connectors/oauth/microsoft_onedrive/callback`
    - Example local: `http://api.geem.dm:8000/api/connectors/oauth/microsoft_onedrive/callback`
@@ -53,9 +58,11 @@ Add Microsoft Graph **delegated** permissions:
 | `User.Read` | Account display / identity |
 | `Files.Read` | Read selected OneDrive driveItems + delta |
 
-Do **not** request `Files.ReadWrite*`, `Files.Read.All`, or `Sites.Read.All` for 9E.
+For **work/school File Picker**, also add SharePoint delegated **`MyFiles.Read`** (or ensure the app can acquire SharePoint-host tokens after consent).
 
-File Picker v8 needs a **SharePoint-host audience** token (not Graph) for both bootstrap (`…/picker-session`) and authenticate (`…/picker-token`). Geem mints those from the backend refresh token for the connected `{tenant}-my.sharepoint.com` host only (fail closed if the drive web URL is unknown). Rotated refresh tokens from those exchanges are persisted without replacing the Graph `access_token`. Ensure the Entra app can acquire `Files.Read` (or SharePoint `MyFiles.Read`) against that resource after admin consent if your tenant requires it.
+For **personal File Picker**, Geem mints a separate token with runtime scope **`OneDrive.ReadOnly`** against the `consumers` authority after connect (when `MICROSOFT_ONEDRIVE_TENANT` is `common` or `consumers`). That scope is **not** added to the authorize URL — mixing it with Graph scopes breaks personal Microsoft account code exchange. Entra maps consented Graph **`Files.Read`** to the consumer picker token. If picker mint returns `invalid_scope` / consent required, **Reconnect**.
+
+Do **not** request `Files.ReadWrite*`, `Files.Read.All`, or `Sites.Read.All` for 9E/9E.1.
 
 ---
 
@@ -66,8 +73,8 @@ MICROSOFT_ONEDRIVE_CLIENT_ID=
 MICROSOFT_ONEDRIVE_CLIENT_SECRET=
 # Empty → {APP_URL}/api/connectors/oauth/microsoft_onedrive/callback
 MICROSOFT_ONEDRIVE_REDIRECT_URI=
-# organizations | common | consumers | <tenant-guid>
-MICROSOFT_ONEDRIVE_TENANT=organizations
+# common = work/school + personal | organizations = work-only | consumers | <tenant-guid>
+MICROSOFT_ONEDRIVE_TENANT=common
 # Graph subscription lifetime minutes (< ~42300)
 MICROSOFT_ONEDRIVE_SUBSCRIPTION_MINUTES=4000
 ```
@@ -87,7 +94,7 @@ Restart API **and** Celery worker after changing these (both register the adapte
 ## 7. In-product flow
 
 1. `/apps/microsoft-onedrive` → Install → **Connect Microsoft OneDrive**.
-2. Complete Entra consent → connection `active` with encrypted credentials + drive identity.
+2. Complete Entra consent → connection `active` with encrypted credentials + `account_kind` (`work_school` | `personal`).
 3. Expert → Knowledge → **Add from Microsoft OneDrive** → File Picker v8 → select files.
 4. Backend revalidates Graph metadata (`drive_id` + `item_id`), creates `ConnectorItem` + Expert source, enqueues sync.
 5. Content → existing Document ingest → MinIO + Qdrant (Expert-filtered).
@@ -101,7 +108,7 @@ Restart API **and** Celery worker after changing these (both register the adapte
 |------|------|
 | External id | `{drive_id}:{item_id}` — never path/filename |
 | Credentials | Encrypted on `app_connections`; refresh tokens never sent to React |
-| Picker tokens | Memory-only SharePoint-audience; `picker-session` / `picker-token` |
+| Picker tokens | Memory-only; `picker-session` / `picker-token`; backend mint for both account kinds |
 | `clientState` / `deltaLink` | Encrypted sync state only |
 | Download URLs | Preauthenticated Graph URLs never persisted |
 | Disconnect | Best-effort subscription delete; secrets cleared; sources unavailable |
@@ -127,9 +134,12 @@ Restart API **and** Celery worker after changing these (both register the adapte
 | Symptom | Check |
 |---------|--------|
 | `microsoft_onedrive_not_configured` | Client id/secret set; API+worker restarted |
-| Reauthorization required | User revoked consent / missing refresh token — Connect again |
-| `microsoft_onedrive_drive_not_supported` / picker fails on personal Hotmail/Outlook | Phase 9E File Picker requires **work/school** OneDrive (`*-my.sharepoint.com`). Personal MSA (`microsoftpersonalcontent.com` / `onedrive.live.com`) can connect for Graph health but cannot open Picker. Set `MICROSOFT_ONEDRIVE_TENANT=organizations` and reconnect with a work account. |
-| SPA logs out when opening Picker | Fixed: provider auth errors are 403 (not session 401). Rebuild/reload Workspace if you still see logout. |
+| Reauthorization required / personal picker fails | Confirm Entra has Graph `Files.Read`; `MICROSOFT_ONEDRIVE_TENANT=common`; **Reconnect** if mint returns consent/`invalid_scope` |
+| Connect fails with “authorization failed” (MSA) | Do not put `OneDrive.ReadOnly` on authorize — Graph-only connect; check redirect URI matches `{APP_URL}/api/connectors/oauth/microsoft_onedrive/callback` |
+| Work/school picker fails with SharePoint audience | Add SharePoint `MyFiles.Read`; confirm drive webUrl is `*-my.sharepoint.com` |
+| Personal picker shows `unableToObtainToken` | Backend must allow `api.onedrive.com` authenticate resources; picker-session OK but picker-token 422 means host allowlist — check API logs `resource_host` |
+| “Selected file is not from the connected OneDrive” (personal) | MSA drive ids are case-insensitive — fixed by Graph revalidation; retry pick. Shared/other drives still rejected |
+| SPA logs out when opening Picker | Provider auth errors are 403 (not session 401). Hard-refresh Workspace |
 | Picker popup blocked | Allow popups for the Workspace origin |
-| Webhooks never fire | Public `APP_URL`; validationToken handshake; subscription renewal Beat task |
-| SharePoint rejected | Expected — 9E is OneDrive only |
+| Webhooks never fire (especially MSA) | Public `APP_URL`; validationToken handshake; use **Sync now** if MSA notifications are flaky |
+| SharePoint library / Teams files | Expected — OneDrive personal/business files only |

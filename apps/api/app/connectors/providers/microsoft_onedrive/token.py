@@ -68,7 +68,11 @@ def ensure_fresh_access(
             "Microsoft OneDrive refresh token is missing.",
         )
 
-    tenant = str(current.get("tenant_id") or settings.microsoft_onedrive_tenant)
+    tenant = str(
+        current.get("auth_tenant")
+        or current.get("tenant_id")
+        or settings.microsoft_onedrive_tenant
+    )
     owned = client is None
     graph = client or MicrosoftOneDriveClient(settings=settings, tenant=tenant)
     try:

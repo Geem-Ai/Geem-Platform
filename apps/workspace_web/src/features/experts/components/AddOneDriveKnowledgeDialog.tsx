@@ -112,6 +112,7 @@ export function AddOneDriveKnowledgeDialog({
           clientId: session.client_id,
           tenant: session.tenant,
           driveId: session.drive_id,
+          accountKind: session.account_kind ?? null,
           getResourceToken: async (resource: string) => {
             const token = await createMicrosoftOneDrivePickerToken(connId, {
               resource,

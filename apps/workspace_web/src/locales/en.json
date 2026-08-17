@@ -314,10 +314,10 @@
     "oneDrive": {
       "add": "Add from Microsoft OneDrive",
       "addTitle": "Add from Microsoft OneDrive",
-      "addHint": "Choose files from a connected Microsoft OneDrive account. Supported: PDF, TXT, Markdown, and Office documents (converted to PDF).",
+      "addHint": "Choose files from a connected Microsoft OneDrive account (work/school or personal). Supported: PDF, TXT, Markdown, and Office documents (converted to PDF).",
       "added": "OneDrive files queued for synchronization.",
       "installFirst": "Install the Microsoft OneDrive app from the App Store first.",
-      "connectFirst": "Connect a Microsoft account before adding files.",
+      "connectFirst": "Connect a Microsoft account before adding files. Work/school and personal accounts are supported when the server allows both.",
       "goToAppStore": "Open Microsoft OneDrive app",
       "connect": "Connect Microsoft OneDrive",
       "chooseAccount": "Microsoft OneDrive account",
@@ -330,6 +330,7 @@
       "syncing": "Synchronizing",
       "lastSynced": "Last synchronized",
       "reconnect": "Reconnect Microsoft OneDrive",
+      "reconnectForPicker": "Reconnect OneDrive to grant File Picker access (required after enabling personal accounts).",
       "authorizationExpired": "Microsoft authorization expired",
       "reauthorizationRequired": "Reauthorization required",
       "syncNow": "Sync now",
@@ -1036,7 +1037,7 @@
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
         "shortDescription": "Connect selected Microsoft OneDrive content to Geem Experts.",
-        "description": "Connect Microsoft work or school OneDrive files to Geem Experts. After installing, connect your Microsoft account, then add files from Expert knowledge sources. Geem reads selected files only — it does not modify your OneDrive."
+        "description": "Connect Microsoft work/school or personal OneDrive files to Geem Experts. After installing, connect your Microsoft account, then add files from Expert knowledge sources. Geem reads selected files only — it does not modify your OneDrive."
       },
       "whatsapp": {
         "name": "WhatsApp",
@@ -1148,8 +1149,8 @@
     "googleDriveSyncFailed": "Drive synchronization failed",
     "microsoftOneDriveNotConfigured": "Microsoft OneDrive is not configured on this server",
     "microsoftOneDriveAuthorizationFailed": "Microsoft OneDrive authorization failed",
-    "microsoftOneDriveReauthorizationRequired": "Reauthorization required for Microsoft OneDrive",
-    "microsoftOneDriveDriveNotSupported": "Personal Microsoft accounts are not supported for file picking. Connect a work or school OneDrive account.",
+    "microsoftOneDriveReauthorizationRequired": "Reconnect Microsoft OneDrive to renew access (required for personal File Picker after enabling dual accounts)",
+    "microsoftOneDriveDriveNotSupported": "This OneDrive location is not supported for file picking",
     "microsoftOneDriveItemNotFound": "OneDrive file was not found",
     "microsoftOneDriveAccessDenied": "OneDrive file is no longer accessible",
     "microsoftOneDriveFileTypeUnsupported": "Unsupported file type for OneDrive",
