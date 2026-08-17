@@ -13,6 +13,7 @@ from urllib.parse import urlencode, urljoin
 
 from sqlalchemy.orm import Session
 
+from app.billing.fulfillment import PurchaseFulfillmentService, purchase_grant_request_id
 from app.billing.gateways.dtos import (
     CheckoutRequest,
     CustomerDetails,
@@ -38,22 +39,15 @@ from app.billing.service import SubscriptionService
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.identity.models import User
-from app.usage.credits import CreditService
-from app.usage.metrics import CreditLedgerEntryType
 from app.workspaces.models import Workspace, WorkspaceKind
 
 logger = logging.getLogger(__name__)
 
-GRANT_REQUEST_ID_PREFIX = "purchase:"
 DEFAULT_PHONE = "0500000000"
 
 
 def hash_return_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def purchase_grant_request_id(purchase_id: uuid.UUID) -> str:
-    return f"{GRANT_REQUEST_ID_PREFIX}{purchase_id}"
 
 
 class BillingService:
@@ -72,7 +66,7 @@ class BillingService:
         self.packs = CreditPackRepository(db)
         self.gateways = PaymentGatewayConfigRepository(db)
         self.subscriptions = SubscriptionService(db, self.settings)
-        self.credits = CreditService(db, self.settings)
+        self.fulfillment = PurchaseFulfillmentService(db, self.settings)
 
     def list_purchasable_plans(self) -> list[Plan]:
         return self.plans.list_purchasable()
@@ -278,6 +272,33 @@ class BillingService:
         )
         return purchase
 
+    def start_external_checkout(
+        self,
+        workspace: Workspace,
+        user: User,
+        *,
+        kind: PurchaseKind,
+        amount: Decimal,
+        currency: str,
+        payload: dict[str, Any],
+        description: str,
+        customer_ip: str | None = None,
+        spa_origin: str | None = None,
+    ) -> tuple[Purchase, str]:
+        """Public entry for domain services (App Store) that share BillingGateway."""
+        self._assert_tenant_workspace(workspace)
+        return self._start_checkout(
+            workspace,
+            user,
+            kind=kind,
+            amount=amount,
+            currency=currency,
+            payload=payload,
+            description=description,
+            customer_ip=customer_ip,
+            spa_origin=spa_origin,
+        )
+
     def _start_checkout(
         self,
         workspace: Workspace,
@@ -340,45 +361,7 @@ class BillingService:
         return purchase, raw_token
 
     def _fulfill(self, purchase: Purchase) -> None:
-        payload = purchase.payload or {}
-        kind = payload.get("kind") or purchase.kind
-        if kind == PurchaseKind.CREDIT_PACK.value:
-            credits = int(payload.get("credits") or 0)
-            if credits <= 0:
-                raise AppError(
-                    ErrorCategory.INVALID_PURCHASE,
-                    "Purchase snapshot is missing granted credits.",
-                )
-            self.credits.append(
-                purchase.workspace_id,
-                entry_type=CreditLedgerEntryType.GRANT,
-                amount=credits,
-                request_id=purchase_grant_request_id(purchase.id),
-                source_type="purchase",
-                source_id=str(purchase.id),
-                extra={"kind": PurchaseKind.CREDIT_PACK.value},
-            )
-            return
-        if kind == PurchaseKind.SUBSCRIPTION.value:
-            raw_plan_id = payload.get("plan_id")
-            try:
-                plan_id = uuid.UUID(str(raw_plan_id))
-            except (TypeError, ValueError) as exc:
-                raise AppError(
-                    ErrorCategory.INVALID_PURCHASE,
-                    "Purchase snapshot is missing the target plan.",
-                ) from exc
-            self.subscriptions.assign_plan(
-                purchase.workspace_id,
-                plan_id,
-                extra={
-                    "source": "purchase",
-                    "purchase_id": str(purchase.id),
-                },
-                require_active=False,
-            )
-            return
-        raise AppError(ErrorCategory.INVALID_PURCHASE, "Unknown purchase kind.")
+        self.fulfillment.fulfill(purchase)
 
     def _mark_failed(self, purchase: Purchase, *, failure: str) -> Purchase:
         """Terminal failure that the caller must commit (do not raise after flush)."""

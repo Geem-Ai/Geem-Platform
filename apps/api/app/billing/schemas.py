@@ -156,6 +156,10 @@ class PurchaseOut(BaseModel):
     item_name: str | None = None
     item_code: str | None = None
     credits: int | None = None
+    app_slug: str | None = None
+    app_name: str | None = None
+    commercial_action: str | None = None
+    billing_interval: str | None = None
     paid_at: datetime | None = None
     created_at: datetime
 

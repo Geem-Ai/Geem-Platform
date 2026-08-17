@@ -33,7 +33,10 @@ type StorageFileListProps = {
   onDelete: (item: DocumentSummary) => void;
 };
 
-function pageCountLabel(count: number, t: (key: string, opts?: object) => string) {
+function pageCountLabel(
+  count: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   return count === 1
     ? t('storage.pageCountOne', { count })
     : t('storage.pageCountOther', { count });

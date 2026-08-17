@@ -223,10 +223,9 @@ describe('ChatMessage citations + retry', () => {
       />,
     );
     const img = screen.getByTestId('geem-assistant-avatar');
-    expect(img.getAttribute('src')).toContain('/brand/geem-avatar.webp');
-    expect(img.getAttribute('alt')).toBe('Geem');
-    expect(img.className).toMatch(/rounded-none/);
-    expect(img.className).toMatch(/object-contain/);
+    expect(img.getAttribute('data')).toContain('/brand/geem-animated.svg');
+    expect(img.getAttribute('aria-label')).toBe('Geem');
+    expect(img.getAttribute('data-geem-mascot')).toBe('animated');
     expect(screen.getByTestId('message-timestamp')).toBeInTheDocument();
   });
 

@@ -22,6 +22,69 @@ import { useConversations } from '@/features/chat/hooks/useConversations';
 import { useLayout } from './context';
 import { workspaceNav, type NavItem } from './nav-config';
 
+const navItemClass = (
+  collapsed: boolean,
+  nested: boolean,
+  active = false,
+) =>
+  cn(
+    'flex w-full min-w-0 items-center justify-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+    nested && 'ps-4',
+    active
+      ? 'bg-accent text-accent-foreground font-medium'
+      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+    collapsed && 'justify-center px-0',
+  );
+
+/** Group label — no href. When collapsed, click expands the sidebar. */
+function NavGroupItem({
+  item,
+  collapsed,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const { sidebarToggle } = useLayout();
+  const label = t(item.labelKey);
+  const Icon = item.icon;
+  const tooltipSide = i18n.language === 'ar' ? 'left' : 'right';
+
+  if (!collapsed) {
+    return (
+      <div
+        className={cn(
+          navItemClass(false, false),
+          'pointer-events-none hover:bg-transparent hover:text-muted-foreground',
+        )}
+        data-testid={`nav-group-${item.id}`}
+      >
+        <Icon className="size-4 shrink-0" />
+        <span className="min-w-0 truncate">{label}</span>
+      </div>
+    );
+  }
+
+  const content = (
+    <button
+      type="button"
+      className={navItemClass(true, false)}
+      onClick={() => sidebarToggle()}
+      aria-label={label}
+      data-testid={`nav-group-${item.id}`}
+    >
+      <Icon className="size-4 shrink-0" />
+    </button>
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side={tooltipSide}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function NavLinkItem({
   item,
   collapsed,
@@ -36,22 +99,17 @@ function NavLinkItem({
   const Icon = item.icon;
   const tooltipSide = i18n.language === 'ar' ? 'left' : 'right';
 
+  if (!item.to) {
+    return null;
+  }
+
   const link = (
     <NavLink
       to={item.to}
-      // Group parents and nested leaves must match exactly. Prefix match would
-      // paint Billing + every /billing/* child as active at once.
-      end={Boolean(item.children) || nested}
-      className={({ isActive }) =>
-        cn(
-          'flex w-full min-w-0 items-center justify-start gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
-          nested && 'ps-4',
-          isActive
-            ? 'bg-accent text-accent-foreground font-medium'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-          collapsed && 'justify-center px-0',
-        )
-      }
+      // Nested leaves must match exactly. Prefix match would paint every
+      // /billing/* child as active under a shared prefix.
+      end={nested}
+      className={({ isActive }) => navItemClass(collapsed, nested, isActive)}
     >
       <Icon className="size-4 shrink-0" />
       {!collapsed && <span className="min-w-0 truncate">{label}</span>}
@@ -79,23 +137,31 @@ function WorkspaceNav({ collapsed }: { collapsed: boolean }) {
       aria-label={t('shell.workspaceSettings')}
       data-testid="workspace-nav"
     >
-      {workspaceNav.map((item) => (
-        <div key={item.id} className="w-full space-y-1">
-          <NavLinkItem item={item} collapsed={collapsed} />
-          {!collapsed &&
-            item.children?.map((child) => (
-              <NavLinkItem
-                key={child.id}
-                item={child}
-                collapsed={collapsed}
-                nested
-              />
-            ))}
-          {!collapsed && item.children && (
-            <Separator className="my-2 opacity-80" />
-          )}
-        </div>
-      ))}
+      {workspaceNav.map((item) => {
+        const isGroup = Boolean(item.children?.length);
+
+        return (
+          <div key={item.id} className="w-full space-y-1">
+            {isGroup ? (
+              <NavGroupItem item={item} collapsed={collapsed} />
+            ) : (
+              <NavLinkItem item={item} collapsed={collapsed} />
+            )}
+            {!collapsed &&
+              item.children?.map((child) => (
+                <NavLinkItem
+                  key={child.id}
+                  item={child}
+                  collapsed={collapsed}
+                  nested
+                />
+              ))}
+            {!collapsed && isGroup && (
+              <Separator className="my-2 opacity-80" />
+            )}
+          </div>
+        );
+      })}
     </nav>
   );
 }

@@ -30,6 +30,11 @@ from app.usage.api_activity_router import router as api_usage_router
 from app.usage.router import router as usage_router
 from app.workspaces.router import router as workspaces_router
 from app.api_keys.router import router as api_keys_router
+from app.apps_catalog.router import router as apps_catalog_router
+from app.connectors.router import (
+    apps_connections_router,
+    connectors_router,
+)
 
 setup_logging()
 settings = get_settings()
@@ -69,6 +74,9 @@ app.include_router(entitlements_router)
 app.include_router(usage_router)
 app.include_router(api_usage_router)
 app.include_router(api_keys_router)
+app.include_router(apps_catalog_router)
+app.include_router(apps_connections_router)
+app.include_router(connectors_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
 

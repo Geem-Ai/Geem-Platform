@@ -578,6 +578,9 @@
     "kind": {
       "subscription": "Subscription",
       "creditPack": "Credit pack",
+      "appOneTime": "One-time App purchase",
+      "appSubscription": "App subscription",
+      "appRenewal": "App renewal",
       "other": "Purchase"
     },
     "status": {
@@ -809,6 +812,195 @@
       "title": "Title"
     }
   },
+  "apps": {
+    "eyebrow": "Workspace",
+    "title": "Apps",
+    "description": "Discover integrations and extensions for your workspace.",
+    "installedApps": "Installed Apps",
+    "installedDescription": "Apps currently active in this workspace.",
+    "featured": "Featured Apps",
+    "allApps": "All Apps",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "loadError": "Couldn’t load the App Store.",
+    "empty": "No apps match these filters.",
+    "viewDetails": "View details",
+    "backToStore": "Back to App Store",
+    "browseStore": "Browse App Store",
+    "about": "About",
+    "plans": "Plans",
+    "defaultPlan": "Default",
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "installed": "Installed",
+    "comingSoon": "Coming soon",
+    "purchaseRequired": "Purchase required",
+    "memberHint": "Only workspace owners and admins can install or uninstall apps.",
+    "installTitle": "Install {{name}}?",
+    "installHint": "This will add the app to this workspace. Connection setup will be available separately.",
+    "uninstallTitle": "Uninstall {{name}}?",
+    "uninstallHint": "This will remove the app from this workspace. Existing connection history is retained.",
+    "manageView": "View",
+    "installedAt": "Installed {{date}}",
+    "integrationLater": "Installed. Integration setup will be available in a later phase.",
+    "installedEmptyTitle": "No installed apps",
+    "installedEmptyHint": "Browse the App Store to install free apps for this workspace.",
+    "connections": {
+      "title": "Connections",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "degraded": "Degraded",
+      "connectionError": "Connection error",
+      "credentialsExpired": "Credentials expired",
+      "connectorUnavailable": "Connector unavailable",
+      "connectorAvailableSoon": "Connector available soon",
+      "setupComingSoon": "Connection setup is not available yet.",
+      "installFirst": "Install this app before managing connections.",
+      "empty": "No connections yet.",
+      "connect": "Connect",
+      "untitled": "Connection",
+      "health": {
+        "unknown": "Unknown",
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "failed": "Failed"
+      },
+      "status": {
+        "pending": "Pending",
+        "connecting": "Connecting",
+        "active": "Connected",
+        "degraded": "Degraded",
+        "error": "Connection error",
+        "disconnected": "Disconnected",
+        "revoked": "Credentials expired"
+      },
+      "checkConnection": "Check connection",
+      "disconnect": "Disconnect",
+      "reconnect": "Reconnect",
+      "sync": "Sync",
+      "syncNow": "Sync now",
+      "syncHistory": "Sync history",
+      "syncHistoryEmpty": "No sync runs yet.",
+      "lastSynced": "Last synced {{date}}",
+      "neverSynced": "Never synced",
+      "disconnectTitle": "Disconnect this connection?",
+      "disconnectHint": "Local credentials will be cleared. You can reconnect later.",
+      "limitReached": "Connection limit reached",
+      "syncCounters": "Seen {{seen}} · created {{created}} · updated {{updated}} · deleted {{deleted}} · failed {{failed}}",
+      "syncTrigger": {
+        "initial": "Initial sync",
+        "manual": "Manual sync",
+        "scheduled": "Scheduled sync",
+        "webhook": "Webhook sync",
+        "reconcile": "Reconcile sync"
+      },
+      "syncStatus": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "partial": "Partial",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    },
+    "filters": {
+      "label": "Categories",
+      "all": "All"
+    },
+    "billing": {
+      "free": "Free",
+      "oneTime": "One-time",
+      "oneTimePrice": "{{amount}} · one time",
+      "subscription": "Subscription",
+      "fromMonthly": "From {{amount}} / month",
+      "perMonth": "/ month",
+      "comingSoon": "Coming soon",
+      "unavailable": "Unavailable",
+      "monthly": "Monthly",
+      "buy": "Buy",
+      "buyAndInstall": "Buy & Install",
+      "choosePlan": "Choose",
+      "selectPlan": "Select a plan",
+      "purchased": "Purchased",
+      "lifetimeAccess": "Lifetime access",
+      "currentPlan": "Current plan",
+      "previousPlan": "Previous plan",
+      "activeUntil": "Active until {{date}}",
+      "expiredOn": "Expired {{date}}",
+      "subscriptionExpired": "Subscription expired",
+      "renew": "Renew",
+      "manualRenewal": "Renewal is manual — there is no automatic charge."
+    },
+    "planCatalog": {
+      "free": {
+        "name": "Free",
+        "description": "Included at no cost. Provider connection setup comes in a later phase."
+      }
+    },
+    "entitlements": {
+      "connections": "{{count}} connections",
+      "sessions": "{{count}} sessions",
+      "other": "{{key}}: {{value}}"
+    },
+    "payment": {
+      "successTitle": "Payment successful",
+      "subscriptionSuccessTitle": "Subscription activated",
+      "renewalSuccessTitle": "Renewal successful",
+      "failedTitle": "Payment failed",
+      "pendingTitle": "Payment is being verified",
+      "oneTimeSuccess": "{{name}} has been added to your workspace.",
+      "subscriptionSuccess": "{{name}} is active until {{date}}.",
+      "renewalSuccess": "{{name}} is active until {{date}}.",
+      "subscriptionSuccessFallback": "{{name}} is now active in your workspace.",
+      "renewalSuccessFallback": "{{name}} subscription has been extended.",
+      "failedHint": "No charge was confirmed. You can try again from the App Store.",
+      "pendingHint": "Geem is confirming this payment. You can refresh this page shortly.",
+      "missingTitle": "Missing purchase reference",
+      "missingHint": "Return to the App Store and check billing history if needed.",
+      "errorHint": "Could not load this purchase. Try again.",
+      "openApp": "Open App",
+      "manageApp": "Manage App"
+    },
+    "status": {
+      "installed": "Installed",
+      "active": "Active"
+    },
+    "categories": {
+      "knowledge": "Knowledge",
+      "knowledgeHint": "Connect knowledge sources to Experts",
+      "communication": "Communication",
+      "communicationHint": "Messaging and conversation channels",
+      "productivity": "Productivity",
+      "productivityHint": "Tools that streamline workspace workflows",
+      "analytics": "Analytics",
+      "analyticsHint": "Insights and reporting integrations",
+      "automation": "Automation",
+      "automationHint": "Automate recurring workspace tasks"
+    },
+    "catalog": {
+      "google-drive": {
+        "name": "Google Drive",
+        "shortDescription": "Connect selected Google Drive content to Geem Experts.",
+        "description": "Install Google Drive to prepare this workspace for connecting Drive folders and files to Geem Experts. OAuth and sync arrive in a later phase — installation alone does not connect your Google account."
+      },
+      "microsoft-onedrive": {
+        "name": "Microsoft OneDrive",
+        "shortDescription": "Connect selected Microsoft OneDrive content to Geem Experts.",
+        "description": "Install Microsoft OneDrive to prepare this workspace for connecting OneDrive content to Geem Experts. Microsoft Graph OAuth and sync arrive in a later phase — installation alone does not connect your Microsoft account."
+      },
+      "whatsapp": {
+        "name": "WhatsApp",
+        "shortDescription": "Connect WhatsApp conversations to a Geem Expert.",
+        "description": "Connect WhatsApp conversations to a Geem Expert. Subscription plans and pricing are finalized in a later phase. This listing is available for discovery only and cannot be installed yet."
+      }
+    },
+    "toasts": {
+      "installed": "{{name}} installed",
+      "uninstalled": "{{name}} uninstalled"
+    }
+  },
   "errors": {
     "notFound": "Page not found",
     "generic": "Something went wrong",
@@ -863,6 +1055,34 @@
     "paymentCurrencyMismatch": "The payment currency did not match this purchase.",
     "creditPackUnavailable": "That credit pack is not available.",
     "planUnavailable": "That plan is not available.",
-    "systemWorkspaceCheckoutForbidden": "This workspace cannot purchase plans or credits."
+    "systemWorkspaceCheckoutForbidden": "This workspace cannot purchase plans or credits.",
+    "appNotFound": "App not found",
+    "appNotAvailable": "This app is not available for installation yet",
+    "appAlreadyInstalled": "This app is already installed",
+    "appNotInstalled": "This app is not installed",
+    "appBillingRequired": "A purchase or subscription is required before installing this app",
+    "appInstallForbidden": "You do not have permission to install or uninstall apps",
+    "appInstallationNotFound": "App installation not found",
+    "appPlanNotFound": "App plan not found",
+    "appPlanInactive": "That App plan is inactive",
+    "appPlanMismatch": "That App plan does not match this App",
+    "appAlreadyLicensed": "This workspace already owns a license for this app",
+    "appSubscriptionRequired": "A valid App subscription is required",
+    "appSubscriptionExpired": "This App subscription has expired",
+    "appSubscriptionAlreadyActive": "An active App subscription already exists",
+    "appRenewalNotAllowed": "This App cannot be renewed",
+    "appCurrencyNotSupported": "This App currency is not supported for checkout",
+    "appCheckoutForbidden": "Checkout is not available for this App",
+    "appCheckoutInProgress": "A checkout for this app is already in progress",
+    "appPurchaseNotPayable": "This App plan cannot be purchased",
+    "connectorNotAvailable": "This connector is not available yet",
+    "connectorNotSupported": "This connector is not supported",
+    "connectorLimitReached": "Connection limit reached for this app",
+    "connectorNotFound": "Connection not found",
+    "connectorAlreadyDisconnected": "This connection is already disconnected",
+    "connectorCredentialsInvalid": "Connection credentials are invalid",
+    "connectorCredentialsExpired": "Connection credentials have expired",
+    "connectorSyncNotSupported": "This connector does not support sync",
+    "connectorSyncInProgress": "A sync is already in progress"
   }
 }

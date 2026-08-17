@@ -18,5 +18,8 @@ describe('purchase status presentation', () => {
   it('maps purchase kinds without provider names', () => {
     expect(purchaseKindLabelKey('subscription')).toBe('billing.kind.subscription');
     expect(purchaseKindLabelKey('credit_pack')).toBe('billing.kind.creditPack');
+    expect(purchaseKindLabelKey('app_one_time')).toBe('billing.kind.appOneTime');
+    expect(purchaseKindLabelKey('app_subscription')).toBe('billing.kind.appSubscription');
+    expect(purchaseKindLabelKey('app_subscription_renewal')).toBe('billing.kind.appRenewal');
   });
 });

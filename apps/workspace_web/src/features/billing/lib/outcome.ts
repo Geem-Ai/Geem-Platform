@@ -11,7 +11,23 @@ export function paymentNoticeFromStatus(status: string): PaymentNotice {
 }
 
 export function billingContinuePath(kind: string | undefined): string {
-  return kind === 'credit_pack' ? '/billing/credits' : '/billing/subscription';
+  if (kind === 'credit_pack') return '/billing/credits';
+  if (
+    kind === 'app_one_time' ||
+    kind === 'app_subscription' ||
+    kind === 'app_subscription_renewal'
+  ) {
+    return '/apps';
+  }
+  return '/billing/subscription';
+}
+
+export function isAppPurchaseKind(kind: string | undefined): boolean {
+  return (
+    kind === 'app_one_time' ||
+    kind === 'app_subscription' ||
+    kind === 'app_subscription_renewal'
+  );
 }
 
 export function paymentNoticeFromState(state: unknown): PaymentNotice | null {

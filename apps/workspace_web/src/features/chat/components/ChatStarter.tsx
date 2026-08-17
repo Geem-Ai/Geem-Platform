@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { geemAvatarUrl } from '@/lib/helpers';
+import { GeemAnimatedMascot } from '@/components/brand/GeemAnimatedMascot';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
@@ -54,11 +54,11 @@ export function ChatStarter({
     >
       <div className="w-full max-w-3xl flex flex-col items-center">
         <div className="flex flex-col items-center gap-6 mb-8 text-center">
-          <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden">
-            <img
-              src={geemAvatarUrl()}
+          <div className="size-24 flex items-center justify-center">
+            <GeemAnimatedMascot
               alt={t('app.name')}
-              className="size-12 object-contain"
+              className="size-24"
+              data-testid="geem-chat-mascot"
             />
           </div>
           <div className="space-y-2">

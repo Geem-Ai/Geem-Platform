@@ -578,6 +578,9 @@
     "kind": {
       "subscription": "اشتراك",
       "creditPack": "حزمة أرصدة",
+      "appOneTime": "شراء تطبيق لمرة واحدة",
+      "appSubscription": "اشتراك تطبيق",
+      "appRenewal": "تجديد تطبيق",
       "other": "شراء"
     },
     "status": {
@@ -809,6 +812,195 @@
       "title": "عنوان"
     }
   },
+  "apps": {
+    "eyebrow": "مساحة العمل",
+    "title": "التطبيقات",
+    "description": "اكتشف التكاملات والإضافات لمساحة عملك.",
+    "installedApps": "التطبيقات المثبتة",
+    "installedDescription": "التطبيقات النشطة حالياً في مساحة العمل هذه.",
+    "featured": "تطبيقات مميزة",
+    "allApps": "كل التطبيقات",
+    "refresh": "تحديث",
+    "retry": "إعادة المحاولة",
+    "loadError": "تعذّر تحميل متجر التطبيقات.",
+    "empty": "لا توجد تطبيقات تطابق هذه عوامل التصفية.",
+    "viewDetails": "عرض التفاصيل",
+    "backToStore": "العودة إلى المتجر",
+    "browseStore": "تصفح المتجر",
+    "about": "نبذة",
+    "plans": "الخطط",
+    "defaultPlan": "افتراضي",
+    "install": "تثبيت",
+    "uninstall": "إلغاء التثبيت",
+    "installed": "مثبت",
+    "comingSoon": "قريباً",
+    "purchaseRequired": "يتطلب شراءً",
+    "memberHint": "يمكن لمالكي مساحة العمل والمشرفين فقط تثبيت التطبيقات أو إلغاء تثبيتها.",
+    "installTitle": "تثبيت {{name}}؟",
+    "installHint": "سيُضاف هذا التطبيق إلى مساحة العمل. إعداد الموصل سيكون متاحاً لاحقاً.",
+    "uninstallTitle": "إلغاء تثبيت {{name}}؟",
+    "uninstallHint": "سيُزال التطبيق من مساحة العمل هذه. يُحتفظ بسجل الموصلات الحالي.",
+    "manageView": "عرض",
+    "installedAt": "ثُبّت في {{date}}",
+    "integrationLater": "مثبت. إعداد التكامل سيكون متاحاً في مرحلة لاحقة.",
+    "installedEmptyTitle": "لا توجد تطبيقات مثبتة",
+    "installedEmptyHint": "تصفح المتجر لتثبيت تطبيقات مجانية لهذه المساحة.",
+    "connections": {
+      "title": "الموصلات",
+      "connected": "متصل",
+      "notConnected": "غير متصل",
+      "connecting": "جارٍ الاتصال",
+      "disconnected": "مفصول",
+      "degraded": "متدهور",
+      "connectionError": "خطأ في الاتصال",
+      "credentialsExpired": "انتهت صلاحية بيانات الاعتماد",
+      "connectorUnavailable": "الموصّل غير متاح",
+      "connectorAvailableSoon": "الموصّل سيتوفر قريباً",
+      "setupComingSoon": "إعداد الموصل غير متاح بعد.",
+      "installFirst": "ثبّت هذا التطبيق قبل إدارة الموصلات.",
+      "empty": "لا توجد اتصالات بعد.",
+      "connect": "اتصال",
+      "untitled": "موصل",
+      "health": {
+        "unknown": "غير معروف",
+        "healthy": "سليم",
+        "degraded": "متدهور",
+        "failed": "فشل"
+      },
+      "status": {
+        "pending": "قيد الانتظار",
+        "connecting": "جارٍ الاتصال",
+        "active": "متصل",
+        "degraded": "متدهور",
+        "error": "خطأ في الاتصال",
+        "disconnected": "مفصول",
+        "revoked": "انتهت صلاحية بيانات الاعتماد"
+      },
+      "checkConnection": "فحص الموصل",
+      "disconnect": "فصل",
+      "reconnect": "إعادة الربط",
+      "sync": "مزامنة",
+      "syncNow": "مزامنة الآن",
+      "syncHistory": "سجل المزامنة",
+      "syncHistoryEmpty": "لا توجد عمليات مزامنة بعد.",
+      "lastSynced": "آخر مزامنة {{date}}",
+      "neverSynced": "لم تتم المزامنة مطلقاً",
+      "disconnectTitle": "فصل هذا الموصل؟",
+      "disconnectHint": "سيتم مسح بيانات الاعتماد المحلية. يمكنك إعادة الربط لاحقاً.",
+      "limitReached": "تم بلوغ حد الموصلات",
+      "syncCounters": "شوهد {{seen}} · أُنشئ {{created}} · حُدّث {{updated}} · حُذف {{deleted}} · فشل {{failed}}",
+      "syncTrigger": {
+        "initial": "مزامنة أولية",
+        "manual": "مزامنة يدوية",
+        "scheduled": "مزامنة مجدولة",
+        "webhook": "مزامنة عبر إشعار",
+        "reconcile": "مزامنة توفيق"
+      },
+      "syncStatus": {
+        "pending": "قيد الانتظار",
+        "running": "جارٍ",
+        "succeeded": "نجحت",
+        "partial": "جزئية",
+        "failed": "فشلت",
+        "cancelled": "أُلغيت"
+      }
+    },
+    "filters": {
+      "label": "الفئات",
+      "all": "الكل"
+    },
+    "billing": {
+      "free": "مجاني",
+      "oneTime": "دفعة واحدة",
+      "oneTimePrice": "{{amount}} · دفعة واحدة",
+      "subscription": "اشتراك",
+      "fromMonthly": "من {{amount}} / شهر",
+      "perMonth": "/ شهر",
+      "comingSoon": "قريباً",
+      "unavailable": "غير متاح",
+      "monthly": "شهري",
+      "buy": "شراء",
+      "buyAndInstall": "اشترِ وثبّت",
+      "choosePlan": "اختيار",
+      "selectPlan": "اختر خطة",
+      "purchased": "تم الشراء",
+      "lifetimeAccess": "وصول مدى الحياة",
+      "currentPlan": "الخطة الحالية",
+      "previousPlan": "الخطة السابقة",
+      "activeUntil": "نشط حتى {{date}}",
+      "expiredOn": "انتهى في {{date}}",
+      "subscriptionExpired": "انتهى الاشتراك",
+      "renew": "تجديد",
+      "manualRenewal": "التجديد يدوي — لا يوجد خصم تلقائي."
+    },
+    "planCatalog": {
+      "free": {
+        "name": "مجاني",
+        "description": "مشمول دون تكلفة. إعداد موصّل المزود يأتي في مرحلة لاحقة."
+      }
+    },
+    "entitlements": {
+      "connections": "{{count}} الموصلات",
+      "sessions": "{{count}} جلسات",
+      "other": "{{key}}: {{value}}"
+    },
+    "payment": {
+      "successTitle": "تم الدفع بنجاح",
+      "subscriptionSuccessTitle": "تم تفعيل الاشتراك",
+      "renewalSuccessTitle": "تم التجديد بنجاح",
+      "failedTitle": "فشل الدفع",
+      "pendingTitle": "جارٍ التحقق من الدفع",
+      "oneTimeSuccess": "تمت إضافة {{name}} إلى مساحتك.",
+      "subscriptionSuccess": "{{name}} نشط حتى {{date}}.",
+      "renewalSuccess": "{{name}} نشط حتى {{date}}.",
+      "subscriptionSuccessFallback": "{{name}} نشط الآن في مساحتك.",
+      "renewalSuccessFallback": "تم تمديد اشتراك {{name}}.",
+      "failedHint": "لم يُؤكَّد أي خصم. يمكنك المحاولة مجدداً من المتجر.",
+      "pendingHint": "يؤكد Geem هذا الدفع. يمكنك تحديث الصفحة بعد قليل.",
+      "missingTitle": "مرجع الشراء مفقود",
+      "missingHint": "عد إلى المتجر وراجع سجل الفوترة عند الحاجة.",
+      "errorHint": "تعذّر تحميل هذا الشراء. حاول مجدداً.",
+      "openApp": "فتح التطبيق",
+      "manageApp": "إدارة التطبيق"
+    },
+    "status": {
+      "installed": "مثبت",
+      "active": "نشط"
+    },
+    "categories": {
+      "knowledge": "المعرفة",
+      "knowledgeHint": "ربط مصادر المعرفة بالخبراء",
+      "communication": "التواصل",
+      "communicationHint": "قنوات المراسلة والمحادثة",
+      "productivity": "الإنتاجية",
+      "productivityHint": "أدوات لتبسيط سير العمل",
+      "analytics": "التحليلات",
+      "analyticsHint": "تكاملات الرؤى والتقارير",
+      "automation": "الأتمتة",
+      "automationHint": "أتمتة المهام المتكررة"
+    },
+    "catalog": {
+      "google-drive": {
+        "name": "Google Drive",
+        "shortDescription": "اربط محتوى Google Drive المحدد بخبراء Geem.",
+        "description": "ثبّت Google Drive لتجهيز مساحة العمل لربط مجلدات وملفات Drive بخبراء Geem. التفويض والمزامنة يأتيان في مرحلة لاحقة — التثبيت وحده لا يربط حساب Google."
+      },
+      "microsoft-onedrive": {
+        "name": "Microsoft OneDrive",
+        "shortDescription": "اربط محتوى Microsoft OneDrive المحدد بخبراء Geem.",
+        "description": "ثبّت Microsoft OneDrive لتجهيز مساحة العمل لربط محتوى OneDrive بخبراء Geem. تفويض Microsoft Graph والمزامنة يأتيان في مرحلة لاحقة — التثبيت وحده لا يربط حساب Microsoft."
+      },
+      "whatsapp": {
+        "name": "WhatsApp",
+        "shortDescription": "اربط محادثات واتساب بخبير Geem.",
+        "description": "اربط محادثات واتساب بخبير Geem. خطط الاشتراك والأسعار تُحدَّد في مرحلة لاحقة. هذا الإدراج للاكتشاف فقط ولا يمكن تثبيته بعد."
+      }
+    },
+    "toasts": {
+      "installed": "تم تثبيت {{name}}",
+      "uninstalled": "تم إلغاء تثبيت {{name}}"
+    }
+  },
   "errors": {
     "notFound": "الصفحة غير موجودة",
     "generic": "حدث خطأ ما",
@@ -863,6 +1055,34 @@
     "paymentCurrencyMismatch": "عملة الدفع لا تطابق هذا الشراء.",
     "creditPackUnavailable": "حزمة الأرصدة هذه غير متاحة.",
     "planUnavailable": "هذه الخطة غير متاحة.",
-    "systemWorkspaceCheckoutForbidden": "لا يمكن لهذه المساحة شراء خطط أو أرصدة."
+    "systemWorkspaceCheckoutForbidden": "لا يمكن لهذه المساحة شراء خطط أو أرصدة.",
+    "appNotFound": "التطبيق غير موجود",
+    "appNotAvailable": "هذا التطبيق غير متاح للتثبيت بعد",
+    "appAlreadyInstalled": "هذا التطبيق مثبت بالفعل",
+    "appNotInstalled": "هذا التطبيق غير مثبت",
+    "appBillingRequired": "يلزم شراء أو اشتراك قبل تثبيت هذا التطبيق",
+    "appInstallForbidden": "ليس لديك صلاحية تثبيت التطبيقات أو إلغاء تثبيتها",
+    "appInstallationNotFound": "تثبيت التطبيق غير موجود",
+    "appPlanNotFound": "خطة التطبيق غير موجودة",
+    "appPlanInactive": "خطة التطبيق غير نشطة",
+    "appPlanMismatch": "خطة التطبيق لا تطابق هذا التطبيق",
+    "appAlreadyLicensed": "تمتلك هذه المساحة ترخيصاً لهذا التطبيق بالفعل",
+    "appSubscriptionRequired": "يلزم اشتراك تطبيق صالح",
+    "appSubscriptionExpired": "انتهى اشتراك هذا التطبيق",
+    "appSubscriptionAlreadyActive": "يوجد اشتراك تطبيق نشط بالفعل",
+    "appRenewalNotAllowed": "لا يمكن تجديد هذا التطبيق",
+    "appCurrencyNotSupported": "عملة هذا التطبيق غير مدعومة للدفع",
+    "appCheckoutForbidden": "الدفع غير متاح لهذا التطبيق",
+    "appCheckoutInProgress": "عملية دفع لهذا التطبيق جارية بالفعل",
+    "appPurchaseNotPayable": "لا يمكن شراء خطة هذا التطبيق",
+    "connectorNotAvailable": "هذا الموصّل غير متاح بعد",
+    "connectorNotSupported": "هذا الموصّل غير مدعوم",
+    "connectorLimitReached": "تم بلوغ حد الموصلات لهذا التطبيق",
+    "connectorNotFound": "الموصل غير موجود",
+    "connectorAlreadyDisconnected": "هذا الموصل مفصول بالفعل",
+    "connectorCredentialsInvalid": "بيانات اعتماد الموصل غير صالحة",
+    "connectorCredentialsExpired": "انتهت صلاحية بيانات اعتماد الموصل",
+    "connectorSyncNotSupported": "هذا الموصّل لا يدعم المزامنة",
+    "connectorSyncInProgress": "تجري مزامنة بالفعل"
   }
 }

@@ -158,6 +158,9 @@ class PaymentGatewayCode(str, enum.Enum):
 class PurchaseKind(str, enum.Enum):
     SUBSCRIPTION = "subscription"
     CREDIT_PACK = "credit_pack"
+    APP_ONE_TIME = "app_one_time"
+    APP_SUBSCRIPTION = "app_subscription"
+    APP_SUBSCRIPTION_RENEWAL = "app_subscription_renewal"
 
 
 class PurchaseStatus(str, enum.Enum):
@@ -251,7 +254,10 @@ class Purchase(Base):
         Index("ix_purchases_workspace_created", "workspace_id", "created_at"),
         Index("ix_purchases_workspace_status", "workspace_id", "status"),
         CheckConstraint(
-            "kind IN ('subscription', 'credit_pack')",
+            "kind IN ("
+            "'subscription', 'credit_pack', "
+            "'app_one_time', 'app_subscription', 'app_subscription_renewal'"
+            ")",
             name="ck_purchases_kind",
         ),
         CheckConstraint(

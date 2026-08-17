@@ -117,6 +117,10 @@ def _purchase_out(purchase: Purchase) -> PurchaseOut:
     item_code: str | None = None
     item_name: str | None = None
     credits: int | None = None
+    app_slug: str | None = None
+    app_name: str | None = None
+    commercial_action: str | None = None
+    billing_interval: str | None = None
     if purchase.kind == "subscription":
         item_code = payload.get("plan_code") if isinstance(payload.get("plan_code"), str) else None
         item_name = payload.get("plan_name") if isinstance(payload.get("plan_name"), str) else item_code
@@ -132,6 +136,30 @@ def _purchase_out(purchase: Purchase) -> PurchaseOut:
             else item_code
         )
         credits = _payload_int(payload, "credits")
+    elif purchase.kind in {
+        "app_one_time",
+        "app_subscription",
+        "app_subscription_renewal",
+    }:
+        app_slug = payload.get("app_slug") if isinstance(payload.get("app_slug"), str) else None
+        app_name = payload.get("app_name") if isinstance(payload.get("app_name"), str) else None
+        plan_code = payload.get("plan_code") if isinstance(payload.get("plan_code"), str) else None
+        plan_name = payload.get("plan_name") if isinstance(payload.get("plan_name"), str) else None
+        item_code = plan_code
+        if app_name and plan_name:
+            item_name = f"{app_name} — {plan_name}"
+        else:
+            item_name = app_name or plan_name or plan_code
+        commercial_action = (
+            payload.get("commercial_action")
+            if isinstance(payload.get("commercial_action"), str)
+            else None
+        )
+        billing_interval = (
+            payload.get("billing_interval")
+            if isinstance(payload.get("billing_interval"), str)
+            else None
+        )
     return PurchaseOut(
         id=purchase.id,
         status=purchase.status,
@@ -141,6 +169,10 @@ def _purchase_out(purchase: Purchase) -> PurchaseOut:
         item_name=item_name,
         item_code=item_code,
         credits=credits,
+        app_slug=app_slug,
+        app_name=app_name,
+        commercial_action=commercial_action,
+        billing_interval=billing_interval,
         paid_at=purchase.paid_at,
         created_at=purchase.created_at,
     )
@@ -169,7 +201,23 @@ def _spa_payment_result_url(purchase: Purchase) -> str | None:
         base = settings.effective_workspace_web_url
     if not base:
         return None
-    if purchase.status == PurchaseStatus.PAID.value:
+    app_kinds = {
+        "app_one_time",
+        "app_subscription",
+        "app_subscription_renewal",
+    }
+    if purchase.kind in app_kinds:
+        if purchase.status == PurchaseStatus.PAID.value:
+            path = "/apps/payment/result"
+        elif purchase.status in {
+            PurchaseStatus.FAILED.value,
+            PurchaseStatus.CANCELLED.value,
+            PurchaseStatus.EXPIRED.value,
+        }:
+            path = "/apps/payment/result"
+        else:
+            path = "/apps/payment/result"
+    elif purchase.status == PurchaseStatus.PAID.value:
         path = "/billing/payment/success"
     elif purchase.status in {
         PurchaseStatus.FAILED.value,

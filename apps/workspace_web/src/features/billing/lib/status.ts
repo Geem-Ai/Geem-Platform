@@ -32,6 +32,9 @@ export function purchaseStatusBadgeVariant(
 export function purchaseKindLabelKey(kind: string): string {
   if (kind === 'subscription') return 'billing.kind.subscription';
   if (kind === 'credit_pack') return 'billing.kind.creditPack';
+  if (kind === 'app_one_time') return 'billing.kind.appOneTime';
+  if (kind === 'app_subscription') return 'billing.kind.appSubscription';
+  if (kind === 'app_subscription_renewal') return 'billing.kind.appRenewal';
   return 'billing.kind.other';
 }
 

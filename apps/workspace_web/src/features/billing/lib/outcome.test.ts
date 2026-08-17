@@ -16,6 +16,8 @@ describe('payment outcome', () => {
   it('sends subscriptions to the subscription page and packs to credits', () => {
     expect(billingContinuePath('subscription')).toBe('/billing/subscription');
     expect(billingContinuePath('credit_pack')).toBe('/billing/credits');
+    expect(billingContinuePath('app_one_time')).toBe('/apps');
+    expect(billingContinuePath('app_subscription')).toBe('/apps');
     expect(billingContinuePath(undefined)).toBe('/billing/subscription');
   });
 

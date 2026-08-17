@@ -167,12 +167,11 @@ services:
     build:
       context: ../apps/workspace_web
       dockerfile: Dockerfile
+    # Source of truth: apps/workspace_web/.env (do not override here —
+    # Compose `environment` would stomp env_file and force http://api.geem.dm:8000,
+    # which breaks HTTPS UAT with mixed-content). Tunnel overlay may set VITE_*.
     env_file:
       - ../apps/workspace_web/.env
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://api.geem.dm:8000}
-      VITE_ROOT_DOMAIN: ${VITE_ROOT_DOMAIN:-geem.dm}
-      VITE_APP_ENV: ${VITE_APP_ENV:-local}
     ports:
       - "5174:5174"
     volumes:

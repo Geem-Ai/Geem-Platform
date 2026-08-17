@@ -242,11 +242,14 @@ describe('ApiKeysPage', () => {
 
     fireEvent.click(screen.getByTestId('api-quick-start-curl-copy'));
     const { copyText } = await import('@/lib/clipboard');
-    expect(copyText).toHaveBeenCalled();
-    expect(String(copyText.mock.calls.at(-1)?.[0] ?? '')).toContain('YOUR_API_KEY');
+    const copyMock = copyText as unknown as ReturnType<typeof vi.fn>;
+    expect(copyMock).toHaveBeenCalled();
+    const curlCopied = copyMock.mock.calls[copyMock.mock.calls.length - 1]?.[0];
+    expect(String(curlCopied ?? '')).toContain('YOUR_API_KEY');
 
     fireEvent.click(screen.getByTestId('api-quick-start-stream-copy'));
-    expect(String(copyText.mock.calls.at(-1)?.[0] ?? '')).toContain('"stream": true');
+    const streamCopied = copyMock.mock.calls[copyMock.mock.calls.length - 1]?.[0];
+    expect(String(streamCopied ?? '')).toContain('"stream": true');
   });
 
   it('shows revoked and expired badges', async () => {

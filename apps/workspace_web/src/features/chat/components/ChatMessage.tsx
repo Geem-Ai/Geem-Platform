@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { geemAvatarUrl } from '@/lib/helpers';
+import { GeemAnimatedMascot } from '@/components/brand/GeemAnimatedMascot';
 import { cn } from '@/lib/utils';
 import { errorMessageKey, isQuotaErrorCode } from '@/services/api/errors';
 import type { ApiErrorCode } from '@/services/api/errors';
@@ -81,10 +81,9 @@ export function ChatMessage({
           </AvatarFallback>
         </Avatar>
       ) : (
-        <img
-          src={geemAvatarUrl()}
+        <GeemAnimatedMascot
           alt={t('app.name')}
-          className="size-10 shrink-0 rounded-none object-contain bg-primary/5"
+          className="size-10 shrink-0"
           data-testid="geem-assistant-avatar"
         />
       )}
