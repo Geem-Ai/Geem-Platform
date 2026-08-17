@@ -84,6 +84,7 @@ export type ConnectorCapability = {
   supports_sync: boolean;
   supports_webhooks: boolean;
   supports_health_check: boolean;
+  unavailable_reason?: string | null;
 };
 
 export type ConnectionStatus =
@@ -127,6 +128,8 @@ export type AppConnection = {
   credentials_expires_at: string | null;
   created_at: string | null;
   capabilities: ConnectionCapabilities;
+  /** Present when starting an OAuth connection — navigate the browser here. */
+  authorization_url?: string | null;
 };
 
 export type AppConnectionList = {
@@ -303,7 +306,11 @@ export async function listAppConnections(
 
 export async function startAppConnection(
   slug: string,
-  body?: { display_name?: string; connection_id?: string },
+  body?: {
+    display_name?: string;
+    connection_id?: string;
+    return_path?: string;
+  },
 ): Promise<AppConnection> {
   return apiRequest<AppConnection>(
     `/api/apps/${encodeURIComponent(slug)}/connections`,
@@ -312,8 +319,26 @@ export async function startAppConnection(
       json: {
         display_name: body?.display_name ?? null,
         connection_id: body?.connection_id ?? null,
+        return_path: body?.return_path ?? null,
       },
     },
+  );
+}
+
+export type GoogleDrivePickerSession = {
+  access_token: string;
+  expires_at: string | null;
+  app_id: string | null;
+  developer_key: string | null;
+};
+
+/** Short-lived Picker token — keep memory-only; never persist. */
+export async function createGoogleDrivePickerSession(
+  connectionId: string,
+): Promise<GoogleDrivePickerSession> {
+  return apiRequest<GoogleDrivePickerSession>(
+    `/api/apps/google-drive/connections/${encodeURIComponent(connectionId)}/picker-session`,
+    { method: 'POST' },
   );
 }
 

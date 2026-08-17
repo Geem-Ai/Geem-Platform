@@ -7,7 +7,19 @@ const ACCEPTED_MIME_TYPES = [
   'text/markdown',
   'text/x-markdown',
 ];
-const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+
+/**
+ * Client-side UX guards. Server ``MAX_UPLOAD_MB`` / ``MAX_PDF_PAGES`` are authoritative.
+ * Optional overrides: ``VITE_MAX_UPLOAD_MB``, ``VITE_MAX_PDF_PAGES``.
+ */
+const _maxMbRaw = Number(import.meta.env.VITE_MAX_UPLOAD_MB);
+export const MAX_UPLOAD_MB =
+  Number.isFinite(_maxMbRaw) && _maxMbRaw > 0 ? _maxMbRaw : 100;
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
+const _maxPagesRaw = Number(import.meta.env.VITE_MAX_PDF_PAGES);
+export const MAX_PDF_PAGES =
+  Number.isFinite(_maxPagesRaw) && _maxPagesRaw > 0 ? _maxPagesRaw : 1000;
 
 export type FileValidationResult =
   | { valid: true }
@@ -22,7 +34,7 @@ export function validateExpertFile(file: File): FileValidationResult {
     return { valid: false, errorKey: 'errors.uploadTypeRejected' };
   }
 
-  if (file.size > MAX_BYTES) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     return { valid: false, errorKey: 'errors.uploadTooLarge' };
   }
 

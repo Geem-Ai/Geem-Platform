@@ -60,6 +60,7 @@ def clean_tables() -> Generator[None, None, None]:
                 "TRUNCATE TABLE "
                 "app_licenses, app_subscriptions, "
                 "app_installations, app_plan_entitlements, app_plans, apps, app_categories, "
+                "connector_webhook_events, connector_sync_runs, connector_items, app_connections, "
                 "purchases, credit_packs, payment_gateway_configs, "
                 "ai_usage_reservations, storage_reservations, workspace_resource_usage, "
                 "storage_usage_events, usage_period_counters, credit_ledger_entries, "

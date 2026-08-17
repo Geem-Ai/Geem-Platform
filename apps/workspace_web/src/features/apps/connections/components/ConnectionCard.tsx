@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { AppConnection } from '@/services/api/apps';
-import { ApiError, errorMessageKey } from '@/services/api/errors';
+import { ApiError, errorMessageKey, friendlyDisplayError } from '@/services/api/errors';
 import { useDisconnectConnection } from '../hooks/useConnectionQueries';
 import { ConnectionHealthBadge } from './ConnectionHealthBadge';
 import { ConnectionStatusBadge } from './ConnectionStatusBadge';
@@ -32,15 +32,19 @@ export function ConnectionCard({
   canManage,
   onHealthCheck,
   onSync,
+  onReconnect,
   healthPending,
   syncPending,
+  reconnectPending,
 }: {
   connection: AppConnection;
   canManage: boolean;
   onHealthCheck?: () => void;
   onSync?: () => void;
+  onReconnect?: () => void;
   healthPending?: boolean;
   syncPending?: boolean;
+  reconnectPending?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -71,8 +75,13 @@ export function ConnectionCard({
           {t('apps.connections.neverSynced')}
         </p>
       )}
-      {connection.last_error_message ? (
-        <p className="text-xs text-destructive">{connection.last_error_message}</p>
+      {connection.last_error_code || connection.last_error_message ? (
+        <p className="text-xs text-destructive">
+          {friendlyDisplayError(t, {
+            code: connection.last_error_code,
+            message: connection.last_error_message,
+          })}
+        </p>
       ) : null}
       {canManage ? (
         <div className="flex flex-wrap gap-2">
@@ -96,6 +105,17 @@ export function ConnectionCard({
               data-testid="connection-sync"
             >
               {t('apps.connections.syncNow')}
+            </Button>
+          ) : null}
+          {connection.capabilities.can_reconnect ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reconnectPending}
+              onClick={onReconnect}
+              data-testid="connection-reconnect"
+            >
+              {t('apps.connections.reconnect')}
             </Button>
           ) : null}
           {connection.capabilities.can_disconnect ? (

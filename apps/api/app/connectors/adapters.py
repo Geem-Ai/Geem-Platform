@@ -111,6 +111,7 @@ class ConnectorAdapter(Protocol):
         credentials: dict[str, Any] | None,
         connection_id: uuid.UUID,
         workspace_id: uuid.UUID,
+        sync_state: dict[str, Any] | None = None,
     ) -> None: ...
 
 
@@ -160,6 +161,7 @@ class KnowledgeSourceConnectorAdapter(Protocol):
         connection_id: uuid.UUID,
         workspace_id: uuid.UUID,
         sync_run_id: uuid.UUID,
+        db: Any | None = None,
     ) -> SyncResult: ...
 
 

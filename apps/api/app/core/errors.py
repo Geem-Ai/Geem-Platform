@@ -150,6 +150,19 @@ class ErrorCategory(StrEnum):
     CONNECTOR_WEBHOOK_UNAUTHORIZED = "connector_webhook_unauthorized"
     CONNECTOR_INVALID_TRANSITION = "connector_invalid_transition"
 
+    # Google Drive (Phase 9D)
+    GOOGLE_DRIVE_NOT_CONFIGURED = "google_drive_not_configured"
+    GOOGLE_DRIVE_AUTHORIZATION_FAILED = "google_drive_authorization_failed"
+    GOOGLE_DRIVE_REAUTHORIZATION_REQUIRED = "google_drive_reauthorization_required"
+    GOOGLE_DRIVE_FILE_NOT_FOUND = "google_drive_file_not_found"
+    GOOGLE_DRIVE_FILE_ACCESS_DENIED = "google_drive_file_access_denied"
+    GOOGLE_DRIVE_FILE_TYPE_UNSUPPORTED = "google_drive_file_type_unsupported"
+    GOOGLE_DRIVE_EXPORT_TOO_LARGE = "google_drive_export_too_large"
+    GOOGLE_DRIVE_DOWNLOAD_FAILED = "google_drive_download_failed"
+    GOOGLE_DRIVE_RATE_LIMITED = "google_drive_rate_limited"
+    GOOGLE_DRIVE_WATCH_FAILED = "google_drive_watch_failed"
+    GOOGLE_DRIVE_SYNC_FAILED = "google_drive_sync_failed"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -265,6 +278,18 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "connector_webhook_invalid": 400,
     "connector_webhook_unauthorized": 401,
     "connector_invalid_transition": 409,
+    # Phase 9D — Google Drive
+    "google_drive_not_configured": 409,
+    "google_drive_authorization_failed": 401,
+    "google_drive_reauthorization_required": 401,
+    "google_drive_file_not_found": 404,
+    "google_drive_file_access_denied": 403,
+    "google_drive_file_type_unsupported": 422,
+    "google_drive_export_too_large": 413,
+    "google_drive_download_failed": 502,
+    "google_drive_rate_limited": 429,
+    "google_drive_watch_failed": 502,
+    "google_drive_sync_failed": 502,
 }
 
 

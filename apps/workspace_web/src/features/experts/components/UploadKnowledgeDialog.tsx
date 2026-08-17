@@ -13,12 +13,17 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
-import { ApiError, errorMessageKey } from '@/services/api/errors';
+import { ApiError, errorMessageKey, friendlyDisplayError } from '@/services/api/errors';
 import { QuotaAlert } from '@/features/usage/components/QuotaAlert';
 import { QuotaMeter } from '@/features/usage/components/QuotaMeter';
 import { useUsageSummary } from '@/features/usage/hooks/useUsageQueries';
 import { meterWarningLevel } from '@/features/usage/lib/quota';
-import { acceptedFileTypes, validateExpertFile } from '../lib/file-validation';
+import {
+  acceptedFileTypes,
+  MAX_PDF_PAGES,
+  MAX_UPLOAD_MB,
+  validateExpertFile,
+} from '../lib/file-validation';
 import { useUploadExpertDocument } from '../hooks/useExpertMutations';
 import { isProcessingDocStatus } from '../lib/status';
 import { KnowledgeIngestionProgress } from './KnowledgeIngestionProgress';
@@ -210,7 +215,11 @@ export function UploadKnowledgeDialog({
               )}
 
               {trackedItem?.failure_reason && (
-                <p className="text-xs text-destructive">{trackedItem.failure_reason}</p>
+                <p className="text-xs text-destructive">
+                  {friendlyDisplayError(t, {
+                    message: trackedItem.failure_reason,
+                  })}
+                </p>
               )}
             </div>
 
@@ -269,8 +278,16 @@ export function UploadKnowledgeDialog({
                   </p>
                 </div>
               ) : (
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('experts.uploadHint')}</p>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    {t('experts.uploadHint')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('experts.uploadLimits', {
+                      maxMb: MAX_UPLOAD_MB,
+                      maxPages: MAX_PDF_PAGES,
+                    })}
+                  </p>
                 </div>
               )}
             </div>

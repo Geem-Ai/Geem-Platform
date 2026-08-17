@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SquarePen } from 'lucide-react';
@@ -19,7 +19,13 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  floatingSheetPanel,
 } from '@/components/ui/sheet';
+import {
+  isGooglePickerEventTarget,
+  isGooglePickerOpen,
+  subscribeGooglePickerOpen,
+} from '@/features/apps/google-drive/picker';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import {
@@ -39,9 +45,10 @@ import { ExpertApiIdField } from './ExpertApiIdField';
 import { KnowledgeSourcesPanel } from './KnowledgeSourcesPanel';
 import { RagConfigFields } from './RagConfigFields';
 
-/** Metronic store-inventory ProductDetails sheet — floating inset panel. */
-const SHEET_PANEL =
-  'gap-0 w-full sm:max-w-none sm:w-[min(100%-2.5rem,42rem)] lg:w-[48rem] inset-5 border start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5';
+const SHEET_PANEL = floatingSheetPanel(
+  'sm:w-[min(100%-2.5rem,42rem)]',
+  'lg:w-[48rem]',
+);
 
 type ExpertDetailSheetProps = {
   expertId: string | undefined;
@@ -69,6 +76,24 @@ export function ExpertDetailSheet({
   );
   const deleteMutation = useDeleteExpert();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  /** Google Picker sits outside Sheet DOM; keep Expert sheet open while it is. */
+  const [googlePickerOpen, setGooglePickerOpen] = useState(isGooglePickerOpen);
+
+  useEffect(() => {
+    return subscribeGooglePickerOpen(() => {
+      setGooglePickerOpen(isGooglePickerOpen());
+    });
+  }, []);
+
+  function blockDismissForGooglePicker(event: Event) {
+    if (
+      googlePickerOpen ||
+      isGooglePickerOpen() ||
+      isGooglePickerEventTarget(event.target)
+    ) {
+      event.preventDefault();
+    }
+  }
 
   const canEdit = expert ? canEditExpert(role, expert.ownership) : false;
   const canDelete = expert ? canDeleteExpert(role, expert.ownership) : false;
@@ -99,8 +124,26 @@ export function ExpertDetailSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="end" className={SHEET_PANEL}>
+    <Sheet
+      open={open}
+      // Modal mode sets pointer-events:none on the rest of the document, which
+      // makes Google Picker (ported outside Sheet) unclickable.
+      modal={!googlePickerOpen}
+      onOpenChange={(next) => {
+        if (!next && (googlePickerOpen || isGooglePickerOpen())) return;
+        onOpenChange(next);
+      }}
+    >
+      <SheetContent
+        side="end"
+        className={SHEET_PANEL}
+        // Drop the dimmed overlay while Picker is up so it cannot steal hits.
+        overlay={!googlePickerOpen}
+        onPointerDownOutside={blockDismissForGooglePicker}
+        onInteractOutside={blockDismissForGooglePicker}
+        onFocusOutside={blockDismissForGooglePicker}
+        onEscapeKeyDown={blockDismissForGooglePicker}
+      >
         <SheetHeader className="border-b py-3.5 px-5 border-border text-start">
           <div className="flex items-start justify-between gap-3 pe-8">
             <div className="flex items-center gap-3 min-w-0">

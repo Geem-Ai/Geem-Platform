@@ -10,6 +10,8 @@ from app.documents.dependencies import DocumentAccess, get_document_access
 from app.experts.models import Expert, ExpertType
 from app.experts.policy import ExpertAction
 from app.experts.schemas import (
+    AddConnectorSourcesRequest,
+    AddConnectorSourcesResponse,
     ExpertCreateRequest,
     ExpertDocumentLinkOut,
     ExpertDocumentLinkRequest,
@@ -169,6 +171,7 @@ def list_expert_documents(
 ) -> list[ExpertKnowledgeItemOut]:
     from app.documents.repository import DocumentRepository
     from app.documents.service import compute_document_progress
+    from app.experts.models import ExpertSource, ExpertSourceType
 
     svc = ExpertService(db)
     items = svc.list_knowledge_items(
@@ -181,8 +184,15 @@ def list_expert_documents(
         [document.id for _, document in items]
     )
     out: list[ExpertKnowledgeItemOut] = []
+    linked_source_ids: set[uuid.UUID] = set()
     for link, document in items:
         prog = compute_document_progress(document, jobs_by_doc.get(document.id))
+        source_type = "upload"
+        if link.source_id is not None:
+            source = db.get(ExpertSource, link.source_id)
+            if source is not None and source.type:
+                source_type = source.type
+                linked_source_ids.add(source.id)
         out.append(
             ExpertKnowledgeItemOut(
                 id=link.id,
@@ -197,13 +207,54 @@ def list_expert_documents(
                 byte_size=document.byte_size,
                 page_count=document.page_count,
                 failure_reason=document.failure_reason,
-                source_type="upload",
+                source_type=source_type,
                 processed_pages=int(prog["processed_pages"] or 0),
                 failed_pages=int(prog["failed_pages"] or 0),
                 current_stage=prog["current_stage"],
                 progress=float(prog["progress"] or 0.0),
             )
         )
+
+    # Connector sources appear as soon as they are added — before sync creates
+    # a Document — so the Knowledge panel is not empty after a successful pick.
+    pending_sources = [
+        s
+        for s in ExpertService(db).repo.list_sources(expert_id)
+        if s.type == ExpertSourceType.CONNECTOR.value and s.id not in linked_source_ids
+    ]
+    # Auth already enforced via list_knowledge_items; re-check workspace ownership
+    # for sources by ensuring list_knowledge_items succeeded for this expert.
+    for source in pending_sources:
+        name = (source.name or "").strip() or "Google Drive file"
+        cfg = source.config if isinstance(source.config, dict) else {}
+        failure_reason = None
+        if isinstance(cfg.get("last_error_message"), str):
+            failure_reason = cfg["last_error_message"]
+        elif isinstance(cfg.get("last_error_code"), str):
+            failure_reason = cfg["last_error_code"]
+        out.append(
+            ExpertKnowledgeItemOut(
+                id=source.id,
+                expert_id=source.expert_id,
+                document_id=None,
+                source_id=source.id,
+                created_at=source.created_at,
+                title=name,
+                original_filename=name,
+                status=source.status,
+                mime_type=None,
+                byte_size=None,
+                page_count=0,
+                failure_reason=failure_reason,
+                source_type=ExpertSourceType.CONNECTOR.value,
+                processed_pages=0,
+                failed_pages=0,
+                current_stage=None,
+                progress=0.0,
+            )
+        )
+
+    out.sort(key=lambda row: row.created_at, reverse=True)
     return out
 
 
@@ -269,12 +320,70 @@ def delete_expert_source(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> None:
+    from app.experts.connector_sources import ExpertConnectorSourceService
+    from app.experts.models import ExpertSource, ExpertSourceType
+
+    source = db.get(ExpertSource, source_id)
+    if (
+        source is not None
+        and source.expert_id == expert_id
+        and source.type == ExpertSourceType.CONNECTOR.value
+        and source.deleted_at is None
+    ):
+        ExpertConnectorSourceService(db).remove_connector_source(
+            workspace=access.workspace,
+            membership=access.membership,
+            actor=access.user,
+            expert_id=expert_id,
+            source_id=source_id,
+        )
+        db.commit()
+        return
+
     ExpertService(db).soft_delete_source(
         workspace=access.workspace,
         membership=access.membership,
         actor=access.user,
         expert_id=expert_id,
         source_id=source_id,
+    )
+
+
+@router.post(
+    "/{expert_id}/connector-sources",
+    response_model=AddConnectorSourcesResponse,
+    status_code=201,
+)
+def add_expert_connector_sources(
+    expert_id: uuid.UUID,
+    body: AddConnectorSourcesRequest,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> AddConnectorSourcesResponse:
+    from app.experts.connector_sources import (
+        ConnectorSourceSelection,
+        ExpertConnectorSourceService,
+    )
+
+    result = ExpertConnectorSourceService(db).add_connector_sources(
+        workspace=access.workspace,
+        membership=access.membership,
+        actor=access.user,
+        expert_id=expert_id,
+        connection_id=body.connection_id,
+        items=[
+            ConnectorSourceSelection(
+                external_id=item.external_id,
+                resource_key=item.resource_key,
+            )
+            for item in body.items
+        ],
+    )
+    db.commit()
+    return AddConnectorSourcesResponse(
+        sources=[ExpertSourceOut.model_validate(s) for s in result.sources],
+        sync_run_id=result.sync_run_id,
+        status=result.status,
     )
 
 

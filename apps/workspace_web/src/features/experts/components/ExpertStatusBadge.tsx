@@ -11,7 +11,11 @@ export function ExpertStatusBadge({ status, showDot = true }: ExpertStatusBadgeP
   const { t } = useTranslation();
   return (
     <Badge variant={expertStatusBadgeVariant(status)} appearance="light" size="sm">
-      {showDot ? <BadgeDot /> : null}
+      {showDot ? (
+        <BadgeDot
+          className={status === 'processing' ? 'animate-pulse opacity-100' : undefined}
+        />
+      ) : null}
       {t(expertStatusLabelKey(status))}
     </Badge>
   );

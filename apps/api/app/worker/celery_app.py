@@ -6,6 +6,11 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# Phase 9D — register Google Drive in worker processes (same as API).
+from app.connectors.providers.google_drive import register_google_drive_connector
+
+register_google_drive_connector()
+
 celery_app = Celery(
     "arabic_rag",
     broker=settings.redis_url,
@@ -28,6 +33,11 @@ celery_app.conf.update(
             "task": "purge_expired_chat_attachments",
             "schedule": 900.0,  # every 15 minutes
             "kwargs": {"limit": 200},
+        },
+        # Google Drive changes.watch channels expire ~daily; renew when within 24h.
+        "renew-google-drive-watches": {
+            "task": "renew_google_drive_watches",
+            "schedule": 21600.0,  # every 6 hours
         },
     },
 )

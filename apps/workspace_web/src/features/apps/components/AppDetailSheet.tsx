@@ -8,6 +8,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  floatingSheetPanel,
 } from '@/components/ui/sheet';
 import { canManageWorkspace } from '@/features/workspaces/lib/roles';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
@@ -24,9 +25,10 @@ import { AppPlanCard } from './AppPlanCard';
 import { AppSubscriptionStatus } from './AppSubscriptionStatus';
 import { AppConnectionsPanel } from '../connections/components/AppConnectionsPanel';
 
-/** Metronic AI Concept floating inset panel (same shell as Experts). */
-const SHEET_PANEL =
-  'gap-0 w-full sm:max-w-none sm:w-[min(100%-2.5rem,36rem)] lg:w-[40rem] inset-5 border start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5';
+const SHEET_PANEL = floatingSheetPanel(
+  'sm:w-[min(100%-2.5rem,36rem)]',
+  'lg:w-[40rem]',
+);
 
 type AppDetailSheetProps = {
   slug: string | undefined;

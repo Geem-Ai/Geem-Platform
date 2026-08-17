@@ -248,6 +248,37 @@ class ConnectorOAuthStateService:
             )
         return payload
 
+    def consume_once(self, state: str) -> OAuthStatePayload:
+        """Pop and validate TTL for provider redirects (no session binding check).
+
+        Binding lives inside the state payload itself (workspace/actor/connection).
+        """
+        if not state or not isinstance(state, str):
+            raise AppError(
+                ErrorCategory.CONNECTOR_OAUTH_STATE_INVALID,
+                "OAuth state is missing or invalid.",
+            )
+        raw = self._pop(state)
+        if raw is None:
+            raise AppError(
+                ErrorCategory.CONNECTOR_OAUTH_STATE_INVALID,
+                "OAuth state is invalid, expired, or already used.",
+            )
+        try:
+            data = json.loads(raw)
+            payload = OAuthStatePayload.from_storage(data)
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
+            raise AppError(
+                ErrorCategory.CONNECTOR_OAUTH_STATE_INVALID,
+                "OAuth state payload is corrupt.",
+            ) from exc
+        if time.time() - payload.created_at > self.ttl_seconds:
+            raise AppError(
+                ErrorCategory.CONNECTOR_OAUTH_STATE_EXPIRED,
+                "OAuth state has expired.",
+            )
+        return payload
+
     def peek_public(self, state: str) -> dict[str, Any] | None:
         """Test helper — never used for authorization decisions."""
         raw = self._get(state)

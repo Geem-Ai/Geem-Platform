@@ -103,6 +103,7 @@ class ConnectorConnectionService:
             supports_sync=bool(desc.get("supports_sync")),
             supports_webhooks=bool(desc.get("supports_webhooks")),
             supports_health_check=bool(desc.get("supports_health_check")),
+            unavailable_reason=desc.get("unavailable_reason"),
         )
 
     def list_connections(
@@ -185,6 +186,7 @@ class ConnectorConnectionService:
         display_name: str | None = None,
         auth_mode: str | None = None,
         connection_id: uuid.UUID | None = None,
+        return_path: str | None = None,
     ) -> AppConnectionOut:
         """Create or reopen a connection in ``connecting`` (requires registered adapter)."""
         if not can_manage_apps(role):
@@ -216,6 +218,8 @@ class ConnectorConnectionService:
 
         workspace_app_connection_lock(self.db, workspace.id, app.id)
 
+        row: AppConnection
+        reconnect = False
         # Reconnect existing disconnected/revoked row.
         if connection_id is not None:
             existing = self.repo.get_connection(
@@ -264,54 +268,100 @@ class ConnectorConnectionService:
                     "reconnect": True,
                 },
             )
-            return to_connection_out(
-                existing,
-                app_slug=app.slug,
-                connector_kind=app.connector_kind,
-                can_manage=True,
-                adapter_available=True,
-                supports_sync=self._supports_sync(existing.connector_key),
+            row = existing
+            reconnect = True
+        else:
+            used = self.repo.count_limit_connections(
+                workspace.id, app_installation_id=installation.id
+            )
+            limit = self._connection_limit(workspace.id, app_slug)
+            if used >= limit:
+                raise_resource_quota(
+                    ErrorCategory.CONNECTOR_LIMIT_REACHED,
+                    "Connection limit reached for this app.",
+                    metric=CONNECTIONS_ENTITLEMENT_KEY,
+                    limit=limit,
+                    used=used,
+                    remaining=0,
+                )
+
+            row = AppConnection(
+                workspace_id=workspace.id,
+                app_installation_id=installation.id,
+                connector_key=app.connector_key,
+                display_name=display_name,
+                auth_mode=mode,
+                status=ConnectionStatus.CONNECTING.value,
+                health=ConnectionHealth.UNKNOWN.value,
+                connected_by_user_id=actor_id,
+                extra={},
+            )
+            self._ensure_routing_token(row)
+            self.repo.add_connection(row)
+            security_log(
+                "app.connection.started",
+                workspace_id=str(workspace.id),
+                actor_id=str(actor_id),
+                app_id=str(app.id),
+                installation_id=str(installation.id),
+                connection_id=str(row.id),
+            )
+            logger.info(
+                "connector_connection_started",
+                extra={"workspace_id": str(workspace.id), "connection_id": str(row.id)},
             )
 
-        used = self.repo.count_limit_connections(
-            workspace.id, app_installation_id=installation.id
-        )
-        limit = self._connection_limit(workspace.id, app_slug)
-        if used >= limit:
-            raise_resource_quota(
-                ErrorCategory.CONNECTOR_LIMIT_REACHED,
-                "Connection limit reached for this app.",
-                metric=CONNECTIONS_ENTITLEMENT_KEY,
-                limit=limit,
-                used=used,
-                remaining=0,
-            )
+        authorization_url: str | None = None
+        if (
+            mode == ConnectorAuthMode.OAUTH2.value
+            and self.registry.is_available(row.connector_key)
+            and hasattr(adapter, "build_authorization_request")
+        ):
+            from app.connectors.oauth_state import ConnectorOAuthStateService
+            import base64
+            import hashlib
 
-        row = AppConnection(
-            workspace_id=workspace.id,
-            app_installation_id=installation.id,
-            connector_key=app.connector_key,
-            display_name=display_name,
-            auth_mode=mode,
-            status=ConnectionStatus.CONNECTING.value,
-            health=ConnectionHealth.UNKNOWN.value,
-            connected_by_user_id=actor_id,
-            extra={},
-        )
-        self._ensure_routing_token(row)
-        self.repo.add_connection(row)
-        security_log(
-            "app.connection.started",
-            workspace_id=str(workspace.id),
-            actor_id=str(actor_id),
-            app_id=str(app.id),
-            installation_id=str(installation.id),
-            connection_id=str(row.id),
-        )
-        logger.info(
-            "connector_connection_started",
-            extra={"workspace_id": str(workspace.id), "connection_id": str(row.id)},
-        )
+            oauth = ConnectorOAuthStateService(settings=self.settings)
+            state_payload = oauth.create(
+                workspace_id=workspace.id,
+                actor_id=actor_id,
+                app_installation_id=installation.id,
+                connector_key=row.connector_key,
+                connection_id=row.id,
+                return_path=return_path,
+                include_pkce=True,
+            )
+            challenge = None
+            method = None
+            if state_payload.code_verifier:
+                digest = hashlib.sha256(
+                    state_payload.code_verifier.encode("ascii")
+                ).digest()
+                challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+                method = "S256"
+            redirect_uri = self.settings.effective_google_drive_redirect_uri
+            if row.connector_key != "google_drive":
+                redirect_uri = (
+                    f"{self.settings.app_url.rstrip('/')}"
+                    f"/api/connectors/oauth/{row.connector_key}/callback"
+                )
+            try:
+                auth_req = adapter.build_authorization_request(  # type: ignore[attr-defined]
+                    state=state_payload.state,
+                    redirect_uri=redirect_uri,
+                    code_challenge=challenge,
+                    code_challenge_method=method,
+                    reconnect=reconnect,
+                )
+            except TypeError:
+                auth_req = adapter.build_authorization_request(  # type: ignore[attr-defined]
+                    state=state_payload.state,
+                    redirect_uri=redirect_uri,
+                    code_challenge=challenge,
+                    code_challenge_method=method,
+                )
+            authorization_url = auth_req.authorization_url
+
         return to_connection_out(
             row,
             app_slug=app.slug,
@@ -319,6 +369,7 @@ class ConnectorConnectionService:
             can_manage=True,
             adapter_available=True,
             supports_sync=self._supports_sync(row.connector_key),
+            authorization_url=authorization_url,
         )
 
     def activate_connection(
@@ -349,7 +400,7 @@ class ConnectorConnectionService:
         self.access.require_active(workspace_id, app_slug=app.slug)
 
         self.credentials.set_credentials(
-            row, credentials, expires_at=credentials_expires_at
+            row, credentials, expires_at=credentials_expires_at, merge_refresh=True
         )
         if external_account_id is not None:
             row.external_account_id = external_account_id
@@ -410,13 +461,22 @@ class ConnectorConnectionService:
         # Best-effort provider disconnect (may no-op when adapter unavailable).
         adapter = self.registry.try_get(row.connector_key)
         creds = self.credentials.get_credentials(row)
+        sync_state = self.credentials.get_sync_state(row)
         if adapter is not None:
             try:
-                adapter.disconnect(
-                    credentials=creds,
-                    connection_id=row.id,
-                    workspace_id=workspace.id,
-                )
+                try:
+                    adapter.disconnect(
+                        credentials=creds,
+                        connection_id=row.id,
+                        workspace_id=workspace.id,
+                        sync_state=sync_state,
+                    )
+                except TypeError:
+                    adapter.disconnect(
+                        credentials=creds,
+                        connection_id=row.id,
+                        workspace_id=workspace.id,
+                    )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "connector_provider_disconnect_failed",
@@ -425,6 +485,23 @@ class ConnectorConnectionService:
                         "error": sanitize_error_message(str(exc)),
                     },
                 )
+
+        # Mark ExpertSources unavailable before clearing secrets.
+        try:
+            from app.experts.connector_sources import ExpertConnectorSourceService
+
+            ExpertConnectorSourceService(self.db).mark_sources_unavailable_for_connection(
+                workspace_id=workspace.id,
+                connection_id=row.id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "connector_mark_sources_unavailable_failed",
+                extra={
+                    "connection_id": str(row.id),
+                    "error": sanitize_error_message(str(exc)),
+                },
+            )
 
         self.credentials.clear_all_secrets(row)
         _transition(row, ConnectionStatus.DISCONNECTED.value)

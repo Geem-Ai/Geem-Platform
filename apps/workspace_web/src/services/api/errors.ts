@@ -83,6 +83,17 @@ export type ApiErrorCode =
   | 'connector_credentials_expired'
   | 'connector_sync_not_supported'
   | 'connector_sync_in_progress'
+  | 'google_drive_not_configured'
+  | 'google_drive_authorization_failed'
+  | 'google_drive_reauthorization_required'
+  | 'google_drive_file_not_found'
+  | 'google_drive_file_access_denied'
+  | 'google_drive_file_type_unsupported'
+  | 'google_drive_export_too_large'
+  | 'google_drive_download_failed'
+  | 'google_drive_rate_limited'
+  | 'google_drive_watch_failed'
+  | 'google_drive_sync_failed'
   | 'api_key_not_found'
   | 'unknown';
 
@@ -169,6 +180,17 @@ const KNOWN_CODES = new Set<string>([
   'connector_credentials_expired',
   'connector_sync_not_supported',
   'connector_sync_in_progress',
+  'google_drive_not_configured',
+  'google_drive_authorization_failed',
+  'google_drive_reauthorization_required',
+  'google_drive_file_not_found',
+  'google_drive_file_access_denied',
+  'google_drive_file_type_unsupported',
+  'google_drive_export_too_large',
+  'google_drive_download_failed',
+  'google_drive_rate_limited',
+  'google_drive_watch_failed',
+  'google_drive_sync_failed',
   'api_key_not_found',
 ]);
 
@@ -306,10 +328,60 @@ export function errorMessageKey(code: ApiErrorCode): string {
     connector_already_disconnected: 'errors.connectorAlreadyDisconnected',
     connector_credentials_invalid: 'errors.connectorCredentialsInvalid',
     connector_credentials_expired: 'errors.connectorCredentialsExpired',
+    connector_connection_failed: 'errors.connectorConnectionFailed',
+    connector_health_check_failed: 'errors.connectorHealthCheckFailed',
     connector_sync_not_supported: 'errors.connectorSyncNotSupported',
     connector_sync_in_progress: 'errors.connectorSyncInProgress',
+    connector_sync_not_found: 'errors.connectorSyncNotFound',
+    google_drive_not_configured: 'errors.googleDriveNotConfigured',
+    google_drive_authorization_failed: 'errors.googleDriveAuthorizationFailed',
+    google_drive_reauthorization_required: 'errors.googleDriveReauthorizationRequired',
+    google_drive_file_not_found: 'errors.googleDriveFileNotFound',
+    google_drive_file_access_denied: 'errors.googleDriveFileAccessDenied',
+    google_drive_file_type_unsupported: 'errors.googleDriveFileTypeUnsupported',
+    google_drive_export_too_large: 'errors.googleDriveExportTooLarge',
+    google_drive_download_failed: 'errors.googleDriveDownloadFailed',
+    google_drive_rate_limited: 'errors.googleDriveRateLimited',
+    google_drive_watch_failed: 'errors.googleDriveWatchFailed',
+    google_drive_sync_failed: 'errors.googleDriveSyncFailed',
   };
   return map[code] ?? 'errors.generic';
+}
+
+/** Detect ORM / SQL / stack dumps that must never be shown to end users. */
+const TECHNICAL_ERROR_RE =
+  /\b(psycopg|sqlalchemy|asyncpg|celery|traceback|CheckViolation|IntegrityError|OperationalError|ProgrammingError|DataError)\b|violates check constraint|\bSQL:\s*(INSERT|UPDATE|SELECT|DELETE|WITH)\b|File "[^"]+\.py"|site-packages|DETAIL:\s*Failing row|\[SQL:\s|Background on this error at:/i;
+
+export function looksTechnicalError(message: string | null | undefined): boolean {
+  const text = (message ?? '').trim();
+  if (!text) return false;
+  if (text.length > 280) return true;
+  return TECHNICAL_ERROR_RE.test(text);
+}
+
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
+/**
+ * User-facing error copy. Prefer mapped error codes; never surface technical dumps.
+ */
+export function friendlyDisplayError(
+  t: TranslateFn,
+  opts: { code?: string | null; message?: string | null } = {},
+): string {
+  const code = (opts.code ?? '').trim();
+  if (code) {
+    const key = errorMessageKey(code);
+    if (key !== 'errors.generic') {
+      return t(key);
+    }
+  }
+
+  const message = (opts.message ?? '').trim();
+  if (message && !looksTechnicalError(message)) {
+    return message;
+  }
+
+  return t('errors.generic');
 }
 
 export function isQuotaErrorCode(code: string | null | undefined): boolean {

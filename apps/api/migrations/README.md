@@ -27,6 +27,8 @@
 - Phase 9A: `0017_app_store_catalog.py` — `app_categories`, `apps`, `app_plans`, `app_plan_entitlements`, `app_installations` (unique per workspace+app; encrypted `config_encrypted`). Catalog seed via `python -m app.apps_catalog.seed` / bootstrap (`ensure_app_catalog`). Checkout/connectors are later Phase 9 slices.
 - Phase 9B: `0018_app_billing.py` — `app_licenses`, `app_subscriptions`; extends `purchases.kind` CHECK with `app_one_time` / `app_subscription` / `app_subscription_renewal`. App checkout reuses `BillingGateway` + return fulfillment; no recurring charges.
 - Phase 9C: `0019_connector_foundation.py` — `apps.connector_key`/`connector_kind`; `app_connections` (encrypted credentials/sync state + webhook routing token hash); `connector_sync_runs`; `connector_items` (optional `current_document_id` SET NULL); `connector_webhook_events` (idempotency, no raw body). Production adapters arrive in 9D–9F.
+- Phase 9D: no Alembic — Google Drive adapter reuses 9C tables + `expert_sources` (`type=connector`, binding in `config` JSON). Register at API/worker startup; available only when `GOOGLE_DRIVE_CLIENT_ID`/`SECRET` are set.
+- Fix: `0020_storage_event_reasons.py` — expand `ck_storage_usage_events_reason` for Phase 5C audit reasons (`reserve` / `release` / `restore`).
 
 ### Document tenancy (Phase 2C final)
 

@@ -282,6 +282,38 @@ describe('Phase 9C connection UI', () => {
     expect(screen.getByText(/Manual sync/i)).toBeInTheDocument();
   });
 
+  it('hides technical sync error dumps behind a friendly message', () => {
+    const run: ConnectorSyncRun = {
+      id: 'run-fail',
+      workspace_id: 'ws-a',
+      app_connection_id: 'conn-1',
+      trigger: 'initial',
+      status: 'failed',
+      started_at: '2026-01-02T00:00:00Z',
+      completed_at: '2026-01-02T00:01:00Z',
+      items_seen: 0,
+      items_created: 0,
+      items_updated: 0,
+      items_deleted: 0,
+      items_failed: 1,
+      error_code: 'connector_connection_failed',
+      error_message:
+        '(psycopg.errors.CheckViolation) new row for relation "storage_usage_events" violates check constraint',
+      created_by_user_id: null,
+      created_at: '2026-01-02T00:00:00Z',
+    };
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SyncHistory runs={[run]} />
+      </I18nextProvider>,
+    );
+    expect(screen.queryByText(/psycopg/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CheckViolation/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Could not complete this sync/i),
+    ).toBeInTheDocument();
+  });
+
   it('scopes connection query keys by workspace', () => {
     const a = queryKeys.appConnections('ws-a', 'google-drive');
     const b = queryKeys.appConnections('ws-b', 'google-drive');

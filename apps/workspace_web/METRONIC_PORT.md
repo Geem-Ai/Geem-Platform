@@ -50,7 +50,7 @@ Also:
 - `src/hooks/use-mobile.tsx` → `src/hooks/use-mobile.ts`
 - `src/lib/utils.ts` (`cn`)
 - `src/lib/helpers.ts` (`toAbsoluteUrl` only; other helpers not required)
-- `src/components/screen-loader.tsx` → `src/components/shared/ScreenLoader.tsx` (Geem avatar)
+- `src/components/screen-loader.tsx` → `src/components/shared/ScreenLoader.tsx` (animated Geem mascot)
 - Theme tokens from `src/styles/globals.css` + `config.metronic.css` (font size tokens only; **no** `demos/demo1.css`)
 
 ## Packages introduced

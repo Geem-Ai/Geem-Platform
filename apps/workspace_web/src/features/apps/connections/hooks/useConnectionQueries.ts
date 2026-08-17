@@ -69,14 +69,17 @@ export function useStartConnection() {
       slug,
       displayName,
       connectionId,
+      returnPath,
     }: {
       slug: string;
       displayName?: string;
       connectionId?: string;
+      returnPath?: string;
     }) =>
       startAppConnection(slug, {
         display_name: displayName,
         connection_id: connectionId,
+        return_path: returnPath,
       }),
     onSuccess: async (_data, vars) => {
       await invalidateConnectionCache(queryClient, workspaceId, vars.slug);
