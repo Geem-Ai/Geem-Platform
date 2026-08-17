@@ -17,9 +17,9 @@ import {
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import {
   formatPairingCode,
-  isReadyStatus,
   isTerminalStatus,
   normalizePhoneForRequest,
+  normalizeProviderStatus,
 } from '../lib';
 
 export function WhatsAppPairingCodeStep({
@@ -55,7 +55,7 @@ export function WhatsAppPairingCodeStep({
     if (isTerminalStatus(connection)) {
       setPolling(false);
     }
-    const ready = isReadyStatus(connection);
+    const ready = normalizeProviderStatus(connection.provider_status) === 'ready';
     if (ready && !wasReadyRef.current) {
       wasReadyRef.current = true;
       setPairing(null);
