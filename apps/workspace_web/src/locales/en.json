@@ -371,7 +371,8 @@
     "processingContinue": "Continue in background",
     "processingReady": "Knowledge is ready.",
     "processingFailed": "Processing failed. You can reprocess from the knowledge list.",
-    "progressPages": "Page {{processed}} of {{total}}",
+    "progressWaitingPage": "Waiting on page {{page}} of {{total}}",
+    "progressPagesDone": "{{processed}} of {{total}} pages done",
     "progressWorking": "Processing…",
     "pageCount": "{{count}} pages",
     "stage": {
