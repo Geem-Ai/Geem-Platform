@@ -168,7 +168,7 @@ def patch_google_drive_client(monkeypatch, fake: FakeGoogleDriveClient | None = 
         _factory,
     )
     monkeypatch.setattr(
-        "app.experts.connector_sources.GoogleDriveClient",
+        "app.connectors.providers.google_drive.resolve.GoogleDriveClient",
         _factory,
     )
     return fake

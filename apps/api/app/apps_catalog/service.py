@@ -29,29 +29,66 @@ from app.apps_catalog.schemas import (
     to_installation_out,
 )
 from app.common.security_log import security_log
-from app.connectors.types import CONNECTION_USABLE_STATUSES
+from app.connectors.types import CONNECTION_USABLE_STATUSES, ConnectionStatus
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.workspaces.models import Workspace, WorkspaceKind, WorkspaceRole
 
+# Prefer attention-needed statuses when summarizing multiple connections.
+_CONNECTION_STATUS_RANK: dict[str, int] = {
+    ConnectionStatus.ERROR.value: 0,
+    ConnectionStatus.REVOKED.value: 1,
+    ConnectionStatus.CONNECTING.value: 2,
+    ConnectionStatus.PENDING.value: 3,
+    ConnectionStatus.DEGRADED.value: 4,
+    ConnectionStatus.ACTIVE.value: 5,
+    ConnectionStatus.DISCONNECTED.value: 6,
+}
 
-def _active_connection_installation_ids(
+
+def _connection_status_by_installation(
     db: Session, workspace_id: uuid.UUID, installation_ids: list[uuid.UUID]
-) -> set[uuid.UUID]:
+) -> dict[uuid.UUID, str]:
+    """Return a single summary connection status per installation."""
     if not installation_ids:
-        return set()
+        return {}
     from sqlalchemy import select
 
     from app.connectors.models import AppConnection
 
     rows = db.execute(
-        select(AppConnection.app_installation_id).where(
+        select(
+            AppConnection.app_installation_id,
+            AppConnection.status,
+        ).where(
             AppConnection.workspace_id == workspace_id,
             AppConnection.app_installation_id.in_(installation_ids),
-            AppConnection.status.in_(list(CONNECTION_USABLE_STATUSES)),
         )
-    ).scalars()
-    return set(rows)
+    ).all()
+    chosen: dict[uuid.UUID, str] = {}
+    for install_id, status in rows:
+        if install_id is None or not status:
+            continue
+        current = chosen.get(install_id)
+        if current is None:
+            chosen[install_id] = status
+            continue
+        if _CONNECTION_STATUS_RANK.get(status, 99) < _CONNECTION_STATUS_RANK.get(
+            current, 99
+        ):
+            chosen[install_id] = status
+    return chosen
+
+
+def _active_connection_installation_ids(
+    db: Session, workspace_id: uuid.UUID, installation_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    statuses = _connection_status_by_installation(db, workspace_id, installation_ids)
+    return {
+        install_id
+        for install_id, status in statuses.items()
+        if status in CONNECTION_USABLE_STATUSES
+    }
 
 
 class AppCatalogService:
@@ -92,7 +129,7 @@ class AppCatalogService:
         install_map = self.repo.map_installations_by_app_id(workspace.id, app_ids)
         license_map = self.repo.map_licenses_by_app_id(workspace.id, app_ids)
         sub_map = self.repo.map_subscriptions_by_app_id(workspace.id, app_ids)
-        connected_installs = _active_connection_installation_ids(
+        connection_statuses = _connection_status_by_installation(
             self.db,
             workspace.id,
             [i.id for i in install_map.values() if i is not None],
@@ -116,6 +153,9 @@ class AppCatalogService:
                 license_row=license_map.get(app.id),
                 subscription=sub_map.get(app.id),
             )
+            conn_status = (
+                connection_statuses.get(inst.id) if inst is not None else None
+            )
             outs.append(
                 to_catalog_app_out(
                     app,
@@ -124,8 +164,10 @@ class AppCatalogService:
                     include_description=False,
                     access=access,
                     has_active_connection=bool(
-                        inst is not None and inst.id in connected_installs
+                        conn_status is not None
+                        and conn_status in CONNECTION_USABLE_STATUSES
                     ),
+                    connection_status=conn_status,
                 )
             )
 
@@ -157,6 +199,11 @@ class AppCatalogService:
         access = self.access.resolve(
             workspace.id, app=app, can_manage=manage, installation=inst
         )
+        conn_status = None
+        if inst is not None:
+            conn_status = _connection_status_by_installation(
+                self.db, workspace.id, [inst.id]
+            ).get(inst.id)
         return to_catalog_app_out(
             app,
             installation=inst if active else None,
@@ -164,10 +211,9 @@ class AppCatalogService:
             include_description=True,
             access=access,
             has_active_connection=bool(
-                inst is not None
-                and inst.id
-                in _active_connection_installation_ids(self.db, workspace.id, [inst.id])
+                conn_status is not None and conn_status in CONNECTION_USABLE_STATUSES
             ),
+            connection_status=conn_status,
         )
 
     @staticmethod
@@ -202,7 +248,7 @@ class AppInstallationService:
             offset=offset,
         )
         manage = can_manage_apps(role)
-        connected = _active_connection_installation_ids(
+        connection_statuses = _connection_status_by_installation(
             self.db, workspace.id, [r.id for r in rows]
         )
         items: list[AppInstallationOut] = []
@@ -213,12 +259,17 @@ class AppInstallationService:
                 can_manage=manage,
                 installation=row,
             )
+            conn_status = connection_statuses.get(row.id)
             items.append(
                 to_installation_out(
                     row,
                     can_manage=manage,
                     access=access,
-                    has_active_connection=row.id in connected,
+                    has_active_connection=bool(
+                        conn_status is not None
+                        and conn_status in CONNECTION_USABLE_STATUSES
+                    ),
+                    connection_status=conn_status,
                 )
             )
         return AppInstallationListOut(
@@ -246,7 +297,18 @@ class AppInstallationService:
         access = self.access.resolve(
             workspace.id, app=row.app, can_manage=manage, installation=row
         )
-        return to_installation_out(row, can_manage=manage, access=access)
+        conn_status = _connection_status_by_installation(
+            self.db, workspace.id, [row.id]
+        ).get(row.id)
+        return to_installation_out(
+            row,
+            can_manage=manage,
+            access=access,
+            has_active_connection=bool(
+                conn_status is not None and conn_status in CONNECTION_USABLE_STATUSES
+            ),
+            connection_status=conn_status,
+        )
 
     def install_app(
         self,

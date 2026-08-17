@@ -81,8 +81,11 @@ export type ApiErrorCode =
   | 'connector_already_disconnected'
   | 'connector_credentials_invalid'
   | 'connector_credentials_expired'
+  | 'connector_connection_failed'
+  | 'connector_health_check_failed'
   | 'connector_sync_not_supported'
   | 'connector_sync_in_progress'
+  | 'connector_sync_not_found'
   | 'google_drive_not_configured'
   | 'google_drive_authorization_failed'
   | 'google_drive_reauthorization_required'
@@ -94,6 +97,19 @@ export type ApiErrorCode =
   | 'google_drive_rate_limited'
   | 'google_drive_watch_failed'
   | 'google_drive_sync_failed'
+  | 'microsoft_onedrive_not_configured'
+  | 'microsoft_onedrive_authorization_failed'
+  | 'microsoft_onedrive_reauthorization_required'
+  | 'microsoft_onedrive_drive_not_supported'
+  | 'microsoft_onedrive_item_not_found'
+  | 'microsoft_onedrive_access_denied'
+  | 'microsoft_onedrive_file_type_unsupported'
+  | 'microsoft_onedrive_conversion_failed'
+  | 'microsoft_onedrive_download_failed'
+  | 'microsoft_onedrive_rate_limited'
+  | 'microsoft_onedrive_delta_resync_required'
+  | 'microsoft_onedrive_subscription_failed'
+  | 'microsoft_onedrive_sync_failed'
   | 'api_key_not_found'
   | 'unknown';
 
@@ -178,8 +194,11 @@ const KNOWN_CODES = new Set<string>([
   'connector_already_disconnected',
   'connector_credentials_invalid',
   'connector_credentials_expired',
+  'connector_connection_failed',
+  'connector_health_check_failed',
   'connector_sync_not_supported',
   'connector_sync_in_progress',
+  'connector_sync_not_found',
   'google_drive_not_configured',
   'google_drive_authorization_failed',
   'google_drive_reauthorization_required',
@@ -191,6 +210,19 @@ const KNOWN_CODES = new Set<string>([
   'google_drive_rate_limited',
   'google_drive_watch_failed',
   'google_drive_sync_failed',
+  'microsoft_onedrive_not_configured',
+  'microsoft_onedrive_authorization_failed',
+  'microsoft_onedrive_reauthorization_required',
+  'microsoft_onedrive_drive_not_supported',
+  'microsoft_onedrive_item_not_found',
+  'microsoft_onedrive_access_denied',
+  'microsoft_onedrive_file_type_unsupported',
+  'microsoft_onedrive_conversion_failed',
+  'microsoft_onedrive_download_failed',
+  'microsoft_onedrive_rate_limited',
+  'microsoft_onedrive_delta_resync_required',
+  'microsoft_onedrive_subscription_failed',
+  'microsoft_onedrive_sync_failed',
   'api_key_not_found',
 ]);
 
@@ -247,7 +279,7 @@ export function mapStatusToCode(status: number, body?: Record<string, unknown>):
 }
 
 /** Map stable backend codes to i18n keys under `errors.*`. */
-export function errorMessageKey(code: ApiErrorCode): string {
+export function errorMessageKey(code: string): string {
   const map: Partial<Record<ApiErrorCode, string>> = {
     invalid_credentials: 'errors.invalidCredentials',
     email_already_exists: 'errors.emailAlreadyExists',
@@ -344,8 +376,28 @@ export function errorMessageKey(code: ApiErrorCode): string {
     google_drive_rate_limited: 'errors.googleDriveRateLimited',
     google_drive_watch_failed: 'errors.googleDriveWatchFailed',
     google_drive_sync_failed: 'errors.googleDriveSyncFailed',
+    microsoft_onedrive_not_configured: 'errors.microsoftOneDriveNotConfigured',
+    microsoft_onedrive_authorization_failed:
+      'errors.microsoftOneDriveAuthorizationFailed',
+    microsoft_onedrive_reauthorization_required:
+      'errors.microsoftOneDriveReauthorizationRequired',
+    microsoft_onedrive_drive_not_supported:
+      'errors.microsoftOneDriveDriveNotSupported',
+    microsoft_onedrive_item_not_found: 'errors.microsoftOneDriveItemNotFound',
+    microsoft_onedrive_access_denied: 'errors.microsoftOneDriveAccessDenied',
+    microsoft_onedrive_file_type_unsupported:
+      'errors.microsoftOneDriveFileTypeUnsupported',
+    microsoft_onedrive_conversion_failed:
+      'errors.microsoftOneDriveConversionFailed',
+    microsoft_onedrive_download_failed: 'errors.microsoftOneDriveDownloadFailed',
+    microsoft_onedrive_rate_limited: 'errors.microsoftOneDriveRateLimited',
+    microsoft_onedrive_delta_resync_required:
+      'errors.microsoftOneDriveDeltaResyncRequired',
+    microsoft_onedrive_subscription_failed:
+      'errors.microsoftOneDriveSubscriptionFailed',
+    microsoft_onedrive_sync_failed: 'errors.microsoftOneDriveSyncFailed',
   };
-  return map[code] ?? 'errors.generic';
+  return map[code as ApiErrorCode] ?? 'errors.generic';
 }
 
 /** Detect ORM / SQL / stack dumps that must never be shown to end users. */

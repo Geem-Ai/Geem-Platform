@@ -14,10 +14,14 @@ from app.apps_catalog.policy import require_browse, require_manage_apps
 from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.health import ConnectorHealthService
 from app.connectors.oauth_state import ConnectorOAuthStateService
+from app.connectors.oauth_redirect import effective_oauth_redirect_uri
+from app.connectors.oauth_tokens import apply_token_response, merge_token_response
 from app.connectors.providers.google_drive.token import (
-    ensure_fresh_access,
+    ensure_fresh_access as ensure_google_fresh_access,
     expires_at_from_credentials,
-    merge_token_response,
+)
+from app.connectors.providers.microsoft_onedrive.token import (
+    ensure_fresh_access as ensure_onedrive_fresh_access,
 )
 from app.connectors.registry import connector_registry
 from app.connectors.schemas import (
@@ -27,6 +31,9 @@ from app.connectors.schemas import (
     ConnectorSyncRunOut,
     GoogleDrivePickerSessionOut,
     ManualSyncRequest,
+    MicrosoftOneDrivePickerSessionOut,
+    MicrosoftOneDrivePickerTokenOut,
+    MicrosoftOneDrivePickerTokenRequest,
     StartConnectionRequest,
 )
 from app.connectors.service import ConnectorConnectionService
@@ -305,7 +312,7 @@ def google_drive_picker_session(
             ErrorCategory.CONNECTOR_CREDENTIALS_INVALID,
             "Connection credentials are missing.",
         )
-    fresh = ensure_fresh_access(db, row, credentials, settings)
+    fresh = ensure_google_fresh_access(db, row, credentials, settings)
     db.commit()
     out = GoogleDrivePickerSessionOut(
         access_token=str(fresh["access_token"]),
@@ -318,6 +325,186 @@ def google_drive_picker_session(
     if picker_key:
         out.developer_key = picker_key
     return out
+
+
+@apps_connections_router.post(
+    "/microsoft-onedrive/connections/{connection_id}/picker-session",
+    response_model=MicrosoftOneDrivePickerSessionOut,
+)
+def microsoft_onedrive_picker_session(
+    connection_id: uuid.UUID,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MicrosoftOneDrivePickerSessionOut:
+    """Picker v8 bootstrap — SharePoint-audience token + OneDrive base URL (memory-only)."""
+    _ = user
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    settings = get_settings()
+    if not settings.microsoft_onedrive_configured:
+        raise AppError(
+            ErrorCategory.MICROSOFT_ONEDRIVE_NOT_CONFIGURED,
+            "Microsoft OneDrive OAuth is not configured.",
+        )
+    if not connector_registry.is_available("microsoft_onedrive"):
+        raise AppError(
+            ErrorCategory.CONNECTOR_NOT_AVAILABLE,
+            "Microsoft OneDrive connector is not available.",
+        )
+    svc = ConnectorConnectionService(db)
+    row, _app, _inst = svc.require_usable_connection(
+        workspace.id, connection_id, app_slug="microsoft-onedrive"
+    )
+    cred_svc = ConnectorCredentialService(db, settings=settings)
+    credentials = cred_svc.get_credentials(row)
+    if not credentials or not credentials.get("refresh_token"):
+        raise AppError(
+            ErrorCategory.MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED,
+            "Microsoft OneDrive refresh token is missing.",
+        )
+    fresh = ensure_onedrive_fresh_access(db, row, credentials, settings)
+    sync_state = cred_svc.get_sync_state(row) or {}
+
+    from app.connectors.providers.microsoft_onedrive.picker_auth import (
+        mint_picker_resource_token,
+        resolve_picker_base_url,
+    )
+
+    picker_base, sync_state = resolve_picker_base_url(
+        sync_state=sync_state,
+        credentials=fresh,
+        settings=settings,
+        access_token=str(fresh["access_token"]),
+    )
+    cred_svc.set_sync_state(row, sync_state)
+    # File Picker v8 requires a SharePoint-host token for the form POST — not Graph.
+    token_payload, _updated = mint_picker_resource_token(
+        db=db,
+        connection=row,
+        credentials=fresh,
+        resource=picker_base,
+        settings=settings,
+        sync_state=sync_state,
+    )
+    db.commit()
+    sp_creds = apply_token_response({}, token_payload)
+    return MicrosoftOneDrivePickerSessionOut(
+        access_token=str(token_payload["access_token"]),
+        expires_at=expires_at_from_credentials(sp_creds),
+        base_url=picker_base,
+        client_id=settings.microsoft_onedrive_client_id.strip() or None,
+        tenant=str(fresh.get("tenant_id") or settings.microsoft_onedrive_tenant),
+        drive_id=str(sync_state.get("drive_id") or fresh.get("drive_id") or "")
+        or None,
+    )
+
+
+@apps_connections_router.post(
+    "/microsoft-onedrive/connections/{connection_id}/picker-token",
+    response_model=MicrosoftOneDrivePickerTokenOut,
+)
+def microsoft_onedrive_picker_token(
+    connection_id: uuid.UUID,
+    body: MicrosoftOneDrivePickerTokenRequest,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MicrosoftOneDrivePickerTokenOut:
+    """Mint a short-lived SharePoint-resource token for File Picker v8 authenticate."""
+    _ = user
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    settings = get_settings()
+    if not settings.microsoft_onedrive_configured:
+        raise AppError(
+            ErrorCategory.MICROSOFT_ONEDRIVE_NOT_CONFIGURED,
+            "Microsoft OneDrive OAuth is not configured.",
+        )
+    svc = ConnectorConnectionService(db)
+    row, _app, _inst = svc.require_usable_connection(
+        workspace.id, connection_id, app_slug="microsoft-onedrive"
+    )
+    cred_svc = ConnectorCredentialService(db, settings=settings)
+    credentials = cred_svc.get_credentials(row)
+    if not credentials or not credentials.get("refresh_token"):
+        raise AppError(
+            ErrorCategory.MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED,
+            "Microsoft OneDrive refresh token is missing.",
+        )
+    from app.connectors.providers.microsoft_onedrive.picker_auth import (
+        mint_picker_resource_token,
+        resolve_picker_base_url,
+    )
+
+    # Ensure drive host is resolved before allowlisting (fail closed).
+    sync_state = cred_svc.get_sync_state(row) or {}
+    if not (sync_state.get("drive_web_url") or credentials.get("drive_web_url")):
+        fresh = ensure_onedrive_fresh_access(db, row, credentials, settings)
+        _, sync_state = resolve_picker_base_url(
+            sync_state=sync_state,
+            credentials=fresh,
+            settings=settings,
+            access_token=str(fresh["access_token"]),
+        )
+        cred_svc.set_sync_state(row, sync_state)
+        credentials = fresh
+
+    token_payload, _updated = mint_picker_resource_token(
+        db=db,
+        connection=row,
+        credentials=credentials,
+        resource=body.resource,
+        settings=settings,
+        sync_state=sync_state,
+    )
+    db.commit()
+    expires_at = expires_at_from_credentials(apply_token_response({}, token_payload))
+    return MicrosoftOneDrivePickerTokenOut(
+        access_token=str(token_payload["access_token"]),
+        expires_at=expires_at,
+        resource=(body.resource or "").strip().rstrip("/"),
+    )
+
+
+def _oauth_auth_failed_code(connector_key: str) -> str:
+    if connector_key == "google_drive":
+        return ErrorCategory.GOOGLE_DRIVE_AUTHORIZATION_FAILED.value
+    if connector_key == "microsoft_onedrive":
+        return ErrorCategory.MICROSOFT_ONEDRIVE_AUTHORIZATION_FAILED.value
+    return ErrorCategory.CONNECTOR_CONNECTION_FAILED.value
+
+
+def _oauth_reauth_code(connector_key: str) -> str:
+    if connector_key == "google_drive":
+        return ErrorCategory.GOOGLE_DRIVE_REAUTHORIZATION_REQUIRED.value
+    if connector_key == "microsoft_onedrive":
+        return ErrorCategory.MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED.value
+    return ErrorCategory.CONNECTOR_CREDENTIALS_INVALID.value
+
+
+def _persist_oauth_failure(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    connection_id: uuid.UUID | None,
+    error_code: str,
+    error_message: str | None = None,
+) -> None:
+    """Leave ``connecting`` for ERROR so the SPA shows a connection error."""
+    if connection_id is None:
+        return
+    try:
+        ConnectorConnectionService(db).mark_authorization_failed(
+            workspace_id=workspace_id,
+            connection_id=connection_id,
+            error_code=error_code,
+            error_message=error_message,
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("connector_oauth_mark_failure_failed")
 
 
 @connectors_router.get("/oauth/{connector_key}/callback")
@@ -369,7 +556,13 @@ def oauth_callback(
     return_path = payload.return_path or f"/apps/{connector_key.replace('_', '-')}"
 
     if error_param:
-        db.commit()
+        _persist_oauth_failure(
+            db,
+            workspace_id=payload.workspace_id,
+            connection_id=payload.connection_id,
+            error_code=_oauth_auth_failed_code(connector_key),
+            error_message=str(error_param),
+        )
         return _oauth_redirect(
             return_path=return_path,
             params={
@@ -381,12 +574,21 @@ def oauth_callback(
         )
 
     if not code:
+        auth_failed = _oauth_auth_failed_code(connector_key)
+        _persist_oauth_failure(
+            db,
+            workspace_id=payload.workspace_id,
+            connection_id=payload.connection_id,
+            error_code=auth_failed,
+            error_message="Authorization code missing.",
+        )
         return _oauth_redirect(
             return_path=return_path,
             params={
                 "connector": connector_key,
                 "oauth": "error",
-                "error": ErrorCategory.GOOGLE_DRIVE_AUTHORIZATION_FAILED.value,
+                "error": auth_failed,
+                "connection_id": str(payload.connection_id) if payload.connection_id else "",
             },
         )
 
@@ -408,12 +610,7 @@ def oauth_callback(
             details={"connector_key": connector_key},
         )
 
-    redirect_uri = settings.effective_google_drive_redirect_uri
-    if connector_key != "google_drive":
-        redirect_uri = (
-            f"{settings.app_url.rstrip('/')}"
-            f"/api/connectors/oauth/{connector_key}/callback"
-        )
+    redirect_uri = effective_oauth_redirect_uri(settings, connector_key)
 
     try:
         result = adapter.complete_authorization(  # type: ignore[attr-defined]
@@ -429,14 +626,22 @@ def oauth_callback(
         cred_svc = ConnectorCredentialService(db, settings=settings)
         old_creds = cred_svc.get_credentials(row)
         merged = merge_token_response(old_creds, result.credentials)
-        if connector_key == "google_drive" and not merged.get("refresh_token"):
+        if not merged.get("refresh_token"):
+            reauth = _oauth_reauth_code(connector_key)
             db.rollback()
+            _persist_oauth_failure(
+                db,
+                workspace_id=payload.workspace_id,
+                connection_id=payload.connection_id,
+                error_code=reauth,
+                error_message="Refresh token missing from provider response.",
+            )
             return _oauth_redirect(
                 return_path=return_path,
                 params={
                     "connector": connector_key,
                     "oauth": "error",
-                    "error": ErrorCategory.GOOGLE_DRIVE_REAUTHORIZATION_REQUIRED.value,
+                    "error": reauth,
                     "connection_id": str(payload.connection_id),
                 },
             )
@@ -461,6 +666,13 @@ def oauth_callback(
         )
     except AppError as exc:
         db.rollback()
+        _persist_oauth_failure(
+            db,
+            workspace_id=payload.workspace_id,
+            connection_id=payload.connection_id,
+            error_code=exc.category.value,
+            error_message=str(exc.message),
+        )
         return _oauth_redirect(
             return_path=return_path,
             params={
@@ -473,12 +685,20 @@ def oauth_callback(
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         logger.exception("connector_oauth_callback_failed")
+        auth_failed = _oauth_auth_failed_code(connector_key)
+        _persist_oauth_failure(
+            db,
+            workspace_id=payload.workspace_id,
+            connection_id=payload.connection_id,
+            error_code=auth_failed,
+            error_message="Authorization failed.",
+        )
         return _oauth_redirect(
             return_path=return_path,
             params={
                 "connector": connector_key,
                 "oauth": "error",
-                "error": ErrorCategory.GOOGLE_DRIVE_AUTHORIZATION_FAILED.value,
+                "error": auth_failed,
                 "connection_id": str(payload.connection_id),
             },
         )

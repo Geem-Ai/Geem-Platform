@@ -377,6 +377,7 @@ def add_expert_connector_sources(
             ConnectorSourceSelection(
                 external_id=item.external_id,
                 resource_key=item.resource_key,
+                provider_locator=dict(item.provider_locator or {}),
             )
             for item in body.items
         ],

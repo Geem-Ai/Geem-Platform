@@ -101,6 +101,7 @@ class CatalogAppOut(BaseModel):
     access: AppAccessOut | None = None
     connector: ConnectorCapabilityOut | None = None
     has_active_connection: bool = False
+    connection_status: str | None = None
 
 
 class CatalogAppListOut(BaseModel):
@@ -201,6 +202,7 @@ def to_catalog_app_out(
     include_description: bool = True,
     access: AppAccessSnapshot | None = None,
     has_active_connection: bool = False,
+    connection_status: str | None = None,
 ) -> CatalogAppOut:
     active = (
         installation is not None
@@ -293,6 +295,7 @@ def to_catalog_app_out(
         access=access_out,
         connector=connector_out,
         has_active_connection=bool(has_active_connection),
+        connection_status=connection_status,
     )
 
 
@@ -302,6 +305,7 @@ def to_installation_out(
     can_manage: bool,
     access: AppAccessSnapshot | None = None,
     has_active_connection: bool = False,
+    connection_status: str | None = None,
 ) -> AppInstallationOut:
     app_out = to_catalog_app_out(
         row.app,
@@ -309,6 +313,7 @@ def to_installation_out(
         can_manage=can_manage,
         access=access,
         has_active_connection=has_active_connection,
+        connection_status=connection_status,
     )
     return AppInstallationOut(
         id=row.id,

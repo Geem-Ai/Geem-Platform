@@ -311,6 +311,30 @@
       "sourceUnavailable": "Source unavailable",
       "syncing": "Syncing"
     },
+    "oneDrive": {
+      "add": "Add from Microsoft OneDrive",
+      "addTitle": "Add from Microsoft OneDrive",
+      "addHint": "Choose files from a connected Microsoft OneDrive account. Supported: PDF, TXT, Markdown, and Office documents (converted to PDF).",
+      "added": "OneDrive files queued for synchronization.",
+      "installFirst": "Install the Microsoft OneDrive app from the App Store first.",
+      "connectFirst": "Connect a Microsoft account before adding files.",
+      "goToAppStore": "Open Microsoft OneDrive app",
+      "connect": "Connect Microsoft OneDrive",
+      "chooseAccount": "Microsoft OneDrive account",
+      "connectedAs": "Connected to {{account}}",
+      "chooseFiles": "Choose files",
+      "openingPicker": "Opening OneDrive…",
+      "popupBlocked": "Allow popups to open the OneDrive file picker.",
+      "sourceUpdated": "Source updated",
+      "sourceUnavailable": "Source unavailable",
+      "syncing": "Synchronizing",
+      "lastSynced": "Last synchronized",
+      "reconnect": "Reconnect Microsoft OneDrive",
+      "authorizationExpired": "Microsoft authorization expired",
+      "reauthorizationRequired": "Reauthorization required",
+      "syncNow": "Sync now",
+      "accountDisconnected": "Account disconnected"
+    },
     "acceptedTypes": "Accepted: PDF, TXT, Markdown",
     "titleLabel": "Document title",
     "titleOptional": "Optional — derived from filename if blank.",
@@ -1012,7 +1036,7 @@
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
         "shortDescription": "Connect selected Microsoft OneDrive content to Geem Experts.",
-        "description": "Install Microsoft OneDrive to prepare this workspace for connecting OneDrive content to Geem Experts. Microsoft Graph OAuth and sync arrive in a later phase — installation alone does not connect your Microsoft account."
+        "description": "Connect Microsoft work or school OneDrive files to Geem Experts. After installing, connect your Microsoft account, then add files from Expert knowledge sources. Geem reads selected files only — it does not modify your OneDrive."
       },
       "whatsapp": {
         "name": "WhatsApp",
@@ -1121,6 +1145,19 @@
     "googleDriveDownloadFailed": "Failed to download from Google Drive",
     "googleDriveRateLimited": "Google Drive rate limit reached — try again shortly",
     "googleDriveWatchFailed": "Failed to set up Google Drive change notifications",
-    "googleDriveSyncFailed": "Drive synchronization failed"
+    "googleDriveSyncFailed": "Drive synchronization failed",
+    "microsoftOneDriveNotConfigured": "Microsoft OneDrive is not configured on this server",
+    "microsoftOneDriveAuthorizationFailed": "Microsoft OneDrive authorization failed",
+    "microsoftOneDriveReauthorizationRequired": "Reauthorization required for Microsoft OneDrive",
+    "microsoftOneDriveDriveNotSupported": "Personal Microsoft accounts are not supported for file picking. Connect a work or school OneDrive account.",
+    "microsoftOneDriveItemNotFound": "OneDrive file was not found",
+    "microsoftOneDriveAccessDenied": "OneDrive file is no longer accessible",
+    "microsoftOneDriveFileTypeUnsupported": "Unsupported file type for OneDrive",
+    "microsoftOneDriveConversionFailed": "OneDrive file conversion failed",
+    "microsoftOneDriveDownloadFailed": "Failed to download from OneDrive",
+    "microsoftOneDriveRateLimited": "Microsoft Graph rate limit reached — try again shortly",
+    "microsoftOneDriveDeltaResyncRequired": "OneDrive synchronization must be reset",
+    "microsoftOneDriveSubscriptionFailed": "Failed to set up OneDrive change notifications",
+    "microsoftOneDriveSyncFailed": "OneDrive synchronization failed"
   }
 }

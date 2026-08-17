@@ -226,6 +226,45 @@ describe('Phase 9C connection UI', () => {
     expect(screen.getByText(/available soon/i)).toBeInTheDocument();
   });
 
+  it('shows connection error on installed cards', () => {
+    const app = catalogApp({
+      has_active_connection: false,
+      connection_status: 'error',
+      connector: {
+        key: 'microsoft_onedrive',
+        kind: 'knowledge_source',
+        available: true,
+        auth_mode: 'oauth2',
+        can_connect: true,
+        supports_sync: true,
+        supports_webhooks: true,
+        supports_health_check: true,
+      },
+    });
+    render(
+      <MemoryRouter>
+        <I18nextProvider i18n={i18n}>
+          <QueryClientProvider client={new QueryClient()}>
+            <InstalledAppCard
+              installation={{
+                id: 'inst-1',
+                workspace_id: 'ws-a',
+                app_id: 'app-1',
+                status: 'active',
+                installed_at: '2026-01-01T00:00:00Z',
+                uninstalled_at: null,
+                installed_by_user_id: null,
+                app,
+              }}
+              canManage
+            />
+          </QueryClientProvider>
+        </I18nextProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Connection error')).toBeInTheDocument();
+  });
+
   it('renders connection status badges', () => {
     render(
       <I18nextProvider i18n={i18n}>

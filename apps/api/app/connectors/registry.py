@@ -26,8 +26,6 @@ def _unavailable_reason(adapter: ConnectorAdapter, key: str) -> str | None:
         return str(value) if value else None
     if isinstance(reason, str) and reason:
         return reason
-    if key == "google_drive":
-        return ErrorCategory.GOOGLE_DRIVE_NOT_CONFIGURED.value
     return f"{key}_not_configured"
 
 

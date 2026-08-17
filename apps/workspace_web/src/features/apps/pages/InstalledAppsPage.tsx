@@ -35,7 +35,7 @@ export function InstalledAppsPage() {
         <div className="space-y-1">
           <Button asChild variant="ghost" size="sm" className="-ms-2 mb-1">
             <Link to="/apps">
-              <ArrowLeft className="size-4" aria-hidden />
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
               {t('apps.backToStore')}
             </Link>
           </Button>

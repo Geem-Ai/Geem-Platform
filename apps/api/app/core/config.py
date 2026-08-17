@@ -194,6 +194,16 @@ class Settings(BaseSettings):
     # Google Cloud project number for Picker.
     google_drive_app_id: str = ""
 
+    # Phase 9E — Microsoft OneDrive knowledge connector (Entra / Graph). Empty → unavailable.
+    microsoft_onedrive_client_id: str = ""
+    microsoft_onedrive_client_secret: str = Field(default="", repr=False, exclude=True)
+    # Empty → derive from app_url + /api/connectors/oauth/microsoft_onedrive/callback
+    microsoft_onedrive_redirect_uri: str = ""
+    # organizations | common | consumers | specific tenant GUID
+    microsoft_onedrive_tenant: str = "organizations"
+    # Graph subscription lifetime minutes (must stay below provider max ~42300).
+    microsoft_onedrive_subscription_minutes: int = 4000
+
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
     conversation_title_max_length: int = 80
@@ -325,6 +335,21 @@ class Settings(BaseSettings):
             return raw
         base = (self.app_url or "").rstrip("/")
         return f"{base}/api/connectors/oauth/google_drive/callback"
+
+    @property
+    def microsoft_onedrive_configured(self) -> bool:
+        return bool(
+            (self.microsoft_onedrive_client_id or "").strip()
+            and (self.microsoft_onedrive_client_secret or "").strip()
+        )
+
+    @property
+    def effective_microsoft_onedrive_redirect_uri(self) -> str:
+        raw = (self.microsoft_onedrive_redirect_uri or "").strip()
+        if raw:
+            return raw
+        base = (self.app_url or "").rstrip("/")
+        return f"{base}/api/connectors/oauth/microsoft_onedrive/callback"
 
     @property
     def reserved_slugs(self) -> frozenset[str]:

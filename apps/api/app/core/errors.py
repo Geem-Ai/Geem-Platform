@@ -163,6 +163,23 @@ class ErrorCategory(StrEnum):
     GOOGLE_DRIVE_WATCH_FAILED = "google_drive_watch_failed"
     GOOGLE_DRIVE_SYNC_FAILED = "google_drive_sync_failed"
 
+    # Microsoft OneDrive (Phase 9E)
+    MICROSOFT_ONEDRIVE_NOT_CONFIGURED = "microsoft_onedrive_not_configured"
+    MICROSOFT_ONEDRIVE_AUTHORIZATION_FAILED = "microsoft_onedrive_authorization_failed"
+    MICROSOFT_ONEDRIVE_REAUTHORIZATION_REQUIRED = (
+        "microsoft_onedrive_reauthorization_required"
+    )
+    MICROSOFT_ONEDRIVE_DRIVE_NOT_SUPPORTED = "microsoft_onedrive_drive_not_supported"
+    MICROSOFT_ONEDRIVE_ITEM_NOT_FOUND = "microsoft_onedrive_item_not_found"
+    MICROSOFT_ONEDRIVE_ACCESS_DENIED = "microsoft_onedrive_access_denied"
+    MICROSOFT_ONEDRIVE_FILE_TYPE_UNSUPPORTED = "microsoft_onedrive_file_type_unsupported"
+    MICROSOFT_ONEDRIVE_CONVERSION_FAILED = "microsoft_onedrive_conversion_failed"
+    MICROSOFT_ONEDRIVE_DOWNLOAD_FAILED = "microsoft_onedrive_download_failed"
+    MICROSOFT_ONEDRIVE_RATE_LIMITED = "microsoft_onedrive_rate_limited"
+    MICROSOFT_ONEDRIVE_DELTA_RESYNC_REQUIRED = "microsoft_onedrive_delta_resync_required"
+    MICROSOFT_ONEDRIVE_SUBSCRIPTION_FAILED = "microsoft_onedrive_subscription_failed"
+    MICROSOFT_ONEDRIVE_SYNC_FAILED = "microsoft_onedrive_sync_failed"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -280,8 +297,9 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "connector_invalid_transition": 409,
     # Phase 9D — Google Drive
     "google_drive_not_configured": 409,
-    "google_drive_authorization_failed": 401,
-    "google_drive_reauthorization_required": 401,
+    # 403 — authenticated Geem session; provider OAuth failed (SPA must not logout).
+    "google_drive_authorization_failed": 403,
+    "google_drive_reauthorization_required": 403,
     "google_drive_file_not_found": 404,
     "google_drive_file_access_denied": 403,
     "google_drive_file_type_unsupported": 422,
@@ -290,6 +308,21 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "google_drive_rate_limited": 429,
     "google_drive_watch_failed": 502,
     "google_drive_sync_failed": 502,
+    # Phase 9E — Microsoft OneDrive
+    "microsoft_onedrive_not_configured": 409,
+    # 403 — authenticated Geem session; provider OAuth failed (SPA must not logout).
+    "microsoft_onedrive_authorization_failed": 403,
+    "microsoft_onedrive_reauthorization_required": 403,
+    "microsoft_onedrive_drive_not_supported": 422,
+    "microsoft_onedrive_item_not_found": 404,
+    "microsoft_onedrive_access_denied": 403,
+    "microsoft_onedrive_file_type_unsupported": 422,
+    "microsoft_onedrive_conversion_failed": 422,
+    "microsoft_onedrive_download_failed": 502,
+    "microsoft_onedrive_rate_limited": 429,
+    "microsoft_onedrive_delta_resync_required": 409,
+    "microsoft_onedrive_subscription_failed": 502,
+    "microsoft_onedrive_sync_failed": 502,
 }
 
 

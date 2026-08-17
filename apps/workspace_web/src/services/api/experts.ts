@@ -145,8 +145,9 @@ export function createExpertSource(expertId: string, name?: string | null) {
 }
 
 export type ConnectorSourceItemInput = {
-  external_id: string;
+  external_id?: string | null;
   resource_key?: string | null;
+  provider_locator?: Record<string, string> | null;
 };
 
 export type ConnectorSourcesCreateResponse = {
@@ -155,7 +156,7 @@ export type ConnectorSourcesCreateResponse = {
   status: string;
 };
 
-/** Attach provider files (Google Drive / future OneDrive) as Expert knowledge sources. */
+/** Attach provider files (Google Drive / Microsoft OneDrive) as Expert knowledge sources. */
 export function createExpertConnectorSources(
   expertId: string,
   body: {
@@ -170,8 +171,9 @@ export function createExpertConnectorSources(
       json: {
         connection_id: body.connection_id,
         items: body.items.map((item) => ({
-          external_id: item.external_id,
+          external_id: item.external_id ?? null,
           resource_key: item.resource_key ?? null,
+          provider_locator: item.provider_locator ?? null,
         })),
       },
     },

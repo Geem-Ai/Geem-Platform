@@ -32,6 +32,7 @@ from app.connectors.providers.google_drive.client import (
 )
 from app.connectors.providers.google_drive.formats import require_supported_mime
 from app.connectors.providers.google_drive.ingest import GoogleDriveIngestBridge
+from app.connectors.providers.google_drive.resolve import resolve_google_drive_selections
 from app.connectors.providers.google_drive.scopes import (
     requires_reauthorization,
     scopes_for_mode,
@@ -211,6 +212,23 @@ class GoogleDriveConnector:
             external_account_id=credentials.get("google_sub"),
             external_account_name=credentials.get("email"),
             credentials_expires_at=expires_at_from_credentials(merged),
+        )
+
+    def resolve_selected_items(
+        self,
+        *,
+        db: Session,
+        connection: AppConnection,
+        credentials: dict[str, Any],
+        selections: list[Any],
+        settings: Settings,
+    ) -> list[Any]:
+        return resolve_google_drive_selections(
+            db=db,
+            connection=connection,
+            credentials=credentials,
+            selections=selections,
+            settings=settings,
         )
 
     def health_check(
