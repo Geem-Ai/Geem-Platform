@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { Progress } from '@/components/ui/progress';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
-import { ingestionStageLabelKey, isProcessingDocStatus } from '../lib/status';
+import {
+  ingestionProgressDetail,
+  ingestionStageLabelKey,
+  isProcessingDocStatus,
+} from '../lib/status';
 
 type KnowledgeIngestionProgressProps = {
   item: Pick<
@@ -28,10 +32,24 @@ export function KnowledgeIngestionProgress({
   const isPdf =
     (item.mime_type ?? '').includes('pdf') || pageCount > 1;
 
+  const detailSpec = ingestionProgressDetail({
+    isPdf,
+    pageCount,
+    processed,
+    currentStage: item.current_stage,
+  });
   const detail =
-    isPdf && pageCount > 0
-      ? t('experts.progressPages', { processed, total: pageCount })
-      : t('experts.progressWorking');
+    detailSpec.kind === 'waitingPage'
+      ? t('experts.progressWaitingPage', {
+          page: detailSpec.page,
+          total: detailSpec.total,
+        })
+      : detailSpec.kind === 'pagesDone'
+        ? t('experts.progressPagesDone', {
+            processed: detailSpec.processed,
+            total: detailSpec.total,
+          })
+        : t('experts.progressWorking');
 
   return (
     <div className={className}>

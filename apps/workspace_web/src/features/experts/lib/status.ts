@@ -74,3 +74,35 @@ export function ingestionStageLabelKey(stage: string | null | undefined): string
   };
   return map[stage] ?? null;
 }
+
+export type IngestionProgressDetail =
+  | { kind: 'waitingPage'; page: number; total: number }
+  | { kind: 'pagesDone'; processed: number; total: number }
+  | { kind: 'working' };
+
+/**
+ * OCR progress copy: prefer "waiting on page N" over "page N of M done",
+ * so a hang on the last page does not look like "stuck on page N-1".
+ */
+export function ingestionProgressDetail(input: {
+  isPdf: boolean;
+  pageCount: number;
+  processed: number;
+  currentStage: string | null | undefined;
+}): IngestionProgressDetail {
+  const { isPdf, pageCount, processed, currentStage } = input;
+  if (!isPdf || pageCount <= 0) {
+    return { kind: 'working' };
+  }
+  if (currentStage === 'ocr' && processed < pageCount) {
+    return {
+      kind: 'waitingPage',
+      page: Math.min(pageCount, processed + 1),
+      total: pageCount,
+    };
+  }
+  if (processed > 0) {
+    return { kind: 'pagesDone', processed, total: pageCount };
+  }
+  return { kind: 'working' };
+}

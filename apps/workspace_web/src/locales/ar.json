@@ -371,7 +371,8 @@
     "processingContinue": "المتابعة في الخلفية",
     "processingReady": "أصبحت المعرفة جاهزة.",
     "processingFailed": "فشلت المعالجة. يمكنك إعادة المعالجة من قائمة المعرفة.",
-    "progressPages": "الصفحة {{processed}} من {{total}}",
+    "progressWaitingPage": "بانتظار الصفحة {{page}} من {{total}}",
+    "progressPagesDone": "اكتملت {{processed}} من {{total}} صفحات",
     "progressWorking": "جارٍ المعالجة…",
     "pageCount": "{{count}} صفحات",
     "stage": {
