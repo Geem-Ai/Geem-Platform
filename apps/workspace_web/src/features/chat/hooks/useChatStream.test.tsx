@@ -291,6 +291,7 @@ describe('useChatStream', () => {
       'First from starter',
       expect.any(Object),
       expect.any(AbortSignal),
+      undefined,
     );
   });
 

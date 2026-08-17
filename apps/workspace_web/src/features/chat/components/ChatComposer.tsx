@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUp, ChevronDown, Mic, Paperclip, Sparkles, Square } from 'lucide-react';
+import { ArrowUp, ChevronDown, FileText, ImageIcon, Mic, Paperclip, Sparkles, Square, Type } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
 import {
   ApiError,
-  CHAT_ATTACHMENT_ACCEPT,
+  CHAT_ATTACHMENT_ACCEPT_BY_KIND,
   CHAT_ATTACHMENT_MAX_BYTES,
   CHAT_TRANSCRIBE_MAX_BYTES,
   CHAT_VOICE_MAX_MS,
@@ -27,6 +27,7 @@ import {
   errorMessageKey,
   transcribeChatAudio,
   uploadChatAttachment,
+  type ChatAttachmentKind,
 } from '@/services/api';
 import { ExpertPickerDialog } from './ExpertPickerDialog';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
@@ -40,6 +41,15 @@ import {
   type ComposerAttachment,
 } from './ComposerAttachmentPreview';
 
+export type ChatComposerSubmitOptions = {
+  attachmentId?: string;
+  attachmentMeta?: {
+    filename: string;
+    mimeType: string;
+    byteSize?: number;
+  };
+};
+
 function pickRecorderMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
     return undefined;
@@ -51,7 +61,7 @@ function pickRecorderMimeType(): string | undefined {
 }
 
 interface ChatComposerProps {
-  onSubmit: (question: string) => void;
+  onSubmit: (question: string, options?: ChatComposerSubmitOptions) => void;
   onStop?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
@@ -96,8 +106,13 @@ export function ChatComposer({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [voicePhase, setVoicePhase] = useState<VoiceRecordingPhase | null>(null);
   const [attachment, setAttachment] = useState<ComposerAttachment | null>(null);
+  const [fileAccept, setFileAccept] = useState(
+    CHAT_ATTACHMENT_ACCEPT_BY_KIND.pdf,
+  );
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
   /** Ignore the next onFocus from programmatic autoFocus so sample prompts can type. */
   const suppressFocusNotifyRef = useRef(false);
   /** When true, an in-flight upload should delete the server object on completion. */
@@ -124,6 +139,25 @@ export function ChatComposer({
   useEffect(() => {
     voicePhaseRef.current = voicePhase;
   }, [voicePhase]);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    function onDocPointerDown(event: MouseEvent) {
+      const root = attachMenuRef.current;
+      if (root && !root.contains(event.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setAttachMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDocPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [attachMenuOpen]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -422,6 +456,8 @@ export function ChatComposer({
       id: localId,
       serverId: null,
       name: file.name,
+      mimeType: file.type || undefined,
+      byteSize: file.size,
       typeLabel: attachmentTypeLabel(file.name),
       progress: 0,
     };
@@ -447,6 +483,8 @@ export function ChatComposer({
         id: localId,
         serverId: uploaded.id,
         name: uploaded.original_filename || file.name,
+        mimeType: uploaded.mime_type,
+        byteSize: uploaded.byte_size,
         typeLabel: attachmentTypeLabel(uploaded.original_filename || file.name),
         progress: 100,
       });
@@ -471,9 +509,14 @@ export function ChatComposer({
     }
   }
 
-  function openFilePicker() {
+  function openFilePicker(kind: ChatAttachmentKind) {
     if (disabled || isStreaming || voicePhase) return;
-    fileInputRef.current?.click();
+    setAttachMenuOpen(false);
+    setFileAccept(CHAT_ATTACHMENT_ACCEPT_BY_KIND[kind]);
+    // Defer click so accept attribute is applied before the dialog opens.
+    requestAnimationFrame(() => {
+      fileInputRef.current?.click();
+    });
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -489,10 +532,31 @@ export function ChatComposer({
     const attachmentUploading = Boolean(
       attachment && (!attachment.serverId || attachment.progress < 100),
     );
-    if (!q || disabled || isStreaming || voicePhase || attachmentUploading) return;
-    // Keep ready attachment in the composer for a later chat-turn wiring.
-    onSubmit(q);
+    const attachmentReady = Boolean(attachment?.serverId && attachment.progress >= 100);
+    if (
+      (!q && !attachmentReady) ||
+      disabled ||
+      isStreaming ||
+      voicePhase ||
+      attachmentUploading
+    ) {
+      return;
+    }
+    const opts: ChatComposerSubmitOptions | undefined = attachmentReady
+      ? {
+          attachmentId: attachment!.serverId!,
+          attachmentMeta: {
+            filename: attachment!.name,
+            mimeType: attachment!.mimeType || 'application/octet-stream',
+            byteSize: attachment!.byteSize,
+          },
+        }
+      : undefined;
+    onSubmit(q, opts);
     setValue('');
+    setAttachment(null);
+    pendingUploadServerIdRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = '';
     requestAnimationFrame(() => {
       if (textareaRef.current) {
         suppressFocusNotifyRef.current = true;
@@ -517,8 +581,9 @@ export function ChatComposer({
   const attachmentUploading = Boolean(
     attachment && (!attachment.serverId || attachment.progress < 100),
   );
+  const attachmentReady = Boolean(attachment?.serverId && attachment.progress >= 100);
   const canSend =
-    Boolean(value.trim()) &&
+    (Boolean(value.trim()) || attachmentReady) &&
     !disabled &&
     !isStreaming &&
     !voicePhase &&
@@ -550,7 +615,7 @@ export function ChatComposer({
         <input
           ref={fileInputRef}
           type="file"
-          accept={CHAT_ATTACHMENT_ACCEPT}
+          accept={fileAccept}
           className="sr-only"
           tabIndex={-1}
           data-testid="chat-attach-input"
@@ -618,23 +683,86 @@ export function ChatComposer({
                     <ChevronDown className="size-3 opacity-50 shrink-0" />
                   </Button>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
-                      aria-label={t('chat.attach')}
-                      data-testid="chat-attach-button"
-                      disabled={disabled || isStreaming}
-                      onClick={openFilePicker}
+                <div className="relative" ref={attachMenuRef}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                        aria-label={t('chat.attach')}
+                        aria-expanded={attachMenuOpen}
+                        aria-haspopup="menu"
+                        data-testid="chat-attach-button"
+                        disabled={disabled || isStreaming || Boolean(voicePhase)}
+                        onClick={() => setAttachMenuOpen((open) => !open)}
+                      >
+                        <Paperclip className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{t('chat.attach')}</TooltipContent>
+                  </Tooltip>
+                  {attachMenuOpen ? (
+                    <div
+                      role="menu"
+                      data-testid="chat-attach-menu"
+                      className="absolute top-full start-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
                     >
-                      <Paperclip className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">{t('chat.attach')}</TooltipContent>
-                </Tooltip>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="chat-attach-images"
+                        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-xl px-3 py-2.5 text-start outline-hidden transition-colors hover:bg-accent"
+                        onClick={() => openFilePicker('images')}
+                      >
+                        <ImageIcon className="size-4 shrink-0 text-foreground" aria-hidden />
+                        <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">
+                            {t('chat.attachImages')}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {t('chat.attachImagesHint')}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="chat-attach-pdf"
+                        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-xl px-3 py-2.5 text-start outline-hidden transition-colors hover:bg-accent"
+                        onClick={() => openFilePicker('pdf')}
+                      >
+                        <FileText className="size-4 shrink-0 text-foreground" aria-hidden />
+                        <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">
+                            {t('chat.attachPdf')}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {t('chat.attachPdfHint')}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="chat-attach-text"
+                        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-xl px-3 py-2.5 text-start outline-hidden transition-colors hover:bg-accent"
+                        onClick={() => openFilePicker('text')}
+                      >
+                        <Type className="size-4 shrink-0 text-foreground" aria-hidden />
+                        <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">
+                            {t('chat.attachText')}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {t('chat.attachTextHint')}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

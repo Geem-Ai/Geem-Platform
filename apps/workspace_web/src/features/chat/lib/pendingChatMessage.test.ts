@@ -15,7 +15,7 @@ describe('pendingChatMessage', () => {
 
   it('stores and peeks a pending first message', () => {
     setPendingChatMessage('c1', '  Hello laws  ');
-    expect(peekPendingChatMessage('c1')).toBe('Hello laws');
+    expect(peekPendingChatMessage('c1')).toEqual({ content: 'Hello laws' });
   });
 
   it('guards concurrent sends across remounts', () => {
@@ -25,6 +25,27 @@ describe('pendingChatMessage', () => {
     endPendingChatSend('c1');
     expect(beginPendingChatSend('c1')).toBe(true);
     clearPendingChatMessage('c1');
+  });
+
+  it('stores attachment payload for starter handoff', () => {
+    setPendingChatMessage('c2', {
+      content: '',
+      attachmentId: 'att-1',
+      attachmentMeta: {
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        byteSize: 12,
+      },
+    });
+    expect(peekPendingChatMessage('c2')).toEqual({
+      content: '',
+      attachmentId: 'att-1',
+      attachmentMeta: {
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        byteSize: 12,
+      },
+    });
   });
 
   it('clear removes storage and in-flight lock', () => {

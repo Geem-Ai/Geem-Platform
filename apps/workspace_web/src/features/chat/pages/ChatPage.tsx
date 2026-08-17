@@ -68,20 +68,45 @@ export function ChatPage() {
     if (!conversationId) return;
 
     const fromState = (location.state as ChatPendingLocationState | null)
-      ?.pendingMessage?.trim();
+      ?.pendingMessage;
     if (fromState) {
-      setPendingChatMessage(conversationId, fromState);
+      const payload =
+        typeof fromState === 'string'
+          ? { content: fromState.trim() }
+          : fromState;
+      if (payload.content?.trim() || payload.attachmentId) {
+        setPendingChatMessage(conversationId, payload);
+      }
       // Clear router state so refresh/back doesn't re-send; storage keeps the handoff.
       void navigate(location.pathname, { replace: true, state: {} });
     }
 
-    const pending = peekPendingChatMessage(conversationId)?.trim();
+    const pending = peekPendingChatMessage(conversationId);
     if (!pending) return;
+    if (!pending.content.trim() && !pending.attachmentId) return;
     if (!beginPendingChatSend(conversationId)) return;
 
-    ensureActiveChatTurn(conversationId, pending);
+    const attachments =
+      pending.attachmentId && pending.attachmentMeta
+        ? [
+            {
+              id: pending.attachmentId,
+              filename: pending.attachmentMeta.filename,
+              mime_type: pending.attachmentMeta.mimeType,
+              byte_size: pending.attachmentMeta.byteSize ?? 0,
+            },
+          ]
+        : undefined;
 
-    void send(pending)
+    ensureActiveChatTurn(conversationId, pending.content, {
+      attachmentId: pending.attachmentId,
+      attachments,
+    });
+
+    void send(pending.content, {
+      attachmentId: pending.attachmentId,
+      attachmentMeta: pending.attachmentMeta,
+    })
       .then(() => {
         clearPendingChatMessage(conversationId);
       })
@@ -176,7 +201,7 @@ export function ChatPage() {
           ) : null}
           <ChatComposer
             variant="compact"
-            onSubmit={(q) => void send(q)}
+            onSubmit={(q, opts) => void send(q, opts)}
             onStop={abort}
             isStreaming={isStreaming}
             disabled={!conversationId || conversationQuery.isError}

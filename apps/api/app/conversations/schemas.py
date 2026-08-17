@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.api.schemas import Citation
 from app.conversations.models import MAX_CONVERSATION_TITLE_LENGTH
@@ -13,15 +15,19 @@ from app.conversations.models import MAX_CONVERSATION_TITLE_LENGTH
 class ConversationMessageStreamRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: str = Field(min_length=1, max_length=32_000)
+    content: str = Field(default="", max_length=32_000)
+    attachment_id: uuid.UUID | None = None
 
     @field_validator("content")
     @classmethod
     def _strip_content(cls, value: str) -> str:
-        cleaned = (value or "").strip()
-        if not cleaned:
-            raise ValueError("Message content is required.")
-        return cleaned
+        return (value or "").strip()
+
+    @model_validator(mode="after")
+    def _require_content_or_attachment(self) -> ConversationMessageStreamRequest:
+        if not self.content and self.attachment_id is None:
+            raise ValueError("Message content or attachment_id is required.")
+        return self
 
 
 class ConversationCreateRequest(BaseModel):
@@ -86,18 +92,33 @@ class MessagePreviewOut(BaseModel):
     created_at: datetime
 
 
+class MessageAttachmentOut(BaseModel):
+    id: uuid.UUID | str
+    filename: str
+    mime_type: str
+    byte_size: int = 0
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID
     role: str
     content: str
     citations: list[Citation] = Field(default_factory=list)
+    attachments: list[MessageAttachmentOut] = Field(default_factory=list)
     status: str
     usage_event_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def _coerce_attachments(cls, value: Any) -> Any:
+        if value is None:
+            return []
+        return value
 
 
 class ConversationOut(BaseModel):

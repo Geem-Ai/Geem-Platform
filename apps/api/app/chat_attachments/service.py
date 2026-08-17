@@ -153,6 +153,41 @@ class ChatAttachmentService:
 
         self._delete_row(row, reason="user_dismiss")
 
+    def load_for_turn(
+        self,
+        *,
+        workspace: Workspace,
+        actor: User,
+        attachment_id: uuid.UUID,
+    ):
+        """Load an actor-owned, non-expired attachment for a chat turn (no ingest)."""
+        from app.chat_attachments.payload import ChatTurnAttachment
+
+        self._require_active_workspace(workspace)
+        now = datetime.now(timezone.utc)
+        row = (
+            self.db.query(ChatAttachment)
+            .filter(
+                ChatAttachment.id == attachment_id,
+                ChatAttachment.workspace_id == workspace.id,
+                ChatAttachment.uploaded_by == actor.id,
+            )
+            .one_or_none()
+        )
+        if row is None or row.expires_at <= now:
+            raise AppError(
+                ErrorCategory.CHAT_ATTACHMENT_NOT_FOUND,
+                "Chat attachment not found.",
+            )
+        data = self.storage.get_bytes(row.storage_key)
+        return ChatTurnAttachment(
+            id=row.id,
+            filename=row.original_filename,
+            mime_type=row.mime_type,
+            byte_size=int(row.byte_size),
+            data=data,
+        )
+
     def purge_expired(self, *, now: datetime | None = None, limit: int = 200) -> int:
         """Delete attachments past ``expires_at``. Returns number purged."""
         cutoff = now or datetime.now(timezone.utc)

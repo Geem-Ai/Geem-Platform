@@ -158,7 +158,7 @@ describe('ChatStarter Experts picker', () => {
     const send = screen.getByRole('button', { name: /send/i });
     expect(send).not.toBeDisabled();
     fireEvent.click(send);
-    expect(onSubmit).toHaveBeenCalledWith('What is the policy?');
+    expect(onSubmit).toHaveBeenCalledWith('What is the policy?', undefined);
   });
 });
 
@@ -222,10 +222,11 @@ describe('ChatMessage citations + retry', () => {
         }}
       />,
     );
-    const img = screen.getByTestId('geem-assistant-avatar');
-    expect(img.getAttribute('data')).toContain('/brand/geem-animated.svg');
-    expect(img.getAttribute('aria-label')).toBe('Geem');
-    expect(img.getAttribute('data-geem-mascot')).toBe('animated');
+    const wrap = screen.getByTestId('geem-assistant-avatar');
+    const img = wrap.querySelector('object');
+    expect(img?.getAttribute('data')).toContain('/brand/geem-animated.svg');
+    expect(img?.getAttribute('aria-label')).toBe('Geem');
+    expect(wrap.getAttribute('data-geem-mascot')).toBe('animated');
     expect(screen.getByTestId('message-timestamp')).toBeInTheDocument();
   });
 

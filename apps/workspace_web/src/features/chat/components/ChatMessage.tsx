@@ -103,9 +103,25 @@ export function ChatMessage({
           )}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words leading-7">
-              {message.content}
-            </p>
+            <div className="space-y-2">
+              {message.attachments && message.attachments.length > 0 ? (
+                <ul className="flex flex-col gap-1.5" data-testid="chat-message-attachments">
+                  {message.attachments.map((att) => (
+                    <li
+                      key={att.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1 text-xs font-medium max-w-full"
+                    >
+                      <span className="truncate">{att.filename}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {message.content ? (
+                <p className="whitespace-pre-wrap break-words leading-7">
+                  {message.content}
+                </p>
+              ) : null}
+            </div>
           ) : failed && !message.content ? (
             <p
               className="text-destructive leading-7"

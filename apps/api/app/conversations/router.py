@@ -167,6 +167,7 @@ async def stream_conversation_message(
     membership = access.membership
     actor = access.user
     content = body.content
+    attachment_id = body.attachment_id
 
     def generate() -> Iterator[str]:
         db = SessionLocal()
@@ -178,6 +179,7 @@ async def stream_conversation_message(
                 actor=actor,
                 conversation_id=conversation_id,
                 content=content,
+                attachment_id=attachment_id,
             ):
                 yield _sse(item["event"], item["data"])
         except AppError as exc:

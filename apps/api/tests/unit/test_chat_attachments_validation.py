@@ -59,6 +59,23 @@ def test_accepts_utf8_text(settings: Settings) -> None:
     assert len(inspection.sha256) == 64
 
 
+def test_accepts_png_image(settings: Settings) -> None:
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+        b"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    inspection = inspect_chat_attachment(png, "dot.png", settings=settings)
+    assert inspection.mime_type == "image/png"
+    assert inspection.extension == "png"
+
+
+def test_rejects_png_extension_without_magic(settings: Settings) -> None:
+    with pytest.raises(AppError) as exc:
+        inspect_chat_attachment(b"not-a-png", "spoof.png", settings=settings)
+    assert exc.value.category == ErrorCategory.UNSUPPORTED_DOCUMENT_TYPE
+
+
 def test_rejects_nul_in_text(settings: Settings) -> None:
     with pytest.raises(AppError) as exc:
         inspect_chat_attachment(b"hello\x00world", "note.txt", settings=settings)

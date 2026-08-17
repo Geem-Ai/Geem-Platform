@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
+from app.chat_attachments.payload import ChatTurnAttachment, build_user_message_content
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.openrouter.client import OpenRouterClient
@@ -79,6 +80,7 @@ class OpenRouterChatProvider:
         context: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
         try:
             return self._call(
@@ -86,6 +88,7 @@ class OpenRouterChatProvider:
                 question,
                 context,
                 history=history,
+                attachment=attachment,
             )
         except AppError:
             return self._call(
@@ -93,6 +96,7 @@ class OpenRouterChatProvider:
                 question,
                 context,
                 history=history,
+                attachment=attachment,
             )
 
     def answer_stream(
@@ -101,6 +105,7 @@ class OpenRouterChatProvider:
         context: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Yield stream events: {"type":"delta"|"replace"|"done", ...}.
 
@@ -114,6 +119,7 @@ class OpenRouterChatProvider:
                 question,
                 context,
                 history=history,
+                attachment=attachment,
             ):
                 if event.get("type") == "done":
                     completed = True
@@ -128,6 +134,7 @@ class OpenRouterChatProvider:
                 question,
                 context,
                 history=history,
+                attachment=attachment,
             )
 
     def answer_general(
@@ -135,16 +142,18 @@ class OpenRouterChatProvider:
         question: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
         """Non-RAG general-knowledge answer (plain markdown)."""
         primary = self._general_model()
         try:
-            return self._call_text(primary, question, history=history)
+            return self._call_text(primary, question, history=history, attachment=attachment)
         except AppError:
             return self._call_text(
                 self.settings.openrouter_chat_fallback_model,
                 question,
                 history=history,
+                attachment=attachment,
             )
 
     def answer_general_stream(
@@ -152,12 +161,15 @@ class OpenRouterChatProvider:
         question: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream a plain-markdown general-knowledge answer."""
         primary = self._general_model()
         completed = False
         try:
-            for event in self._call_text_stream(primary, question, history=history):
+            for event in self._call_text_stream(
+                primary, question, history=history, attachment=attachment
+            ):
                 if event.get("type") == "done":
                     completed = True
                 yield event
@@ -169,6 +181,7 @@ class OpenRouterChatProvider:
                 self.settings.openrouter_chat_fallback_model,
                 question,
                 history=history,
+                attachment=attachment,
             )
 
     def _general_model(self) -> str:
@@ -182,21 +195,23 @@ class OpenRouterChatProvider:
         *,
         stream: bool,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict[str, Any]:
-        messages: list[dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
         for turn in history or []:
             role = (turn.get("role") or "").strip()
             content = turn.get("content") or ""
             if role in {"user", "assistant"} and content:
                 messages.append({"role": role, "content": content})
+        prompt_text = (
+            f"{ANSWER_SCHEMA_HINT}\n\n"
+            f"SOURCES:\n{context}\n\n"
+            f"QUESTION:\n{question}"
+        )
         messages.append(
             {
                 "role": "user",
-                "content": (
-                    f"{ANSWER_SCHEMA_HINT}\n\n"
-                    f"SOURCES:\n{context}\n\n"
-                    f"QUESTION:\n{question}"
-                ),
+                "content": build_user_message_content(prompt_text, attachment),
             }
         )
         return {
@@ -215,14 +230,20 @@ class OpenRouterChatProvider:
         *,
         stream: bool,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict[str, Any]:
-        messages: list[dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
         for turn in history or []:
             role = (turn.get("role") or "").strip()
             content = turn.get("content") or ""
             if role in {"user", "assistant"} and content:
                 messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": question})
+        messages.append(
+            {
+                "role": "user",
+                "content": build_user_message_content(question, attachment),
+            }
+        )
         return {
             "model": model,
             "messages": messages,
@@ -237,8 +258,11 @@ class OpenRouterChatProvider:
         question: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
-        payload = self._text_payload(model, question, stream=False, history=history)
+        payload = self._text_payload(
+            model, question, stream=False, history=history, attachment=attachment
+        )
         payload.pop("stream", None)
         body, meta, status = self.client.request(
             "POST",
@@ -274,8 +298,11 @@ class OpenRouterChatProvider:
         question: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
-        payload = self._text_payload(model, question, stream=True, history=history)
+        payload = self._text_payload(
+            model, question, stream=True, history=history, attachment=attachment
+        )
         buffer = ""
         resolved_model = model
         request_id: str | None = None
@@ -332,8 +359,11 @@ class OpenRouterChatProvider:
         context: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
-        payload = self._payload(model, question, context, stream=False, history=history)
+        payload = self._payload(
+            model, question, context, stream=False, history=history, attachment=attachment
+        )
         # Non-stream OpenRouter rejects stream=false being explicit on some providers; omit key
         payload.pop("stream", None)
         body, meta, status = self.client.request(
@@ -370,8 +400,11 @@ class OpenRouterChatProvider:
         context: str,
         *,
         history: list[dict[str, str]] | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
-        payload = self._payload(model, question, context, stream=True, history=history)
+        payload = self._payload(
+            model, question, context, stream=True, history=history, attachment=attachment
+        )
         buffer = ""
         emitted = ""
         resolved_model = model

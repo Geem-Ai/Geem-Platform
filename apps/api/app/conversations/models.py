@@ -141,6 +141,10 @@ class Message(Base):
     citations: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
+    # Snapshot of chat composer attachments for this user turn (filename/mime; blob may TTL).
+    attachments: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=MessageStatus.COMPLETED.value
     )

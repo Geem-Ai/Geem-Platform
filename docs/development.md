@@ -277,6 +277,10 @@ npm test
 npm run typecheck
 ```
 
+### Chat composer attachments
+
+Paperclip → Images / PDF / Text. Files upload to ephemeral `chat_attachments` (TTL via `CHAT_ATTACHMENT_TTL_HOURS`) and are forwarded to the chat model as multimodal parts on the next turn. They are **not** Expert knowledge (no OCR ingest / Qdrant). Cap: `CHAT_ATTACHMENT_MAX_MB` (default 20; optional `VITE_CHAT_ATTACHMENT_MAX_MB` for the SPA).
+
 ## Workspace UI scripts
 
 | Command | Purpose |

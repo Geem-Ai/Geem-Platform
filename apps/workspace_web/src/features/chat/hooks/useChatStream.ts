@@ -407,9 +407,20 @@ export function useChatStream({
   );
 
   const send = useCallback(
-    async (content: string) => {
+    async (
+      content: string,
+      options?: {
+        attachmentId?: string;
+        attachmentMeta?: {
+          filename: string;
+          mimeType: string;
+          byteSize?: number;
+        };
+      },
+    ) => {
       const trimmed = content.trim();
-      if (!trimmed) return;
+      const attachmentId = options?.attachmentId;
+      if (!trimmed && !attachmentId) return;
 
       // Optimistic first-message seed (ChatStartPage → ChatPage) sets isStreaming
       // before the network call. Allow that resume; block only a real in-flight stream.
@@ -417,6 +428,7 @@ export function useChatStream({
       const resumingOptimisticSeed =
         seeded !== null &&
         seeded.content === trimmed &&
+        (seeded.attachmentId || undefined) === (attachmentId || undefined) &&
         abortRef.current === null;
       if (isStreamingRef.current && !resumingOptimisticSeed) return;
       if (abortRef.current) return;
@@ -429,18 +441,35 @@ export function useChatStream({
       let assistantClientId: string;
       let nextMessages: ChatUiMessage[];
 
-      if (seeded && seeded.content === trimmed) {
+      const optimisticAttachments =
+        attachmentId && options?.attachmentMeta
+          ? [
+              {
+                id: attachmentId,
+                filename: options.attachmentMeta.filename,
+                mime_type: options.attachmentMeta.mimeType,
+                byte_size: options.attachmentMeta.byteSize ?? 0,
+              },
+            ]
+          : undefined;
+
+      if (seeded && seeded.content === trimmed && (seeded.attachmentId || undefined) === (attachmentId || undefined)) {
         userClientId = seeded.userClientId;
         assistantClientId = seeded.assistantClientId;
         nextMessages = seeded.messages;
       } else {
-        const built = buildOptimisticTurnMessages(trimmed);
+        const built = buildOptimisticTurnMessages(
+          trimmed,
+          undefined,
+          optimisticAttachments,
+        );
         userClientId = built.userClientId;
         assistantClientId = built.assistantClientId;
         nextMessages = [...messagesRef.current, ...built.messages];
         publishActiveChatTurn({
           conversationId,
           content: trimmed,
+          attachmentId,
           messages: nextMessages,
           isStreaming: true,
           userClientId,
@@ -463,7 +492,9 @@ export function useChatStream({
       // Title job starts with the first user message on the server — poll + show a
       // provisional title immediately so the sidebar updates during streaming.
       if (expectTitle) {
-        const provisional = provisionalConversationTitle(trimmed);
+        const provisional = provisionalConversationTitle(
+          trimmed || options?.attachmentMeta?.filename || '',
+        );
         if (provisional) {
           queryClient.setQueryData(
             queryKeys.conversation(workspaceId, conversationId),
@@ -522,6 +553,7 @@ export function useChatStream({
             },
           },
           controller.signal,
+          attachmentId ? { attachmentId } : undefined,
         );
       } catch (err) {
         if (err instanceof ApiError && err.code === 'aborted') {

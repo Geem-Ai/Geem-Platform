@@ -25,6 +25,7 @@ from app.ingestion.chunker import PageChunker
 from app.openrouter.chat import OpenRouterChatProvider
 from app.openrouter.embeddings import OpenRouterEmbeddingProvider
 from app.openrouter.rerank import OpenRouterRerankProvider
+from app.chat_attachments.payload import ChatTurnAttachment
 from app.storage.qdrant_store import QdrantVectorStore
 from app.storage.scopes import (
     ExpertRagScope,
@@ -242,14 +243,21 @@ class RagService:
         *,
         history: list[dict[str, str]] | None = None,
         usage_context: GenerationUsageContext | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
+        retrieval_q = (question or "").strip() or (
+            attachment.filename if attachment is not None else ""
+        )
         prepared = self._prepare_expert_context(
-            question, knowledge, top_k, usage_context=usage_context
+            retrieval_q, knowledge, top_k, usage_context=usage_context
         )
         scope = prepared["scope"]
         expert_chat = self._build_expert_chat(knowledge)
         result = expert_chat.answer(
-            prepared["question"], prepared["context"], history=history
+            prepared["question"],
+            prepared["context"],
+            history=history,
+            attachment=attachment,
         )
         validated = self._validate_citations(
             result, prepared["allowed_ids"], prepared["context_chunks"]
@@ -270,7 +278,10 @@ class RagService:
                 settings=self.settings, system_prompt=stricter_prompt, client=self.chat.client
             )
             result = retry_chat.answer(
-                prepared["question"], prepared["context"], history=history
+                prepared["question"],
+                prepared["context"],
+                history=history,
+                attachment=attachment,
             )
             validated = self._carry_usage(
                 validated,
@@ -302,10 +313,14 @@ class RagService:
         *,
         history: list[dict[str, str]] | None = None,
         usage_context: GenerationUsageContext | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
         yield {"event": "status", "data": {"stage": "retrieving"}}
+        retrieval_q = (question or "").strip() or (
+            attachment.filename if attachment is not None else ""
+        )
         prepared = self._prepare_expert_context(
-            question, knowledge, top_k, usage_context=usage_context
+            retrieval_q, knowledge, top_k, usage_context=usage_context
         )
         scope = prepared["scope"]
         yield {"event": "status", "data": {"stage": "generating"}}
@@ -313,7 +328,10 @@ class RagService:
         expert_chat = self._build_expert_chat(knowledge)
         result: dict | None = None
         for event in expert_chat.answer_stream(
-            prepared["question"], prepared["context"], history=history
+            prepared["question"],
+            prepared["context"],
+            history=history,
+            attachment=attachment,
         ):
             etype = event.get("type")
             if etype == "delta":
@@ -348,7 +366,10 @@ class RagService:
             )
             result = None
             for event in retry_chat.answer_stream(
-                prepared["question"], prepared["context"], history=history
+                prepared["question"],
+                prepared["context"],
+                history=history,
+                attachment=attachment,
             ):
                 etype = event.get("type")
                 if etype == "delta":
@@ -403,13 +424,14 @@ class RagService:
         *,
         history: list[dict[str, str]] | None = None,
         usage_context: GenerationUsageContext | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> dict:
         """LLM-only Expert answer (Geem General) — no retrieve/rerank/citations."""
         question = (question or "").strip()
-        if not question:
+        if not question and attachment is None:
             raise AppError(ErrorCategory.VALIDATION, "question is required")
         chat = self._build_general_expert_chat(knowledge)
-        result = chat.answer_general(question, history=history)
+        result = chat.answer_general(question, history=history, attachment=attachment)
         answer = (result.get("answer_markdown") or "").strip()
         validated = {
             "answer": answer,
@@ -438,16 +460,19 @@ class RagService:
         *,
         history: list[dict[str, str]] | None = None,
         usage_context: GenerationUsageContext | None = None,
+        attachment: ChatTurnAttachment | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream LLM-only Expert answer — SSE-compatible with ChatOrchestrator."""
         question = (question or "").strip()
-        if not question:
+        if not question and attachment is None:
             raise AppError(ErrorCategory.VALIDATION, "question is required")
 
         yield {"event": "status", "data": {"stage": "generating"}}
         chat = self._build_general_expert_chat(knowledge)
         result: dict | None = None
-        for event in chat.answer_general_stream(question, history=history):
+        for event in chat.answer_general_stream(
+            question, history=history, attachment=attachment
+        ):
             etype = event.get("type")
             if etype == "delta":
                 yield {"event": "token", "data": {"text": event.get("text") or ""}}

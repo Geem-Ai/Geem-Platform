@@ -211,7 +211,7 @@ class Settings(BaseSettings):
     conversation_generation_lock_ttl_seconds: int = 300
     max_chat_message_chars: int = 32_000
     # Chat composer attachments (ephemeral — not Expert knowledge Documents)
-    chat_attachment_max_mb: int = 5
+    chat_attachment_max_mb: int = 20
     chat_attachment_ttl_hours: int = 12
     # Chat voice STT upload cap (OpenRouter allows up to 25 MiB; keep lower for mic clips)
     chat_transcribe_max_mb: int = 10
