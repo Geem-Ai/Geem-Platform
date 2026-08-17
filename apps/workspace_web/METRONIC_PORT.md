@@ -44,6 +44,7 @@ From `samples/metronic_vite_9.5.0/src/components/ui/`:
 - `sheet.tsx`
 - `tooltip.tsx`
 - `sonner.tsx`
+- `tabs.tsx` (Radix Tabs — app detail Connections / Sync history / Plans)
 
 Also:
 

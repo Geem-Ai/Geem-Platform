@@ -264,6 +264,49 @@ describe('CitationList', () => {
       />,
     );
     expect(screen.getByText('Handbook')).toBeInTheDocument();
+    expect(screen.getByText(/p\.\s*2/i)).toBeInTheDocument();
+  });
+
+  it('hides markdown image placeholders in snippets', () => {
+    withI18n(
+      <CitationList
+        citations={[
+          {
+            chunk_id: 'c2',
+            document_id: 'd2',
+            document_title: 'كتيب نظام السعد.pdf',
+            page: 2,
+            snippet:
+              'تطبيق خاص مبيعات ![img-0.jpeg](img-0.jpeg) إدارة مطبخ ![img-1.jpeg](img-1.jpeg) فواتير إلكترونية',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('كتيب نظام السعد.pdf')).toBeInTheDocument();
+    const snippet = screen.getByTestId('citation-snippet');
+    expect(snippet).toHaveTextContent('تطبيق خاص مبيعات إدارة مطبخ فواتير إلكترونية');
+    expect(snippet.textContent).not.toContain('![img-0.jpeg]');
+    expect(snippet.textContent).not.toContain('img-0.jpeg');
+  });
+
+  it('offers show more for long sanitized snippets', () => {
+    const longSnippet = `${'ميزة مهمة في النظام '.repeat(20)}نهاية`;
+    withI18n(
+      <CitationList
+        citations={[
+          {
+            chunk_id: 'c3',
+            document_id: 'd3',
+            document_title: 'Doc.pdf',
+            page: 1,
+            snippet: longSnippet,
+          },
+        ]}
+      />,
+    );
+    const toggle = screen.getByRole('button', { name: /show more/i });
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: /show less/i })).toBeInTheDocument();
   });
 });
 

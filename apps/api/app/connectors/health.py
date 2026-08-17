@@ -95,8 +95,7 @@ class ConnectorHealthService:
         )
         if result.health == ConnectionHealth.HEALTHY:
             row.last_success_at = now
-            row.last_error_code = None
-            row.last_error_message = None
+            self.connections.mark_healthy(row)
         elif result.error_code or result.error_message:
             row.last_error_code = result.error_code
             row.last_error_message = sanitize_error_message(result.error_message)

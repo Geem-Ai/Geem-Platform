@@ -597,6 +597,17 @@ class ConnectorConnectionService:
                 _transition(connection, ConnectionStatus.ERROR.value)
             connection.health = ConnectionHealth.FAILED.value
 
+    def mark_healthy(self, connection: AppConnection) -> None:
+        """Clear transient errors and restore ACTIVE after a successful check/sync."""
+        connection.health = ConnectionHealth.HEALTHY.value
+        connection.last_error_code = None
+        connection.last_error_message = None
+        if connection.status == ConnectionStatus.DEGRADED.value:
+            _transition(connection, ConnectionStatus.ACTIVE.value)
+        elif connection.status == ConnectionStatus.ERROR.value:
+            # Recoverable path (e.g. health check after transient provider blip).
+            _transition(connection, ConnectionStatus.ACTIVE.value)
+
     def _connection_limit(self, workspace_id: uuid.UUID, app_slug: str) -> int:
         raw = self.entitlements.get(
             workspace_id, app_slug=app_slug, key=CONNECTIONS_ENTITLEMENT_KEY, default=1

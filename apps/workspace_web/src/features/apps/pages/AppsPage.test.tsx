@@ -460,6 +460,7 @@ describe('Apps feature', () => {
     );
     renderAt('/apps/paid-demo');
     expect(await screen.findByTestId('app-detail-sheet')).toBeInTheDocument();
+    expect(screen.getByTestId('app-tab-plans')).toBeInTheDocument();
     expect(screen.getByTestId('app-plan-buy')).toBeInTheDocument();
     expect(screen.getAllByText(/SAR 299\.00/).length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('app-buy-buy').length).toBeGreaterThan(0);
@@ -516,7 +517,9 @@ describe('Apps feature', () => {
       ),
     );
     renderAt('/apps/sub-demo');
-    expect(await screen.findByTestId('app-plan-pro')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-detail-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('app-tab-plans')).toBeInTheDocument();
+    expect(screen.getByTestId('app-plan-pro')).toBeInTheDocument();
     expect(screen.getByTestId('app-plan-starter')).toBeInTheDocument();
     expect(screen.getAllByText(i18n.t('apps.billing.manualRenewal')).length).toBeGreaterThan(
       0,
