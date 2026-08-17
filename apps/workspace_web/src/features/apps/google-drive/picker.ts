@@ -239,9 +239,12 @@ export async function openGooglePicker(options: OpenGooglePickerOptions): Promis
   view.setMode(pickerNs.DocsViewMode.LIST);
 
   let settled = false;
+  let stopDomWatch: (() => void) | null = null;
   const settlePicker = () => {
     if (settled) return;
     settled = true;
+    stopDomWatch?.();
+    stopDomWatch = null;
     setGooglePickerOpen(false);
   };
 
@@ -264,7 +267,9 @@ export async function openGooglePicker(options: OpenGooglePickerOptions): Promis
           resourceKey: doc.resourceKey,
         }));
         onPicked(files);
+        return;
       }
+      // Unknown actions still keep the host open; DOM watch handles teardown.
     });
 
   if (multiSelect) {
@@ -282,11 +287,66 @@ export async function openGooglePicker(options: OpenGooglePickerOptions): Promis
   try {
     // Let Radix Sheet switch modal={false} before Picker claims the overlay.
     await prepareGooglePickerHost();
+    stopDomWatch = watchGooglePickerClosed(settlePicker);
     builder.build().setVisible(true);
   } catch (err) {
     settlePicker();
     throw err;
   }
+}
+
+/**
+ * Clear the host "picker open" latch when Google removes its overlay without a
+ * CANCEL/PICKED callback (broken iframe, invalid key page closed, etc.).
+ */
+function watchGooglePickerClosed(onClosed: () => void): () => void {
+  let seenPickerDom = false;
+  let done = false;
+
+  const pickerDomPresent = (): boolean =>
+    Boolean(
+      document.querySelector(
+        '.picker, .picker-dialog, .picker-dialog-bg, iframe[src*="google.com/picker"], iframe[src*="docs.google.com/picker"]',
+      ),
+    );
+
+  const tick = () => {
+    if (done) return;
+    if (pickerDomPresent()) {
+      seenPickerDom = true;
+      return;
+    }
+    if (seenPickerDom) {
+      done = true;
+      cleanup();
+      onClosed();
+    }
+  };
+
+  const observer = new MutationObserver(tick);
+  observer.observe(document.body, { childList: true, subtree: true });
+  const intervalId = window.setInterval(tick, 750);
+  // Hard cap so a permanently broken Picker cannot leave the Expert sheet non-modal.
+  const timeoutId = window.setTimeout(() => {
+    if (done) return;
+    done = true;
+    cleanup();
+    onClosed();
+  }, 30 * 60 * 1000);
+
+  function cleanup() {
+    observer.disconnect();
+    window.clearInterval(intervalId);
+    window.clearTimeout(timeoutId);
+  }
+
+  // Picker mounts asynchronously after setVisible.
+  window.setTimeout(tick, 0);
+  return () => {
+    if (done) return;
+    done = true;
+    cleanup();
+  };
 }
 
 /** Test helper — reset cached script loader / open tracking between tests. */

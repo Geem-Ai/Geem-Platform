@@ -17,6 +17,10 @@ describe('Google Drive picker module', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     document.head.querySelectorAll('script').forEach((s) => s.remove());
+    document.body.querySelectorAll('.picker, .picker-dialog, .picker-dialog-bg').forEach((el) => {
+      el.remove();
+    });
+    __resetGooglePickerLoaderForTests();
   });
 
   it('invokes callback with selected file ids and does not touch storage', async () => {
@@ -97,5 +101,67 @@ describe('Google Drive picker module', () => {
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
     expect(storedToken).toBeNull();
+  });
+
+  it('clears open latch when picker DOM disappears without a callback', async () => {
+    const docsView = {
+      setIncludeFolders: vi.fn().mockReturnThis(),
+      setSelectFolderEnabled: vi.fn().mockReturnThis(),
+      setMimeTypes: vi.fn().mockReturnThis(),
+      setMode: vi.fn().mockReturnThis(),
+    };
+
+    const builder = {
+      addView: vi.fn().mockReturnThis(),
+      enableFeature: vi.fn().mockReturnThis(),
+      setOAuthToken: vi.fn().mockReturnThis(),
+      setDeveloperKey: vi.fn().mockReturnThis(),
+      setAppId: vi.fn().mockReturnThis(),
+      setOrigin: vi.fn().mockReturnThis(),
+      setCallback: vi.fn().mockReturnThis(),
+      build: vi.fn(() => ({
+        setVisible: vi.fn(() => {
+          const overlay = document.createElement('div');
+          overlay.className = 'picker-dialog';
+          document.body.appendChild(overlay);
+        }),
+      })),
+    };
+
+    vi.stubGlobal('google', {
+      picker: {
+        Action: { PICKED: 'picked', CANCEL: 'cancel' },
+        DocsViewMode: { LIST: 'list' },
+        Feature: { MULTISELECT_ENABLED: 'multi', SUPPORT_DRIVES: 'drives' },
+        ViewId: { DOCS: 'docs' },
+        DocsView: vi.fn(function DocsView() {
+          return docsView;
+        }),
+        PickerBuilder: vi.fn(function PickerBuilder() {
+          return builder;
+        }),
+      },
+    });
+
+    const api = document.createElement('script');
+    api.src = 'https://apis.google.com/js/api.js';
+    api.dataset.loaded = '1';
+    document.head.appendChild(api);
+    const gsi = document.createElement('script');
+    gsi.src = 'https://accounts.google.com/gsi/client';
+    gsi.dataset.loaded = '1';
+    document.head.appendChild(gsi);
+
+    await openGooglePicker({
+      session: { accessToken: 'memory-only-token', appId: '1', developerKey: 'key' },
+      onPicked: () => undefined,
+    });
+
+    expect(isGooglePickerOpen()).toBe(true);
+    document.querySelector('.picker-dialog')?.remove();
+
+    await vi.waitFor(() => {
+      expect(isGooglePickerOpen()).toBe(false);
+    });
   });
 });

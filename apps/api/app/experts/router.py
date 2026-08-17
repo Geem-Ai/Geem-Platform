@@ -171,7 +171,7 @@ def list_expert_documents(
 ) -> list[ExpertKnowledgeItemOut]:
     from app.documents.repository import DocumentRepository
     from app.documents.service import compute_document_progress
-    from app.experts.models import ExpertSource, ExpertSourceType
+    from app.experts.models import Expert, ExpertSource, ExpertSourceType, ExpertType
 
     svc = ExpertService(db)
     items = svc.list_knowledge_items(
@@ -217,42 +217,44 @@ def list_expert_documents(
 
     # Connector sources appear as soon as they are added — before sync creates
     # a Document — so the Knowledge panel is not empty after a successful pick.
-    pending_sources = [
-        s
-        for s in ExpertService(db).repo.list_sources(expert_id)
-        if s.type == ExpertSourceType.CONNECTOR.value and s.id not in linked_source_ids
-    ]
-    # Auth already enforced via list_knowledge_items; re-check workspace ownership
-    # for sources by ensuring list_knowledge_items succeeded for this expert.
-    for source in pending_sources:
-        name = (source.name or "").strip() or "Google Drive file"
-        cfg = source.config if isinstance(source.config, dict) else {}
-        failure_reason = None
-        if isinstance(cfg.get("last_error_message"), str):
-            failure_reason = cfg["last_error_message"]
-        elif isinstance(cfg.get("last_error_code"), str):
-            failure_reason = cfg["last_error_code"]
-        out.append(
-            ExpertKnowledgeItemOut(
-                id=source.id,
-                expert_id=source.expert_id,
-                document_id=None,
-                source_id=source.id,
-                created_at=source.created_at,
-                title=name,
-                original_filename=name,
-                status=source.status,
-                mime_type=None,
-                byte_size=None,
-                page_count=0,
-                failure_reason=failure_reason,
-                source_type=ExpertSourceType.CONNECTOR.value,
-                processed_pages=0,
-                failed_pages=0,
-                current_stage=None,
-                progress=0.0,
+    # Platform Experts never attach connector knowledge via Workspace APIs.
+    expert_row = db.get(Expert, expert_id)
+    if expert_row is not None and expert_row.type == ExpertType.WORKSPACE.value:
+        pending_sources = [
+            s
+            for s in svc.repo.list_sources(expert_id)
+            if s.type == ExpertSourceType.CONNECTOR.value
+            and s.id not in linked_source_ids
+        ]
+        for source in pending_sources:
+            name = (source.name or "").strip() or "Google Drive file"
+            cfg = source.config if isinstance(source.config, dict) else {}
+            failure_reason = None
+            if isinstance(cfg.get("last_error_message"), str):
+                failure_reason = cfg["last_error_message"]
+            elif isinstance(cfg.get("last_error_code"), str):
+                failure_reason = cfg["last_error_code"]
+            out.append(
+                ExpertKnowledgeItemOut(
+                    id=source.id,
+                    expert_id=source.expert_id,
+                    document_id=None,
+                    source_id=source.id,
+                    created_at=source.created_at,
+                    title=name,
+                    original_filename=name,
+                    status=source.status,
+                    mime_type=None,
+                    byte_size=None,
+                    page_count=0,
+                    failure_reason=failure_reason,
+                    source_type=ExpertSourceType.CONNECTOR.value,
+                    processed_pages=0,
+                    failed_pages=0,
+                    current_stage=None,
+                    progress=0.0,
+                )
             )
-        )
 
     out.sort(key=lambda row: row.created_at, reverse=True)
     return out

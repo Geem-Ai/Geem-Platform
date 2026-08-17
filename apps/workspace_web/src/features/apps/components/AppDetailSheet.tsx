@@ -217,11 +217,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                         ) : null}
                       </TabsList>
 
-                      <TabsContent
-                        value="connections"
-                        forceMount
-                        className="space-y-3 data-[state=inactive]:hidden"
-                      >
+                      <TabsContent value="connections" className="space-y-3">
                         <AppConnectionsPanel
                           app={app}
                           canManage={canManage}
@@ -230,20 +226,12 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                         />
                       </TabsContent>
 
-                      <TabsContent
-                        value="sync"
-                        forceMount
-                        className="space-y-3 data-[state=inactive]:hidden"
-                      >
+                      <TabsContent value="sync" className="space-y-3">
                         <AppSyncHistoryPanel app={app} />
                       </TabsContent>
 
                       {showPlans ? (
-                        <TabsContent
-                          value="plans"
-                          forceMount
-                          className="space-y-3 data-[state=inactive]:hidden"
-                        >
+                        <TabsContent value="plans" className="space-y-3">
                           <AppPlansSection
                             app={app}
                             canManage={canManage}
