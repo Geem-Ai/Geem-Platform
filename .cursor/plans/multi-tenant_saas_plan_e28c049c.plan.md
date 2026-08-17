@@ -192,7 +192,7 @@ billing/           # plans, subscriptions, purchases, gateway abstraction
 entitlements/      # quota definitions + resolution
 usage/             # credit ledger, period counters, metering
 api_keys/          # workspace API credentials
-apps_catalog/      # app definitions + installations (foundations only)
+apps_catalog/      # App Store: catalog, plans, licenses/subscriptions, installations (see §17)
 platform_admin/    # platform admin APIs
 audit/             # audit log writer
 common/            # tenancy context, authz, idempotency, soft-delete mixins
@@ -588,6 +588,11 @@ erDiagram
   workspaces ||--o{ api_keys : has
   workspaces ||--o{ app_installations : installs
   apps ||--o{ app_installations : installed_as
+  apps ||--o{ app_plans : offers
+  app_plans ||--o{ app_plan_entitlements : defines
+  workspaces ||--o{ app_licenses : owns
+  workspaces ||--o{ app_subscriptions : subscribes
+  app_installations ||--o{ app_connections : connects
 ```
 
 **Identity / tenancy**
@@ -609,12 +614,13 @@ erDiagram
 - `messages` — conversation_id, role, content, token usage refs, citations JSONB
 
 **Billing / plans / usage / API keys / apps / audit** — unchanged from prior plan decisions:
-- plans, plan_entitlements, subscriptions, purchases, credit_packs
+- plans, plan_entitlements, subscriptions, purchases, credit_packs *(Workspace Geem plans — separate from App Store commerce; see §17)*
 - payment_gateway_configs (multiple rows; **exactly one `enabled=true`**), purchases, credit_packs, billing_customers
 - Phase 6 fulfillment is **redirect return + server-side query**, not `billing_events` webhooks (webhooks later)
 - credit_accounts, credit_ledger_entries (append-only), usage_period_counters, storage events
 - api_keys (hashed secrets, scopes, revocation)
-- apps, app_prices, app_installations (not boolean flags)
+- **App Store (Phase 9):** `app_categories`, `apps`, `app_plans`, `app_plan_entitlements`, `app_installations`, `app_licenses`, `app_subscriptions` — not boolean feature flags; price lives on `app_plans` (no flat `app_prices` table)
+- **Connectors (Phase 9C+):** `app_connections`, `connector_sync_runs`, `connector_items`, `connector_webhook_events`
 - audit_logs
 - evolve `usage_events` with workspace/user/expert/api_key attribution; `cost_metadata` stores family, multiplier, raw vs billed tokens
 
@@ -693,9 +699,106 @@ Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SEL
 
 ---
 
-## 17. App Store foundations
+## 17. App Store foundations (locked)
 
-Catalog + installation tables + encrypted config; no connector implementations yet. UI in Phase 9 uses AI Concept visual language (cards/dialogs), not another Metronic concept app.
+Canonical App Store model for Geem. **Phase 9** implements catalog, commerce, connectors, and Workspace Apps UI. This section is the source of truth for billing types, plans, install/license semantics, and what is explicitly out of scope.
+
+UI uses AI Concept visual language (cards/dialogs/drawers) — not another Metronic concept app. FastAPI is authoritative; the SPA never invents entitlement or pricing.
+
+### Product shape
+
+| Concept | Meaning |
+|---------|---------|
+| **Catalog app** (`apps`) | Global listing (slug, name, category, `billing_type`, `status`, optional `connector_key` / `connector_kind`) |
+| **App plan** (`app_plans`) | Priced SKU for one catalog app (`code`, `price_amount`, `currency`, `billing_interval`, entitlements) |
+| **Installation** (`app_installations`) | Workspace opted into the app (`active` / `suspended` / `uninstalled`). Soft lifecycle — one row per `(workspace, app)` |
+| **Connection** (`app_connections`) | Provider account linked under an installation (OAuth/session). Distinct from install |
+| **License / subscription** | Commercial entitlement records — **separate** from installation and from Workspace Geem `subscriptions` |
+
+```text
+Browse catalog → (pay if required) → Install → Connect provider → Use (Expert sources / channel)
+```
+
+### Billing types (`apps.billing_type`) — locked
+
+Exactly three commercial models. Do not invent a fourth without a plan revision.
+
+| `billing_type` | How access is granted | Purchase kinds | Survives uninstall? |
+|----------------|----------------------|----------------|---------------------|
+| **`free`** | Install alone (published apps) | none | n/a (re-install anytime while published) |
+| **`one_time`** | Pay once → `app_licenses` (`active`) → then install | `app_one_time` | **Yes** — license stays; re-install without re-paying |
+| **`subscription`** | Pay for period → `app_subscriptions` with time window → then install | `app_subscription`, `app_subscription_renewal` | Period access is independent of install; expired period blocks use until renew |
+
+**Rules:**
+- Free apps: `POST …/install` creates/reactivates installation; no checkout.
+- Paid apps: checkout + ClickPay/Noop return (same Phase 6 gateway path) **before** install is allowed; `AppAccessService` is the gate — connectors and UI must not bypass it.
+- Coming-soon / draft / disabled catalog rows: browse may show them; install and checkout fail closed.
+- Currency v1: **SAR** (aligned with Workspace billing / ClickPay).
+- **No card-on-file auto-renew** in Phase 9 — subscription renewal is an explicit `POST …/renew` hosted-page checkout (manual renewal).
+- Period math: **calendar-month anniversary** windows (`current_period_start` / `current_period_end`), not usage-meter months. Active renew extends end by one month; expired renew starts a fresh period from now.
+- One active commercial entitlement per `(workspace, app)` for licenses and for subscriptions (unique constraints).
+- Workspace Geem plan (`plans` / `subscriptions`) and App Store commerce are **orthogonal**: buying an App does not change Workspace AI quotas; Workspace plan does not auto-grant App licenses.
+
+### App plans + entitlements
+
+- Each catalog app has zero or more `app_plans` (seeded default `free` plan for free connectors; paid apps require at least one active priced plan before checkout).
+- `billing_interval`: `none` (free / one-time SKUs) or `monthly` (subscription SKUs). Yearly / weekly intervals are **out of scope** for Phase 9.
+- `app_plan_entitlements` — key/value JSONB per plan (e.g. `connections: 1`). Resolved via `AppEntitlementService` — **not** Workspace `plan_entitlements`.
+- Do not hardcode `if app.slug == "…"` for limits; read entitlement keys.
+- WhatsApp / OpenWA: seed as `subscription` + `coming_soon` with **no invented prices** until commercial plans are decided in 9F.
+
+### Catalog status (`apps.status`)
+
+| Status | Tenant behavior |
+|--------|-----------------|
+| `draft` | Hidden / unavailable |
+| `published` | Install/checkout per billing rules |
+| `coming_soon` | Discoverable; cannot install or pay |
+| `disabled` | Unavailable (existing installs may uninstall only) |
+
+Categories (`app_categories`): knowledge, communication, productivity, analytics, automation (i18n name keys). Starter seeds: **Google Drive** + **Microsoft OneDrive** (`free`, `knowledge_source`) + **WhatsApp / OpenWA** (`subscription`, `coming_soon`, `channel`).
+
+### Access snapshot (`AppAccessService`) — locked UX contract
+
+Authoritative statuses returned to API/UI: `not_entitled` | `entitled_not_installed` | `active` | `expired` | `unavailable`.
+
+Action flags (role-aware): `can_purchase`, `can_renew`, `can_install`, `can_uninstall`. Members browse; **owner/admin** (`MANAGE_APPS`) mutate install/checkout/renew/connect.
+
+### Install vs connect vs Expert use
+
+| Layer | Table / surface | Notes |
+|-------|-----------------|-------|
+| Install | `app_installations` | Workspace enables the app |
+| Connect | `app_connections` | OAuth/session credentials encrypted; counts toward `connections` entitlement |
+| Use | Expert connector-sources / channel | Knowledge apps feed Document ingest; channel apps (9F) bind conversations |
+
+Encrypted blobs (`config_encrypted`, connection credentials, sync state) **never** appear in API DTOs.
+
+### Connector kinds
+
+| `connector_kind` | Role | Phase |
+|------------------|------|-------|
+| `knowledge_source` | Pick files → Document / MinIO / Qdrant | 9D Drive, 9E/9E.1 OneDrive |
+| `channel` | Messaging surface ↔ Expert | 9F OpenWA |
+
+Non-connector catalog apps are allowed later (tooling/utilities) with `connector_key` null — still use the same install + billing model.
+
+### APIs (Phase 9 surface)
+
+Workspace-scoped under `/api/apps` (names illustrative): categories; list/detail catalog; installations list/detail; `POST/DELETE …/{slug}/install`; `POST …/{slug}/checkout`; `POST …/{slug}/renew`. Connector OAuth/sync/webhook routes live under connectors package. Purchase fulfillment reuses `purchases` + `BillingGateway` with kinds `app_one_time` | `app_subscription` | `app_subscription_renewal`.
+
+### Explicitly out of scope (Phase 9)
+
+- Auto-recurring charges / card vault / dunning
+- App Store for personal (non-workspace) accounts
+- Third-party developer upload marketplace / revenue share
+- Seat-based or usage-metered App pricing (beyond plan entitlement caps like `connections`)
+- Bundling Apps into Workspace Geem plans (platform admin may assign later; not self-serve in 9)
+- Yearly App plans, trials, coupons, freemium tier ladders beyond the three billing types
+- Public unauthenticated catalog
+- Porting Metronic Store Inventory / unrelated demo apps
+
+Platform Admin catalog CRUD / forced licenses → Phase 12 (`dashboard_web`), not Workspace UI.
 
 ---
 
@@ -1082,6 +1185,8 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** (personal + work/school File Picker). Do not start 9F–9G or Phase 10 until requested.
 
+**Canonical model:** §17 App Store foundations (billing types, plans, licenses, install vs connect, out of scope).
+
 **Revised slices:**
 
 ```text
@@ -1094,6 +1199,21 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9F — OpenWA / WhatsApp
 9G — App Management + E2E Gate
 ```
+
+#### Locked decisions (Phase 9)
+
+| Decision | Choice |
+|----------|--------|
+| Commercial models | Exactly **`free`**, **`one_time`**, **`subscription`** on `apps.billing_type` |
+| Pricing home | `app_plans.price_amount` + `currency` (SAR) — not a separate `app_prices` table |
+| Workspace vs App billing | Orthogonal; shared `BillingGateway` / `purchases` only |
+| One-time | `app_licenses`; survives uninstall; re-install free while license `active` |
+| Subscription | `app_subscriptions`; time-aware periods; **manual** renew via hosted page (no auto-charge) |
+| Free | Install/uninstall only; default plan entitlements (e.g. `connections`) |
+| Roles | Browse: any member; install/checkout/renew/connect/disconnect: owner/admin |
+| Secrets | Encrypted at rest; never in API responses |
+| UI routes | `/apps`, `/apps/:slug`, `/apps/installed` (+ payment-result reuse from Billing) |
+| Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/coming_soon** (no fake prices until 9F) |
 
 **9A Goal:** global catalog (`app_categories`, `apps`, `app_plans`, `app_plan_entitlements`), workspace `app_installations`, encrypted config boundary, free install/uninstall, Workspace App Store UI (`/apps`, `/apps/:slug`, `/apps/installed`), role-aware controls, EN/AR.
 
@@ -1118,6 +1238,14 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 **9E.1 Goal:** Dual-account File Picker — work/school ODSP path plus personal MSA (`OneDrive.ReadOnly` + `onedrive.live.com/picker`) with backend token mint; shared Graph ingest.
 
 **9E.1 Acceptance:** `account_kind` persisted; authorize stays Graph-only (no mixed `OneDrive.ReadOnly`); personal picker mints `OneDrive.ReadOnly` via `consumers`; personal picker-session returns live picker base URL; work/school regression green; reconnect documented when picker mint needs consent; no OpenWA.
+
+**9F Goal:** OpenWA / WhatsApp as first production `channel` connector — publish catalog app with real subscription `app_plans` (no invented pricing until commercial numbers are locked), session/QR (or documented auth mode) connect under installed app, bind channel ↔ Expert, inbound/outbound message path into existing chat/executor boundaries, webhook/idempotency via connector foundation. Remains gated by `AppAccessService` (subscription period).
+
+**9F Acceptance:** `openwa` (or seeded `whatsapp` slug) adapter registered; `coming_soon` lifted only when plans + env are ready; install requires active App subscription; connection counts toward `connections`; Expert can be reached from WhatsApp per product rules documented in `docs/apps/`; disconnect/revoke fails closed; Drive/OneDrive regression green; no auto-recurring charges.
+
+**9G Goal:** App Management polish + Phase 9 E2E gate — Installed apps management (status, plan/period, renew CTA, connections health), catalog edge cases (expired, entitled-not-installed, coming-soon), billing history labels for App purchase kinds, EN/AR + RTL, isolation tests across workspaces, smoke E2E for free install→connect→Expert source and (when 9F live) paid subscribe→install→connect.
+
+**9G Acceptance:** No catalog/commerce/connector regressions; owner/admin vs member matrix verified; encrypted secrets absent from all App DTOs; Phase 9 acceptance checklist signed off before Phase 10.
 
 **Next:** Phase 9F (OpenWA / WhatsApp) when explicitly requested — not Phase 10 yet.
 
