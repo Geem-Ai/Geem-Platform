@@ -46,6 +46,12 @@ describe('usage history helpers', () => {
     expect(operationLabelKey('speech_to_text')).toBe('usage.operation.speech_to_text');
   });
 
+  it('maps expert_instructions to a known operation label', () => {
+    expect(operationLabelKey('expert_instructions')).toBe(
+      'usage.operation.expert_instructions',
+    );
+  });
+
   it('keeps kind in paginated history URLs', () => {
     expect(historyPageHref(1)).toBe('/billing/usage/history');
     expect(historyPageHref(2)).toBe('/billing/usage/history?page=2');

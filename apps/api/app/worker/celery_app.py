@@ -11,9 +11,11 @@ from app.connectors.providers.google_drive import register_google_drive_connecto
 from app.connectors.providers.microsoft_onedrive import (
     register_microsoft_onedrive_connector,
 )
+from app.connectors.providers.openwa import register_openwa_connector
 
 register_google_drive_connector()
 register_microsoft_onedrive_connector()
+register_openwa_connector()
 
 celery_app = Celery(
     "arabic_rag",

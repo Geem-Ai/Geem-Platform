@@ -1,7 +1,6 @@
 """Idempotent App Store catalog seed (Phase 9A).
 
 Safe to re-run. Updates mutable catalog metadata by stable slug/code.
-Does not invent WhatsApp commercial pricing — that app stays coming_soon.
 """
 
 from __future__ import annotations
@@ -114,6 +113,39 @@ FREE_PLAN = PlanSpec(
     entitlements={"connections": 1},
 )
 
+WHATSAPP_PLANS: tuple[PlanSpec, ...] = (
+    PlanSpec(
+        code="line",
+        name="WhatsApp Line",
+        description="One WhatsApp business number routed to a Geem Expert.",
+        billing_interval=AppPlanBillingInterval.MONTHLY.value,
+        price_amount="79.00",
+        is_default=True,
+        sort_order=10,
+        entitlements={"connections": 1},
+    ),
+    PlanSpec(
+        code="desk",
+        name="WhatsApp Desk",
+        description="Up to three WhatsApp numbers for small teams and multi-brand lines.",
+        billing_interval=AppPlanBillingInterval.MONTHLY.value,
+        price_amount="199.00",
+        is_default=False,
+        sort_order=20,
+        entitlements={"connections": 3},
+    ),
+    PlanSpec(
+        code="ops",
+        name="WhatsApp Ops",
+        description="Up to ten WhatsApp numbers for multi-branch and agency workloads.",
+        billing_interval=AppPlanBillingInterval.MONTHLY.value,
+        price_amount="449.00",
+        is_default=False,
+        sort_order=30,
+        entitlements={"connections": 10},
+    ),
+)
+
 APP_SPECS: tuple[AppSpec, ...] = (
     AppSpec(
         slug="google-drive",
@@ -156,21 +188,22 @@ APP_SPECS: tuple[AppSpec, ...] = (
     AppSpec(
         slug="whatsapp",
         name="WhatsApp",
-        short_description="Connect WhatsApp conversations to a Geem Expert.",
+        short_description="Route WhatsApp conversations into a Geem Expert channel.",
         description=(
-            "Connect WhatsApp conversations to a Geem Expert. "
-            "Subscription plans and pricing are finalized in a later phase. "
-            "This listing is available for discovery only and cannot be installed yet."
+            "Connect a WhatsApp business number to Geem, bind it to an Expert, and reply "
+            "to inbound chats with workspace AI quotas and channel controls. "
+            "Subscribe to a monthly plan, install the app, then connect via QR or pairing code. "
+            "OpenWA is an unofficial WhatsApp gateway — use a dedicated business number."
         ),
         category_slug="communication",
         billing_type=AppBillingType.SUBSCRIPTION.value,
-        status=AppStatus.COMING_SOON.value,
+        status=AppStatus.PUBLISHED.value,
         is_featured=True,
         sort_order=30,
         icon_url="/brand/apps/whatsapp.svg",
         connector_key="openwa",
         connector_kind="channel",
-        plans=(),  # No invented pricing until commercial plans exist
+        plans=WHATSAPP_PLANS,
     ),
 )
 

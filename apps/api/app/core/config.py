@@ -205,6 +205,11 @@ class Settings(BaseSettings):
     # Graph subscription lifetime minutes (must stay below provider max ~42300).
     microsoft_onedrive_subscription_minutes: int = 4000
 
+    # Phase 9F — OpenWA / WhatsApp channel connector. Empty API key → unavailable.
+    openwa_base_url: str = "https://whatsapp-hub.dalseen.sa"
+    openwa_api_key: str = Field(default="", repr=False, exclude=True)
+    openwa_timeout_seconds: float = 30.0
+
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
     conversation_title_max_length: int = 80
@@ -351,6 +356,12 @@ class Settings(BaseSettings):
             return raw
         base = (self.app_url or "").rstrip("/")
         return f"{base}/api/connectors/oauth/microsoft_onedrive/callback"
+
+    @property
+    def openwa_configured(self) -> bool:
+        return bool(
+            (self.openwa_base_url or "").strip() and (self.openwa_api_key or "").strip()
+        )
 
     @property
     def reserved_slugs(self) -> frozenset[str]:

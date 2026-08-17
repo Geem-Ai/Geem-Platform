@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.policy import require_browse, require_manage_apps
+from app.apps_catalog.repository import AppCatalogRepository
 from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.health import ConnectorHealthService
 from app.connectors.oauth_state import ConnectorOAuthStateService
@@ -27,15 +28,21 @@ from app.connectors.registry import connector_registry
 from app.connectors.schemas import (
     AppConnectionListOut,
     AppConnectionOut,
+    ChannelSettingsUpdateRequest,
     ConnectorSyncRunListOut,
     ConnectorSyncRunOut,
     GoogleDrivePickerSessionOut,
     ManualSyncRequest,
+    OpenWAPairingCodeOut,
+    OpenWAPairingCodeRequest,
+    OpenWAQrOut,
     MicrosoftOneDrivePickerSessionOut,
     MicrosoftOneDrivePickerTokenOut,
     MicrosoftOneDrivePickerTokenRequest,
     StartConnectionRequest,
+    WhatsAppConnectionOut,
 )
+from app.connectors.providers.openwa.service import OpenWAChannelService
 from app.connectors.service import ConnectorConnectionService
 from app.connectors.sync import ConnectorSyncService
 from app.connectors.webhooks import ConnectorWebhookDispatcher
@@ -90,6 +97,13 @@ def _oauth_redirect(
     return RedirectResponse(url=target, status_code=302)
 
 
+def _app_connector_key(db: Session, app_slug: str) -> str | None:
+    app = AppCatalogRepository(db).get_app_by_slug(app_slug)
+    if app is None:
+        raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+    return app.connector_key
+
+
 @apps_connections_router.get(
     "/{app_slug}/connections", response_model=AppConnectionListOut
 )
@@ -102,6 +116,14 @@ def list_connections(
 ) -> AppConnectionListOut:
     workspace, membership = pair
     require_browse(membership.role)
+    if _app_connector_key(db, app_slug) == "openwa":
+        return OpenWAChannelService(db).list_connections(
+            workspace=workspace,
+            role=membership.role,
+            app_slug=app_slug,
+            limit=limit,
+            offset=offset,
+        )
     return ConnectorConnectionService(db).list_connections(
         workspace=workspace,
         role=membership.role,
@@ -112,7 +134,8 @@ def list_connections(
 
 
 @apps_connections_router.get(
-    "/{app_slug}/connections/{connection_id}", response_model=AppConnectionOut
+    "/{app_slug}/connections/{connection_id}",
+    response_model=AppConnectionOut | WhatsAppConnectionOut,
 )
 def get_connection(
     app_slug: str,
@@ -122,6 +145,13 @@ def get_connection(
 ) -> AppConnectionOut:
     workspace, membership = pair
     require_browse(membership.role)
+    if _app_connector_key(db, app_slug) == "openwa":
+        return OpenWAChannelService(db).get_connection(
+            workspace=workspace,
+            role=membership.role,
+            app_slug=app_slug,
+            connection_id=connection_id,
+        )
     return ConnectorConnectionService(db).get_connection(
         workspace=workspace,
         role=membership.role,
@@ -131,7 +161,9 @@ def get_connection(
 
 
 @apps_connections_router.post(
-    "/{app_slug}/connections", response_model=AppConnectionOut, status_code=201
+    "/{app_slug}/connections",
+    response_model=AppConnectionOut | WhatsAppConnectionOut,
+    status_code=201,
 )
 def start_connection(
     app_slug: str,
@@ -142,6 +174,17 @@ def start_connection(
 ) -> AppConnectionOut:
     workspace, membership = pair
     require_manage_apps(membership.role)
+    if _app_connector_key(db, app_slug) == "openwa":
+        out = OpenWAChannelService(db).start_session_connection(
+            workspace,
+            membership.role,
+            user.id,
+            app_slug=app_slug,
+            connection_id=body.connection_id,
+            connect_mode=body.connect_mode or "qr",
+        )
+        db.commit()
+        return out
     out = ConnectorConnectionService(db).start_connection(
         workspace=workspace,
         role=membership.role,
@@ -156,7 +199,8 @@ def start_connection(
 
 
 @apps_connections_router.delete(
-    "/{app_slug}/connections/{connection_id}", response_model=AppConnectionOut
+    "/{app_slug}/connections/{connection_id}",
+    response_model=AppConnectionOut | WhatsAppConnectionOut,
 )
 def disconnect_connection(
     app_slug: str,
@@ -167,10 +211,167 @@ def disconnect_connection(
 ) -> AppConnectionOut:
     workspace, membership = pair
     require_manage_apps(membership.role)
+    if _app_connector_key(db, app_slug) == "openwa":
+        out = OpenWAChannelService(db).disconnect_whatsapp(
+            workspace,
+            membership.role,
+            user.id,
+            app_slug=app_slug,
+            connection_id=connection_id,
+        )
+        db.commit()
+        return out
     out = ConnectorConnectionService(db).disconnect(
         workspace=workspace,
         role=membership.role,
         actor_id=user.id,
+        app_slug=app_slug,
+        connection_id=connection_id,
+    )
+    db.commit()
+    return out
+
+
+@apps_connections_router.post(
+    "/{app_slug}/connections/{connection_id}/openwa/start",
+    response_model=WhatsAppConnectionOut,
+)
+def start_openwa_connection(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    body: StartConnectionRequest | None = None,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WhatsAppConnectionOut:
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    req = body or StartConnectionRequest()
+    out = OpenWAChannelService(db).start_session_connection(
+        workspace,
+        membership.role,
+        user.id,
+        app_slug=app_slug,
+        connection_id=connection_id,
+        connect_mode=req.connect_mode or "qr",
+    )
+    db.commit()
+    return out
+
+
+@apps_connections_router.get(
+    "/{app_slug}/connections/{connection_id}/openwa/status",
+    response_model=WhatsAppConnectionOut,
+)
+def get_openwa_status(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+) -> WhatsAppConnectionOut:
+    workspace, membership = pair
+    require_browse(membership.role)
+    out = OpenWAChannelService(db).get_session_status(
+        workspace,
+        membership.role,
+        app_slug=app_slug,
+        connection_id=connection_id,
+    )
+    db.commit()
+    return out
+
+
+@apps_connections_router.get(
+    "/{app_slug}/connections/{connection_id}/openwa/qr",
+    response_model=OpenWAQrOut,
+)
+def get_openwa_qr(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+) -> OpenWAQrOut:
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    qr = OpenWAChannelService(db).get_qr(
+        workspace,
+        membership.role,
+        app_slug=app_slug,
+        connection_id=connection_id,
+    )
+    db.commit()
+    return OpenWAQrOut(status=qr.status, qr_code=qr.qrCode)
+
+
+@apps_connections_router.post(
+    "/{app_slug}/connections/{connection_id}/openwa/pairing-code",
+    response_model=OpenWAPairingCodeOut,
+)
+def request_openwa_pairing_code(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    body: OpenWAPairingCodeRequest,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+) -> OpenWAPairingCodeOut:
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    out = OpenWAChannelService(db).request_pairing_code(
+        workspace,
+        membership.role,
+        app_slug=app_slug,
+        connection_id=connection_id,
+        phone_number=body.phone_number,
+    )
+    db.commit()
+    return OpenWAPairingCodeOut.model_validate(out)
+
+
+@apps_connections_router.patch(
+    "/{app_slug}/connections/{connection_id}/channel-settings",
+    response_model=WhatsAppConnectionOut,
+)
+def update_channel_settings(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    body: ChannelSettingsUpdateRequest,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+) -> WhatsAppConnectionOut:
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    fields = body.model_dump(exclude_unset=True)
+    out = OpenWAChannelService(db).update_settings(
+        workspace,
+        membership.role,
+        app_slug=app_slug,
+        connection_id=connection_id,
+        expert_id=fields["expert_id"] if "expert_id" in fields else ...,
+        auto_reply_enabled=fields.get("auto_reply_enabled"),
+        respond_to_groups=fields.get("respond_to_groups"),
+        enabled=fields.get("enabled"),
+    )
+    db.commit()
+    return out
+
+
+@apps_connections_router.post(
+    "/{app_slug}/connections/{connection_id}/openwa/reconnect",
+    response_model=WhatsAppConnectionOut,
+)
+def reconnect_openwa_connection(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WhatsAppConnectionOut:
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    out = OpenWAChannelService(db).reconnect(
+        workspace,
+        membership.role,
+        user.id,
         app_slug=app_slug,
         connection_id=connection_id,
     )

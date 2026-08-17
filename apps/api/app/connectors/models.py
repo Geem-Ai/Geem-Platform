@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -305,3 +306,96 @@ class ConnectorWebhookEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     connection: Mapped[AppConnection] = relationship(back_populates="webhook_events")
+
+
+class ChannelBinding(Base):
+    """Expert + reply policy for a channel connection (Phase 9F)."""
+
+    __tablename__ = "channel_bindings"
+    __table_args__ = (
+        UniqueConstraint("app_connection_id", name="uq_channel_bindings_connection"),
+        Index(
+            "ix_channel_bindings_workspace_connection",
+            "workspace_id",
+            "app_connection_id",
+        ),
+        Index("ix_channel_bindings_workspace_expert", "workspace_id", "expert_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    app_connection_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("app_connections.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    expert_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    auto_reply_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    respond_to_groups: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ChannelConversationBinding(Base):
+    """Maps an external channel chat to a Geem conversation."""
+
+    __tablename__ = "channel_conversation_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "app_connection_id",
+            "external_chat_id",
+            "expert_id",
+            name="uq_channel_conv_connection_chat_expert",
+        ),
+        UniqueConstraint("conversation_id", name="uq_channel_conv_conversation"),
+        Index(
+            "ix_channel_conv_workspace_connection",
+            "workspace_id",
+            "app_connection_id",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    app_connection_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("app_connections.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    external_chat_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    external_sender_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    expert_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

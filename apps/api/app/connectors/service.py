@@ -21,7 +21,7 @@ from app.apps_catalog.models import (
 )
 from app.apps_catalog.policy import can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
-from app.common.crypto import encrypt_secret
+from app.common.crypto import decrypt_secret, encrypt_secret
 from app.common.security_log import security_log
 from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.locks import workspace_app_connection_lock
@@ -660,6 +660,18 @@ class ConnectorConnectionService:
         return bool(caps and caps.supports_sync)
 
     def _ensure_routing_token(self, connection: AppConnection) -> str:
+        """Return existing routing token, or mint one if missing.
+
+        Never rotate an existing token — providers (OpenWA webhooks) bind to the URL.
+        """
+        if connection.webhook_routing_token_encrypted and connection.webhook_routing_token_hash:
+            try:
+                return decrypt_secret(
+                    connection.webhook_routing_token_encrypted, settings=self.settings
+                )
+            except Exception:  # noqa: BLE001
+                # Corrupt ciphertext — mint a replacement.
+                pass
         token = generate_routing_token()
         connection.webhook_routing_token_hash = hash_routing_token(token)
         connection.webhook_routing_token_encrypted = encrypt_secret(

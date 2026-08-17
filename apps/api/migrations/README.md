@@ -30,6 +30,7 @@
 - Phase 9D: no Alembic — Google Drive adapter reuses 9C tables + `expert_sources` (`type=connector`, binding in `config` JSON). Register at API/worker startup; available only when `GOOGLE_DRIVE_CLIENT_ID`/`SECRET` are set.
 - Fix: `0020_storage_event_reasons.py` — expand `ck_storage_usage_events_reason` for Phase 5C audit reasons (`reserve` / `release` / `restore`).
 - Chat attach multimodal: `0021_message_attachments.py` — `messages.attachments` JSONB snapshot for composer files sent to the model (no Expert ingest).
+- Phase 9F: `0022_openwa_channel.py` — `channel_bindings`, `channel_conversation_bindings`, `conversations.source`, and nullable `conversations.user_id` for WhatsApp/OpenWA channel conversations. Runtime registration remains application code (`register_openwa_connector`).
 
 ### Document tenancy (Phase 2C final)
 

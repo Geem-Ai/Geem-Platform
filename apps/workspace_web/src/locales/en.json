@@ -281,6 +281,25 @@
     "instructions": "System instructions",
     "instructionsPlaceholder": "How should this Expert answer and behave?",
     "instructionsHint": "These instructions define how the Expert should answer and behave. Maximum length is enforced by the server.",
+    "generateInstructions": {
+      "open": "Generate system instructions with AI",
+      "title": "Generate system instructions",
+      "brief": "Brief",
+      "briefPlaceholder": "Describe what this Expert should do…",
+      "persona": "Persona / role",
+      "personaPlaceholder": "e.g. Senior legal advisor",
+      "audience": "Audience",
+      "audiencePlaceholder": "e.g. Internal legal team",
+      "tone": "Tone",
+      "tonePlaceholder": "e.g. Precise, cautious, plain language",
+      "constraints": "Constraints",
+      "constraintsPlaceholder": "Do / don’t — e.g. Never give binding legal advice…",
+      "billingHint": "Uses your workspace AI token balance (same as chat).",
+      "overwriteWarning": "This will replace the current system instructions.",
+      "generate": "Generate",
+      "generating": "Generating…",
+      "success": "System instructions generated"
+    },
     "advancedSettings": "Advanced settings",
     "advancedSettingsHint": "Controls how this Expert finds passages in its knowledge before answering.",
     "ragRange": "{{min}}–{{max}}",
@@ -517,6 +536,7 @@
       "embed_query": "Query embedding",
       "rerank": "Rerank",
       "title": "Title",
+      "expert_instructions": "Expert instructions",
       "other": "Activity"
     },
     "source": {
@@ -1055,6 +1075,67 @@
     "toasts": {
       "installed": "{{name}} installed",
       "uninstalled": "{{name}} uninstalled"
+    },
+    "whatsapp": {
+      "connect": {
+        "title": "Connect WhatsApp",
+        "description": "Choose how you want to link this WhatsApp session to Geem.",
+        "followInstructions": "Finish the steps in WhatsApp, then keep this dialog open while Geem checks the connection.",
+        "qrTitle": "Scan QR",
+        "qrDescription": "Use Linked Devices in WhatsApp to scan a QR code from this browser.",
+        "pairingTitle": "Pairing code",
+        "pairingDescription": "Enter your phone number and connect with an 8-character pairing code.",
+        "connectAnother": "Connect another",
+        "resume": "Continue linking"
+      },
+      "status": {
+        "connecting": "Connecting",
+        "waitingForQr": "Waiting for QR",
+        "authenticating": "Authenticating",
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "actionRequired": "Action required",
+        "failed": "Failed"
+      },
+      "qr": {
+        "title": "Scan with Linked Devices",
+        "instructions": "Open WhatsApp on your phone and use Linked Devices to finish connection.",
+        "step1": "Open WhatsApp on your phone.",
+        "step2": "Go to Settings or Menu, then Linked Devices.",
+        "step3": "Tap Link a Device and scan this QR code.",
+        "loading": "Loading QR code…",
+        "alt": "WhatsApp QR code",
+        "connected": "WhatsApp is connected. You can close this dialog.",
+        "waiting": "Waiting for WhatsApp to become ready for QR."
+      },
+      "pairing": {
+        "title": "Request a pairing code",
+        "instructions": "Enter the phone number for this WhatsApp account, then use the pairing code on your device.",
+        "phoneLabel": "Phone number",
+        "phonePlaceholder": "9665XXXXXXXX",
+        "phoneHint": "Use the full international number with country code.",
+        "request": "Get pairing code",
+        "requesting": "Requesting…",
+        "codeLabel": "Pairing code",
+        "copy": "Copy code",
+        "copySuccess": "Pairing code copied",
+        "copyFailed": "Couldn’t copy the pairing code"
+      },
+      "connection": {
+        "phone": "Phone: {{phone}}",
+        "providerStatus": "Provider status: {{status}}",
+        "expert": "Expert",
+        "unassignedExpert": "No Expert selected",
+        "settings": "Channel settings",
+        "enabled": "Enabled",
+        "autoReply": "Auto-reply",
+        "respondToGroups": "Respond to groups",
+        "readOnly": "Members can view WhatsApp connection settings but cannot change them."
+      },
+      "toasts": {
+        "settingsSaved": "WhatsApp settings saved",
+        "reconnecting": "Trying to reconnect WhatsApp"
+      }
     }
   },
   "errors": {
@@ -1166,6 +1247,20 @@
     "microsoftOneDriveRateLimited": "Microsoft Graph rate limit reached — try again shortly",
     "microsoftOneDriveDeltaResyncRequired": "OneDrive synchronization must be reset",
     "microsoftOneDriveSubscriptionFailed": "Failed to set up OneDrive change notifications",
-    "microsoftOneDriveSyncFailed": "OneDrive synchronization failed"
+    "microsoftOneDriveSyncFailed": "OneDrive synchronization failed",
+    "openwaNotConfigured": "WhatsApp is not configured on this server",
+    "openwaUnavailable": "WhatsApp is temporarily unavailable",
+    "openwaUnauthorized": "The WhatsApp provider rejected this configuration",
+    "openwaTimeout": "The WhatsApp provider timed out. Try again shortly.",
+    "openwaRequestInvalid": "WhatsApp rejected this request",
+    "openwaSessionNotFound": "This WhatsApp session was not found",
+    "openwaSessionConflict": "WhatsApp is still cleaning up a previous session. Try again shortly.",
+    "openwaQrNotReady": "The QR code is not ready yet",
+    "openwaPairingFailed": "Could not create a WhatsApp pairing code",
+    "openwaPhoneInvalid": "Enter a valid phone number with country code",
+    "openwaWebhookFailed": "WhatsApp could not finish webhook setup",
+    "openwaSendFailed": "Could not send the WhatsApp reply",
+    "channelBindingRequired": "Select an Expert before WhatsApp can reply",
+    "channelExpertInvalid": "This Expert cannot be used for the WhatsApp channel"
   }
 }
