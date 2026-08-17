@@ -191,6 +191,7 @@ def test_catalog_connector_metadata(client, register_user, db, monkeypatch) -> N
     assert body["connector"]["available"] is False
     assert body["connector"]["can_connect"] is False
     assert body["has_active_connection"] is False
+    assert body.get("connection_status") is None
     assert "credentials_encrypted" not in body
 
 

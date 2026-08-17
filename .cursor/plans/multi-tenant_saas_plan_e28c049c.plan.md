@@ -30,7 +30,7 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: 9A–9D PASS. Remaining 9E–9G (OneDrive, OpenWA, E2E). Do not start 9E or Phase 10 until requested."
+    content: "Phase 9: 9A–9E PASS. Remaining 9F–9G (OpenWA, E2E). Do not start 9F or Phase 10 until requested."
     status: in_progress
   - id: phase-10
     content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
@@ -1080,7 +1080,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** (Google Drive knowledge connector). Do not start 9E–9G or Phase 10 until requested.
+**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** (Microsoft OneDrive knowledge connector). Do not start 9F–9G or Phase 10 until requested.
 
 **Revised slices:**
 
@@ -1089,7 +1089,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9B — App Billing & Plans     ✅ PASS
 9C — Connector Foundation    ✅ PASS
 9D — Google Drive            ✅ PASS
-9E — Microsoft OneDrive
+9E — Microsoft OneDrive      ✅ PASS
 9F — OpenWA / WhatsApp
 9G — App Management + E2E Gate
 ```
@@ -1110,7 +1110,11 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9D Acceptance:** Google Drive adapter registered at API/worker startup; `available=false` until OAuth env configured; OAuth connect/callback + picker session; Expert connector-sources → Document ingest + incremental changes.watch sync; disconnect marks sources unavailable; no OneDrive/OpenWA.
 
-**Next:** Phase 9E (Microsoft OneDrive) when explicitly requested — not Phase 10 yet.
+**9E Goal:** Microsoft OneDrive as second production `KNOWLEDGE_SOURCE` connector — Entra OAuth + Files.Read, File Picker v8, Graph download/Office→PDF conversion, Expert connector sources via shared knowledge domain, Graph delta + root-drive subscriptions with Beat renewal.
+
+**9E Acceptance:** `microsoft_onedrive` adapter registered; unavailable until Entra env configured; work/school OAuth + encrypted refresh; Picker v8 with server-side revalidation; PDF/TXT/MD + Office via Graph PDF conversion through existing ingest; delta + webhook validation/notifications; Google Drive regression green; no OpenWA.
+
+**Next:** Phase 9F (OpenWA / WhatsApp) when explicitly requested — not Phase 10 yet.
 
 ---
 

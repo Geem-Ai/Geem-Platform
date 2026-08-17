@@ -129,6 +129,12 @@ export function AppConnectionsPanel({
         </p>
       ) : null}
 
+      {oauthNotice === 'error' ? (
+        <p className="text-sm text-destructive" data-testid="oauth-error">
+          {t('apps.connections.connectionError')}
+        </p>
+      ) : null}
+
       {installed && connector.available && connectionsQuery.isLoading ? (
         <div className="h-16 rounded-xl bg-muted animate-pulse" />
       ) : null}

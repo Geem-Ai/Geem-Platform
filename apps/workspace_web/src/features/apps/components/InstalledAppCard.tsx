@@ -95,6 +95,23 @@ export function InstalledAppCard({
                 <Badge variant="success" appearance="light" size="sm">
                   {t('apps.connections.connected')}
                 </Badge>
+              ) : app.connection_status === 'error' ? (
+                <Badge variant="destructive" appearance="light" size="sm">
+                  {t('apps.connections.status.error')}
+                </Badge>
+              ) : app.connection_status === 'connecting' ||
+                app.connection_status === 'pending' ? (
+                <Badge variant="info" appearance="light" size="sm">
+                  {t(`apps.connections.status.${app.connection_status}`)}
+                </Badge>
+              ) : app.connection_status === 'revoked' ? (
+                <Badge variant="destructive" appearance="light" size="sm">
+                  {t('apps.connections.status.revoked')}
+                </Badge>
+              ) : app.connection_status === 'disconnected' ? (
+                <Badge variant="secondary" appearance="light" size="sm">
+                  {t('apps.connections.reconnect')}
+                </Badge>
               ) : (
                 <Badge variant="secondary" appearance="light" size="sm">
                   {t('apps.connections.notConnected')}
@@ -109,11 +126,21 @@ export function InstalledAppCard({
               {t('apps.integrationLater')}
             </p>
           )}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button asChild variant="outline" size="sm">
+          <div className="inline-grid grid-cols-2 gap-2 pt-1">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="w-full justify-center"
+            >
               <Link to={`/apps/${app.slug}`}>{t('apps.manageView')}</Link>
             </Button>
-            <AppInstallButton app={app} canManage={canManage} />
+            <AppInstallButton
+              app={app}
+              canManage={canManage}
+              size="sm"
+              className="w-full justify-center"
+            />
           </div>
         </div>
       </CardContent>

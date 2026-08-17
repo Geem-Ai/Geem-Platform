@@ -1,27 +1,23 @@
-"""Expert knowledge sources backed by connectors (Phase 9D)."""
+"""Expert knowledge sources backed by connectors (Phase 9D/9E)."""
 
 from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService
-from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.items import ConnectorItemService
-from app.connectors.models import AppConnection, ConnectorItem, ConnectorSyncRun
-from app.connectors.providers.google_drive.client import GoogleDriveClient
-from app.connectors.providers.google_drive.formats import require_supported_mime
-from app.connectors.providers.google_drive.ingest import safe_provenance
-from app.connectors.providers.google_drive.token import ensure_fresh_access
+from app.connectors.knowledge.resolve import resolve_selections_via_adapter
+from app.connectors.models import ConnectorItem, ConnectorSyncRun
 from app.connectors.registry import connector_registry
 from app.connectors.repository import ConnectorRepository
 from app.connectors.service import ConnectorConnectionService
+from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.types import (
     ConnectorItemStatus,
     ConnectorItemType,
@@ -46,13 +42,12 @@ from app.workspaces.models import Workspace, WorkspaceMembership
 
 logger = logging.getLogger(__name__)
 
-GOOGLE_DRIVE_KEY = "google_drive"
-
 
 @dataclass(frozen=True, slots=True)
 class ConnectorSourceSelection:
-    external_id: str
+    external_id: str | None = None
     resource_key: str | None = None
+    provider_locator: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,16 +105,20 @@ class ExpertConnectorSourceService:
         row, app, _inst = self.connections.require_usable_connection(
             workspace.id, connection_id
         )
-        if row.connector_key != GOOGLE_DRIVE_KEY:
-            raise AppError(
-                ErrorCategory.VALIDATION,
-                "Only Google Drive connections are supported for connector sources.",
-                details={"connector_key": row.connector_key},
-            )
-        if not connector_registry.is_available(GOOGLE_DRIVE_KEY):
+        connector_key = row.connector_key
+        if not connector_registry.is_available(connector_key):
             raise AppError(
                 ErrorCategory.CONNECTOR_NOT_AVAILABLE,
-                "Google Drive connector is not available.",
+                "Connector is not available.",
+                details={"connector_key": connector_key},
+            )
+        adapter = connector_registry.get(connector_key)
+        caps = adapter.capabilities
+        if not caps.supports_sync:
+            raise AppError(
+                ErrorCategory.CONNECTOR_NOT_SUPPORTED,
+                "Connector does not support knowledge sources.",
+                details={"connector_key": connector_key},
             )
         self.app_access.require_active(workspace.id, app_slug=app.slug)
 
@@ -129,91 +128,75 @@ class ExpertConnectorSourceService:
                 ErrorCategory.CONNECTOR_CREDENTIALS_INVALID,
                 "Connection credentials are missing.",
             )
-        credentials = ensure_fresh_access(self.db, row, credentials, self.settings)
 
-        client = GoogleDriveClient(
-            settings=self.settings, access_token=str(credentials["access_token"])
+        resolved = resolve_selections_via_adapter(
+            adapter=adapter,
+            db=self.db,
+            connection=row,
+            credentials=credentials,
+            selections=items,
+            settings=self.settings,
         )
+
         created_sources: list[ExpertSource] = []
-        try:
-            for selection in items:
-                external_id = (selection.external_id or "").strip()
-                if not external_id:
-                    raise AppError(
-                        ErrorCategory.VALIDATION, "external_id is required."
+        for resolved_item in resolved:
+            external_id = resolved_item.external_id
+            item = self.items.upsert_item(
+                workspace_id=workspace.id,
+                connection_id=row.id,
+                external_id=external_id,
+                name=resolved_item.name,
+                item_type=ConnectorItemType.FILE.value,
+                mime_type=resolved_item.mime_type,
+                size_bytes=resolved_item.size_bytes,
+                external_version=resolved_item.external_version,
+                external_etag=resolved_item.external_etag,
+                metadata={**resolved_item.provenance, **resolved_item.extra},
+                status=ConnectorItemStatus.ACTIVE.value,
+            )
+
+            existing = self._find_source_for_item(expert.id, item.id)
+            if existing is not None:
+                if existing.status in {
+                    ExpertSourceStatus.UNAVAILABLE.value,
+                    ExpertSourceStatus.FAILED.value,
+                    ExpertSourceStatus.DISABLED.value,
+                }:
+                    existing.status = ExpertSourceStatus.PENDING.value
+                    existing.name = item.name
+                    cfg = dict(existing.config or {})
+                    cfg.update(
+                        {
+                            "connector_key": connector_key,
+                            "connection_id": str(row.id),
+                            "connector_item_id": str(item.id),
+                            "external_id": external_id,
+                            "provenance": resolved_item.provenance,
+                        }
                     )
-                meta = client.get_file_metadata(
-                    external_id, resource_key=selection.resource_key
-                )
-                require_supported_mime(meta.get("mimeType"))
-                provenance = safe_provenance(meta)
-                if selection.resource_key:
-                    provenance["resourceKey"] = selection.resource_key
-                elif meta.get("resourceKey"):
-                    provenance["resourceKey"] = meta["resourceKey"]
+                    existing.config = cfg
+                    item.current_document_id = None
+                    item.status = ConnectorItemStatus.ACTIVE.value
+                    item.deleted_at_provider = None
+                created_sources.append(existing)
+                continue
 
-                item = self.items.upsert_item(
-                    workspace_id=workspace.id,
-                    connection_id=row.id,
-                    external_id=external_id,
-                    name=str(meta.get("name") or external_id),
-                    item_type=ConnectorItemType.FILE.value,
-                    mime_type=meta.get("mimeType"),
-                    size_bytes=int(meta["size"]) if str(meta.get("size") or "").isdigit() else None,
-                    external_version=str(meta.get("version") or meta.get("md5Checksum") or "")
-                    or None,
-                    external_etag=meta.get("md5Checksum"),
-                    metadata=provenance,
-                    status=ConnectorItemStatus.ACTIVE.value,
-                )
-
-                existing = self._find_source_for_item(expert.id, item.id)
-                if existing is not None:
-                    # Revive sources left unavailable/failed after disconnect or errors.
-                    if existing.status in {
-                        ExpertSourceStatus.UNAVAILABLE.value,
-                        ExpertSourceStatus.FAILED.value,
-                        ExpertSourceStatus.DISABLED.value,
-                    }:
-                        existing.status = ExpertSourceStatus.PENDING.value
-                        existing.name = item.name
-                        cfg = dict(existing.config or {})
-                        cfg.update(
-                            {
-                                "connector_key": GOOGLE_DRIVE_KEY,
-                                "connection_id": str(row.id),
-                                "connector_item_id": str(item.id),
-                                "external_id": external_id,
-                                "provenance": provenance,
-                            }
-                        )
-                        existing.config = cfg
-                        # Force re-ingest: disconnect cleared Expert membership but may
-                        # have left a stale document pointer on the ConnectorItem.
-                        item.current_document_id = None
-                        item.status = ConnectorItemStatus.ACTIVE.value
-                        item.deleted_at_provider = None
-                    created_sources.append(existing)
-                    continue
-
-                source = ExpertSource(
-                    expert_id=expert.id,
-                    type=ExpertSourceType.CONNECTOR.value,
-                    name=item.name,
-                    status=ExpertSourceStatus.PENDING.value,
-                    config={
-                        "connector_key": GOOGLE_DRIVE_KEY,
-                        "connection_id": str(row.id),
-                        "connector_item_id": str(item.id),
-                        "external_id": external_id,
-                        "provenance": provenance,
-                    },
-                    created_by=actor.id,
-                )
-                self.repo.create_source(source)
-                created_sources.append(source)
-        finally:
-            client.close()
+            source = ExpertSource(
+                expert_id=expert.id,
+                type=ExpertSourceType.CONNECTOR.value,
+                name=item.name,
+                status=ExpertSourceStatus.PENDING.value,
+                config={
+                    "connector_key": connector_key,
+                    "connection_id": str(row.id),
+                    "connector_item_id": str(item.id),
+                    "external_id": external_id,
+                    "provenance": resolved_item.provenance,
+                },
+                created_by=actor.id,
+            )
+            self.repo.create_source(source)
+            created_sources.append(source)
 
         sync_run_id: uuid.UUID | None = None
         status = ExpertSourceStatus.PROCESSING.value
@@ -221,9 +204,6 @@ class ExpertConnectorSourceService:
             if source.status == ExpertSourceStatus.PENDING.value:
                 source.status = ExpertSourceStatus.PROCESSING.value
 
-        # Create initial sync run (coalesce if one already active).
-        # Always enqueue *after commit* — workers racing an open transaction
-        # leave runs stuck in pending (sync_run_not_found) and block future syncs.
         from app.connectors.enqueue import enqueue_connector_sync_after_commit
 
         if self.conn_repo.has_active_sync(row.id):
@@ -239,7 +219,6 @@ class ExpertConnectorSourceService:
                 .limit(1)
             ).scalar_one_or_none()
             sync_run_id = active.id if active else None
-            # Re-enqueue stuck/pending runs so a prior pre-commit race can recover.
             if (
                 enqueue
                 and active is not None
@@ -300,7 +279,6 @@ class ExpertConnectorSourceService:
         if source is None:
             raise AppError(ErrorCategory.NOT_FOUND, "Expert source not found.")
         if source.type != ExpertSourceType.CONNECTOR.value:
-            # Fall back to generic soft-delete.
             self.experts.soft_delete_source(
                 workspace=workspace,
                 membership=membership,
@@ -357,7 +335,6 @@ class ExpertConnectorSourceService:
             cfg = source.config if isinstance(source.config, dict) else {}
             if str(cfg.get("connection_id") or "") != conn_str:
                 continue
-            # Ensure source belongs to an expert in this workspace.
             expert = self.repo.get_by_id(source.expert_id)
             if expert is None or expert.workspace_id != workspace_id:
                 continue
@@ -372,8 +349,6 @@ class ExpertConnectorSourceService:
                 self.db.delete(link)
                 self.db.flush()
                 self.experts._sync_document_membership(doc_id)
-            # Clear shared item document pointer when no active Expert still links it
-            # via a connector source for this connection.
             item_id_raw = cfg.get("connector_item_id")
             if item_id_raw:
                 try:
@@ -394,7 +369,6 @@ class ExpertConnectorSourceService:
         return count
 
     def _item_has_active_expert_link(self, item_id: uuid.UUID) -> bool:
-        """True if any non-deleted, usable connector source still points at the item."""
         item_str = str(item_id)
         rows = list(
             self.db.scalars(

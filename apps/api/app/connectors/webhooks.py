@@ -170,6 +170,19 @@ class ConnectorWebhookDispatcher:
                 details={"error_code": result.error_code},
             )
 
+        # Microsoft Graph validationToken handshake — return plain text immediately.
+        content_type = (result.response_headers or {}).get("Content-Type", "")
+        if (
+            result.ignore
+            and result.response_body is not None
+            and content_type.startswith("text/plain")
+        ):
+            return (
+                result.http_status,
+                result.response_body,
+                dict(result.response_headers),
+            )
+
         payload_hash = hashlib.sha256(raw_body).hexdigest() if raw_body else None
 
         # Idempotency: provider event id or derived key

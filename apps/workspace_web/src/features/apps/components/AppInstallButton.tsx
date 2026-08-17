@@ -19,9 +19,13 @@ import { useState } from 'react';
 export function AppInstallButton({
   app,
   canManage,
+  size = 'default',
+  className,
 }: {
   app: CatalogApp;
   canManage: boolean;
+  size?: 'sm' | 'default';
+  className?: string;
 }) {
   const { t } = useTranslation();
   const install = useInstallApp();
@@ -32,7 +36,13 @@ export function AppInstallButton({
 
   if (app.status === 'coming_soon') {
     return (
-      <Button type="button" disabled data-testid="app-coming-soon">
+      <Button
+        type="button"
+        disabled
+        size={size}
+        className={className}
+        data-testid="app-coming-soon"
+      >
         {t('apps.comingSoon')}
       </Button>
     );
@@ -46,7 +56,14 @@ export function AppInstallButton({
     !access.can_uninstall
   ) {
     return (
-      <Button type="button" disabled variant="outline" data-testid="app-purchased">
+      <Button
+        type="button"
+        disabled
+        variant="outline"
+        size={size}
+        className={className}
+        data-testid="app-purchased"
+      >
         {t('apps.billing.purchased')}
       </Button>
     );
@@ -64,7 +81,14 @@ export function AppInstallButton({
   if (!canManage) {
     if (app.installation_status === 'active') {
       return (
-        <Button type="button" disabled variant="outline" data-testid="app-installed-readonly">
+        <Button
+          type="button"
+          disabled
+          variant="outline"
+          size={size}
+          className={className}
+          data-testid="app-installed-readonly"
+        >
           {t('apps.installed')}
         </Button>
       );
@@ -102,6 +126,8 @@ export function AppInstallButton({
         <Button
           type="button"
           variant="outline"
+          size={size}
+          className={className}
           disabled={pending}
           data-testid="app-uninstall"
           onClick={() => setConfirm('uninstall')}
@@ -115,6 +141,8 @@ export function AppInstallButton({
       {canInstall ? (
         <Button
           type="button"
+          size={size}
+          className={className}
           disabled={pending}
           data-testid="app-install"
           onClick={() => setConfirm('install')}
@@ -128,7 +156,7 @@ export function AppInstallButton({
         </Button>
       ) : null}
       {app.installation_status === 'active' && !canUninstall && !canInstall ? (
-        <Button type="button" disabled variant="outline">
+        <Button type="button" disabled variant="outline" size={size} className={className}>
           {t('apps.installed')}
         </Button>
       ) : null}

@@ -82,6 +82,46 @@ describe('api client refresh single-flight', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('does not logout on connector 401 codes', async () => {
+    const onSessionInvalid = vi.fn();
+    const refreshAccessToken = vi.fn(async () => 'fresh');
+    setAuthSession({ accessToken: 'tok', userId: 'u1' });
+
+    configureApiClient({
+      baseUrl: 'http://api.test',
+      getAccessToken: () => 'tok',
+      onSessionInvalid,
+      refreshAccessToken,
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            error: 'microsoft_onedrive_authorization_failed',
+            message: 'Microsoft authorization failed.',
+          }),
+          {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      ),
+    );
+
+    await expect(
+      apiRequest('/api/apps/microsoft-onedrive/connections/x/picker-session', {
+        method: 'POST',
+      }),
+    ).rejects.toMatchObject({
+      code: 'microsoft_onedrive_authorization_failed',
+      status: 401,
+    });
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(onSessionInvalid).not.toHaveBeenCalled();
+  });
+
   it('calls onSessionInvalid when refresh fails', async () => {
     const onSessionInvalid = vi.fn();
     setAuthSession({ accessToken: 'expired', userId: 'u1' });

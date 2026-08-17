@@ -311,6 +311,30 @@
       "sourceUnavailable": "المصدر غير متاح",
       "syncing": "جارٍ المزامنة"
     },
+    "oneDrive": {
+      "add": "إضافة من Microsoft OneDrive",
+      "addTitle": "إضافة من Microsoft OneDrive",
+      "addHint": "اختر ملفات من حساب Microsoft OneDrive متصل. المدعوم: PDF وTXT وMarkdown ومستندات Office (تُحوَّل إلى PDF).",
+      "added": "تمت إضافة ملفات OneDrive إلى قائمة المزامنة.",
+      "installFirst": "ثبّت تطبيق Microsoft OneDrive من المتجر أولاً.",
+      "connectFirst": "اربط حساب Microsoft قبل إضافة الملفات.",
+      "goToAppStore": "فتح تطبيق Microsoft OneDrive",
+      "connect": "ربط Microsoft OneDrive",
+      "chooseAccount": "حساب Microsoft OneDrive",
+      "connectedAs": "متصل بـ {{account}}",
+      "chooseFiles": "اختيار الملفات",
+      "openingPicker": "جارٍ فتح OneDrive…",
+      "popupBlocked": "اسمح بالنوافذ المنبثقة لفتح منتقي ملفات OneDrive.",
+      "sourceUpdated": "تم تحديث المصدر",
+      "sourceUnavailable": "المصدر غير متاح",
+      "syncing": "جارٍ المزامنة",
+      "lastSynced": "آخر مزامنة",
+      "reconnect": "إعادة ربط Microsoft OneDrive",
+      "authorizationExpired": "انتهت صلاحية تفويض Microsoft",
+      "reauthorizationRequired": "يلزم إعادة التفويض",
+      "syncNow": "مزامنة الآن",
+      "accountDisconnected": "تم فصل الحساب"
+    },
     "acceptedTypes": "المقبول: PDF و TXT و Markdown",
     "titleLabel": "عنوان المستند",
     "titleOptional": "اختياري — يُستمد من اسم الملف إن تُرك فارغاً.",
@@ -1012,7 +1036,7 @@
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
         "shortDescription": "اربط محتوى Microsoft OneDrive المحدد بخبراء Geem.",
-        "description": "ثبّت Microsoft OneDrive لتجهيز مساحة العمل لربط محتوى OneDrive بخبراء Geem. تفويض Microsoft Graph والمزامنة يأتيان في مرحلة لاحقة — التثبيت وحده لا يربط حساب Microsoft."
+        "description": "اربط ملفات OneDrive للعمل أو المدرسة بخبراء Geem. بعد التثبيت، صل حساب Microsoft ثم أضف الملفات من مصادر معرفة الخبير. Geem يقرأ الملفات المختارة فقط — دون تعديل OneDrive."
       },
       "whatsapp": {
         "name": "WhatsApp",
@@ -1121,6 +1145,19 @@
     "googleDriveDownloadFailed": "فشل التنزيل من Google Drive",
     "googleDriveRateLimited": "تم بلوغ حد معدل طلبات Google Drive — حاول لاحقاً",
     "googleDriveWatchFailed": "فشل إعداد إشعارات تغييرات Google Drive",
-    "googleDriveSyncFailed": "فشلت مزامنة Drive"
+    "googleDriveSyncFailed": "فشلت مزامنة Drive",
+    "microsoftOneDriveNotConfigured": "Microsoft OneDrive غير مضبوط على هذا الخادم",
+    "microsoftOneDriveAuthorizationFailed": "فشل تفويض Microsoft OneDrive",
+    "microsoftOneDriveReauthorizationRequired": "يلزم إعادة التفويض لـ Microsoft OneDrive",
+    "microsoftOneDriveDriveNotSupported": "حسابات Microsoft الشخصية غير مدعومة لاختيار الملفات. اربط حساب OneDrive للعمل أو المدرسة.",
+    "microsoftOneDriveItemNotFound": "ملف OneDrive غير موجود",
+    "microsoftOneDriveAccessDenied": "ملف OneDrive لم يعد متاحاً",
+    "microsoftOneDriveFileTypeUnsupported": "نوع ملف غير مدعوم من OneDrive",
+    "microsoftOneDriveConversionFailed": "فشل تحويل ملف OneDrive",
+    "microsoftOneDriveDownloadFailed": "فشل التنزيل من OneDrive",
+    "microsoftOneDriveRateLimited": "تم بلوغ حد معدل طلبات Microsoft Graph — حاول لاحقاً",
+    "microsoftOneDriveDeltaResyncRequired": "يجب إعادة ضبط مزامنة OneDrive",
+    "microsoftOneDriveSubscriptionFailed": "فشل إعداد إشعارات تغييرات OneDrive",
+    "microsoftOneDriveSyncFailed": "فشلت مزامنة OneDrive"
   }
 }

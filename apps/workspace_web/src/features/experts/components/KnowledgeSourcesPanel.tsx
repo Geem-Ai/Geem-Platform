@@ -13,6 +13,7 @@ import { ApiError, errorMessageKey, friendlyDisplayError } from '@/services/api/
 import { useUnlinkExpertDocument, useReprocessDocument } from '../hooks/useExpertMutations';
 import { docStatusBadgeVariant, docStatusLabelKey, isProcessingDocStatus } from '../lib/status';
 import { AddGoogleDriveKnowledgeDialog } from './AddGoogleDriveKnowledgeDialog';
+import { AddOneDriveKnowledgeDialog } from './AddOneDriveKnowledgeDialog';
 import { KnowledgeIngestionProgress } from './KnowledgeIngestionProgress';
 import { RemoveKnowledgeDialog } from './RemoveKnowledgeDialog';
 import { UploadKnowledgeDialog } from './UploadKnowledgeDialog';
@@ -35,6 +36,7 @@ export function KnowledgeSourcesPanel({
   const { t } = useTranslation();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [driveOpen, setDriveOpen] = useState(false);
+  const [oneDriveOpen, setOneDriveOpen] = useState(false);
   const [removeItem, setRemoveItem] = useState<ExpertKnowledgeItem | null>(null);
 
   const unlinkMutation = useUnlinkExpertDocument(expertId);
@@ -80,6 +82,14 @@ export function KnowledgeSourcesPanel({
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => setDriveOpen(true)}>
               {t('experts.googleDrive.add')}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setOneDriveOpen(true)}
+              data-testid="add-onedrive-knowledge"
+            >
+              {t('experts.oneDrive.add')}
             </Button>
             <Button size="sm" onClick={() => setUploadOpen(true)}>
               {t('experts.upload')}
@@ -199,6 +209,11 @@ export function KnowledgeSourcesPanel({
             expertId={expertId}
             open={driveOpen}
             onOpenChange={setDriveOpen}
+          />
+          <AddOneDriveKnowledgeDialog
+            expertId={expertId}
+            open={oneDriveOpen}
+            onOpenChange={setOneDriveOpen}
           />
           <RemoveKnowledgeDialog
             item={removeItem}

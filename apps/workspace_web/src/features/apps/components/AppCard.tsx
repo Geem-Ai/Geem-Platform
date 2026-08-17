@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { Check } from 'lucide-react';
+import { AlertCircle, Check, Link2Off, LoaderCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import type { CatalogApp } from '@/services/api/apps';
+import type { CatalogApp, ConnectionStatus } from '@/services/api/apps';
 import {
   formatAppBillingLabel,
   localizeCatalogApp,
@@ -26,6 +26,104 @@ export function AppBillingBadge({ app }: { app: CatalogApp }) {
   );
 }
 
+type FooterConnection = {
+  label: string;
+  icon: 'check' | 'error' | 'loading' | 'reconnect' | 'off' | 'warn';
+  tone: 'success' | 'destructive' | 'muted' | 'warning';
+};
+
+function footerConnection(app: CatalogApp, t: (key: string) => string): FooterConnection | null {
+  if (app.installation_status !== 'active' || !app.connector) {
+    return null;
+  }
+
+  const status = (app.connection_status || null) as ConnectionStatus | null;
+
+  if (!status) {
+    return {
+      label: t('apps.connections.notConnected'),
+      icon: 'off',
+      tone: 'muted',
+    };
+  }
+
+  switch (status) {
+    case 'active':
+      return {
+        label: t('apps.connections.status.active'),
+        icon: 'check',
+        tone: 'success',
+      };
+    case 'degraded':
+      return {
+        label: t('apps.connections.status.degraded'),
+        icon: 'warn',
+        tone: 'warning',
+      };
+    case 'error':
+      return {
+        label: t('apps.connections.status.error'),
+        icon: 'error',
+        tone: 'destructive',
+      };
+    case 'connecting':
+    case 'pending':
+      return {
+        label: t(`apps.connections.status.${status}`),
+        icon: 'loading',
+        tone: 'muted',
+      };
+    case 'disconnected':
+      return {
+        label: t('apps.connections.reconnect'),
+        icon: 'reconnect',
+        tone: 'muted',
+      };
+    case 'revoked':
+      return {
+        label: t('apps.connections.status.revoked'),
+        icon: 'reconnect',
+        tone: 'destructive',
+      };
+    default:
+      return {
+        label: t('apps.connections.notConnected'),
+        icon: 'off',
+        tone: 'muted',
+      };
+  }
+}
+
+function FooterIcon({
+  icon,
+  tone,
+}: {
+  icon: FooterConnection['icon'];
+  tone: FooterConnection['tone'];
+}) {
+  const className = cn(
+    'size-3.5 shrink-0',
+    tone === 'success' && 'text-green-600',
+    tone === 'destructive' && 'text-destructive',
+    tone === 'warning' && 'text-amber-600',
+    tone === 'muted' && 'text-muted-foreground',
+  );
+  switch (icon) {
+    case 'check':
+      return <Check className={className} aria-hidden />;
+    case 'error':
+      return <AlertCircle className={className} aria-hidden />;
+    case 'loading':
+      return <LoaderCircle className={cn(className, 'animate-spin')} aria-hidden />;
+    case 'reconnect':
+      return <RefreshCw className={className} aria-hidden />;
+    case 'warn':
+      return <AlertCircle className={className} aria-hidden />;
+    case 'off':
+      return <Link2Off className={className} aria-hidden />;
+  }
+}
+
 export function AppCard({
   app,
   onOpen,
@@ -38,6 +136,7 @@ export function AppCard({
   const categoryLabel = t(app.category.name_key, {
     defaultValue: app.category.slug,
   });
+  const connection = footerConnection(app, t);
 
   return (
     <Card
@@ -84,10 +183,19 @@ export function AppCard({
             <span className="text-xs font-medium text-primary">
               {t('apps.viewDetails')}
             </span>
-            {app.installation_status === 'active' ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Check className="size-3.5 text-green-600" aria-hidden />
-                {t('apps.installed')}
+            {connection ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 text-xs',
+                  connection.tone === 'success' && 'text-green-700 dark:text-green-500',
+                  connection.tone === 'destructive' && 'text-destructive',
+                  connection.tone === 'warning' && 'text-amber-700 dark:text-amber-500',
+                  connection.tone === 'muted' && 'text-muted-foreground',
+                )}
+                data-testid={`app-card-connection-${app.slug}`}
+              >
+                <FooterIcon icon={connection.icon} tone={connection.tone} />
+                {connection.label}
               </span>
             ) : null}
           </div>

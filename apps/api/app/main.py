@@ -36,12 +36,16 @@ from app.connectors.router import (
     connectors_router,
 )
 from app.connectors.providers.google_drive import register_google_drive_connector
+from app.connectors.providers.microsoft_onedrive import (
+    register_microsoft_onedrive_connector,
+)
 
 setup_logging()
 settings = get_settings()
 
-# Phase 9D — always register; available=False until OAuth env is configured.
+# Phase 9D/9E — always register; available=False until OAuth env is configured.
 register_google_drive_connector()
+register_microsoft_onedrive_connector()
 
 app = FastAPI(
     title=settings.app_name,

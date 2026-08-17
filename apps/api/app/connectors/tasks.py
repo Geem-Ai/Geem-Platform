@@ -177,7 +177,7 @@ def run_connector_sync(
 
 @celery_app.task(name="process_connector_webhook_event", bind=True, max_retries=3)
 def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
-    """Heavy webhook follow-up — enqueue coalesced sync for Google Drive."""
+    """Heavy webhook follow-up — enqueue coalesced sync for knowledge connectors."""
     ws_id = _parse_uuid(payload.get("workspace_id"))
     conn_id = _parse_uuid(payload.get("connection_id"))
     if ws_id is None or conn_id is None:
@@ -190,12 +190,14 @@ def process_connector_webhook_event(self, payload: dict[str, Any]) -> dict:
             request_id=getattr(self.request, "id", None),
         ):
             from app.connectors.models import ConnectorWebhookEvent
+            from app.connectors.registry import connector_registry
             from app.connectors.sync import ConnectorSyncService
             from app.connectors.types import WebhookEventStatus
 
             connector_key = str(payload.get("connector_key") or "")
             sync_run_id = None
-            if connector_key == "google_drive":
+            caps = connector_registry.capabilities(connector_key)
+            if caps is not None and caps.supports_sync and caps.supports_webhooks:
                 out = ConnectorSyncService(db).request_webhook_sync(
                     workspace_id=ws_id,
                     connection_id=conn_id,
@@ -306,6 +308,100 @@ def renew_google_drive_watches(self) -> dict:
                     failed += 1
                     logger.exception(
                         "google_drive_watch_renew_failed",
+                        extra={"connection_id": str(row.id)},
+                    )
+        db.commit()
+        return {
+            "status": "ok",
+            "renewed": renewed,
+            "skipped": skipped,
+            "failed": failed,
+        }
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="renew_microsoft_onedrive_subscriptions", bind=True)
+def renew_microsoft_onedrive_subscriptions(self) -> dict:
+    """Renew Microsoft Graph OneDrive subscriptions nearing expiry (~every 6h)."""
+    from app.common.crypto import decrypt_secret
+    from app.connectors.credentials import ConnectorCredentialService
+    from app.connectors.models import AppConnection
+    from app.connectors.providers.microsoft_onedrive.client import MicrosoftOneDriveClient
+    from app.connectors.providers.microsoft_onedrive.subscription import (
+        ensure_subscription,
+        subscription_needs_renewal,
+    )
+    from app.connectors.providers.microsoft_onedrive.token import ensure_fresh_access
+    from app.connectors.types import CONNECTION_USABLE_STATUSES
+    from app.core.config import get_settings
+    from sqlalchemy import select
+
+    settings = get_settings()
+    if not settings.microsoft_onedrive_configured:
+        return {"status": "skipped", "reason": "not_configured"}
+
+    db = SessionLocal()
+    renewed = 0
+    skipped = 0
+    failed = 0
+    try:
+        rows = list(
+            db.scalars(
+                select(AppConnection).where(
+                    AppConnection.connector_key == "microsoft_onedrive",
+                    AppConnection.status.in_(list(CONNECTION_USABLE_STATUSES)),
+                )
+            ).all()
+        )
+        cred_svc = ConnectorCredentialService(db, settings=settings)
+        for row in rows:
+            with tenant_context(workspace_id=row.workspace_id):
+                state = cred_svc.get_sync_state(row) or {}
+                if not subscription_needs_renewal(state):
+                    skipped += 1
+                    continue
+                drive_id = state.get("drive_id")
+                if not drive_id or not row.webhook_routing_token_encrypted:
+                    skipped += 1
+                    continue
+                credentials = cred_svc.get_credentials(row)
+                if not credentials:
+                    skipped += 1
+                    continue
+                try:
+                    fresh = ensure_fresh_access(db, row, credentials, settings)
+                    routing = decrypt_secret(
+                        row.webhook_routing_token_encrypted, settings=settings
+                    )
+                    client = MicrosoftOneDriveClient(
+                        settings=settings,
+                        access_token=str(fresh["access_token"]),
+                        tenant=str(
+                            fresh.get("tenant_id")
+                            or settings.microsoft_onedrive_tenant
+                        ),
+                    )
+                    try:
+                        new_state = ensure_subscription(
+                            client,
+                            sync_state=state,
+                            drive_id=str(drive_id),
+                            routing_token=routing,
+                            settings=settings,
+                            force=False,
+                        )
+                        cred_svc.set_sync_state(row, new_state)
+                        renewed += 1
+                    finally:
+                        client.close()
+                except Exception:  # noqa: BLE001
+                    failed += 1
+                    logger.exception(
+                        "microsoft_onedrive_subscription_renew_failed",
                         extra={"connection_id": str(row.id)},
                     )
         db.commit()

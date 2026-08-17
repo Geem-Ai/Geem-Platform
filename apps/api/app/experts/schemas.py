@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ExpertCreateRequest(BaseModel):
@@ -112,8 +112,21 @@ class ExpertSourceOut(BaseModel):
 
 
 class ConnectorSourceItemIn(BaseModel):
-    external_id: str = Field(min_length=1, max_length=512)
+    external_id: str | None = Field(default=None, max_length=1024)
     resource_key: str | None = Field(default=None, max_length=512)
+    provider_locator: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def require_identity(self) -> ConnectorSourceItemIn:
+        has_external = bool((self.external_id or "").strip())
+        locator = self.provider_locator or {}
+        has_locator = bool(
+            isinstance(locator, dict)
+            and (locator.get("drive_id") or locator.get("item_id"))
+        )
+        if not has_external and not has_locator:
+            raise ValueError("external_id or provider_locator is required")
+        return self
 
 
 class AddConnectorSourcesRequest(BaseModel):

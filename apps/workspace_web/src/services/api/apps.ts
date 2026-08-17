@@ -73,6 +73,8 @@ export type CatalogApp = {
   access: AppAccess | null;
   connector: ConnectorCapability | null;
   has_active_connection: boolean;
+  /** Summary status of the workspace's primary connection for this app, if any. */
+  connection_status?: ConnectionStatus | string | null;
 };
 
 export type ConnectorCapability = {
@@ -339,6 +341,45 @@ export async function createGoogleDrivePickerSession(
   return apiRequest<GoogleDrivePickerSession>(
     `/api/apps/google-drive/connections/${encodeURIComponent(connectionId)}/picker-session`,
     { method: 'POST' },
+  );
+}
+
+export type MicrosoftOneDrivePickerSession = {
+  access_token: string;
+  expires_at: string | null;
+  base_url: string;
+  client_id: string | null;
+  tenant: string | null;
+  drive_id: string | null;
+};
+
+export type MicrosoftOneDrivePickerToken = {
+  access_token: string;
+  expires_at: string | null;
+  resource: string;
+};
+
+/** File Picker v8 bootstrap — tokens are memory-only. */
+export async function createMicrosoftOneDrivePickerSession(
+  connectionId: string,
+): Promise<MicrosoftOneDrivePickerSession> {
+  return apiRequest<MicrosoftOneDrivePickerSession>(
+    `/api/apps/microsoft-onedrive/connections/${encodeURIComponent(connectionId)}/picker-session`,
+    { method: 'POST' },
+  );
+}
+
+/** Short-lived SharePoint-resource token for Picker authenticate commands. */
+export async function createMicrosoftOneDrivePickerToken(
+  connectionId: string,
+  body: { resource: string },
+): Promise<MicrosoftOneDrivePickerToken> {
+  return apiRequest<MicrosoftOneDrivePickerToken>(
+    `/api/apps/microsoft-onedrive/connections/${encodeURIComponent(connectionId)}/picker-token`,
+    {
+      method: 'POST',
+      json: { resource: body.resource },
+    },
   );
 }
 

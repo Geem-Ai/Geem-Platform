@@ -339,12 +339,11 @@ class ConnectorConnectionService:
                 ).digest()
                 challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
                 method = "S256"
-            redirect_uri = self.settings.effective_google_drive_redirect_uri
-            if row.connector_key != "google_drive":
-                redirect_uri = (
-                    f"{self.settings.app_url.rstrip('/')}"
-                    f"/api/connectors/oauth/{row.connector_key}/callback"
-                )
+            from app.connectors.oauth_redirect import effective_oauth_redirect_uri
+
+            redirect_uri = effective_oauth_redirect_uri(
+                self.settings, row.connector_key
+            )
             try:
                 auth_req = adapter.build_authorization_request(  # type: ignore[attr-defined]
                     state=state_payload.state,
@@ -402,6 +401,17 @@ class ConnectorConnectionService:
         self.credentials.set_credentials(
             row, credentials, expires_at=credentials_expires_at, merge_refresh=True
         )
+        # Seed provider-neutral sync_state with drive identity when present.
+        drive_id = credentials.get("drive_id")
+        if drive_id:
+            existing_state = self.credentials.get_sync_state(row) or {}
+            seeded = {
+                **existing_state,
+                "drive_id": drive_id,
+                "drive_type": credentials.get("drive_type"),
+                "drive_web_url": credentials.get("drive_web_url"),
+            }
+            self.credentials.set_sync_state(row, seeded)
         if external_account_id is not None:
             row.external_account_id = external_account_id
         if external_account_name is not None:
@@ -568,6 +578,33 @@ class ConnectorConnectionService:
             )
         return row, app, installation
 
+    def mark_authorization_failed(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        connection_id: uuid.UUID,
+        error_code: str,
+        error_message: str | None = None,
+    ) -> AppConnection | None:
+        """Persist OAuth failure so the connection leaves ``connecting``."""
+        row = self.repo.get_connection(workspace_id, connection_id, for_update=True)
+        if row is None:
+            return None
+        self.record_error(
+            row,
+            error_code=error_code,
+            error_message=error_message or "Authorization failed.",
+        )
+        logger.info(
+            "connector_authorization_failed",
+            extra={
+                "workspace_id": str(workspace_id),
+                "connection_id": str(connection_id),
+                "error_code": error_code,
+            },
+        )
+        return row
+
     def record_error(
         self,
         connection: AppConnection,
@@ -593,6 +630,7 @@ class ConnectorConnectionService:
                 ConnectionStatus.ACTIVE.value,
                 ConnectionStatus.DEGRADED.value,
                 ConnectionStatus.CONNECTING.value,
+                ConnectionStatus.PENDING.value,
             }:
                 _transition(connection, ConnectionStatus.ERROR.value)
             connection.health = ConnectionHealth.FAILED.value

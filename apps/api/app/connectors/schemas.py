@@ -94,6 +94,25 @@ class GoogleDrivePickerSessionOut(BaseModel):
     developer_key: str | None = None
 
 
+class MicrosoftOneDrivePickerSessionOut(BaseModel):
+    access_token: str
+    expires_at: datetime | None = None
+    base_url: str
+    client_id: str | None = None
+    tenant: str | None = None
+    drive_id: str | None = None
+
+
+class MicrosoftOneDrivePickerTokenRequest(BaseModel):
+    resource: str = Field(min_length=8, max_length=512)
+
+
+class MicrosoftOneDrivePickerTokenOut(BaseModel):
+    access_token: str
+    expires_at: datetime | None = None
+    resource: str
+
+
 class ConnectorSyncRunOut(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
@@ -139,11 +158,12 @@ def to_connection_out(
         ConnectionStatus.DISCONNECTED.value,
         ConnectionStatus.REVOKED.value,
     }
+    reconnectable = disconnected or row.status == ConnectionStatus.ERROR.value
     caps = ConnectionCapabilitiesOut(
         can_disconnect=bool(can_manage and not disconnected),
         can_health_check=bool(can_manage and usable and adapter_available),
         can_sync=bool(can_manage and usable and adapter_available and supports_sync),
-        can_reconnect=bool(can_manage and disconnected and adapter_available),
+        can_reconnect=bool(can_manage and reconnectable and adapter_available),
     )
     return AppConnectionOut(
         id=row.id,

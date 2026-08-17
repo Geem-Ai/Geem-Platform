@@ -6,10 +6,14 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# Phase 9D — register Google Drive in worker processes (same as API).
+# Phase 9D/9E — register knowledge connectors in worker processes (same as API).
 from app.connectors.providers.google_drive import register_google_drive_connector
+from app.connectors.providers.microsoft_onedrive import (
+    register_microsoft_onedrive_connector,
+)
 
 register_google_drive_connector()
+register_microsoft_onedrive_connector()
 
 celery_app = Celery(
     "arabic_rag",
@@ -37,6 +41,11 @@ celery_app.conf.update(
         # Google Drive changes.watch channels expire ~daily; renew when within 24h.
         "renew-google-drive-watches": {
             "task": "renew_google_drive_watches",
+            "schedule": 21600.0,  # every 6 hours
+        },
+        # Microsoft Graph OneDrive subscriptions expire; renew when within 24h.
+        "renew-microsoft-onedrive-subscriptions": {
+            "task": "renew_microsoft_onedrive_subscriptions",
             "schedule": 21600.0,  # every 6 hours
         },
     },

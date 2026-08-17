@@ -1,4 +1,4 @@
-import { ApiError, mapStatusToCode } from './errors';
+import { ApiError, isKnownApiErrorCode, mapStatusToCode } from './errors';
 
 export type ApiClientConfig = {
   baseUrl?: string;
@@ -11,6 +11,37 @@ export type ApiClientConfig = {
   /** Single-flight refresh using HttpOnly cookie. Returns new access token. */
   refreshAccessToken?: () => Promise<string>;
 };
+
+/** Geem session 401s — everything else (connector OAuth, etc.) must not force logout. */
+const SESSION_AUTH_CODES = new Set([
+  'unauthorized',
+  'invalid_credentials',
+  'session_expired',
+  'session_revoked',
+]);
+
+function peekErrorCode(body: Record<string, unknown> | undefined): string | undefined {
+  const explicit =
+    (typeof body?.code === 'string' && body.code) ||
+    (typeof body?.error === 'string' && body.error) ||
+    undefined;
+  return explicit || undefined;
+}
+
+function isSessionAuthFailure(
+  status: number,
+  body?: Record<string, unknown>,
+): boolean {
+  if (status !== 401) return false;
+  const code = peekErrorCode(body);
+  if (!code) return true;
+  if (SESSION_AUTH_CODES.has(code)) return true;
+  // Known non-session codes (connectors, apps, …) keep the Geem session.
+  if (isKnownApiErrorCode(code) && !SESSION_AUTH_CODES.has(code)) {
+    return false;
+  }
+  return true;
+}
 
 export type RequestOptions = {
   method?: string;
@@ -148,6 +179,16 @@ async function rawFetch(
   }
 }
 
+async function readErrorBody(
+  res: Response,
+): Promise<Record<string, unknown> | undefined> {
+  try {
+    return (await res.clone().json()) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
 async function authorizedFetch(
   path: string,
   options: RequestOptions = {},
@@ -155,19 +196,34 @@ async function authorizedFetch(
   const res = await rawFetch(path, options);
 
   if (res.status === 401 && !options.skipAuth) {
+    const firstBody = await readErrorBody(res);
+    // Connector/app 401s share the HTTP status with session auth — do not
+    // refresh or clear the Geem session for those explicit codes.
+    if (!isSessionAuthFailure(401, firstBody)) {
+      throw await parseError(res);
+    }
     try {
       await refreshAccessTokenSingleFlight();
       const retry = await rawFetch(path, options);
       if (!retry.ok) {
         const err = await parseError(retry);
-        if (retry.status === 401) {
+        const retryBody =
+          err.details && typeof err.details === 'object'
+            ? (err.details as Record<string, unknown>)
+            : undefined;
+        if (isSessionAuthFailure(retry.status, retryBody)) {
           clientConfig.onSessionInvalid?.();
         }
         throw err;
       }
       return retry;
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 401 || err.code === 'session_expired' || err.code === 'session_revoked')) {
+      if (
+        err instanceof ApiError &&
+        (err.code === 'session_expired' ||
+          err.code === 'session_revoked' ||
+          (err.status === 401 && SESSION_AUTH_CODES.has(err.code)))
+      ) {
         clientConfig.onSessionInvalid?.();
       }
       throw err;
