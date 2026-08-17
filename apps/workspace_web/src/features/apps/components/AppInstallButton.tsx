@@ -19,12 +19,12 @@ import { useState } from 'react';
 export function AppInstallButton({
   app,
   canManage,
-  size = 'default',
+  size = 'md',
   className,
 }: {
   app: CatalogApp;
   canManage: boolean;
-  size?: 'sm' | 'default';
+  size?: 'sm' | 'md' | 'default';
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -33,13 +33,14 @@ export function AppInstallButton({
   const [confirm, setConfirm] = useState<'install' | 'uninstall' | null>(null);
   const localized = localizeCatalogApp(app, t);
   const access = app.access;
+  const buttonSize = size === 'sm' ? 'sm' : 'md';
 
   if (app.status === 'coming_soon') {
     return (
       <Button
         type="button"
         disabled
-        size={size}
+        size={buttonSize}
         className={className}
         data-testid="app-coming-soon"
       >
@@ -60,7 +61,7 @@ export function AppInstallButton({
         type="button"
         disabled
         variant="outline"
-        size={size}
+        size={buttonSize}
         className={className}
         data-testid="app-purchased"
       >
@@ -85,7 +86,7 @@ export function AppInstallButton({
           type="button"
           disabled
           variant="outline"
-          size={size}
+          size={buttonSize}
           className={className}
           data-testid="app-installed-readonly"
         >
@@ -125,8 +126,8 @@ export function AppInstallButton({
       {canUninstall ? (
         <Button
           type="button"
-          variant="outline"
-          size={size}
+          variant="destructive"
+          size={buttonSize}
           className={className}
           disabled={pending}
           data-testid="app-uninstall"
@@ -141,7 +142,8 @@ export function AppInstallButton({
       {canInstall ? (
         <Button
           type="button"
-          size={size}
+          variant="primary"
+          size={buttonSize}
           className={className}
           disabled={pending}
           data-testid="app-install"
@@ -150,13 +152,17 @@ export function AppInstallButton({
           {pending && install.isPending ? (
             <Loader2 className="size-4 animate-spin" aria-hidden />
           ) : null}
-          {access?.commercially_entitled && app.billing_type !== 'free'
-            ? t('apps.install')
-            : t('apps.install')}
+          {t('apps.install')}
         </Button>
       ) : null}
       {app.installation_status === 'active' && !canUninstall && !canInstall ? (
-        <Button type="button" disabled variant="outline" size={size} className={className}>
+        <Button
+          type="button"
+          disabled
+          variant="outline"
+          size={buttonSize}
+          className={className}
+        >
           {t('apps.installed')}
         </Button>
       ) : null}
@@ -184,6 +190,7 @@ export function AppInstallButton({
             <Button
               type="button"
               variant="outline"
+              size="md"
               disabled={pending}
               onClick={() => setConfirm(null)}
             >
@@ -192,6 +199,7 @@ export function AppInstallButton({
             <Button
               type="button"
               variant={confirm === 'uninstall' ? 'destructive' : 'primary'}
+              size="md"
               disabled={pending}
               data-testid="app-confirm-action"
               onClick={() => void onConfirm()}

@@ -44,6 +44,7 @@ export function WhatsAppConnectDialog({
   const workspaceId = currentWorkspace?.id ?? '';
   const openRef = useRef(open);
   openRef.current = open;
+  const wasOpenRef = useRef(false);
 
   const [step, setStep] = useState<Step>('choose');
   const [connection, setConnection] = useState<WhatsAppConnection | null>(null);
@@ -54,10 +55,10 @@ export function WhatsAppConnectDialog({
         connect_mode: mode,
         connection_id: resumeConnection?.id,
       }),
-    onSuccess: async (result, mode) => {
+    onSuccess: (result, mode) => {
       if (!openRef.current) {
-        // Dialog closed while request was in flight — do not restore mid-flow UI.
-        await Promise.all([
+        // Dialog closed while request was in flight — refresh lists only.
+        void Promise.all([
           invalidateAppsCache(queryClient, workspaceId, appSlug),
           queryClient.invalidateQueries({
             queryKey: queryKeys.appConnections(workspaceId, appSlug),
@@ -65,14 +66,10 @@ export function WhatsAppConnectDialog({
         ]);
         return;
       }
+      // Enter QR/pairing immediately. Defer list invalidation until the dialog
+      // closes so parent remounts cannot wipe the in-progress connect UI.
       setConnection(result);
       setStep(mode);
-      await Promise.all([
-        invalidateAppsCache(queryClient, workspaceId, appSlug),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.appConnections(workspaceId, appSlug),
-        }),
-      ]);
     },
   });
 
@@ -81,8 +78,18 @@ export function WhatsAppConnectDialog({
       setStep('choose');
       setConnection(null);
       startMutation.reset();
+      if (wasOpenRef.current) {
+        void Promise.all([
+          invalidateAppsCache(queryClient, workspaceId, appSlug),
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.appConnections(workspaceId, appSlug),
+          }),
+        ]);
+      }
+      wasOpenRef.current = false;
       return;
     }
+    wasOpenRef.current = true;
     if (resumeConnection && isConnectingStatus(resumeConnection)) {
       setConnection(resumeConnection);
       const mode =
@@ -99,9 +106,6 @@ export function WhatsAppConnectDialog({
 
   function handleReady(next: WhatsAppConnection) {
     setConnection(next);
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.appConnections(workspaceId, appSlug),
-    });
     onOpenChange(false);
   }
 

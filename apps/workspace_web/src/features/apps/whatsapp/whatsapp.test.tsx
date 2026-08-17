@@ -279,18 +279,42 @@ describe('WhatsApp Phase 9F UI', () => {
     expect(screen.getByTestId('whatsapp-option-pairing')).toBeInTheDocument();
   });
 
-  it('QR step renders returned data URL', async () => {
-    getWhatsAppStatus.mockResolvedValue(
-      connection({ provider_status: 'qr_ready', status: 'connecting' }),
-    );
+  it('keeps showing the QR after a later status poll leaves qr_ready briefly', async () => {
+    vi.useRealTimers();
+    getWhatsAppStatus
+      .mockResolvedValueOnce(
+        connection({ provider_status: 'qr_ready', status: 'connecting' }),
+      )
+      .mockResolvedValue(
+        connection({ provider_status: 'authenticating', status: 'connecting' }),
+      );
+    getWhatsAppQr.mockResolvedValue({
+      status: 'qr_ready',
+      qr_code: 'data:image/png;base64,abc',
+    });
 
     renderWithProviders(
-      <WhatsAppQrStep appSlug="whatsapp" initialConnection={connection()} />,
+      <WhatsAppQrStep
+        appSlug="whatsapp"
+        initialConnection={connection({
+          provider_status: 'qr_ready',
+          status: 'connecting',
+        })}
+      />,
     );
 
     const image = await screen.findByTestId('whatsapp-qr-image');
     expect(image).toHaveAttribute('src', 'data:image/png;base64,abc');
-  });
+
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId('whatsapp-status-authenticating'),
+        ).toBeInTheDocument(),
+      { timeout: 5000 },
+    );
+    expect(screen.getByTestId('whatsapp-qr-image')).toBeInTheDocument();
+  }, 10000);
 
   it('pairing code renders and copies', async () => {
     getWhatsAppStatus.mockResolvedValue(
