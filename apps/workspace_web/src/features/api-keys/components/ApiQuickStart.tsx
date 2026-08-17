@@ -10,14 +10,16 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  floatingSheetPanel,
 } from '@/components/ui/sheet';
 import { getApiBaseUrl } from '@/services/api/client';
 import { publicChatCurlExample, publicChatStreamBodyExample } from '../lib/quick-start';
 import { CopyableCodeBlock } from './CopyableCodeBlock';
 
-/** Metronic-style floating inset panel — same as Expert sheets. */
-const SHEET_PANEL =
-  'gap-0 w-full min-w-0 overflow-hidden sm:max-w-none sm:w-[min(100%-2.5rem,42rem)] lg:w-[42rem] inset-5 border start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5';
+const SHEET_PANEL = floatingSheetPanel(
+  'sm:w-[min(100%-2.5rem,42rem)]',
+  'lg:w-[42rem]',
+);
 
 type ApiQuickStartProps = {
   open: boolean;

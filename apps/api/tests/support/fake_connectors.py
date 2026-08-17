@@ -67,16 +67,6 @@ class FakeKnowledgeConnector:
             )
         return HealthCheckResult(health=self.health_result)
 
-    def disconnect(
-        self,
-        *,
-        credentials: dict[str, Any] | None,
-        connection_id: uuid.UUID,
-        workspace_id: uuid.UUID,
-    ) -> None:
-        _ = credentials, connection_id, workspace_id
-        self.disconnect_calls += 1
-
     def build_authorization_request(
         self,
         *,
@@ -133,8 +123,9 @@ class FakeKnowledgeConnector:
         connection_id: uuid.UUID,
         workspace_id: uuid.UUID,
         sync_run_id: uuid.UUID,
+        db: Any | None = None,
     ) -> SyncResult:
-        _ = credentials, connection_id, workspace_id, sync_run_id
+        _ = credentials, connection_id, workspace_id, sync_run_id, db
         if self.fail_sync:
             raise RuntimeError("sync failed with access_token=SECRET_TOKEN")
         cursor = (sync_state or {}).get("cursor", 0)
@@ -149,6 +140,17 @@ class FakeKnowledgeConnector:
             items_failed=0,
             sync_state=new_state,
         )
+
+    def disconnect(
+        self,
+        *,
+        credentials: dict[str, Any] | None,
+        connection_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        sync_state: dict[str, Any] | None = None,
+    ) -> None:
+        _ = credentials, connection_id, workspace_id, sync_state
+        self.disconnect_calls += 1
 
     def verify_and_handle_webhook(
         self,
@@ -214,8 +216,9 @@ class FakeChannelConnector:
         credentials: dict[str, Any] | None,
         connection_id: uuid.UUID,
         workspace_id: uuid.UUID,
+        sync_state: dict[str, Any] | None = None,
     ) -> None:
-        _ = credentials, connection_id, workspace_id
+        _ = credentials, connection_id, workspace_id, sync_state
 
     def validate_credentials(
         self, *, credentials: dict[str, Any]

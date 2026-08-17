@@ -72,6 +72,13 @@ export function unlinkExpertDocument(expertId: string, documentId: string) {
   });
 }
 
+/** Soft-delete a connector-backed ExpertSource (Google Drive / future OneDrive). */
+export function deleteExpertConnectorSource(expertId: string, sourceId: string) {
+  return apiRequest<void>(`/api/experts/${expertId}/sources/${sourceId}`, {
+    method: 'DELETE',
+  });
+}
+
 /** Alias for unlinkExpertDocument matching Phase 3C naming convention. */
 export const deleteExpertSource = unlinkExpertDocument;
 
@@ -135,4 +142,38 @@ export function createExpertSource(expertId: string, name?: string | null) {
     method: 'POST',
     json: { name: name ?? null, type: 'upload' },
   });
+}
+
+export type ConnectorSourceItemInput = {
+  external_id: string;
+  resource_key?: string | null;
+};
+
+export type ConnectorSourcesCreateResponse = {
+  sources: ExpertSource[];
+  sync_run_id: string | null;
+  status: string;
+};
+
+/** Attach provider files (Google Drive / future OneDrive) as Expert knowledge sources. */
+export function createExpertConnectorSources(
+  expertId: string,
+  body: {
+    connection_id: string;
+    items: ConnectorSourceItemInput[];
+  },
+) {
+  return apiRequest<ConnectorSourcesCreateResponse>(
+    `/api/experts/${expertId}/connector-sources`,
+    {
+      method: 'POST',
+      json: {
+        connection_id: body.connection_id,
+        items: body.items.map((item) => ({
+          external_id: item.external_id,
+          resource_key: item.resource_key ?? null,
+        })),
+      },
+    },
+  );
 }

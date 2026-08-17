@@ -3,10 +3,16 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
-import { ApiError, errorMessageKey } from '@/services/api/errors';
+import { ApiError, errorMessageKey, friendlyDisplayError } from '@/services/api/errors';
 import { useUnlinkExpertDocument, useReprocessDocument } from '../hooks/useExpertMutations';
 import { docStatusBadgeVariant, docStatusLabelKey, isProcessingDocStatus } from '../lib/status';
+import { AddGoogleDriveKnowledgeDialog } from './AddGoogleDriveKnowledgeDialog';
 import { KnowledgeIngestionProgress } from './KnowledgeIngestionProgress';
 import { RemoveKnowledgeDialog } from './RemoveKnowledgeDialog';
 import { UploadKnowledgeDialog } from './UploadKnowledgeDialog';
@@ -28,13 +34,14 @@ export function KnowledgeSourcesPanel({
 }: KnowledgeSourcesPanelProps) {
   const { t } = useTranslation();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [driveOpen, setDriveOpen] = useState(false);
   const [removeItem, setRemoveItem] = useState<ExpertKnowledgeItem | null>(null);
 
   const unlinkMutation = useUnlinkExpertDocument(expertId);
   const reprocessMutation = useReprocessDocument(expertId);
 
   function handleRemove(item: ExpertKnowledgeItem) {
-    unlinkMutation.mutate(item.document_id, {
+    unlinkMutation.mutate(item, {
       onSuccess: () => {
         toast.success(t('experts.remove'));
         setRemoveItem(null);
@@ -67,12 +74,17 @@ export function KnowledgeSourcesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">{t('experts.knowledge')}</h3>
         {canManage && (
-          <Button size="sm" onClick={() => setUploadOpen(true)}>
-            {t('experts.upload')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setDriveOpen(true)}>
+              {t('experts.googleDrive.add')}
+            </Button>
+            <Button size="sm" onClick={() => setUploadOpen(true)}>
+              {t('experts.upload')}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -122,9 +134,23 @@ export function KnowledgeSourcesPanel({
                         </span>
                       )}
                       {item.failure_reason && (
-                        <span className="text-xs text-destructive truncate max-w-[240px]">
-                          {item.failure_reason}
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs text-destructive truncate max-w-[240px] cursor-help">
+                              {friendlyDisplayError(t, {
+                                message: item.failure_reason,
+                              })}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-sm whitespace-pre-wrap break-words"
+                          >
+                            {friendlyDisplayError(t, {
+                              message: item.failure_reason,
+                            })}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -132,11 +158,11 @@ export function KnowledgeSourcesPanel({
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-2 shrink-0">
-                    {item.status === 'failed' && (
+                    {item.status === 'failed' && item.document_id && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleReprocess(item.document_id)}
+                        onClick={() => handleReprocess(item.document_id!)}
                         disabled={reprocessMutation.isPending}
                       >
                         {t('experts.reprocess')}
@@ -146,7 +172,10 @@ export function KnowledgeSourcesPanel({
                       variant="outline"
                       size="sm"
                       onClick={() => setRemoveItem(item)}
-                      disabled={unlinkMutation.isPending || processing}
+                      disabled={
+                        unlinkMutation.isPending ||
+                        (processing && Boolean(item.document_id))
+                      }
                     >
                       {t('experts.remove')}
                     </Button>
@@ -165,6 +194,11 @@ export function KnowledgeSourcesPanel({
             open={uploadOpen}
             onOpenChange={setUploadOpen}
             knowledgeItems={items}
+          />
+          <AddGoogleDriveKnowledgeDialog
+            expertId={expertId}
+            open={driveOpen}
+            onOpenChange={setDriveOpen}
           />
           <RemoveKnowledgeDialog
             item={removeItem}

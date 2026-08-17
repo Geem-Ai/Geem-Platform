@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.connectors.models import AppConnection, ConnectorSyncRun
+from app.connectors.sanitize import sanitize_error_message
 from app.connectors.types import (
     CONNECTION_USABLE_STATUSES,
     ConnectionHealth,
@@ -33,6 +34,7 @@ class ConnectorCapabilityOut(BaseModel):
     supports_sync: bool = False
     supports_webhooks: bool = False
     supports_health_check: bool = False
+    unavailable_reason: str | None = None
 
 
 class ConnectionCapabilitiesOut(BaseModel):
@@ -66,6 +68,7 @@ class AppConnectionOut(BaseModel):
     last_error_at: datetime | None = None
     credentials_expires_at: datetime | None = None
     created_at: datetime | None = None
+    authorization_url: str | None = None
     capabilities: ConnectionCapabilitiesOut = Field(
         default_factory=ConnectionCapabilitiesOut
     )
@@ -81,6 +84,14 @@ class AppConnectionListOut(BaseModel):
 class StartConnectionRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     connection_id: uuid.UUID | None = None  # reconnect existing
+    return_path: str | None = Field(default=None, max_length=512)
+
+
+class GoogleDrivePickerSessionOut(BaseModel):
+    access_token: str
+    expires_at: datetime | None = None
+    app_id: str | None = None
+    developer_key: str | None = None
 
 
 class ConnectorSyncRunOut(BaseModel):
@@ -121,6 +132,7 @@ def to_connection_out(
     can_manage: bool,
     adapter_available: bool,
     supports_sync: bool,
+    authorization_url: str | None = None,
 ) -> AppConnectionOut:
     usable = row.status in CONNECTION_USABLE_STATUSES
     disconnected = row.status in {
@@ -151,10 +163,11 @@ def to_connection_out(
         last_health_check_at=_utc(row.last_health_check_at),
         last_success_at=_utc(row.last_success_at),
         last_error_code=row.last_error_code,
-        last_error_message=row.last_error_message,
+        last_error_message=sanitize_error_message(row.last_error_message),
         last_error_at=_utc(row.last_error_at),
         credentials_expires_at=_utc(row.credentials_expires_at),
         created_at=_utc(row.created_at),
+        authorization_url=authorization_url,
         capabilities=caps,
     )
 
@@ -174,7 +187,7 @@ def to_sync_run_out(row: ConnectorSyncRun) -> ConnectorSyncRunOut:
         items_deleted=int(row.items_deleted or 0),
         items_failed=int(row.items_failed or 0),
         error_code=row.error_code,
-        error_message=row.error_message,
+        error_message=sanitize_error_message(row.error_message),
         created_by_user_id=row.created_by_user_id,
         created_at=_utc(row.created_at),
     )

@@ -100,6 +100,7 @@ class ExpertKnowledgeMode(str, enum.Enum):
 
 class ExpertSourceType(str, enum.Enum):
     UPLOAD = "upload"
+    CONNECTOR = "connector"
 
 
 class ExpertSourceStatus(str, enum.Enum):
@@ -108,6 +109,7 @@ class ExpertSourceStatus(str, enum.Enum):
     ``ACTIVE`` is kept as a compat alias of ``READY`` — code paths that stored
     "active" pre-3B continue to load without a migration; new writes should
     prefer ``READY`` / ``PROCESSING`` / ``FAILED`` / ``PENDING``.
+    ``STALE`` / ``UNAVAILABLE`` are used by connector-backed sources (Phase 9D).
     """
 
     PENDING = "pending"
@@ -115,6 +117,8 @@ class ExpertSourceStatus(str, enum.Enum):
     READY = "ready"
     FAILED = "failed"
     DISABLED = "disabled"
+    STALE = "stale"
+    UNAVAILABLE = "unavailable"
     ACTIVE = "active"  # compat alias of READY (Phase 3A rows)
 
 

@@ -30,9 +30,9 @@ describe('validateExpertFile', () => {
     }
   });
 
-  it('rejects files over 50 MB', () => {
-    const over50MB = 51 * 1024 * 1024;
-    const result = validateExpertFile(makeFile('large.pdf', 'application/pdf', over50MB));
+  it('rejects files over the max upload size', () => {
+    const overLimit = 101 * 1024 * 1024;
+    const result = validateExpertFile(makeFile('large.pdf', 'application/pdf', overLimit));
     expect(result.valid).toBe(false);
     if (!result.valid) {
       expect(result.errorKey).toBe('errors.uploadTooLarge');

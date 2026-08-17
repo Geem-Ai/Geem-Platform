@@ -22,6 +22,9 @@ export function docStatusLabelKey(status: string): string {
     processing: 'experts.docStatus.processing',
     ready: 'experts.docStatus.ready',
     failed: 'experts.docStatus.failed',
+    unavailable: 'experts.googleDrive.sourceUnavailable',
+    stale: 'experts.docStatus.processing',
+    disabled: 'experts.docStatus.failed',
   };
   return map[status] ?? 'experts.docStatus.pending';
 }
@@ -44,6 +47,9 @@ export function docStatusBadgeVariant(status: string): BadgeVariant {
     queued: 'warning',
     pending: 'secondary',
     failed: 'destructive',
+    unavailable: 'destructive',
+    stale: 'warning',
+    disabled: 'secondary',
   };
   return map[status] ?? 'secondary';
 }

@@ -6,6 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService
@@ -127,6 +128,34 @@ class ConnectorSyncService:
                 return to_sync_run_out(existing)
 
         if self.repo.has_active_sync(row.id):
+            active = self.db.execute(
+                select(ConnectorSyncRun)
+                .where(
+                    ConnectorSyncRun.app_connection_id == row.id,
+                    ConnectorSyncRun.status.in_(
+                        [SyncRunStatus.PENDING.value, SyncRunStatus.RUNNING.value]
+                    ),
+                )
+                .order_by(ConnectorSyncRun.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            # Recover stuck pending runs (e.g. pre-commit enqueue race) by
+            # re-queueing instead of hard-failing "already in progress".
+            if (
+                active is not None
+                and active.status == SyncRunStatus.PENDING.value
+                and enqueue
+            ):
+                from app.connectors.enqueue import enqueue_connector_sync_after_commit
+
+                enqueue_connector_sync_after_commit(
+                    self.db,
+                    workspace_id=workspace.id,
+                    connection_id=row.id,
+                    sync_run_id=active.id,
+                    actor_id=actor_id,
+                )
+                return to_sync_run_out(active)
             raise AppError(
                 ErrorCategory.CONNECTOR_SYNC_IN_PROGRESS,
                 "A sync is already in progress for this connection.",
@@ -160,13 +189,60 @@ class ConnectorSyncService:
         )
         self.db.flush()
         if enqueue:
-            from app.connectors.tasks import enqueue_connector_sync
+            from app.connectors.enqueue import enqueue_connector_sync_after_commit
 
-            enqueue_connector_sync(
+            enqueue_connector_sync_after_commit(
+                self.db,
                 workspace_id=workspace.id,
                 connection_id=row.id,
                 sync_run_id=run.id,
                 actor_id=actor_id,
+            )
+        return to_sync_run_out(run)
+
+    def request_webhook_sync(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        connection_id: uuid.UUID,
+        enqueue: bool = True,
+    ) -> ConnectorSyncRunOut | None:
+        """Internal webhook-triggered sync — coalesces with an in-flight run."""
+        try:
+            row, _app, _inst = self.connections.require_usable_connection(
+                workspace_id, connection_id
+            )
+        except AppError:
+            return None
+        if not self.registry.is_available(row.connector_key):
+            return None
+        caps = self.registry.capabilities(row.connector_key)
+        if not caps or not caps.supports_sync:
+            return None
+
+        connection_sync_lock(self.db, row.id)
+        if self.repo.has_active_sync(row.id):
+            # Coalesce — an active sync will pick up changes.
+            return None
+
+        run = ConnectorSyncRun(
+            workspace_id=workspace_id,
+            app_connection_id=row.id,
+            trigger=SyncTrigger.WEBHOOK.value,
+            status=SyncRunStatus.PENDING.value,
+            created_by_user_id=None,
+        )
+        self.repo.add_sync_run(run)
+        self.db.flush()
+        if enqueue:
+            from app.connectors.enqueue import enqueue_connector_sync_after_commit
+
+            enqueue_connector_sync_after_commit(
+                self.db,
+                workspace_id=workspace_id,
+                connection_id=row.id,
+                sync_run_id=run.id,
+                actor_id=None,
             )
         return to_sync_run_out(run)
 
@@ -228,20 +304,41 @@ class ConnectorSyncService:
                 connection_id=row.id,
                 workspace_id=workspace_id,
                 sync_run_id=run.id,
+                db=self.db,
+            )
+        except TypeError:
+            result = adapter.sync(  # type: ignore[attr-defined]
+                credentials=creds,
+                sync_state=sync_state,
+                connection_id=row.id,
+                workspace_id=workspace_id,
+                sync_run_id=run.id,
             )
         except Exception as exc:  # noqa: BLE001
+            # Never persist raw exception text (SQL dumps, stack traces) for users.
+            code = (
+                exc.category.value
+                if isinstance(exc, AppError)
+                else ErrorCategory.CONNECTOR_CONNECTION_FAILED.value
+            )
+            public_message = (
+                str(exc.message)
+                if isinstance(exc, AppError)
+                else "Synchronization failed. Please try again."
+            )
             self._fail_run(
                 run,
                 row,
-                error_code=ErrorCategory.CONNECTOR_CONNECTION_FAILED.value,
-                error_message=str(exc),
+                error_code=code,
+                error_message=public_message,
             )
-            logger.info(
+            logger.exception(
                 "connector_sync_failed",
                 extra={
                     "workspace_id": str(workspace_id),
                     "connection_id": str(connection_id),
                     "sync_run_id": str(sync_run_id),
+                    "error_code": code,
                 },
             )
             return run

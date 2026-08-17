@@ -9,17 +9,18 @@ type AppIconProps = {
   size?: 'sm' | 'md' | 'lg';
 };
 
+/** Explicit w/h (not only `size-*`) so SVG intrinsic widths cannot expand the box. */
 const SIZE = {
-  sm: 'size-10',
-  md: 'size-12',
-  lg: 'size-14',
+  sm: 'size-10 w-10 h-10',
+  md: 'size-12 w-12 h-12',
+  lg: 'size-14 w-14 h-14',
 } as const;
 
 /** Local SVG Repo marks under public/brand/apps (?v= busts stale browser cache). */
 const BRAND_ICON_BY_SLUG: Record<string, string> = {
-  'google-drive': '/brand/apps/google-drive.svg?v=2',
-  'microsoft-onedrive': '/brand/apps/microsoft-onedrive.svg?v=2',
-  whatsapp: '/brand/apps/whatsapp.svg?v=2',
+  'google-drive': '/brand/apps/google-drive.svg?v=3',
+  'microsoft-onedrive': '/brand/apps/microsoft-onedrive.svg?v=3',
+  whatsapp: '/brand/apps/whatsapp.svg?v=3',
 };
 
 function resolveIconSrc(slug: string, iconUrl?: string | null): string | null {
@@ -41,7 +42,13 @@ export function AppIcon({ slug, name, iconUrl, className, size = 'md' }: AppIcon
       aria-hidden
     >
       {src ? (
-        <img src={src} alt="" className="size-full object-contain" />
+        <img
+          src={src}
+          alt=""
+          width={56}
+          height={56}
+          className="max-h-full max-w-full w-full h-full object-contain"
+        />
       ) : (
         <AppWindow className="size-5 text-muted-foreground" aria-label={name} />
       )}

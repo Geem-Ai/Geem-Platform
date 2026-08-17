@@ -9,6 +9,28 @@ from app.connectors.types import ConnectorAuthMode, ConnectorKind
 from app.core.errors import AppError, ErrorCategory
 
 
+def _adapter_configured(adapter: ConnectorAdapter) -> bool:
+    """True when the adapter has no config gate, or the gate passes."""
+    check = getattr(adapter, "is_configured", None)
+    if callable(check):
+        return bool(check())
+    if hasattr(adapter, "configured"):
+        return bool(getattr(adapter, "configured"))
+    return True
+
+
+def _unavailable_reason(adapter: ConnectorAdapter, key: str) -> str | None:
+    reason = getattr(adapter, "unavailable_reason", None)
+    if callable(reason):
+        value = reason()
+        return str(value) if value else None
+    if isinstance(reason, str) and reason:
+        return reason
+    if key == "google_drive":
+        return ErrorCategory.GOOGLE_DRIVE_NOT_CONFIGURED.value
+    return f"{key}_not_configured"
+
+
 class ConnectorRegistry:
     """In-process adapter registry. Production providers register in 9D–9F."""
 
@@ -40,6 +62,10 @@ class ConnectorRegistry:
         return key in self._adapters
 
     def get(self, key: str) -> ConnectorAdapter:
+        """Return the adapter even when not configured (introspection).
+
+        Callers that need live operations must check ``is_available`` first.
+        """
         adapter = self._adapters.get(key)
         if adapter is None:
             raise AppError(
@@ -53,7 +79,9 @@ class ConnectorRegistry:
         return self._adapters.get(key)
 
     def is_available(self, key: str | None) -> bool:
-        return bool(key) and key in self._adapters
+        if not key or key not in self._adapters:
+            return False
+        return _adapter_configured(self._adapters[key])
 
     def capabilities(self, key: str) -> ConnectorCapabilities | None:
         adapter = self._adapters.get(key)
@@ -76,22 +104,27 @@ class ConnectorRegistry:
                 "supports_sync": False,
                 "supports_webhooks": False,
                 "supports_health_check": False,
+                "unavailable_reason": None,
             }
         caps = adapter.capabilities
-        return {
+        available = _adapter_configured(adapter)
+        payload: dict[str, Any] = {
             "key": adapter.key,
             "kind": adapter.kind.value
             if isinstance(adapter.kind, ConnectorKind)
             else str(adapter.kind),
-            "available": True,
+            "available": available,
             "auth_mode": adapter.auth_mode.value
             if isinstance(adapter.auth_mode, ConnectorAuthMode)
             else str(adapter.auth_mode),
-            "can_connect": True,
+            "can_connect": available,
             "supports_sync": bool(caps.supports_sync),
             "supports_webhooks": bool(caps.supports_webhooks),
             "supports_health_check": bool(caps.supports_health_check),
         }
+        if not available:
+            payload["unavailable_reason"] = _unavailable_reason(adapter, key)
+        return payload
 
     def keys(self) -> list[str]:
         return sorted(self._adapters.keys())

@@ -42,8 +42,16 @@ class ConnectorCredentialService:
         credentials: dict[str, Any],
         *,
         expires_at: datetime | None = None,
+        merge_refresh: bool = True,
     ) -> None:
-        connection.credentials_encrypted = self.encrypt(credentials)
+        payload = dict(credentials)
+        if merge_refresh:
+            previous = self.decrypt(connection.credentials_encrypted)
+            if previous and previous.get("refresh_token"):
+                new_rt = payload.get("refresh_token")
+                if new_rt is None or new_rt == "":
+                    payload["refresh_token"] = previous["refresh_token"]
+        connection.credentials_encrypted = self.encrypt(payload)
         if expires_at is not None:
             connection.credentials_expires_at = expires_at
 
@@ -53,8 +61,14 @@ class ConnectorCredentialService:
         credentials: dict[str, Any],
         *,
         expires_at: datetime | None = None,
+        merge_refresh: bool = True,
     ) -> None:
-        self.set_credentials(connection, credentials, expires_at=expires_at)
+        self.set_credentials(
+            connection,
+            credentials,
+            expires_at=expires_at,
+            merge_refresh=merge_refresh,
+        )
 
     def clear_credentials(self, connection: AppConnection) -> None:
         connection.credentials_encrypted = None

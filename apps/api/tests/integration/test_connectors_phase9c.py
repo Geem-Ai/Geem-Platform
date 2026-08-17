@@ -145,20 +145,41 @@ def test_registry_register_and_duplicate() -> None:
         assert exc.category == ErrorCategory.CONNECTOR_ALREADY_REGISTERED
 
 
-def test_registry_unknown_and_production_unavailable() -> None:
+def test_registry_unknown_and_production_unavailable(monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
+    from app.core.config import get_settings
+    from app.connectors.providers.google_drive import register_google_drive_connector
+
+    get_settings.cache_clear()
+    register_google_drive_connector()
+
     reg = ConnectorRegistry()
     try:
         reg.get("google_drive")
         assert False
     except AppError as exc:
         assert exc.category == ErrorCategory.CONNECTOR_NOT_AVAILABLE
+    # Global registry may have google_drive registered (Phase 9D) but still
+    # unavailable when OAuth env is unset.
     desc = connector_registry.describe("google_drive")
     assert desc is not None
     assert desc["available"] is False
     assert desc["can_connect"] is False
+    if connector_registry.has("google_drive"):
+        assert desc.get("unavailable_reason") == "google_drive_not_configured"
+        assert not connector_registry.is_available("google_drive")
 
 
-def test_catalog_connector_metadata(client, register_user, db) -> None:
+def test_catalog_connector_metadata(client, register_user, db, monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
+    from app.core.config import get_settings
+    from app.connectors.providers.google_drive import register_google_drive_connector
+
+    get_settings.cache_clear()
+    register_google_drive_connector()
+
     _seed(db)
     user = register_user(email="conn-meta@example.com")
     ws = _create_workspace(client, user, "conn-meta")
@@ -384,7 +405,15 @@ def test_workspace_isolation_connections(client, register_user, db) -> None:
     assert leak.status_code == 404
 
 
-def test_production_sync_unavailable(client, register_user, db) -> None:
+def test_production_sync_unavailable(client, register_user, db, monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
+    from app.core.config import get_settings
+    from app.connectors.providers.google_drive import register_google_drive_connector
+
+    get_settings.cache_clear()
+    register_google_drive_connector()
+
     _seed(db)
     user = register_user(email="conn-prod@example.com")
     ws = _create_workspace(client, user, "conn-prod")
@@ -512,8 +541,18 @@ def test_oauth_state_security(db) -> None:
         pass
 
 
-def test_oauth_callback_unavailable(client) -> None:
-    res = client.get("/api/connectors/oauth/google_drive/callback?code=x&state=y")
+def test_oauth_callback_unavailable(client, monkeypatch) -> None:
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_DRIVE_CLIENT_SECRET", "")
+    from app.core.config import get_settings
+    from app.connectors.providers.google_drive import register_google_drive_connector
+
+    get_settings.cache_clear()
+    register_google_drive_connector()
+    res = client.get(
+        "/api/connectors/oauth/google_drive/callback?code=x&state=y",
+        follow_redirects=False,
+    )
     assert res.status_code == 409
     assert res.json()["error"] == "connector_not_available"
 

@@ -4,12 +4,14 @@ import { reprocessDocument } from '@/services/api/documents';
 import {
   createExpert,
   deleteExpert,
+  deleteExpertConnectorSource,
   unlinkExpertDocument,
   updateExpert,
   uploadExpertDocument,
 } from '@/services/api/experts';
 import type { ExpertCreateInput, ExpertUpdateInput } from '@/services/api/experts';
 import { queryKeys } from '@/services/api/query-keys';
+import type { ExpertKnowledgeItem } from '@/services/api/types';
 
 function useWorkspaceId() {
   const { currentWorkspace } = useWorkspace();
@@ -90,7 +92,15 @@ export function useUnlinkExpertDocument(expertId: string) {
   const workspaceId = useWorkspaceId();
 
   return useMutation({
-    mutationFn: (documentId: string) => unlinkExpertDocument(expertId, documentId),
+    mutationFn: (item: Pick<ExpertKnowledgeItem, 'document_id' | 'source_id' | 'source_type'>) => {
+      if (item.source_type === 'connector' && item.source_id) {
+        return deleteExpertConnectorSource(expertId, item.source_id);
+      }
+      if (!item.document_id) {
+        throw new Error('Missing document_id');
+      }
+      return unlinkExpertDocument(expertId, item.document_id);
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.expertKnowledge(workspaceId, expertId),

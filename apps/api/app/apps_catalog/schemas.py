@@ -269,6 +269,7 @@ def to_catalog_app_out(
             supports_sync=bool(desc.get("supports_sync")),
             supports_webhooks=bool(desc.get("supports_webhooks")),
             supports_health_check=bool(desc.get("supports_health_check")),
+            unavailable_reason=desc.get("unavailable_reason"),
         )
 
     return CatalogAppOut(

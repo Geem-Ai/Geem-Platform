@@ -21,6 +21,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  floatingSheetPanel,
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
@@ -31,8 +32,10 @@ import { useExpert } from '../hooks/useExpert';
 import { parseRagConfig, serializeRagConfig } from '../lib/rag-config';
 
 /** Metronic store-inventory ProductFormSheet layout — floating inset panel. */
-const SHEET_PANEL =
-  'gap-0 w-full sm:max-w-none sm:w-[min(100%-2.5rem,40rem)] lg:w-[44rem] inset-5 border start-auto h-auto rounded-lg p-0 [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5';
+const SHEET_PANEL = floatingSheetPanel(
+  'sm:w-[min(100%-2.5rem,40rem)]',
+  'lg:w-[44rem]',
+);
 
 export type ExpertFormSheetMode = 'create' | 'edit';
 

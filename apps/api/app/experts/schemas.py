@@ -69,20 +69,21 @@ class ExpertDocumentLinkOut(BaseModel):
 
 
 class ExpertKnowledgeItemOut(BaseModel):
-    """Workspace Expert knowledge row with Document display fields (Phase 3C)."""
+    """Workspace Expert knowledge row (upload Document link or connector source)."""
 
     id: uuid.UUID
     expert_id: uuid.UUID
-    document_id: uuid.UUID
+    # Null while a connector source is queued/syncing and no Document exists yet.
+    document_id: uuid.UUID | None = None
     source_id: uuid.UUID | None
     created_at: datetime
     title: str
     original_filename: str
     status: str
-    mime_type: str | None
-    byte_size: int | None
-    page_count: int
-    failure_reason: str | None
+    mime_type: str | None = None
+    byte_size: int | None = None
+    page_count: int = 0
+    failure_reason: str | None = None
     source_type: str = "upload"
     # Ingestion progress (from latest IngestionJob) — for Expert knowledge UX.
     processed_pages: int = 0
@@ -108,6 +109,22 @@ class ExpertSourceOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ConnectorSourceItemIn(BaseModel):
+    external_id: str = Field(min_length=1, max_length=512)
+    resource_key: str | None = Field(default=None, max_length=512)
+
+
+class AddConnectorSourcesRequest(BaseModel):
+    connection_id: uuid.UUID
+    items: list[ConnectorSourceItemIn] = Field(min_length=1, max_length=100)
+
+
+class AddConnectorSourcesResponse(BaseModel):
+    sources: list[ExpertSourceOut]
+    sync_run_id: uuid.UUID | None = None
+    status: str
 
 
 class ExpertUploadResponse(BaseModel):

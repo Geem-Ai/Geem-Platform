@@ -30,7 +30,7 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: 9A PASS + 9B PASS + 9C Connector Foundation PASS. Remaining 9D–9G (Drive, OneDrive, OpenWA, E2E). Do not start 9D or Phase 10 until requested."
+    content: "Phase 9: 9A–9D PASS. Remaining 9E–9G (OneDrive, OpenWA, E2E). Do not start 9E or Phase 10 until requested."
     status: in_progress
   - id: phase-10
     content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
@@ -1080,7 +1080,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** (Connector foundation: connections, registry, OAuth state, webhooks, sync runs, items). Do not start 9D–9G or Phase 10 until requested.
+**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** (Google Drive knowledge connector). Do not start 9E–9G or Phase 10 until requested.
 
 **Revised slices:**
 
@@ -1088,7 +1088,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9A — App Store Core          ✅ PASS
 9B — App Billing & Plans     ✅ PASS
 9C — Connector Foundation    ✅ PASS
-9D — Google Drive
+9D — Google Drive            ✅ PASS
 9E — Microsoft OneDrive
 9F — OpenWA / WhatsApp
 9G — App Management + E2E Gate
@@ -1106,7 +1106,11 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9C Acceptance:** Catalog `connector_key`/`connector_kind`; registry unavailable for production keys until 9D–9F; connection lifecycle + encrypted secrets; OAuth state one-time/bound; webhook routing token ≠ connection UUID; sync/webhook infra proven with test-only fake adapter; Installed vs Connected UI; EN/AR.
 
-**Next:** Phase 9D (Google Drive) when explicitly requested — not Phase 10 yet.
+**9D Goal:** Google Drive as first production `KNOWLEDGE_SOURCE` connector — least-privilege `drive.file` + Picker, Expert connector sources, existing Document/MinIO/Qdrant ingestion, change feed + `changes.watch` with Beat renewal.
+
+**9D Acceptance:** Google Drive adapter registered at API/worker startup; `available=false` until OAuth env configured; OAuth connect/callback + picker session; Expert connector-sources → Document ingest + incremental changes.watch sync; disconnect marks sources unavailable; no OneDrive/OpenWA.
+
+**Next:** Phase 9E (Microsoft OneDrive) when explicitly requested — not Phase 10 yet.
 
 ---
 

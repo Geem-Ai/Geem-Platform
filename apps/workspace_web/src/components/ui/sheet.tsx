@@ -172,6 +172,21 @@ function SheetDescription({
   );
 }
 
+/**
+ * Metronic-style floating inset panel for `side="end"`.
+ *
+ * Default `side=end` uses `inset-y-0 end-0` (full-bleed drawer). Combining that
+ * with `inset-5 start-auto` leaves both horizontal insets set, so the panel
+ * stretches to nearly the full viewport. Reset with `inset-auto` then pin
+ * top/bottom/end only.
+ */
+const FLOATING_SHEET_PANEL =
+  'gap-0 inset-auto top-5 bottom-5 end-5 start-auto h-auto w-full min-w-0 overflow-hidden sm:max-w-none rounded-lg p-0 border [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5';
+
+function floatingSheetPanel(...widthClasses: string[]) {
+  return cn(FLOATING_SHEET_PANEL, ...widthClasses);
+}
+
 export {
   Sheet,
   SheetBody,
@@ -184,4 +199,5 @@ export {
   SheetPortal,
   SheetTitle,
   SheetTrigger,
+  floatingSheetPanel,
 };

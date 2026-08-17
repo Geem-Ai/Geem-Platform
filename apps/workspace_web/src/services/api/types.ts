@@ -158,7 +158,8 @@ export type ExpertDocumentLink = {
 export type ExpertKnowledgeItem = {
   id: string;
   expert_id: string;
-  document_id: string;
+  /** Null while a connector source is queued and no Document exists yet. */
+  document_id: string | null;
   source_id: string | null;
   created_at: string;
   title: string;

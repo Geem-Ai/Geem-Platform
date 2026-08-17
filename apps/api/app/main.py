@@ -35,9 +35,13 @@ from app.connectors.router import (
     apps_connections_router,
     connectors_router,
 )
+from app.connectors.providers.google_drive import register_google_drive_connector
 
 setup_logging()
 settings = get_settings()
+
+# Phase 9D — always register; available=False until OAuth env is configured.
+register_google_drive_connector()
 
 app = FastAPI(
     title=settings.app_name,

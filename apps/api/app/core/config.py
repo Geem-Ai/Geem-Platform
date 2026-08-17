@@ -182,6 +182,18 @@ class Settings(BaseSettings):
     # Empty: local/test fall back to http://localhost:5174; non-local disables HTML redirect.
     workspace_web_url: str = ""
 
+    # Phase 9D — Google Drive knowledge connector (OAuth). Empty → unavailable.
+    google_drive_client_id: str = ""
+    google_drive_client_secret: str = Field(default="", repr=False, exclude=True)
+    # Empty → derive from app_url + /api/connectors/oauth/google_drive/callback
+    google_drive_redirect_uri: str = ""
+    # selected_files | readonly
+    google_drive_scope_mode: str = "selected_files"
+    # Optional backend echo for Picker; frontend may use Vite env instead.
+    google_drive_picker_api_key: str = ""
+    # Google Cloud project number for Picker.
+    google_drive_app_id: str = ""
+
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
     conversation_title_max_length: int = 80
@@ -298,6 +310,21 @@ class Settings(BaseSettings):
             "API_KEY_HASH_PEPPER is required in non-local environments. "
             "Set a dedicated random secret (≥32 chars), distinct from JWT_SECRET."
         )
+
+    @property
+    def google_drive_configured(self) -> bool:
+        return bool(
+            (self.google_drive_client_id or "").strip()
+            and (self.google_drive_client_secret or "").strip()
+        )
+
+    @property
+    def effective_google_drive_redirect_uri(self) -> str:
+        raw = (self.google_drive_redirect_uri or "").strip()
+        if raw:
+            return raw
+        base = (self.app_url or "").rstrip("/")
+        return f"{base}/api/connectors/oauth/google_drive/callback"
 
     @property
     def reserved_slugs(self) -> frozenset[str]:
