@@ -18,7 +18,10 @@ from app.connectors.providers.microsoft_onedrive.formats import (
     require_supported_mime,
     suggested_filename,
 )
-from app.connectors.providers.microsoft_onedrive.identity import parse_external_id
+from app.connectors.providers.microsoft_onedrive.identity import (
+    parse_external_id,
+    same_drive_id,
+)
 from app.connectors.types import ConnectorItemStatus
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -126,7 +129,9 @@ class MicrosoftOneDriveIngestBridge:
             self.bridge.fail_sources(sources, exc)
             return "failed"
 
-        if self.connected_drive_id and drive_id != self.connected_drive_id:
+        if self.connected_drive_id and not same_drive_id(
+            drive_id, self.connected_drive_id
+        ):
             exc = AppError(
                 ErrorCategory.MICROSOFT_ONEDRIVE_DRIVE_NOT_SUPPORTED,
                 "OneDrive item is not from the connected drive.",

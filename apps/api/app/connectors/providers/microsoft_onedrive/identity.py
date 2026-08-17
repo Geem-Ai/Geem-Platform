@@ -5,6 +5,15 @@ from __future__ import annotations
 from app.core.errors import AppError, ErrorCategory
 
 
+def same_drive_id(left: str | None, right: str | None) -> bool:
+    """True when drive ids refer to the same drive (MSA ids differ by case)."""
+    a = (left or "").strip()
+    b = (right or "").strip()
+    if not a or not b:
+        return False
+    return a.casefold() == b.casefold()
+
+
 def compose_external_id(drive_id: str, item_id: str) -> str:
     drive = (drive_id or "").strip()
     item = (item_id or "").strip()

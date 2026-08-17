@@ -139,9 +139,9 @@ APP_SPECS: tuple[AppSpec, ...] = (
         name="Microsoft OneDrive",
         short_description="Connect selected Microsoft OneDrive content to Geem Experts.",
         description=(
-            "Install Microsoft OneDrive to prepare this workspace for connecting OneDrive "
-            "content to Geem Experts. Microsoft Graph OAuth and sync arrive in a later "
-            "phase — installation alone does not connect your Microsoft account."
+            "Connect Microsoft work/school or personal OneDrive files to Geem Experts. "
+            "After installing, connect your Microsoft account, then add files from Expert "
+            "knowledge sources. Geem reads selected files only — it does not modify your OneDrive."
         ),
         category_slug="knowledge",
         billing_type=AppBillingType.FREE.value,

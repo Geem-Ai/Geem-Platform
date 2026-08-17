@@ -351,6 +351,8 @@ export type MicrosoftOneDrivePickerSession = {
   client_id: string | null;
   tenant: string | null;
   drive_id: string | null;
+  account_kind?: 'personal' | 'work_school';
+  picker_mode?: string | null;
 };
 
 export type MicrosoftOneDrivePickerToken = {

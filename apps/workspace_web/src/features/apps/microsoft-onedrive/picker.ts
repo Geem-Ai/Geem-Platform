@@ -4,17 +4,23 @@
  * Picker access tokens stay memory-only for the session — never localStorage /
  * sessionStorage / URL params. Backend refresh credentials never reach React.
  *
+ * Work/school: ODSP FilePicker.aspx on {tenant}-my.sharepoint.com
+ * Personal MSA: https://onedrive.live.com/picker
+ *
  * @see https://learn.microsoft.com/en-us/onedrive/developer/controls/file-pickers/
  */
 
+export type OneDriveAccountKind = 'personal' | 'work_school';
+
 export type OneDrivePickerSession = {
-  /** Short-lived SharePoint-audience token for File Picker form POST (memory-only). */
+  /** Short-lived picker token for form POST (memory-only). */
   accessToken: string;
   baseUrl: string;
   clientId?: string | null;
   tenant?: string | null;
   driveId?: string | null;
-  /** Called when Picker requests a SharePoint-resource token. */
+  accountKind?: OneDriveAccountKind | null;
+  /** Called when Picker requests a resource token. */
   getResourceToken: (resource: string) => Promise<string>;
 };
 
@@ -44,6 +50,20 @@ function channelId(): string {
     return crypto.randomUUID();
   }
   return `geem-od-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** Build the File Picker v8 form action URL for the account kind. */
+export function buildOneDrivePickerActionUrl(
+  baseUrl: string,
+  query: URLSearchParams,
+  accountKind?: OneDriveAccountKind | null,
+): string {
+  const base = baseUrl.replace(/\/$/, '');
+  const qs = query.toString();
+  if (accountKind === 'personal' || /onedrive\.live\.com\/picker/i.test(base)) {
+    return `${base}?${qs}`;
+  }
+  return `${base}/_layouts/15/FilePicker.aspx?${qs}`;
 }
 
 function extractItems(command: PickerCommand): OneDrivePickerSelectedFile[] {
@@ -112,7 +132,11 @@ export function openOneDrivePicker(
     filePicker: JSON.stringify(pickerOptions),
     locale: document.documentElement.lang || 'en-us',
   });
-  const url = `${baseUrl}/_layouts/15/FilePicker.aspx?${query.toString()}`;
+  const url = buildOneDrivePickerActionUrl(
+    baseUrl,
+    query,
+    session.accountKind,
+  );
 
   const form = win.document.createElement('form');
   form.setAttribute('action', url);

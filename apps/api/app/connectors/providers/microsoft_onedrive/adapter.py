@@ -35,8 +35,11 @@ from app.connectors.providers.microsoft_onedrive.resolve import (
     resolve_microsoft_onedrive_selections,
 )
 from app.connectors.providers.microsoft_onedrive.scopes import (
-    ONEDRIVE_SCOPES,
-    oauth_scope_string,
+    auth_tenant_for_account_kind,
+    oauth_scopes_for_tenant,
+)
+from app.connectors.providers.microsoft_onedrive.picker_auth import (
+    apply_account_kind_fields,
 )
 from app.connectors.providers.microsoft_onedrive.subscription import (
     decode_validation_token,
@@ -119,12 +122,14 @@ class MicrosoftOneDriveConnector:
             )
         settings = self._settings()
         _ = reconnect
+        tenant = settings.microsoft_onedrive_tenant.strip() or "organizations"
+        scopes = oauth_scopes_for_tenant(tenant)
         url = build_authorization_url(
             client_id=settings.microsoft_onedrive_client_id.strip(),
             redirect_uri=redirect_uri,
             state=state,
-            scopes=ONEDRIVE_SCOPES,
-            tenant=settings.microsoft_onedrive_tenant.strip() or "organizations",
+            scopes=scopes,
+            tenant=tenant,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             prompt=prompt or "consent",
@@ -151,13 +156,15 @@ class MicrosoftOneDriveConnector:
                 "Microsoft OneDrive OAuth is not configured.",
             )
         settings = self._settings()
-        client = self._client()
+        tenant = settings.microsoft_onedrive_tenant.strip() or "organizations"
+        client = self._client(tenant=tenant)
         try:
+            # Omit scope on exchange — same pattern as Google Drive. Re-sending
+            # mixed Graph + OneDrive.ReadOnly scopes causes MSA 400s.
             token_payload = client.exchange_code(
                 code=code,
                 redirect_uri=redirect_uri,
                 code_verifier=code_verifier,
-                scope=oauth_scope_string(),
             )
             access = str(token_payload["access_token"])
             me = client.get_me(access_token=access)
@@ -173,12 +180,25 @@ class MicrosoftOneDriveConnector:
             credentials["account_id"] = account_id
         if upn:
             credentials["upn"] = upn
-        credentials["tenant_id"] = settings.microsoft_onedrive_tenant.strip() or "organizations"
+        credentials["tenant_id"] = tenant
         drive_id = drive.get("id")
+        drive_type = drive.get("driveType")
+        drive_web_url = drive.get("webUrl")
         if drive_id:
             credentials["drive_id"] = drive_id
-            credentials["drive_type"] = drive.get("driveType")
-            credentials["drive_web_url"] = drive.get("webUrl")
+            credentials["drive_type"] = drive_type
+            credentials["drive_web_url"] = drive_web_url
+        kind = apply_account_kind_fields(
+            credentials,
+            web_url=str(drive_web_url or "") or None,
+            drive_type=str(drive_type or "") or None,
+            settings_tenant=tenant,
+        )
+        credentials["account_kind"] = kind
+        credentials["auth_tenant"] = auth_tenant_for_account_kind(
+            account_kind=kind,
+            settings_tenant=tenant,
+        )
         scope = token_payload.get("scope")
         if scope:
             credentials["granted_scopes"] = (
@@ -361,10 +381,20 @@ class MicrosoftOneDriveConnector:
             state["drive_id"] = drive_id
             state["drive_type"] = drive.get("driveType")
             state["drive_web_url"] = drive.get("webUrl")
+            apply_account_kind_fields(
+                state,
+                web_url=str(drive.get("webUrl") or "") or None,
+                drive_type=str(drive.get("driveType") or "") or None,
+                settings_tenant=settings.microsoft_onedrive_tenant,
+            )
             cred_svc.set_sync_state(connection, state)
             db.flush()
 
-        tenant = str(fresh.get("tenant_id") or settings.microsoft_onedrive_tenant)
+        tenant = str(
+            fresh.get("auth_tenant")
+            or fresh.get("tenant_id")
+            or settings.microsoft_onedrive_tenant
+        )
         client = self._client(
             access_token=str(fresh.get("access_token")), tenant=tenant
         )

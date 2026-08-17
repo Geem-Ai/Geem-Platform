@@ -371,6 +371,7 @@ def test_picker_session_and_token(client, register_user, db, monkeypatch) -> Non
     assert data["access_token"].startswith("sp-token-for-")
     assert data["access_token"] != fake.token_response["access_token"]
     assert data["base_url"] == "https://contoso-my.sharepoint.com"
+    assert data.get("account_kind") == "work_school"
     assert "refresh_token" not in data
     assert data.get("drive_id") == "drive-1"
 
@@ -455,10 +456,10 @@ def test_picker_fails_closed_without_drive_web_url(
     assert "web url" in detail or "drive" in detail
 
 
-def test_picker_rejects_personal_msa_drive(
+def test_picker_session_personal_msa(
     client, register_user, db, monkeypatch
 ) -> None:
-    """Personal MSA hosts cannot mint SharePoint-audience picker tokens."""
+    """9E.1: personal MSA uses onedrive.live.com/picker + OneDrive.ReadOnly mint."""
     _seed(db)
     _enable_onedrive(monkeypatch)
     fake = patch_microsoft_onedrive_client(monkeypatch)
@@ -474,10 +475,21 @@ def test_picker_rejects_personal_msa_drive(
     creds = dict(cred_svc.get_credentials(conn) or {})
     creds["drive_type"] = "personal"
     creds["drive_web_url"] = personal_url
+    creds["account_kind"] = "personal"
+    creds["auth_tenant"] = "consumers"
+    creds["granted_scopes"] = [
+        "openid",
+        "profile",
+        "offline_access",
+        "User.Read",
+        "Files.Read",
+    ]
     cred_svc.set_credentials(conn, creds, expires_at=None, merge_refresh=True)
     state = dict(cred_svc.get_sync_state(conn) or {})
     state["drive_type"] = "personal"
     state["drive_web_url"] = personal_url
+    state["account_kind"] = "personal"
+    state["auth_tenant"] = "consumers"
     cred_svc.set_sync_state(conn, state)
     db.commit()
 
@@ -485,8 +497,20 @@ def test_picker_rejects_personal_msa_drive(
         f"/api/apps/microsoft-onedrive/connections/{body['id']}/picker-session",
         headers=_ws_headers(user, ws),
     )
-    assert res.status_code == 422
-    assert res.json()["error"] == "microsoft_onedrive_drive_not_supported"
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["account_kind"] == "personal"
+    assert payload["base_url"] == "https://onedrive.live.com/picker"
+    assert payload["access_token"]
+    assert "sharepoint.com" not in payload["base_url"]
+
+    tok = client.post(
+        f"/api/apps/microsoft-onedrive/connections/{body['id']}/picker-token",
+        headers=_ws_headers(user, ws),
+        json={"resource": "https://onedrive.live.com/picker"},
+    )
+    assert tok.status_code == 200, tok.text
+    assert tok.json()["access_token"]
 
 
 def test_add_sources_pdf_txt_docx_and_reject_sharepoint(

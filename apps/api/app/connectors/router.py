@@ -370,15 +370,33 @@ def microsoft_onedrive_picker_session(
         mint_picker_resource_token,
         resolve_picker_base_url,
     )
+    from app.connectors.providers.microsoft_onedrive.scopes import (
+        ACCOUNT_KIND_PERSONAL,
+        auth_tenant_for_account_kind,
+    )
 
-    picker_base, sync_state = resolve_picker_base_url(
+    picker_base, sync_state, account_kind = resolve_picker_base_url(
         sync_state=sync_state,
         credentials=fresh,
         settings=settings,
         access_token=str(fresh["access_token"]),
     )
+    # Mirror kind onto credentials for later refreshes.
+    if fresh.get("account_kind") != account_kind:
+        fresh = dict(fresh)
+        fresh["account_kind"] = account_kind
+        fresh["auth_tenant"] = auth_tenant_for_account_kind(
+            account_kind=account_kind,
+            settings_tenant=settings.microsoft_onedrive_tenant,
+            stored_auth_tenant=str(fresh.get("auth_tenant") or "") or None,
+        )
+        cred_svc.set_credentials(
+            row,
+            fresh,
+            expires_at=expires_at_from_credentials(fresh),
+            merge_refresh=True,
+        )
     cred_svc.set_sync_state(row, sync_state)
-    # File Picker v8 requires a SharePoint-host token for the form POST — not Graph.
     token_payload, _updated = mint_picker_resource_token(
         db=db,
         connection=row,
@@ -386,17 +404,25 @@ def microsoft_onedrive_picker_session(
         resource=picker_base,
         settings=settings,
         sync_state=sync_state,
+        account_kind=account_kind,
     )
     db.commit()
     sp_creds = apply_token_response({}, token_payload)
+    picker_mode = "personal_live" if account_kind == ACCOUNT_KIND_PERSONAL else "odsp"
     return MicrosoftOneDrivePickerSessionOut(
         access_token=str(token_payload["access_token"]),
         expires_at=expires_at_from_credentials(sp_creds),
         base_url=picker_base,
         client_id=settings.microsoft_onedrive_client_id.strip() or None,
-        tenant=str(fresh.get("tenant_id") or settings.microsoft_onedrive_tenant),
+        tenant=str(
+            fresh.get("auth_tenant")
+            or fresh.get("tenant_id")
+            or settings.microsoft_onedrive_tenant
+        ),
         drive_id=str(sync_state.get("drive_id") or fresh.get("drive_id") or "")
         or None,
+        account_kind=account_kind,
+        picker_mode=picker_mode,
     )
 
 
@@ -437,11 +463,16 @@ def microsoft_onedrive_picker_token(
         resolve_picker_base_url,
     )
 
-    # Ensure drive host is resolved before allowlisting (fail closed).
+    # Ensure drive host / account kind is resolved before allowlisting (fail closed).
     sync_state = cred_svc.get_sync_state(row) or {}
-    if not (sync_state.get("drive_web_url") or credentials.get("drive_web_url")):
+    if not (
+        sync_state.get("drive_web_url")
+        or credentials.get("drive_web_url")
+        or sync_state.get("account_kind")
+        or credentials.get("account_kind")
+    ):
         fresh = ensure_onedrive_fresh_access(db, row, credentials, settings)
-        _, sync_state = resolve_picker_base_url(
+        _, sync_state, _kind = resolve_picker_base_url(
             sync_state=sync_state,
             credentials=fresh,
             settings=settings,

@@ -1,7 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
-import { openOneDrivePicker } from './picker';
+import { buildOneDrivePickerActionUrl, openOneDrivePicker } from './picker';
 
 describe('Microsoft OneDrive picker module', () => {
+  it('builds ODSP FilePicker.aspx URL for work/school', () => {
+    const q = new URLSearchParams({ filePicker: '{}' });
+    expect(
+      buildOneDrivePickerActionUrl(
+        'https://contoso-my.sharepoint.com',
+        q,
+        'work_school',
+      ),
+    ).toBe(
+      'https://contoso-my.sharepoint.com/_layouts/15/FilePicker.aspx?filePicker=%7B%7D',
+    );
+  });
+
+  it('builds onedrive.live.com/picker URL for personal (no layouts path)', () => {
+    const q = new URLSearchParams({ filePicker: '{}' });
+    expect(
+      buildOneDrivePickerActionUrl(
+        'https://onedrive.live.com/picker',
+        q,
+        'personal',
+      ),
+    ).toBe('https://onedrive.live.com/picker?filePicker=%7B%7D');
+  });
+
   it('submits selected drive/item ids without trusting names for identity', async () => {
     const picked: Array<{ driveId: string; itemId: string }> = [];
     const tokens: string[] = [];
@@ -41,6 +65,7 @@ describe('Microsoft OneDrive picker module', () => {
       session: {
         accessToken: 'mem-only-token',
         baseUrl: 'https://contoso-my.sharepoint.com',
+        accountKind: 'work_school',
         getResourceToken: async (resource) => {
           tokens.push(resource);
           return 'sp-token';
