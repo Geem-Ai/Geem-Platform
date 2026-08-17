@@ -277,6 +277,53 @@ def test_owner_can_connect_fake_and_member_cannot(client, register_user, db) -> 
     assert sync_denied.json()["error"] == "connector_already_disconnected"
 
 
+def test_health_check_restores_degraded_to_active(client, register_user, db) -> None:
+    _seed(db)
+    _register_fake()
+    app = _seed_fake_app(db)
+    owner = register_user(email="conn-heal@example.com")
+    ws = _create_workspace(client, owner, "conn-heal")
+    client.post(f"/api/apps/{app.slug}/install", headers=_ws_headers(owner, ws))
+
+    started = client.post(
+        f"/api/apps/{app.slug}/connections",
+        headers=_ws_headers(owner, ws),
+        json={"display_name": "Heal"},
+    )
+    assert started.status_code == 201, started.text
+    conn = started.json()
+    svc = ConnectorConnectionService(db, registry=connector_registry)
+    row = svc.activate_connection(
+        workspace_id=uuid.UUID(ws["id"]),
+        connection_id=uuid.UUID(conn["id"]),
+        credentials={"access_token": "tok", "refresh_token": "ref"},
+        actor_id=uuid.UUID(owner["user"]["id"]),
+        external_account_name="Heal Me",
+    )
+    db.commit()
+    svc.record_error(
+        row,
+        error_code="connector_sync_failed",
+        error_message="transient provider blip",
+        degrade=True,
+    )
+    db.commit()
+    db.refresh(row)
+    assert row.status == ConnectionStatus.DEGRADED.value
+
+    health = client.post(
+        f"/api/apps/{app.slug}/connections/{conn['id']}/health-check",
+        headers=_ws_headers(owner, ws),
+    )
+    assert health.status_code == 200, health.text
+    body = health.json()
+    assert body["health"] == "healthy"
+    assert body["status"] == ConnectionStatus.ACTIVE.value
+    db.refresh(row)
+    assert row.status == ConnectionStatus.ACTIVE.value
+    assert row.last_error_code is None
+
+
 def test_must_install_before_connect(client, register_user, db) -> None:
     _seed(db)
     _register_fake()
