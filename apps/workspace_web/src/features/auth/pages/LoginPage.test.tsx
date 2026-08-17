@@ -7,8 +7,11 @@ import { LoginPage } from './LoginPage';
 
 const login = vi.fn();
 const clearSessionExpired = vi.fn();
-const authState = {
-  status: 'unauthenticated' as const,
+const authState: {
+  status: 'unauthenticated' | 'authenticated' | 'loading';
+  sessionExpired: boolean;
+} = {
+  status: 'unauthenticated',
   sessionExpired: false,
 };
 

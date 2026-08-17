@@ -132,5 +132,6 @@ Production data: Conversations REST + SSE (`useChatStream`), Workspace-scoped Re
 
 - Product: **Geem**
 - Avatar vendored: `public/brand/geem-avatar.webp` (source of truth URL: `https://geem.ai/assets/geem-avatar.webp`)
+- Chat mascot: `public/brand/geem-animated.svg` (waving SVG; used via `GeemAnimatedMascot` on Chat starter + assistant bubbles)
 - Theme storage key: `geem-theme`
 - Locale storage key: `geem-locale`

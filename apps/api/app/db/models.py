@@ -52,6 +52,21 @@ from app.usage.models import (  # noqa: E402
     WorkspaceResourceUsage,
 )
 from app.api_keys.models import ApiKey  # noqa: E402
+from app.apps_catalog.models import (  # noqa: E402
+    AppCategory,
+    AppInstallation,
+    AppLicense,
+    AppPlan,
+    AppPlanEntitlement,
+    AppSubscription,
+    CatalogApp,
+)
+from app.connectors.models import (  # noqa: E402
+    AppConnection,
+    ConnectorItem,
+    ConnectorSyncRun,
+    ConnectorWebhookEvent,
+)
 
 __all__ = [
     "Document",
@@ -84,6 +99,17 @@ __all__ = [
     "WorkspaceResourceUsage",
     "AiUsageReservation",
     "ApiKey",
+    "AppCategory",
+    "CatalogApp",
+    "AppPlan",
+    "AppPlanEntitlement",
+    "AppInstallation",
+    "AppLicense",
+    "AppSubscription",
+    "AppConnection",
+    "ConnectorSyncRun",
+    "ConnectorItem",
+    "ConnectorWebhookEvent",
 ]
 
 

@@ -91,4 +91,36 @@ export const queryKeys = {
     params
       ? workspaceQueryKey(workspaceId, 'api-usage', 'history', params)
       : workspaceQueryKey(workspaceId, 'api-usage', 'history'),
+  apps: (
+    workspaceId: string,
+    params?: {
+      category?: string;
+      billing_type?: string;
+      installed?: boolean | string;
+      q?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'apps', 'catalog', params)
+      : workspaceQueryKey(workspaceId, 'apps', 'catalog'),
+  appCategories: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'categories'),
+  app: (workspaceId: string, slug: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'detail', slug),
+  appInstallations: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'installations'),
+  appInstallation: (workspaceId: string, installationId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'installations', installationId),
+  appConnections: (workspaceId: string, appSlug: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'connections', appSlug),
+  appConnection: (
+    workspaceId: string,
+    appSlug: string,
+    connectionId: string,
+  ) =>
+    workspaceQueryKey(workspaceId, 'apps', 'connection', appSlug, connectionId),
+  connectionSyncRuns: (workspaceId: string, connectionId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'sync-runs', connectionId),
 };

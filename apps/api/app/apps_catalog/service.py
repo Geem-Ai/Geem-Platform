@@ -1,0 +1,498 @@
+"""App Store catalog + installation services (Phase 9A/9B)."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import Session
+
+from app.apps_catalog.access import AppAccessService, AppAccessStatus
+from app.apps_catalog.encryption import AppConfigEncryptionService
+from app.apps_catalog.models import (
+    AppBillingType,
+    AppInstallation,
+    AppInstallationStatus,
+    AppStatus,
+    CatalogApp,
+)
+from app.apps_catalog.policy import can_manage_apps
+from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.schemas import (
+    AppCategoryOut,
+    AppInstallationListOut,
+    AppInstallationOut,
+    CatalogAppListOut,
+    CatalogAppOut,
+    to_catalog_app_out,
+    to_category_out,
+    to_installation_out,
+)
+from app.common.security_log import security_log
+from app.connectors.types import CONNECTION_USABLE_STATUSES
+from app.core.config import Settings, get_settings
+from app.core.errors import AppError, ErrorCategory
+from app.workspaces.models import Workspace, WorkspaceKind, WorkspaceRole
+
+
+def _active_connection_installation_ids(
+    db: Session, workspace_id: uuid.UUID, installation_ids: list[uuid.UUID]
+) -> set[uuid.UUID]:
+    if not installation_ids:
+        return set()
+    from sqlalchemy import select
+
+    from app.connectors.models import AppConnection
+
+    rows = db.execute(
+        select(AppConnection.app_installation_id).where(
+            AppConnection.workspace_id == workspace_id,
+            AppConnection.app_installation_id.in_(installation_ids),
+            AppConnection.status.in_(list(CONNECTION_USABLE_STATUSES)),
+        )
+    ).scalars()
+    return set(rows)
+
+
+class AppCatalogService:
+    def __init__(self, db: Session, settings: Settings | None = None) -> None:
+        self.db = db
+        self.settings = settings or get_settings()
+        self.repo = AppCatalogRepository(db)
+        self.access = AppAccessService(db)
+
+    def list_categories(self) -> list[AppCategoryOut]:
+        return [to_category_out(c) for c in self.repo.list_active_categories()]
+
+    def list_apps(
+        self,
+        *,
+        workspace: Workspace,
+        role: str | WorkspaceRole,
+        category: str | None = None,
+        billing_type: str | None = None,
+        installed: bool | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> CatalogAppListOut:
+        self._require_tenant(workspace)
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        manage = can_manage_apps(role)
+
+        items, total = self.repo.list_catalog_apps(
+            category_slug=category,
+            billing_type=billing_type,
+            q=q,
+            limit=limit if installed is None else 500,
+            offset=0 if installed is not None else offset,
+        )
+        app_ids = [a.id for a in items]
+        install_map = self.repo.map_installations_by_app_id(workspace.id, app_ids)
+        license_map = self.repo.map_licenses_by_app_id(workspace.id, app_ids)
+        sub_map = self.repo.map_subscriptions_by_app_id(workspace.id, app_ids)
+        connected_installs = _active_connection_installation_ids(
+            self.db,
+            workspace.id,
+            [i.id for i in install_map.values() if i is not None],
+        )
+
+        outs: list[CatalogAppOut] = []
+        for app in items:
+            inst = install_map.get(app.id)
+            active = (
+                inst is not None and inst.status == AppInstallationStatus.ACTIVE.value
+            )
+            if installed is True and not active:
+                continue
+            if installed is False and active:
+                continue
+            access = self.access.resolve(
+                workspace.id,
+                app=app,
+                can_manage=manage,
+                installation=inst,
+                license_row=license_map.get(app.id),
+                subscription=sub_map.get(app.id),
+            )
+            outs.append(
+                to_catalog_app_out(
+                    app,
+                    installation=inst if active else None,
+                    can_manage=manage,
+                    include_description=False,
+                    access=access,
+                    has_active_connection=bool(
+                        inst is not None and inst.id in connected_installs
+                    ),
+                )
+            )
+
+        if installed is not None:
+            total = len(outs)
+            outs = outs[offset : offset + limit]
+
+        return CatalogAppListOut(items=outs, total=total, limit=limit, offset=offset)
+
+    def get_app(
+        self,
+        *,
+        workspace: Workspace,
+        role: str | WorkspaceRole,
+        slug: str,
+    ) -> CatalogAppOut:
+        self._require_tenant(workspace)
+        app = self.repo.get_app_by_slug(slug)
+        if app is None or app.status in {
+            AppStatus.DRAFT.value,
+            AppStatus.DISABLED.value,
+        }:
+            raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+        manage = can_manage_apps(role)
+        inst = self.repo.get_installation_by_app(workspace.id, app.id)
+        active = (
+            inst is not None and inst.status == AppInstallationStatus.ACTIVE.value
+        )
+        access = self.access.resolve(
+            workspace.id, app=app, can_manage=manage, installation=inst
+        )
+        return to_catalog_app_out(
+            app,
+            installation=inst if active else None,
+            can_manage=manage,
+            include_description=True,
+            access=access,
+            has_active_connection=bool(
+                inst is not None
+                and inst.id
+                in _active_connection_installation_ids(self.db, workspace.id, [inst.id])
+            ),
+        )
+
+    @staticmethod
+    def _require_tenant(workspace: Workspace) -> None:
+        if workspace.kind != WorkspaceKind.TENANT.value:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+
+
+class AppInstallationService:
+    def __init__(self, db: Session, settings: Settings | None = None) -> None:
+        self.db = db
+        self.settings = settings or get_settings()
+        self.repo = AppCatalogRepository(db)
+        self.crypto = AppConfigEncryptionService(self.settings)
+        self.access = AppAccessService(db)
+
+    def list_installations(
+        self,
+        *,
+        workspace: Workspace,
+        role: str | WorkspaceRole,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AppInstallationListOut:
+        self._require_tenant(workspace)
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        rows, total = self.repo.list_installations(
+            workspace.id,
+            status=AppInstallationStatus.ACTIVE.value,
+            limit=limit,
+            offset=offset,
+        )
+        manage = can_manage_apps(role)
+        connected = _active_connection_installation_ids(
+            self.db, workspace.id, [r.id for r in rows]
+        )
+        items: list[AppInstallationOut] = []
+        for row in rows:
+            access = self.access.resolve(
+                workspace.id,
+                app=row.app,
+                can_manage=manage,
+                installation=row,
+            )
+            items.append(
+                to_installation_out(
+                    row,
+                    can_manage=manage,
+                    access=access,
+                    has_active_connection=row.id in connected,
+                )
+            )
+        return AppInstallationListOut(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_installation(
+        self,
+        *,
+        workspace: Workspace,
+        role: str | WorkspaceRole,
+        installation_id: uuid.UUID,
+    ) -> AppInstallationOut:
+        self._require_tenant(workspace)
+        row = self.repo.get_installation_for_workspace(workspace.id, installation_id)
+        if row is None:
+            raise AppError(
+                ErrorCategory.APP_INSTALLATION_NOT_FOUND,
+                "App installation not found.",
+            )
+        manage = can_manage_apps(role)
+        access = self.access.resolve(
+            workspace.id, app=row.app, can_manage=manage, installation=row
+        )
+        return to_installation_out(row, can_manage=manage, access=access)
+
+    def install_app(
+        self,
+        *,
+        workspace: Workspace,
+        actor_id: uuid.UUID,
+        slug: str,
+    ) -> AppInstallationOut:
+        self._require_tenant(workspace)
+        security_log(
+            "app_install_started",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            app_slug=slug,
+        )
+        app = self._require_installable_app(workspace.id, slug)
+        existing = self.repo.get_installation_by_app(workspace.id, app.id)
+        now = datetime.now(timezone.utc)
+
+        if existing is not None:
+            if existing.status == AppInstallationStatus.ACTIVE.value:
+                raise AppError(
+                    ErrorCategory.APP_ALREADY_INSTALLED,
+                    "App is already installed in this workspace.",
+                    details={"app_slug": slug},
+                )
+            existing.status = AppInstallationStatus.ACTIVE.value
+            existing.installed_by_user_id = actor_id
+            existing.installed_at = now
+            existing.uninstalled_at = None
+            self.db.commit()
+            self.db.refresh(existing)
+            row = self.repo.get_installation_for_workspace(workspace.id, existing.id)
+            assert row is not None
+            security_log(
+                "app_installed",
+                workspace_id=str(workspace.id),
+                actor_id=str(actor_id),
+                app_id=str(app.id),
+                installation_id=str(row.id),
+                reinstall=True,
+            )
+            access = self.access.resolve(
+                workspace.id, app=row.app, can_manage=True, installation=row
+            )
+            return to_installation_out(row, can_manage=True, access=access)
+
+        row = AppInstallation(
+            workspace_id=workspace.id,
+            app_id=app.id,
+            status=AppInstallationStatus.ACTIVE.value,
+            installed_by_user_id=actor_id,
+            installed_at=now,
+            config_encrypted=None,
+        )
+        self.repo.create_installation(row)
+        self.db.commit()
+        loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
+        assert loaded is not None
+        security_log(
+            "app_installed",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            app_id=str(app.id),
+            installation_id=str(loaded.id),
+            reinstall=False,
+        )
+        access = self.access.resolve(
+            workspace.id, app=loaded.app, can_manage=True, installation=loaded
+        )
+        return to_installation_out(loaded, can_manage=True, access=access)
+
+    def uninstall_app(
+        self,
+        *,
+        workspace: Workspace,
+        actor_id: uuid.UUID,
+        slug: str,
+    ) -> AppInstallationOut:
+        self._require_tenant(workspace)
+        app = self.repo.get_app_by_slug(slug)
+        if app is None:
+            raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+        row = self.repo.get_installation_by_app(workspace.id, app.id)
+        if row is None or row.status != AppInstallationStatus.ACTIVE.value:
+            raise AppError(
+                ErrorCategory.APP_NOT_INSTALLED,
+                "App is not installed in this workspace.",
+                details={"app_slug": slug},
+            )
+
+        # Future phases attach connector cleanup hooks here (9C+).
+        # Uninstall must NOT revoke licenses or cancel subscriptions.
+        self._run_uninstall_hooks(workspace_id=workspace.id, installation=row, app=app)
+
+        now = datetime.now(timezone.utc)
+        row.status = AppInstallationStatus.UNINSTALLED.value
+        row.uninstalled_at = now
+        self.db.commit()
+        loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
+        assert loaded is not None
+        security_log(
+            "app_uninstalled",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            app_id=str(app.id),
+            installation_id=str(loaded.id),
+        )
+        access = self.access.resolve(
+            workspace.id, app=loaded.app, can_manage=True, installation=loaded
+        )
+        return to_installation_out(loaded, can_manage=True, access=access)
+
+    def set_encrypted_config(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        installation_id: uuid.UUID,
+        payload: dict,
+    ) -> None:
+        """Service-boundary write for future connectors. Not exposed via 9A API."""
+        row = self.repo.get_installation_for_workspace(workspace_id, installation_id)
+        if row is None:
+            raise AppError(
+                ErrorCategory.APP_INSTALLATION_NOT_FOUND,
+                "App installation not found.",
+            )
+        row.config_encrypted = self.crypto.encrypt(payload)
+        self.db.flush()
+
+    def get_decrypted_config(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        installation_id: uuid.UUID,
+    ) -> dict | None:
+        row = self.repo.get_installation_for_workspace(workspace_id, installation_id)
+        if row is None:
+            raise AppError(
+                ErrorCategory.APP_INSTALLATION_NOT_FOUND,
+                "App installation not found.",
+            )
+        if not row.config_encrypted:
+            return None
+        return self.crypto.decrypt(row.config_encrypted)
+
+    def _require_installable_app(
+        self, workspace_id: uuid.UUID, slug: str
+    ) -> CatalogApp:
+        app = self.repo.get_app_by_slug(slug)
+        if app is None or app.status == AppStatus.DISABLED.value:
+            security_log("app_install_rejected", reason="not_found", app_slug=slug)
+            raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+        if app.status == AppStatus.DRAFT.value:
+            security_log("app_install_rejected", reason="draft", app_slug=slug)
+            raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+
+        # Paid entitlement survives catalog unpublish — allow reinstall when licensed.
+        if app.billing_type != AppBillingType.FREE.value and self._has_live_commercial_access(
+            workspace_id, app
+        ):
+            return app
+
+        if app.status == AppStatus.COMING_SOON.value:
+            security_log("app_install_rejected", reason="coming_soon", app_slug=slug)
+            raise AppError(
+                ErrorCategory.APP_NOT_AVAILABLE,
+                "App is not available for installation yet.",
+                details={"app_slug": slug, "status": app.status},
+            )
+        if app.status != AppStatus.PUBLISHED.value:
+            security_log("app_install_rejected", reason="status", app_slug=slug)
+            raise AppError(
+                ErrorCategory.APP_NOT_AVAILABLE,
+                "App is not available for installation.",
+                details={"app_slug": slug, "status": app.status},
+            )
+
+        if app.billing_type == AppBillingType.FREE.value:
+            return app
+
+        access = self.access.resolve(workspace_id, app=app, can_manage=True)
+        if access.status == AppAccessStatus.EXPIRED:
+            security_log(
+                "app_install_rejected",
+                reason="subscription_expired",
+                app_slug=slug,
+            )
+            raise AppError(
+                ErrorCategory.APP_SUBSCRIPTION_EXPIRED,
+                "App subscription has expired. Renew before installing.",
+                details={"app_slug": slug},
+            )
+        if app.billing_type == AppBillingType.ONE_TIME.value:
+            security_log(
+                "app_install_rejected",
+                reason="billing_required",
+                app_slug=slug,
+                billing_type=app.billing_type,
+            )
+            raise AppError(
+                ErrorCategory.APP_BILLING_REQUIRED,
+                "This app requires a purchase before installation.",
+                details={
+                    "app_slug": slug,
+                    "billing_type": app.billing_type,
+                    "access_requirement": app.billing_type,
+                },
+            )
+        security_log(
+            "app_install_rejected",
+            reason="subscription_required",
+            app_slug=slug,
+        )
+        raise AppError(
+            ErrorCategory.APP_SUBSCRIPTION_REQUIRED,
+            "A valid App subscription is required before installation.",
+            details={"app_slug": slug, "billing_type": app.billing_type},
+        )
+
+    def _has_live_commercial_access(
+        self, workspace_id: uuid.UUID, app: CatalogApp
+    ) -> bool:
+        """True when license/sub still grants access, even if catalog is unpublished."""
+        from app.apps_catalog.calendar import ensure_utc
+
+        if app.billing_type == AppBillingType.ONE_TIME.value:
+            return self.repo.get_active_license(workspace_id, app.id) is not None
+        if app.billing_type == AppBillingType.SUBSCRIPTION.value:
+            sub = self.repo.get_subscription(workspace_id, app.id)
+            if sub is None:
+                return False
+            return ensure_utc(sub.current_period_end) > datetime.now(timezone.utc)
+        return False
+
+    @staticmethod
+    def _run_uninstall_hooks(
+        *,
+        workspace_id: uuid.UUID,
+        installation: AppInstallation,
+        app: CatalogApp,
+    ) -> None:
+        """Placeholder for future connector/source cleanup (9C+)."""
+        _ = (workspace_id, installation, app)
+
+    @staticmethod
+    def _require_tenant(workspace: Workspace) -> None:
+        if workspace.kind != WorkspaceKind.TENANT.value:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")

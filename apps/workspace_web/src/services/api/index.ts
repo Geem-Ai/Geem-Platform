@@ -14,5 +14,6 @@ export * from './query';
 export * from './usage';
 export * from './billing';
 export * from './api-keys';
+export * from './apps';
 export { streamSse } from './sse';
 export { apiRequest };

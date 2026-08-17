@@ -11,11 +11,12 @@ import {
   Users,
 } from 'lucide-react';
 
+/** Leaf destinations always have `to`. Group parents omit it (label only). */
 export type NavItem = {
   id: string;
   labelKey: string;
-  to: string;
   icon: LucideIcon;
+  to?: string;
   children?: NavItem[];
 };
 
@@ -25,7 +26,6 @@ export const workspaceNav: NavItem[] = [
   {
     id: 'api',
     labelKey: 'nav.api',
-    to: '/api',
     icon: KeyRound,
     children: [
       { id: 'api-keys', labelKey: 'nav.apiKeys', to: '/api/keys', icon: KeyRound },
@@ -38,7 +38,6 @@ export const workspaceNav: NavItem[] = [
   {
     id: 'billing',
     labelKey: 'nav.billing',
-    to: '/billing',
     icon: CreditCard,
     children: [
       {

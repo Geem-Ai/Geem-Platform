@@ -30,13 +30,16 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: App Store foundations + Apps UI in AI Concept visual language"
-    status: pending
+    content: "Phase 9: 9A PASS + 9B PASS + 9C Connector Foundation PASS. Remaining 9D–9G (Drive, OneDrive, OpenWA, E2E). Do not start 9D or Phase 10 until requested."
+    status: in_progress
   - id: phase-10
-    content: "Phase 10: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
+    content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
     status: pending
   - id: phase-11
-    content: "Phase 11: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
+    content: "Phase 11: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
+    status: pending
+  - id: phase-12
+    content: "Phase 12: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
     status: pending
 isProject: false
 ---
@@ -97,7 +100,7 @@ apps/
 ├── api/                 # FastAPI backend (existing)
 ├── web/                 # Existing MVP UI — keep as-is (do not rename or delete)
 ├── workspace_web/       # New Workspace tenant product UI (this plan)
-├── dashboard_web/       # Platform Admin UI (future — Phase 11, last)
+├── dashboard_web/       # Platform Admin UI (future — Phase 12, last)
 └── landpage_web/        # Marketing / landing site (future)
 ```
 
@@ -555,7 +558,7 @@ Workspace
 │   ├── API Keys
 │   └── Usage
 ├── Apps
-├── Members
+├── Members          ← Phase 1 stub; Phase 10 = invites + polish + role matrix
 ├── Storage
 ├── Billing
 │   ├── Subscription
@@ -591,6 +594,7 @@ erDiagram
 - `users` — email, password_hash (argon2), status, platform_role (`none|admin`), timestamps, soft-delete
 - `workspaces` — name, slug, status, created_by, soft-delete
 - `workspace_memberships` — workspace_id, user_id, role (`owner|admin|member`), unique `(workspace_id, user_id)`
+- `workspace_invitations` — Phase 10: email invite tokens (pending/accepted/revoked); see Phase 10 locked decisions
 - `sessions` or JWT refresh tokens — hashed refresh tokens, device meta
 
 **Experts / knowledge**
@@ -802,11 +806,13 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 - Sidebar brand: Geem avatar + product name (not Metronic logo)
 - Chat empty/assistant states prepared to use Geem avatar (fully wired in Phase 4)
 - Workspace switcher + account menu wired to FastAPI
-- Protected routes; role-aware nav stubs
+- Protected routes; role-aware nav stubs (including **Members** `/members` list/role/remove)
 - Subdomain/hostname UX context + API client workspace handling
 - EN/AR + `dir` switching baseline
 
-**Authorization:** owner/admin/member matrix.
+**Authorization:** owner/admin/member matrix (`WorkspacePolicy`).
+
+**Deferred to Phase 10:** email invites, pending-invite management, Members page Metronic polish, in-product role-matrix explainer. Phase 1 ships membership CRUD for existing users only (`members.noInviteHint`).
 
 **Tests:** membership isolation; slug uniqueness; unauthenticated redirect.
 
@@ -1017,7 +1023,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Billing history (`/billing/history`) lists Workspace `purchases`; credit ledger linked via Usage history
 - Existing `/billing/usage` kept; Overview “Manage subscription”; EN/AR + RTL; workspace-scoped React Query keys
 
-**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 11), enabling two gateways at once.
+**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 12), enabling two gateways at once.
 
 **Acceptance (full Phase 6):** Pay for a plan or credit pack through the enabled gateway via redirect; return is verified server-side and applied once; switching the enabled gateway does not change `BillingService` call sites.
 
@@ -1074,19 +1080,91 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** pending
+**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** (Connector foundation: connections, registry, OAuth state, webhooks, sync runs, items). Do not start 9D–9G or Phase 10 until requested.
 
-**Goal:** apps + installations schema; workspace install stub UI using AI Concept visual language only.
+**Revised slices:**
 
-**Acceptance:** Install/uninstall recorded; config encrypted; no connector sync yet.
+```text
+9A — App Store Core          ✅ PASS
+9B — App Billing & Plans     ✅ PASS
+9C — Connector Foundation    ✅ PASS
+9D — Google Drive
+9E — Microsoft OneDrive
+9F — OpenWA / WhatsApp
+9G — App Management + E2E Gate
+```
+
+**9A Goal:** global catalog (`app_categories`, `apps`, `app_plans`, `app_plan_entitlements`), workspace `app_installations`, encrypted config boundary, free install/uninstall, Workspace App Store UI (`/apps`, `/apps/:slug`, `/apps/installed`), role-aware controls, EN/AR.
+
+**9A Acceptance:** Install/uninstall recorded for free published apps; paid/coming-soon cannot bypass billing; config encrypted at rest and never exposed via API; no connector sync yet; starter seeds: Google Drive + Microsoft OneDrive (free) + OpenWA (subscription/coming_soon).
+
+**9B Goal:** App commerce on existing `BillingGateway` — one-time `app_licenses`, monthly `app_subscriptions` (manual renewal), purchase kinds `app_one_time` / `app_subscription` / `app_subscription_renewal`, `AppAccessService` + plan entitlement resolver, checkout/renew APIs, Apps payment-result UX, billing history labels. No recurring charges, no connectors.
+
+**9B Acceptance:** Free apps unchanged; paid install gated by license/subscription; license survives uninstall; subscription access is time-aware; renewals extend calendar months idempotently; ClickPay/Noop return path reused; owner/admin only; Workspace isolation.
+
+**9C Goal:** Reusable connector framework — `app_connections`, adapter registry/protocols, credential encryption, OAuth state (Redis), webhook routing + idempotency, sync runs + Celery tenant context, `connector_items`, connection limits via `connections` entitlement, Workspace Apps connection UI foundation. No production Google/Microsoft/OpenWA adapters.
+
+**9C Acceptance:** Catalog `connector_key`/`connector_kind`; registry unavailable for production keys until 9D–9F; connection lifecycle + encrypted secrets; OAuth state one-time/bound; webhook routing token ≠ connection UUID; sync/webhook infra proven with test-only fake adapter; Installed vs Connected UI; EN/AR.
+
+**Next:** Phase 9D (Google Drive) when explicitly requested — not Phase 10 yet.
 
 ---
 
-### Phase 10 — Hardening
+### Phase 10 — Members UX (invites + role matrix + polish)
 
-**Status:** pending — do not start until Phase 9 is complete and this phase is explicitly requested.
+**Status:** pending — do not start until Phase 9 is complete and this phase is explicitly requested. Runs **before** Hardening (Phase 11).
 
-Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
+**Baseline already shipped (Phase 1):** sidebar **Members** item → `/members`; list / change role / remove for existing members; `WorkspacePolicy` role matrix; copy still says invites unavailable.
+
+**Gap this phase closes:** cannot add people by email; no pending invites; Members UI is a thin stub vs other AI Concept pages; role capabilities are not explained in-product.
+
+**Goal:** Production Members experience — invite by email, manage pending invites, show owner/admin/member capabilities, polish `/members` to AI Concept visual language. Sidebar entry stays; do not invent a second nav location.
+
+#### Locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Invite model | Tokenized **email invite** (not auto-add without accept) |
+| Table | `workspace_invitations` — workspace_id, email (normalized), role (`admin\|member` only on invite; promote-to-owner stays owner-only via existing role PATCH), token_hash, invited_by, expires_at, accepted_at, revoked_at, unique pending `(workspace_id, email)` |
+| Accept flow | Link → `workspace_web` invite-accept route → login/register with **same email** → `POST /api/invitations/accept` → membership row; reject email mismatch |
+| Email delivery | `EmailProvider` protocol + **console/log adapter** for local/tests; optional SMTP settings for non-local (same pattern as other adapters). Acceptance does **not** require a third-party ESP |
+| Who can invite | owner/admin (`MANAGE_MEMBERS`); cannot invite as `owner` |
+| Existing member | Invite to already-active membership → 409 |
+| Resend / revoke | Owner/admin; resend rotates token + expiry; revoke sets `revoked_at` |
+| Role matrix UI | Read-only capability summary on Members page aligned with `WorkspacePolicy` (EN/AR); UX helpers remain non-authoritative |
+| Out of scope | SSO/SCIM, bulk CSV import, seat billing by member count, domain allowlists, invite-as-owner |
+
+#### 10A — Invitations backend
+
+**DB / services:** `workspace_invitations`; extend `WorkspaceService` (or focused `InvitationService`); hash invite tokens like API keys / refresh tokens.
+
+**APIs (session auth, workspace-scoped except accept):**
+- `POST /api/workspaces/{id}/invitations` — create + send
+- `GET /api/workspaces/{id}/invitations` — pending list (owner/admin)
+- `POST /api/workspaces/{id}/invitations/{id}/resend`
+- `DELETE /api/workspaces/{id}/invitations/{id}` — revoke
+- `POST /api/invitations/accept` — body `{ token }` (authenticated)
+
+**Tests:** isolation; last-owner rules unchanged; expired/revoked/mismatched-email fail closed; accept is idempotent for already-accepted token.
+
+#### 10B — Members UI (AI Concept)
+
+**Frontend (`apps/workspace_web`):**
+- Upgrade [`MembersPage`](apps/workspace_web/src/features/members/pages/MembersPage.tsx): members table + pending invites; invite dialog (email + role); revoke/resend; remove `noInviteHint` once live
+- Invite-accept route (public-ish gated: auth required) with EN/AR + RTL
+- Role matrix card/section (owner vs admin vs member) matching policy
+- Nav: keep existing [`nav-config`](apps/workspace_web/src/app/layouts/workspace/nav-config.ts) Members item; role-aware manage controls only
+- API client under `services/api/` only; no `samples/` imports
+
+**Acceptance (full Phase 10):** Owner/admin invites by email; invitee accepts after auth and appears in members list with the invited role; pending invites list/revoke/resend work; members without manage rights see list + matrix only; EN/AR + RTL; Playwright smoke: invite → accept → appear in Members; no ESP required for CI (console adapter + token from API/test helper).
+
+---
+
+### Phase 11 — Hardening
+
+**Status:** pending — do not start until Phase 10 (Members UX) is complete and this phase is explicitly requested.
+
+Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat; optionally invite path), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
 
 **Usage metering scale (saved plan):** [usage_events_scale.plan.md](usage_events_scale.plan.md) — execute in this phase, not earlier.
 
@@ -1101,9 +1179,9 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ---
 
-### Phase 11 — Platform Admin (separate scope / future `dashboard_web`)
+### Phase 12 — Platform Admin (separate scope / future `dashboard_web`)
 
-**Status:** pending — **last step.** Do not start until Phase 9 (App Store) and Phase 10 (Hardening) are complete and this phase is explicitly requested.
+**Status:** pending — **last step.** Do not start until Phase 9 (App Store), Phase 10 (Members UX), and Phase 11 (Hardening) are complete and this phase is explicitly requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 

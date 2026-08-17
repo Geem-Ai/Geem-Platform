@@ -57,6 +57,10 @@ export type Purchase = {
   item_name: string | null;
   item_code: string | null;
   credits: number | null;
+  app_slug?: string | null;
+  app_name?: string | null;
+  commercial_action?: string | null;
+  billing_interval?: string | null;
   paid_at: string | null;
   created_at: string;
 };

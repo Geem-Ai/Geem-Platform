@@ -103,6 +103,53 @@ class ErrorCategory(StrEnum):
     PLAN_UNAVAILABLE = "plan_unavailable"
     SYSTEM_WORKSPACE_CHECKOUT_FORBIDDEN = "system_workspace_checkout_forbidden"
 
+    # App Store (Phase 9A) — cross-workspace misses use not_found (404)
+    APP_NOT_FOUND = "app_not_found"
+    APP_NOT_AVAILABLE = "app_not_available"
+    APP_ALREADY_INSTALLED = "app_already_installed"
+    APP_NOT_INSTALLED = "app_not_installed"
+    APP_BILLING_REQUIRED = "app_billing_required"
+    APP_INSTALL_FORBIDDEN = "app_install_forbidden"
+    APP_INSTALLATION_NOT_FOUND = "app_installation_not_found"
+
+    # App Store billing (Phase 9B)
+    APP_PLAN_NOT_FOUND = "app_plan_not_found"
+    APP_PLAN_INACTIVE = "app_plan_inactive"
+    APP_PLAN_MISMATCH = "app_plan_mismatch"
+    APP_ALREADY_LICENSED = "app_already_licensed"
+    APP_SUBSCRIPTION_REQUIRED = "app_subscription_required"
+    APP_SUBSCRIPTION_EXPIRED = "app_subscription_expired"
+    APP_SUBSCRIPTION_ALREADY_ACTIVE = "app_subscription_already_active"
+    APP_RENEWAL_NOT_ALLOWED = "app_renewal_not_allowed"
+    APP_CURRENCY_NOT_SUPPORTED = "app_currency_not_supported"
+    APP_CHECKOUT_FORBIDDEN = "app_checkout_forbidden"
+    APP_CHECKOUT_IN_PROGRESS = "app_checkout_in_progress"
+    APP_PURCHASE_NOT_PAYABLE = "app_purchase_not_payable"
+
+    # Connectors (Phase 9C)
+    CONNECTOR_NOT_AVAILABLE = "connector_not_available"
+    CONNECTOR_NOT_SUPPORTED = "connector_not_supported"
+    CONNECTOR_ALREADY_REGISTERED = "connector_already_registered"
+    CONNECTOR_ACCESS_REQUIRED = "connector_access_required"
+    CONNECTOR_INSTALLATION_REQUIRED = "connector_installation_required"
+    CONNECTOR_LIMIT_REACHED = "connector_limit_reached"
+    CONNECTOR_NOT_FOUND = "connector_not_found"
+    CONNECTOR_ALREADY_DISCONNECTED = "connector_already_disconnected"
+    CONNECTOR_CREDENTIALS_INVALID = "connector_credentials_invalid"
+    CONNECTOR_CREDENTIALS_EXPIRED = "connector_credentials_expired"
+    CONNECTOR_CONNECTION_FAILED = "connector_connection_failed"
+    CONNECTOR_HEALTH_CHECK_FAILED = "connector_health_check_failed"
+    CONNECTOR_SYNC_NOT_SUPPORTED = "connector_sync_not_supported"
+    CONNECTOR_SYNC_IN_PROGRESS = "connector_sync_in_progress"
+    CONNECTOR_SYNC_NOT_FOUND = "connector_sync_not_found"
+    CONNECTOR_OAUTH_STATE_INVALID = "connector_oauth_state_invalid"
+    CONNECTOR_OAUTH_STATE_EXPIRED = "connector_oauth_state_expired"
+    CONNECTOR_OAUTH_STATE_REPLAYED = "connector_oauth_state_replayed"
+    CONNECTOR_OAUTH_RETURN_PATH_INVALID = "connector_oauth_return_path_invalid"
+    CONNECTOR_WEBHOOK_INVALID = "connector_webhook_invalid"
+    CONNECTOR_WEBHOOK_UNAUTHORIZED = "connector_webhook_unauthorized"
+    CONNECTOR_INVALID_TRANSITION = "connector_invalid_transition"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -174,6 +221,50 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "api_key_not_found": 404,
     # Phase 7B — public API rate limiting
     "rate_limit_exceeded": 429,
+    # Phase 9A — App Store
+    "app_not_found": 404,
+    "app_not_available": 409,
+    "app_already_installed": 409,
+    "app_not_installed": 409,
+    "app_billing_required": 402,
+    "app_install_forbidden": 403,
+    "app_installation_not_found": 404,
+    # Phase 9B — App billing
+    "app_plan_not_found": 404,
+    "app_plan_inactive": 409,
+    "app_plan_mismatch": 409,
+    "app_already_licensed": 409,
+    "app_subscription_required": 402,
+    "app_subscription_expired": 402,
+    "app_subscription_already_active": 409,
+    "app_renewal_not_allowed": 409,
+    "app_currency_not_supported": 422,
+    "app_checkout_forbidden": 403,
+    "app_checkout_in_progress": 409,
+    "app_purchase_not_payable": 422,
+    # Phase 9C — Connectors
+    "connector_not_available": 409,
+    "connector_not_supported": 409,
+    "connector_already_registered": 409,
+    "connector_access_required": 402,
+    "connector_installation_required": 409,
+    "connector_limit_reached": 429,
+    "connector_not_found": 404,
+    "connector_already_disconnected": 409,
+    "connector_credentials_invalid": 401,
+    "connector_credentials_expired": 401,
+    "connector_connection_failed": 502,
+    "connector_health_check_failed": 502,
+    "connector_sync_not_supported": 409,
+    "connector_sync_in_progress": 409,
+    "connector_sync_not_found": 404,
+    "connector_oauth_state_invalid": 400,
+    "connector_oauth_state_expired": 400,
+    "connector_oauth_state_replayed": 400,
+    "connector_oauth_return_path_invalid": 400,
+    "connector_webhook_invalid": 400,
+    "connector_webhook_unauthorized": 401,
+    "connector_invalid_transition": 409,
 }
 
 

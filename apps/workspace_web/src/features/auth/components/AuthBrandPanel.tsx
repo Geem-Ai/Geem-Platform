@@ -48,21 +48,21 @@ export function AuthBrandPanel() {
           </div>
         </div>
 
-        <div className="my-auto space-y-8 py-12">
-          <div className="space-y-3">
-            <h2 className="max-w-sm text-3xl font-semibold tracking-tight text-white">
+        <div className="my-auto w-full space-y-6 py-10">
+          <div className="max-w-lg space-y-3">
+            <h2 className="text-3xl font-semibold tracking-tight text-white">
               {t('auth.brandHeadline')}
             </h2>
-            <p className="max-w-sm text-sm leading-relaxed text-white/75">
+            <p className="text-sm leading-relaxed text-white/75">
               {t('auth.brandBody')}
             </p>
           </div>
 
-          <ul className="space-y-3">
+          <ul className="max-w-md space-y-3">
             {HIGHLIGHTS.map(({ icon: Icon, titleKey, bodyKey }) => (
               <li
                 key={titleKey}
-                className="flex items-start gap-3 rounded-xl border border-white/15 bg-white/10 p-3.5 backdrop-blur-sm"
+                className="flex items-start gap-3 rounded-xl border border-white/15 bg-white/10 px-3.5 py-3 backdrop-blur-sm"
               >
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
                   <Icon className="size-4 text-white" aria-hidden />

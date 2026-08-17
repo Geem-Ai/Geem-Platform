@@ -24,6 +24,9 @@ import { ApiUsagePage } from '@/features/api-keys/pages/ApiUsagePage';
 import { UsageHistoryPage } from '@/features/usage/pages/UsageHistoryPage';
 import { UsagePage } from '@/features/usage/pages/UsagePage';
 import { StoragePage } from '@/features/storage/pages/StoragePage';
+import { AppsPage } from '@/features/apps/pages/AppsPage';
+import { AppPaymentResultPage } from '@/features/apps/pages/AppPaymentResultPage';
+import { InstalledAppsPage } from '@/features/apps/pages/InstalledAppsPage';
 
 export function AppRouter() {
   return (
@@ -51,7 +54,10 @@ export function AppRouter() {
             <Route path="api" element={<Navigate to="/api/keys" replace />} />
             <Route path="api/keys" element={<ApiKeysPage />} />
             <Route path="api/usage" element={<ApiUsagePage />} />
-            <Route path="apps" element={<PlaceholderPage titleKey="nav.apps" />} />
+            <Route path="apps" element={<AppsPage />} />
+            <Route path="apps/installed" element={<InstalledAppsPage />} />
+            <Route path="apps/payment/result" element={<AppPaymentResultPage />} />
+            <Route path="apps/:slug" element={<AppsPage />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="storage" element={<StoragePage />} />
             <Route

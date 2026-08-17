@@ -55,6 +55,35 @@ export type ApiErrorCode =
   | 'credit_pack_unavailable'
   | 'plan_unavailable'
   | 'system_workspace_checkout_forbidden'
+  | 'app_not_found'
+  | 'app_not_available'
+  | 'app_already_installed'
+  | 'app_not_installed'
+  | 'app_billing_required'
+  | 'app_install_forbidden'
+  | 'app_installation_not_found'
+  | 'app_plan_not_found'
+  | 'app_plan_inactive'
+  | 'app_plan_mismatch'
+  | 'app_already_licensed'
+  | 'app_subscription_required'
+  | 'app_subscription_expired'
+  | 'app_subscription_already_active'
+  | 'app_renewal_not_allowed'
+  | 'app_currency_not_supported'
+  | 'app_checkout_forbidden'
+  | 'app_checkout_in_progress'
+  | 'app_purchase_not_payable'
+  | 'connector_not_available'
+  | 'connector_not_supported'
+  | 'connector_limit_reached'
+  | 'connector_not_found'
+  | 'connector_already_disconnected'
+  | 'connector_credentials_invalid'
+  | 'connector_credentials_expired'
+  | 'connector_sync_not_supported'
+  | 'connector_sync_in_progress'
+  | 'api_key_not_found'
   | 'unknown';
 
 const KNOWN_CODES = new Set<string>([
@@ -112,6 +141,35 @@ const KNOWN_CODES = new Set<string>([
   'credit_pack_unavailable',
   'plan_unavailable',
   'system_workspace_checkout_forbidden',
+  'app_not_found',
+  'app_not_available',
+  'app_already_installed',
+  'app_not_installed',
+  'app_billing_required',
+  'app_install_forbidden',
+  'app_installation_not_found',
+  'app_plan_not_found',
+  'app_plan_inactive',
+  'app_plan_mismatch',
+  'app_already_licensed',
+  'app_subscription_required',
+  'app_subscription_expired',
+  'app_subscription_already_active',
+  'app_renewal_not_allowed',
+  'app_currency_not_supported',
+  'app_checkout_forbidden',
+  'app_checkout_in_progress',
+  'app_purchase_not_payable',
+  'connector_not_available',
+  'connector_not_supported',
+  'connector_limit_reached',
+  'connector_not_found',
+  'connector_already_disconnected',
+  'connector_credentials_invalid',
+  'connector_credentials_expired',
+  'connector_sync_not_supported',
+  'connector_sync_in_progress',
+  'api_key_not_found',
 ]);
 
 export class ApiError extends Error {
@@ -222,6 +280,34 @@ export function errorMessageKey(code: ApiErrorCode): string {
     credit_pack_unavailable: 'errors.creditPackUnavailable',
     plan_unavailable: 'errors.planUnavailable',
     system_workspace_checkout_forbidden: 'errors.systemWorkspaceCheckoutForbidden',
+    app_not_found: 'errors.appNotFound',
+    app_not_available: 'errors.appNotAvailable',
+    app_already_installed: 'errors.appAlreadyInstalled',
+    app_not_installed: 'errors.appNotInstalled',
+    app_billing_required: 'errors.appBillingRequired',
+    app_install_forbidden: 'errors.appInstallForbidden',
+    app_installation_not_found: 'errors.appInstallationNotFound',
+    app_plan_not_found: 'errors.appPlanNotFound',
+    app_plan_inactive: 'errors.appPlanInactive',
+    app_plan_mismatch: 'errors.appPlanMismatch',
+    app_already_licensed: 'errors.appAlreadyLicensed',
+    app_subscription_required: 'errors.appSubscriptionRequired',
+    app_subscription_expired: 'errors.appSubscriptionExpired',
+    app_subscription_already_active: 'errors.appSubscriptionAlreadyActive',
+    app_renewal_not_allowed: 'errors.appRenewalNotAllowed',
+    app_currency_not_supported: 'errors.appCurrencyNotSupported',
+    app_checkout_forbidden: 'errors.appCheckoutForbidden',
+    app_checkout_in_progress: 'errors.appCheckoutInProgress',
+    app_purchase_not_payable: 'errors.appPurchaseNotPayable',
+    connector_not_available: 'errors.connectorNotAvailable',
+    connector_not_supported: 'errors.connectorNotSupported',
+    connector_limit_reached: 'errors.connectorLimitReached',
+    connector_not_found: 'errors.connectorNotFound',
+    connector_already_disconnected: 'errors.connectorAlreadyDisconnected',
+    connector_credentials_invalid: 'errors.connectorCredentialsInvalid',
+    connector_credentials_expired: 'errors.connectorCredentialsExpired',
+    connector_sync_not_supported: 'errors.connectorSyncNotSupported',
+    connector_sync_in_progress: 'errors.connectorSyncInProgress',
   };
   return map[code] ?? 'errors.generic';
 }
@@ -231,6 +317,7 @@ export function isQuotaErrorCode(code: string | null | undefined): boolean {
     code === 'quota_exceeded' ||
     code === 'insufficient_credits' ||
     code === 'expert_limit_reached' ||
-    code === 'storage_quota_exceeded'
+    code === 'storage_quota_exceeded' ||
+    code === 'connector_limit_reached'
   );
 }

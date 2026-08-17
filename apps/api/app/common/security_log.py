@@ -28,6 +28,11 @@ _BLOCKED_KEYS = frozenset(
         "api_key",
         "plaintext",
         "secret_hash",
+        "code_verifier",
+        "pkce",
+        "webhook_secret",
+        "delta_link",
+        "sync_cursor",
     }
 )
 

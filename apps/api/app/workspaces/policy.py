@@ -22,6 +22,8 @@ class WorkspaceAction(StrEnum):
     REPROCESS_DOCUMENT = "reprocess_document"
     # API keys (Phase 7A) — owner/admin only
     MANAGE_API_KEYS = "manage_api_keys"
+    # App Store (Phase 9A) — owner/admin install/uninstall; members browse via READ
+    MANAGE_APPS = "manage_apps"
 
 
 _DOCUMENT_ACTIONS = frozenset(
@@ -47,6 +49,7 @@ _ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[WorkspaceAction]] = {
             WorkspaceAction.CHANGE_MEMBER_ROLES,
             WorkspaceAction.PROMOTE_TO_OWNER,
             WorkspaceAction.MANAGE_API_KEYS,
+            WorkspaceAction.MANAGE_APPS,
             *_DOCUMENT_ACTIONS,
         }
     ),
@@ -58,6 +61,7 @@ _ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[WorkspaceAction]] = {
             WorkspaceAction.MANAGE_MEMBERS,
             WorkspaceAction.CHANGE_MEMBER_ROLES,
             WorkspaceAction.MANAGE_API_KEYS,
+            WorkspaceAction.MANAGE_APPS,
             *_DOCUMENT_ACTIONS,
         }
     ),

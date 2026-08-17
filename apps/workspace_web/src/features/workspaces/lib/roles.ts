@@ -26,6 +26,10 @@ export function canManageApiKeys(role: string | null | undefined): boolean {
   return role === 'owner' || role === 'admin';
 }
 
+export function canManageApps(role: string | null | undefined): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
 export function canDeleteStorageFiles(role: string | null | undefined): boolean {
   return role === 'owner' || role === 'admin';
 }

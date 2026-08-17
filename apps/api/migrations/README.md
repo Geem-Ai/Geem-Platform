@@ -24,6 +24,9 @@
 - Phase 7A: `0013_api_keys.py` — `api_keys` (HMAC-SHA256 hashed secrets, scopes, persistent `revoked_at`) + nullable `usage_events.api_key_id`. Public Chat Completions is Phase 7B.
 - Phase 7B: no Alembic — `POST /api/v1/chat/completions` + `GET /api/v1/models` (OpenAI wire format, API-key auth, Expert via `X-Geem-Expert-Id`, entitlement key `api_requests_per_minute` seeded on bootstrap/demo plans, Redis rate limiter). Workspace Chat persistence is unchanged.
 - Phase 7C: `0014_api_usage_events_index.py` — partial index `(workspace_id, api_key_id, created_at) WHERE api_key_id IS NOT NULL` for API usage summary/history. Management UI: `GET /api/api-usage/summary` + `GET /api/api-usage/history` (session auth).
+- Phase 9A: `0017_app_store_catalog.py` — `app_categories`, `apps`, `app_plans`, `app_plan_entitlements`, `app_installations` (unique per workspace+app; encrypted `config_encrypted`). Catalog seed via `python -m app.apps_catalog.seed` / bootstrap (`ensure_app_catalog`). Checkout/connectors are later Phase 9 slices.
+- Phase 9B: `0018_app_billing.py` — `app_licenses`, `app_subscriptions`; extends `purchases.kind` CHECK with `app_one_time` / `app_subscription` / `app_subscription_renewal`. App checkout reuses `BillingGateway` + return fulfillment; no recurring charges.
+- Phase 9C: `0019_connector_foundation.py` — `apps.connector_key`/`connector_kind`; `app_connections` (encrypted credentials/sync state + webhook routing token hash); `connector_sync_runs`; `connector_items` (optional `current_document_id` SET NULL); `connector_webhook_events` (idempotency, no raw body). Production adapters arrive in 9D–9F.
 
 ### Document tenancy (Phase 2C final)
 

@@ -12,7 +12,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  PAYMENT_NOTICE_STATE_KEY,
   paymentNoticeFromState,
   type PaymentNotice,
 } from '../lib/outcome';

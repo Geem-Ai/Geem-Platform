@@ -15,6 +15,7 @@ from app.billing.models import (
     PlanEntitlement,
     PlanStatus,
     Purchase,
+    PurchaseStatus,
     Subscription,
     SubscriptionStatus,
 )
@@ -259,3 +260,30 @@ class PurchaseRepository:
             )
         )
         return rows, total
+
+    def find_open_app_checkout(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        app_id: uuid.UUID,
+        kinds: list[str],
+    ) -> Purchase | None:
+        """Return a pending/redirected App Store checkout for (workspace, app)."""
+        if not kinds:
+            return None
+        return self.db.scalar(
+            select(Purchase)
+            .where(
+                Purchase.workspace_id == workspace_id,
+                Purchase.kind.in_(kinds),
+                Purchase.status.in_(
+                    [
+                        PurchaseStatus.PENDING.value,
+                        PurchaseStatus.REDIRECTED.value,
+                    ]
+                ),
+                Purchase.payload["app_id"].astext == str(app_id),
+            )
+            .order_by(Purchase.created_at.desc())
+            .limit(1)
+        )
