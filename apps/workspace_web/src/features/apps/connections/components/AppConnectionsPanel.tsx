@@ -21,9 +21,14 @@ function oauthReturnPath(slug: string): string {
 export function AppConnectionsPanel({
   app,
   canManage,
+  showSyncHistory = true,
+  showTitle = true,
 }: {
   app: CatalogApp;
   canManage: boolean;
+  /** When false, parent renders Sync history in a separate tab. */
+  showSyncHistory?: boolean;
+  showTitle?: boolean;
 }) {
   const { t } = useTranslation();
   const connector = app.connector;
@@ -66,7 +71,7 @@ export function AppConnectionsPanel({
   const syncQuery = useConnectionSyncRuns(
     app.slug,
     firstConnection?.id,
-    Boolean(firstConnection),
+    Boolean(firstConnection) && showSyncHistory,
   );
 
   if (!connector) {
@@ -97,7 +102,9 @@ export function AppConnectionsPanel({
 
   return (
     <section className="space-y-3" data-testid="app-connections-panel">
-      <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+      {showTitle ? (
+        <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+      ) : null}
 
       {!installed ? (
         <p className="text-sm text-muted-foreground">
@@ -193,7 +200,7 @@ export function AppConnectionsPanel({
         />
       ))}
 
-      {firstConnection ? (
+      {showSyncHistory && firstConnection ? (
         <div className="space-y-2">
           <h4 className="text-sm font-medium">
             {t('apps.connections.syncHistory')}

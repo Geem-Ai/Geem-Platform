@@ -358,6 +358,7 @@ class ConnectorSyncService:
         else:
             run.status = SyncRunStatus.SUCCEEDED.value
             row.last_success_at = run.completed_at
+            self.connections.mark_healthy(row)
         self.db.flush()
         logger.info(
             "connector_sync_completed",

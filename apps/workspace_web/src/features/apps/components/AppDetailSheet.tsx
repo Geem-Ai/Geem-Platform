@@ -10,9 +10,11 @@ import {
   SheetTitle,
   floatingSheetPanel,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { canManageWorkspace } from '@/features/workspaces/lib/roles';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
+import type { CatalogApp } from '@/services/api/apps';
 import { useApp } from '../hooks/useAppsQueries';
 import {
   formatAppBillingLabel,
@@ -24,6 +26,7 @@ import { AppInstallButton } from './AppInstallButton';
 import { AppPlanCard } from './AppPlanCard';
 import { AppSubscriptionStatus } from './AppSubscriptionStatus';
 import { AppConnectionsPanel } from '../connections/components/AppConnectionsPanel';
+import { AppSyncHistoryPanel } from '../connections/components/AppSyncHistoryPanel';
 
 const SHEET_PANEL = floatingSheetPanel(
   'sm:w-[min(100%-2.5rem,36rem)]',
@@ -35,6 +38,48 @@ type AppDetailSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
+
+function shouldShowPlans(app: CatalogApp): boolean {
+  const access = app.access;
+  if (app.plans.length === 0) return false;
+  return (
+    app.billing_type === 'free' ||
+    (app.billing_type === 'one_time' && !access?.commercially_entitled) ||
+    (app.billing_type === 'subscription' && Boolean(access?.can_purchase))
+  );
+}
+
+function AppPlansSection({
+  app,
+  canManage,
+  showTitle = true,
+}: {
+  app: CatalogApp;
+  canManage: boolean;
+  showTitle?: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!shouldShowPlans(app)) return null;
+  return (
+    <div className="space-y-3" data-testid="app-plans-section">
+      {showTitle ? (
+        <h3 className="text-sm font-semibold">
+          {app.billing_type === 'subscription'
+            ? t('apps.billing.selectPlan')
+            : t('apps.plans')}
+        </h3>
+      ) : null}
+      {app.plans.map((plan) => (
+        <AppPlanCard
+          key={plan.id}
+          app={app}
+          plan={plan}
+          canManage={canManage}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps) {
   const { t } = useTranslation();
@@ -48,6 +93,8 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
     ? t(app.category.name_key, { defaultValue: app.category.slug })
     : '';
   const access = app?.access;
+  const showPlans = app ? shouldShowPlans(app) : false;
+  const useConnectorTabs = Boolean(app?.connector);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -137,32 +184,77 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </div>
                   ) : null}
 
-                  <AppConnectionsPanel app={app} canManage={canManage} />
-
                   <AppSubscriptionStatus app={app} canManage={canManage} />
 
-                  {app.plans.length > 0 &&
-                  (app.billing_type === 'free' ||
-                    (app.billing_type === 'one_time' &&
-                      !access?.commercially_entitled) ||
-                    (app.billing_type === 'subscription' &&
-                      access?.can_purchase)) ? (
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold">
-                        {app.billing_type === 'subscription'
-                          ? t('apps.billing.selectPlan')
-                          : t('apps.plans')}
-                      </h3>
-                      {app.plans.map((plan) => (
-                        <AppPlanCard
-                          key={plan.id}
+                  {useConnectorTabs ? (
+                    <Tabs
+                      defaultValue="connections"
+                      className="gap-3"
+                      data-testid="app-detail-tabs"
+                    >
+                      <TabsList aria-label={t('apps.detailTabs')}>
+                        <TabsTrigger
+                          value="connections"
+                          data-testid="app-tab-connections"
+                        >
+                          {t('apps.connections.title')}
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="sync"
+                          data-testid="app-tab-sync"
+                        >
+                          {t('apps.connections.syncHistory')}
+                        </TabsTrigger>
+                        {showPlans ? (
+                          <TabsTrigger
+                            value="plans"
+                            data-testid="app-tab-plans"
+                          >
+                            {app.billing_type === 'subscription'
+                              ? t('apps.billing.selectPlan')
+                              : t('apps.plans')}
+                          </TabsTrigger>
+                        ) : null}
+                      </TabsList>
+
+                      <TabsContent
+                        value="connections"
+                        forceMount
+                        className="space-y-3 data-[state=inactive]:hidden"
+                      >
+                        <AppConnectionsPanel
                           app={app}
-                          plan={plan}
                           canManage={canManage}
+                          showTitle={false}
+                          showSyncHistory={false}
                         />
-                      ))}
-                    </div>
-                  ) : null}
+                      </TabsContent>
+
+                      <TabsContent
+                        value="sync"
+                        forceMount
+                        className="space-y-3 data-[state=inactive]:hidden"
+                      >
+                        <AppSyncHistoryPanel app={app} />
+                      </TabsContent>
+
+                      {showPlans ? (
+                        <TabsContent
+                          value="plans"
+                          forceMount
+                          className="space-y-3 data-[state=inactive]:hidden"
+                        >
+                          <AppPlansSection
+                            app={app}
+                            canManage={canManage}
+                            showTitle={false}
+                          />
+                        </TabsContent>
+                      ) : null}
+                    </Tabs>
+                  ) : (
+                    <AppPlansSection app={app} canManage={canManage} />
+                  )}
                 </>
               ) : null}
             </div>
