@@ -1093,7 +1093,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 | Currency (ClickPay v1) | **SAR only** |
 | Samples | [`samples/clickpay_gateway`](samples/clickpay_gateway) is a **read-only** Perfex CRM module. Never import, copy PHP, or mutate it. Port the *flow* into Python adapters |
 | UI | `apps/workspace_web` Metronic AI Concept cards/dialogs; no `samples/` imports; EN/AR + RTL |
-| Invoices/PDFs | Lightweight `purchases` records are enough; invoice PDFs / tax docs later |
+| Invoices/PDFs | **Added after Phase 6:** ZATCA **simplified tax invoice** PDF on paid purchases (`GET /api/billing/purchases/{id}/invoice`). Phase 1 generation (required fields + TLV QR). Not Fatoora Phase 2 XML / cryptographic stamp. Seller VAT via `INVOICE_*` settings. |
 | Card-on-file / recurring charge | Not in Phase 6 — subscription change is a new hosted-page payment (or Noop in local) |
 
 #### ClickPay redirect flow (from the Perfex sample, adapted)
@@ -1132,7 +1132,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - Billing history (`/billing/history`) lists Workspace `purchases`; credit ledger linked via Usage history
 - Existing `/billing/usage` kept; Overview “Manage subscription”; EN/AR + RTL; workspace-scoped React Query keys
 
-**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, invoice PDF, Platform Admin gateway CRUD (`dashboard_web` / Phase 12), enabling two gateways at once.
+**Explicitly not in 6A/6B:** webhook receivers, multi-currency, saved cards, dunning, Platform Admin gateway CRUD (`dashboard_web` / Phase 12), enabling two gateways at once. Invoice PDF (ZATCA simplified tax invoice) was added later — see the Invoices/PDFs row above.
 
 **Acceptance (full Phase 6):** Pay for a plan or credit pack through the enabled gateway via redirect; return is verified server-side and applied once; switching the enabled gateway does not change `BillingService` call sites.
 

@@ -262,6 +262,7 @@ class BillingService:
             "provider_status": (result.extra or {}).get("provider_status"),
         }
         self.db.flush()
+        self._issue_invoice(purchase)
         logger.info(
             "billing_purchase_paid",
             extra={
@@ -362,6 +363,31 @@ class BillingService:
 
     def _fulfill(self, purchase: Purchase) -> None:
         self.fulfillment.fulfill(purchase)
+
+    def _issue_invoice(self, purchase: Purchase) -> None:
+        """Best-effort snapshot after payment is flushed.
+
+        Runs in a SAVEPOINT so a failed ``nextval`` / flush cannot abort the
+        outer payment transaction. Download backfills if this is skipped.
+        """
+        from app.billing.invoices.service import InvoiceService
+
+        try:
+            with self.db.begin_nested():
+                InvoiceService(self.db, self.settings).issue_for_purchase(purchase)
+        except AppError as exc:
+            logger.warning(
+                "billing_invoice_issue_skipped",
+                extra={
+                    "purchase_id": str(purchase.id),
+                    "code": exc.category.value,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "billing_invoice_issue_failed",
+                extra={"purchase_id": str(purchase.id)},
+            )
 
     def _mark_failed(self, purchase: Purchase, *, failure: str) -> Purchase:
         """Terminal failure that the caller must commit (do not raise after flush)."""

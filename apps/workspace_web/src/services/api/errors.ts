@@ -60,6 +60,8 @@ export type ApiErrorCode =
   | 'credit_pack_unavailable'
   | 'plan_unavailable'
   | 'system_workspace_checkout_forbidden'
+  | 'invoice_not_available'
+  | 'invoice_not_configured'
   | 'app_not_found'
   | 'app_not_available'
   | 'app_already_installed'
@@ -201,6 +203,8 @@ const KNOWN_CODES = new Set<string>([
   'credit_pack_unavailable',
   'plan_unavailable',
   'system_workspace_checkout_forbidden',
+  'invoice_not_available',
+  'invoice_not_configured',
   'app_not_found',
   'app_not_available',
   'app_already_installed',
@@ -395,6 +399,8 @@ export function errorMessageKey(code: string): string {
     credit_pack_unavailable: 'errors.creditPackUnavailable',
     plan_unavailable: 'errors.planUnavailable',
     system_workspace_checkout_forbidden: 'errors.systemWorkspaceCheckoutForbidden',
+    invoice_not_available: 'errors.invoiceNotAvailable',
+    invoice_not_configured: 'errors.invoiceNotConfigured',
     app_not_found: 'errors.appNotFound',
     app_not_available: 'errors.appNotAvailable',
     app_already_installed: 'errors.appAlreadyInstalled',

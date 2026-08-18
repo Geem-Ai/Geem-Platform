@@ -4,6 +4,7 @@ import {
   BILLING_HISTORY_PAGE_SIZE,
   createCreditPackCheckout,
   createSubscriptionCheckout,
+  downloadPurchaseInvoice,
   getPurchase,
   listBillingPlans,
   listCreditPacks,
@@ -113,5 +114,11 @@ export function useCreditPackCheckout() {
     onSuccess: (checkout) => {
       redirectToCheckout(checkout.redirect_url);
     },
+  });
+}
+
+export function useDownloadPurchaseInvoice() {
+  return useMutation({
+    mutationFn: (purchaseId: string) => downloadPurchaseInvoice(purchaseId),
   });
 }

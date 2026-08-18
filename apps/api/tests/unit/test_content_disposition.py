@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from starlette.responses import Response
 
-from app.api.documents import content_disposition, content_disposition_inline
+from app.common.http import content_disposition, content_disposition_inline
 
 
 def test_content_disposition_inline_ascii():

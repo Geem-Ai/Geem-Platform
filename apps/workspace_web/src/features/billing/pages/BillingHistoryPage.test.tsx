@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
@@ -28,7 +28,12 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   }),
 }));
 
+vi.mock('@/lib/download', () => ({
+  triggerBrowserDownload: vi.fn(),
+}));
+
 const listPurchases = vi.fn();
+const downloadPurchaseInvoice = vi.fn();
 
 vi.mock('@/services/api/billing', async () => {
   const actual = await vi.importActual<typeof import('@/services/api/billing')>(
@@ -37,6 +42,7 @@ vi.mock('@/services/api/billing', async () => {
   return {
     ...actual,
     listPurchases: (params?: unknown) => listPurchases(params),
+    downloadPurchaseInvoice: (id: string) => downloadPurchaseInvoice(id),
   };
 });
 
@@ -82,6 +88,7 @@ describe('BillingHistoryPage', () => {
   beforeEach(async () => {
     workspaceState.id = 'ws-a';
     listPurchases.mockReset();
+    downloadPurchaseInvoice.mockReset();
     listPurchases.mockResolvedValue(list([purchase()]));
     await i18n.changeLanguage('en');
   });
@@ -100,6 +107,38 @@ describe('BillingHistoryPage', () => {
     expect(screen.getByLabelText('SAR 25.00')).toBeInTheDocument();
     expect(screen.queryByText('tran_ref')).not.toBeInTheDocument();
     expect(screen.queryByText('server_key')).not.toBeInTheDocument();
+  });
+
+  it('shows an invoice download on paid rows only', async () => {
+    listPurchases.mockResolvedValue(
+      list([
+        purchase({ id: 'paid-1', status: 'paid' }),
+        purchase({ id: 'pend-1', status: 'pending', item_name: 'Pending pack' }),
+      ]),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-invoice-download-paid-1')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('billing-invoice-download-pend-1')).not.toBeInTheDocument();
+  });
+
+  it('downloads the invoice PDF for a paid purchase', async () => {
+    const { triggerBrowserDownload } = await import('@/lib/download');
+    downloadPurchaseInvoice.mockResolvedValue({
+      blob: new Blob(['%PDF'], { type: 'application/pdf' }),
+      filename: 'GEEM-000001.pdf',
+      contentType: 'application/pdf',
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('billing-invoice-download-pur-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('billing-invoice-download-pur-1'));
+    await waitFor(() => {
+      expect(downloadPurchaseInvoice).toHaveBeenCalledWith('pur-1');
+    });
+    expect(triggerBrowserDownload).toHaveBeenCalled();
   });
 
   it('shows an empty state', async () => {

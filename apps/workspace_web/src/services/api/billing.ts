@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, apiRequestBlob } from './client';
 
 export type BillingEntitlement = {
   key: string;
@@ -98,6 +98,10 @@ export function createCreditPackCheckout(packId: string): Promise<CheckoutResult
 
 export function getPurchase(purchaseId: string): Promise<Purchase> {
   return apiRequest<Purchase>(`/api/billing/purchases/${purchaseId}`);
+}
+
+export function downloadPurchaseInvoice(purchaseId: string) {
+  return apiRequestBlob(`/api/billing/purchases/${purchaseId}/invoice`);
 }
 
 export function listPurchases(params?: {

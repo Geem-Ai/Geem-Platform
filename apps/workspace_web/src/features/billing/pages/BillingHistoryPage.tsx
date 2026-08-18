@@ -14,6 +14,7 @@ import {
 import { BILLING_HISTORY_PAGE_SIZE } from '@/services/api/billing';
 import { formatPeriodDateTime } from '@/features/usage/lib/quota';
 import { BillingPageHeader } from '../components/BillingPageHeader';
+import { DownloadInvoiceButton } from '../components/DownloadInvoiceButton';
 import { PurchaseStatusBadge } from '../components/PurchaseStatusBadge';
 import { usePurchases } from '../hooks/useBillingQueries';
 import {
@@ -25,7 +26,7 @@ import {
   type PurchaseStatusFilter,
 } from '../lib/history';
 import { MoneyAmount } from '../components/MoneyAmount';
-import { purchaseKindLabelKey, formatPurchaseHistoryTitle } from '../lib/status';
+import { purchaseKindLabelKey, formatPurchaseHistoryTitle, isPaidStatus } from '../lib/status';
 
 function parsePage(raw: string | null): number {
   const n = Number(raw);
@@ -191,9 +192,14 @@ export function BillingHistoryPage() {
                       {item.id}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold shrink-0">
-                    <MoneyAmount amount={item.amount} currency={item.currency} />
-                  </p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {isPaidStatus(item.status) ? (
+                      <DownloadInvoiceButton purchaseId={item.id} />
+                    ) : null}
+                    <p className="text-sm font-semibold">
+                      <MoneyAmount amount={item.amount} currency={item.currency} />
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

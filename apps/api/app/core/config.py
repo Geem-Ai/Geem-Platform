@@ -178,6 +178,17 @@ class Settings(BaseSettings):
     clickpay_base_url: str = "https://secure.clickpay.com.sa"
     clickpay_timeout_seconds: float = 30.0
     billing_currency: str = "SAR"
+    # ZATCA simplified tax invoice — seller is the Geem legal entity.
+    # INVOICE_SELLER_NAME should match the VAT registration name (QR tag 1).
+    invoice_seller_name: str = "Geem"
+    invoice_seller_name_ar: str = "جيم"
+    invoice_vat_number: str = ""
+    invoice_cr_number: str = ""
+    invoice_address: str = "Kingdom of Saudi Arabia"
+    invoice_address_ar: str = "المملكة العربية السعودية"
+    # Standard KSA VAT. Catalog prices are treated as VAT-inclusive.
+    invoice_vat_rate: str = "0.15"
+    invoice_prices_include_vat: bool = True
     # SPA origin for post-verification browser handoff (Phase 6B).
     # Empty: local/test fall back to http://localhost:5174; non-local disables HTML redirect.
     workspace_web_url: str = ""
