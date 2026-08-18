@@ -135,6 +135,13 @@ export const en: SiteCopy = {
         description: 'Website channel',
       },
     ],
+    systemCard: {
+      eyebrow: 'Beyond chat',
+      title: 'Geem is more than a chatbot.',
+      description:
+        'Through the API, your technical team can bring Geem Expert answers grounded in your organization’s knowledge into ERP and internal tools, supporting employees with relevant information as decisions are made.',
+      tags: ['ERP systems', 'Internal tools', 'Human decision support'],
+    },
   },
   channels: {
     number: '03',

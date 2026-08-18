@@ -73,6 +73,12 @@ export type SiteCopy = {
     title: string;
     description: string;
     items: { id: string; title: string; description: string }[];
+    systemCard: {
+      eyebrow: string;
+      title: string;
+      description: string;
+      tags: string[];
+    };
   };
   channels: {
     number: string;
