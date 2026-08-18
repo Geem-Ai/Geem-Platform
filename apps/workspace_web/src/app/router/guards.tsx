@@ -48,13 +48,17 @@ export function consumePaymentReturn(): string | null {
 /** Login/onboarding continue target. Prefers `from`, then stashed payment return. */
 export function continueAfterAuth(from: unknown): string {
   const explicit = safeInternalPath(from);
+  const pathOnly = explicit?.split('?')[0] ?? null;
   if (
     explicit &&
-    explicit !== '/login' &&
-    explicit !== '/register' &&
-    explicit !== '/onboarding'
+    pathOnly &&
+    pathOnly !== '/login' &&
+    pathOnly !== '/register' &&
+    pathOnly !== '/forgot-password' &&
+    pathOnly !== '/reset-password' &&
+    pathOnly !== '/onboarding'
   ) {
-    if (isBillingPaymentResultPath(explicit.split('?')[0] ?? explicit)) {
+    if (isBillingPaymentResultPath(pathOnly)) {
       consumePaymentReturn();
     }
     return explicit;

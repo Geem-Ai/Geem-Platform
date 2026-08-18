@@ -1,0 +1,17 @@
+---
+import type { Locale } from '../../lib/i18n';
+import { organizationJsonLd, softwareApplicationJsonLd } from '../../lib/seo';
+
+type Props = {
+  locale: Locale;
+  includeSoftware?: boolean;
+};
+
+const { locale, includeSoftware = true } = Astro.props;
+const payloads: Record<string, unknown>[] = [organizationJsonLd()];
+if (includeSoftware) payloads.push(softwareApplicationJsonLd(locale));
+---
+
+{payloads.map((data) => (
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(data)} />
+))}

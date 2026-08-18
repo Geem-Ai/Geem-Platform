@@ -17,6 +17,7 @@ import {
   logoutSession,
   refreshSession,
   registerAccount,
+  resetPassword,
   type MeResponse,
   type User,
 } from '@/services/api';
@@ -39,6 +40,7 @@ type AuthContextValue = {
   me: MeResponse | null;
   login: (email: string, password: string) => Promise<MeResponse>;
   register: (email: string, password: string) => Promise<MeResponse>;
+  completePasswordReset: (token: string, password: string) => Promise<MeResponse>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   refreshSession: () => Promise<string>;
@@ -157,6 +159,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const completePasswordReset = useCallback(
+    async (token: string, password: string) => {
+      const res = await resetPassword(token, password);
+      applyToken(res.access_token, res.user.id);
+      setAccessToken(res.access_token);
+      setUser(res.user);
+      setSessionExpired(false);
+      const data = await fetchMe();
+      setMe(data);
+      setStatus('authenticated');
+      return data;
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     try {
       await logoutSession();
@@ -183,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       login,
       register,
+      completePasswordReset,
       logout,
       logoutAll,
       refreshSession: doRefresh,
@@ -197,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       login,
       register,
+      completePasswordReset,
       logout,
       logoutAll,
       doRefresh,

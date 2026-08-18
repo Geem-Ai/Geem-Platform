@@ -6,7 +6,8 @@
 - Repo folder may remain `ArabicRag`; user-facing strings use **Geem**
 - Workspace SaaS UI: `apps/workspace_web`
 - Legacy MVP UI: `apps/web` (keep runnable; do not rename/delete)
-- Future: `apps/dashboard_web`, `apps/landpage_web` (do not implement early)
+- Future: `apps/dashboard_web` (Platform Admin — Phase 12)
+- Marketing: `apps/landpage_web` (Astro static site; independent of Phase 11/12)
 
 ## UI Boundary Rule (mandatory)
 
@@ -38,7 +39,7 @@ Metronic upgrades are **manual selective ports** into `apps/workspace_web`. Docu
 | `apps/web` | Existing MVP — leave intact during transition |
 | `apps/workspace_web` | Geem Workspace SaaS product UI |
 | `apps/dashboard_web` | Platform Admin (future — README placeholder only) |
-| `apps/landpage_web` | Marketing (future — README placeholder only) |
+| `apps/landpage_web` | Geem public marketing site (Astro static) |
 
 Reuse patterns from `apps/web` by **copying/adapting**, not runtime imports across apps.
 
@@ -46,7 +47,7 @@ Reuse patterns from `apps/web` by **copying/adapting**, not runtime imports acro
 
 - Package boundaries under `apps/api/app/` (`common`, `identity`, `workspaces`, …) — implement domains per phase
 - `RequestContext` + middleware in `app.common`
-- `AUTH_REQUIRED=true` for SaaS Document/Query/Jobs after Phase 2C cutover (login/register/refresh/health remain public)
+- `AUTH_REQUIRED=true` for SaaS Document/Query/Jobs after Phase 2C cutover (login/register/refresh/forgot-password/reset-password/health remain public)
 - OpenAPI / product title: **Geem**
 - Alembic notes: `apps/api/migrations/README.md`
 

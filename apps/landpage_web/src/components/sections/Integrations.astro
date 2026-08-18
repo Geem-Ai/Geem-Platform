@@ -1,0 +1,41 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import Section from '../ui/Section.astro';
+import googleDrive from '../../assets/apps/google-drive.svg';
+import oneDrive from '../../assets/apps/microsoft-onedrive.svg';
+import whatsapp from '../../assets/apps/whatsapp.svg';
+import chatWidget from '../../assets/apps/chat-widget.svg';
+import { homeHash } from '../../lib/routes';
+import type { Locale } from '../../lib/i18n';
+
+type Props = { locale: Locale; copy: SiteCopy };
+const { locale, copy } = Astro.props;
+
+const icons: Record<string, string> = {
+  'google-drive': googleDrive.src,
+  'microsoft-onedrive': oneDrive.src,
+  whatsapp: whatsapp.src,
+  'chat-widget': chatWidget.src,
+};
+---
+
+<Section id="integrations" tone="light">
+  <div class="max-w-3xl" data-reveal>
+    <p class="eyebrow"><span class="section-number">{copy.integrations.number}</span> {copy.integrations.eyebrow}</p>
+    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.integrations.title}</h2>
+    <p class="mt-4 text-lg text-geem-muted">{copy.integrations.description}</p>
+    <a class="btn btn-ghost mt-4 inline-flex" href={homeHash(locale, 'channels')}>{copy.integrations.cta}</a>
+  </div>
+
+  <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
+    {
+      copy.integrations.items.map((item) => (
+        <article class="geem-card p-5">
+          <img src={icons[item.id]} alt="" width="40" height="40" class="size-10" loading="lazy" />
+          <h3 class="mt-4 text-lg font-semibold">{item.title}</h3>
+          <p class="mt-2 text-sm text-geem-muted">{item.description}</p>
+        </article>
+      ))
+    }
+  </div>
+</Section>

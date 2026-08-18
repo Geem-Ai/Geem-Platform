@@ -1,0 +1,65 @@
+---
+import MarketingLayout from '../../layouts/MarketingLayout.astro';
+import { getSiteCopy } from '../../content/site';
+import { isLocale, localeStaticPaths } from '../../lib/i18n';
+import { company } from '../../lib/company';
+import Button from '../../components/ui/Button.astro';
+import { getSiteConfig } from '../../lib/site';
+
+export function getStaticPaths() {
+  return localeStaticPaths();
+}
+
+const raw = Astro.params.locale;
+if (!isLocale(raw)) return Astro.redirect('/ar', 302);
+const locale = raw;
+const copy = getSiteCopy(locale);
+const { loginUrl } = getSiteConfig();
+const address = locale === 'ar' ? company.addressAr : company.addressEn;
+---
+
+<MarketingLayout
+  locale={locale}
+  copy={copy}
+  title={copy.meta.contactTitle}
+  description={copy.meta.contactDescription}
+  path="contact"
+>
+  <section class="section-shell section-light">
+    <div class="container-shell grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+      <div data-reveal>
+        <h1 class="text-4xl font-semibold tracking-tight">{copy.contact.title}</h1>
+        <p class="mt-4 text-lg text-geem-muted">{copy.contact.lead}</p>
+        <p class="mt-6 text-sm text-geem-muted">{copy.contact.workspaceHint}</p>
+        <div class="mt-6">
+          <Button href={loginUrl} variant="secondary-light">{copy.nav.login}</Button>
+        </div>
+      </div>
+
+      <div class="geem-card space-y-5 p-6" data-reveal>
+        <div>
+          <h2 class="text-sm font-semibold text-geem-muted">{copy.contact.salesLabel}</h2>
+          <a class="mt-1 inline-block font-medium text-geem-navy-900" href={`mailto:${company.emails.sales}`}>
+            {company.emails.sales}
+          </a>
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-geem-muted">{copy.contact.infoLabel}</h2>
+          <a class="mt-1 inline-block font-medium text-geem-navy-900" href={`mailto:${company.emails.info}`}>
+            {company.emails.info}
+          </a>
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-geem-muted">{copy.contact.phoneLabel}</h2>
+          <a class="mt-1 inline-block font-medium text-geem-navy-900" href={`tel:${company.phoneTel}`}>
+            {company.phoneDisplay}
+          </a>
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-geem-muted">{copy.contact.addressLabel}</h2>
+          <p class="mt-1 text-geem-navy-900">{address}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</MarketingLayout>

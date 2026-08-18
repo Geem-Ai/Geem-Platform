@@ -1,0 +1,72 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import type { Locale } from '../../lib/i18n';
+import { Picture, Image } from 'astro:assets';
+import hero from '../../assets/landing/riyadh-madinah-hero.webp';
+import avatar from '../../assets/brand/geem-avatar.webp';
+import Button from '../ui/Button.astro';
+import { getSiteConfig } from '../../lib/site';
+import { homeHash } from '../../lib/routes';
+
+type Props = {
+  locale: Locale;
+  copy: SiteCopy;
+};
+
+const { locale, copy } = Astro.props;
+const { signupUrl, loginUrl } = getSiteConfig();
+---
+
+<section class="relative min-h-[min(92vh,56rem)] overflow-hidden text-white" id="product">
+  <div class="hero-media">
+    <Picture
+      src={hero}
+      formats={['avif', 'webp']}
+      widths={[640, 960, 1280, 1600, 1774]}
+      sizes="100vw"
+      width={1774}
+      height={887}
+      alt={copy.hero.imageAlt}
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+    <div class="hero-overlay" aria-hidden="true"></div>
+    <div class="hero-grain" aria-hidden="true"></div>
+  </div>
+
+  <div class="relative container-shell flex min-h-[min(92vh,56rem)] flex-col justify-center py-24">
+    <div class="max-w-3xl">
+      <div class="hero-enter hero-enter-1 mb-6 flex items-center gap-3">
+        <Image
+          src={avatar}
+          alt=""
+          width={56}
+          height={56}
+          class="size-14 rounded-full shadow-lg shadow-black/30"
+          loading="eager"
+          fetchpriority="high"
+        />
+        <p class="eyebrow !text-geem-sand m-0">{copy.hero.eyebrow}</p>
+      </div>
+
+      <h1 class="hero-enter hero-enter-2 text-balance text-4xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
+        {copy.hero.title}
+      </h1>
+
+      <p class="hero-enter hero-enter-3 mt-5 max-w-2xl text-lg text-white/85 md:text-xl">
+        {copy.hero.description}
+      </p>
+
+      <ul class="hero-enter hero-enter-4 mt-6 space-y-2 text-white/80">
+        {copy.hero.bullets.map((item) => <li class="flex gap-2"><span aria-hidden="true">•</span><span>{item}</span></li>)}
+      </ul>
+
+      <div class="hero-enter hero-enter-5 mt-8 flex flex-wrap items-center gap-3">
+        <Button href={signupUrl} variant="primary">{copy.hero.primaryCta}</Button>
+        <Button href={loginUrl} variant="secondary">{copy.hero.secondaryCta}</Button>
+        <Button href={homeHash(locale, 'experts')} variant="ghost">{copy.hero.tertiaryCta}</Button>
+      </div>
+    </div>
+  </div>
+</section>

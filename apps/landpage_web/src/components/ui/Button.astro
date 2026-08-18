@@ -1,0 +1,15 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+type Props = HTMLAttributes<'a'> & {
+  variant?: 'primary' | 'secondary' | 'secondary-light' | 'ghost';
+  href: string;
+};
+
+const { variant = 'primary', class: className, ...rest } = Astro.props;
+const classes = ['btn', `btn-${variant}`, className].filter(Boolean).join(' ');
+---
+
+<a class={classes} {...rest}>
+  <slot />
+</a>

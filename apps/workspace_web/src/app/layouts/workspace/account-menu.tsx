@@ -198,6 +198,14 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
 
           <DropdownMenuSeparator />
 
+          <DropdownMenuItem
+            onSelect={() => navigate('/account')}
+            data-testid="account-settings-menu-item"
+          >
+            <UserRound className="size-3.5" />
+            {t('shell.accountSettings')}
+          </DropdownMenuItem>
+
           <DropdownMenuSub>
             <DropdownMenuSubTrigger data-testid="theme-menu">
               <ThemeGlyph theme={currentTheme} />

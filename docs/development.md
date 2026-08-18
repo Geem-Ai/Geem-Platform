@@ -24,10 +24,12 @@ You do **not** need the Metronic sample under `samples/` to run the stack. That 
 | `apps/api` | FastAPI + Celery |
 | `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
 | `apps/web` | Legacy MVP UI (port **5173**) — keep runnable; not the product |
-| `apps/dashboard_web` / `apps/landpage_web` | Placeholders only — do not implement |
+| `apps/landpage_web` | Public marketing site (Astro, port **4321**) |
+| `apps/dashboard_web` | Platform Admin placeholder — Phase 12 |
 | `infra/docker-compose.yml` | Local full stack |
 | `.env` | API / worker / shared backend env (copy from `.env.example`) |
 | `apps/workspace_web/.env` | Vite env (copy from `apps/workspace_web/.env.example`) |
+| `apps/landpage_web/.env` | Marketing public env (copy from `apps/landpage_web/.env.example`) |
 
 ## Environment files
 
@@ -36,6 +38,7 @@ From the repo root:
 ```bash
 cp .env.example .env
 cp apps/workspace_web/.env.example apps/workspace_web/.env
+cp apps/landpage_web/.env.example apps/landpage_web/.env
 ```
 
 Set at least:

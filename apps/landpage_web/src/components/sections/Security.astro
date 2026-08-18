@@ -1,0 +1,32 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import type { Locale } from '../../lib/i18n';
+import Section from '../ui/Section.astro';
+import { localizedPath } from '../../lib/site';
+
+type Props = { locale: Locale; copy: SiteCopy };
+const { locale, copy } = Astro.props;
+---
+
+<Section id="security-overview" tone="light" class="!pt-0">
+  <div class="rounded-[2rem] border border-geem-border bg-white p-8 md:p-10" data-reveal>
+    <p class="eyebrow"><span class="section-number">{copy.security.number}</span> {copy.security.eyebrow}</p>
+    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.security.title}</h2>
+    <p class="mt-4 max-w-3xl text-lg text-geem-muted">{copy.security.description}</p>
+
+    <div class="mt-8 grid gap-4 md:grid-cols-2" data-reveal-stagger>
+      {
+        copy.security.points.map((point) => (
+          <article class="rounded-2xl border border-geem-border bg-geem-surface/80 p-5">
+            <h3 class="font-semibold text-geem-navy-900">{point.title}</h3>
+            <p class="mt-2 text-sm text-geem-muted">{point.description}</p>
+          </article>
+        ))
+      }
+    </div>
+
+    <a class="btn btn-ghost mt-6 inline-flex" href={localizedPath(locale, 'security')}>
+      {copy.security.linkLabel}
+    </a>
+  </div>
+</Section>

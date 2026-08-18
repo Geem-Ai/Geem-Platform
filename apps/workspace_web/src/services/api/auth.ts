@@ -50,3 +50,35 @@ export async function fetchMe(): Promise<MeResponse> {
     skipWorkspace: false,
   });
 }
+
+export async function forgotPassword(email: string): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>('/api/auth/forgot-password', {
+    method: 'POST',
+    json: { email },
+    skipAuth: true,
+    skipWorkspace: true,
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<AuthTokenResponse> {
+  return apiRequest<AuthTokenResponse>('/api/auth/reset-password', {
+    method: 'POST',
+    json: { token, password },
+    skipAuth: true,
+    skipWorkspace: true,
+  });
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>('/api/auth/change-password', {
+    method: 'POST',
+    json: { current_password: currentPassword, new_password: newPassword },
+    skipWorkspace: true,
+  });
+}

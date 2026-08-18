@@ -1,0 +1,16 @@
+---
+import LegalDocument from '../../components/sections/LegalDocument.astro';
+import { getSiteCopy } from '../../content/site';
+import { isLocale, localeStaticPaths } from '../../lib/i18n';
+
+export function getStaticPaths() {
+  return localeStaticPaths();
+}
+
+const raw = Astro.params.locale;
+if (!isLocale(raw)) return Astro.redirect('/ar', 302);
+const locale = raw;
+const copy = getSiteCopy(locale);
+---
+
+<LegalDocument locale={locale} copy={copy} kind="privacy" />

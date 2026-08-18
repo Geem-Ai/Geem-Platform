@@ -1,0 +1,37 @@
+---
+import MarketingLayout from '../../layouts/MarketingLayout.astro';
+import { getSiteCopy } from '../../content/site';
+import { isLocale, localeStaticPaths } from '../../lib/i18n';
+import { company } from '../../lib/company';
+
+export function getStaticPaths() {
+  return localeStaticPaths();
+}
+
+const raw = Astro.params.locale;
+if (!isLocale(raw)) return Astro.redirect('/ar', 302);
+const locale = raw;
+const copy = getSiteCopy(locale);
+---
+
+<MarketingLayout
+  locale={locale}
+  copy={copy}
+  title={copy.meta.aboutTitle}
+  description={copy.meta.aboutDescription}
+  path="about"
+>
+  <section class="section-shell section-light">
+    <div class="container-shell max-w-3xl" data-reveal>
+      <p class="eyebrow">{locale === 'ar' ? company.brandAr : company.brandEn}</p>
+      <h1 class="mt-3 text-4xl font-semibold tracking-tight">{copy.about.title}</h1>
+      <p class="mt-4 text-xl text-geem-muted">{copy.about.lead}</p>
+      <div class="prose-legal mt-8 space-y-4">
+        {copy.about.paragraphs.map((p) => <p>{p}</p>)}
+      </div>
+      <p class="mt-8 text-sm font-medium text-geem-navy-900">
+        {locale === 'ar' ? company.madeInMadinahAr : company.madeInMadinahEn}
+      </p>
+    </div>
+  </section>
+</MarketingLayout>

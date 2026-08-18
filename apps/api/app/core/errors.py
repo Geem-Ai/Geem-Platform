@@ -31,6 +31,8 @@ class ErrorCategory(StrEnum):
     SESSION_EXPIRED = "session_expired"
     SESSION_REVOKED = "session_revoked"
     WEAK_PASSWORD = "weak_password"
+    INVALID_RESET_TOKEN = "invalid_reset_token"
+    RESET_TOKEN_EXPIRED = "reset_token_expired"
 
     # Workspaces / membership
     WORKSPACE_SLUG_TAKEN = "workspace_slug_taken"
@@ -232,6 +234,8 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "session_expired": 401,
     "session_revoked": 401,
     "weak_password": 422,
+    "invalid_reset_token": 400,
+    "reset_token_expired": 410,
     "workspace_slug_taken": 409,
     "workspace_slug_invalid": 422,
     "workspace_not_found": 404,

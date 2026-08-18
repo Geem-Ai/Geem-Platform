@@ -1,0 +1,56 @@
+---
+import '../styles/global.css';
+import type { Locale } from '../lib/i18n';
+import { dirFor } from '../lib/i18n';
+import type { SiteCopy } from '../content/site/types';
+import SEO from '../components/seo/SEO.astro';
+import JsonLd from '../components/seo/JsonLd.astro';
+import Header from '../components/layout/Header.astro';
+import Footer from '../components/layout/Footer.astro';
+import { getImage } from 'astro:assets';
+import hero from '../assets/landing/riyadh-madinah-hero.webp';
+
+type Props = {
+  locale: Locale;
+  copy: SiteCopy;
+  title: string;
+  description: string;
+  path?: string;
+  preloadHero?: boolean;
+};
+
+const { locale, copy, title, description, path = '', preloadHero = false } = Astro.props;
+const dir = dirFor(locale);
+const pathname = Astro.url.pathname;
+const heroPreload = preloadHero
+  ? await getImage({ src: hero, width: 1774, format: 'webp' })
+  : null;
+---
+
+<!doctype html>
+<html lang={locale} dir={dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <SEO locale={locale} title={title} description={description} path={path} />
+    <JsonLd locale={locale} />
+    {
+      heroPreload && (
+        <link rel="preload" as="image" href={heroPreload.src} fetchpriority="high" />
+      )
+    }
+    <!-- Analytics slot: insert an approved provider here later. -->
+  </head>
+  <body class="bg-geem-surface text-geem-navy-950">
+    <a class="skip-link" href="#main">{copy.a11y.skipToContent}</a>
+    <Header locale={locale} copy={copy} pathname={pathname} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer locale={locale} copy={copy} />
+    <script>
+      import '../scripts/ui.ts';
+    </script>
+  </body>
+</html>

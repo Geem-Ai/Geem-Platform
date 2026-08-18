@@ -1,0 +1,37 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import Section from '../ui/Section.astro';
+import googleDrive from '../../assets/apps/google-drive.svg';
+import oneDrive from '../../assets/apps/microsoft-onedrive.svg';
+import whatsapp from '../../assets/apps/whatsapp.svg';
+import chatWidget from '../../assets/apps/chat-widget.svg';
+
+type Props = { copy: SiteCopy };
+const { copy } = Astro.props;
+const icons: Record<string, string> = {
+  'google-drive': googleDrive.src,
+  'microsoft-onedrive': oneDrive.src,
+  whatsapp: whatsapp.src,
+  'chat-widget': chatWidget.src,
+};
+---
+
+<Section id="apps" tone="light">
+  <div class="max-w-3xl" data-reveal>
+    <p class="eyebrow"><span class="section-number">{copy.apps.number}</span> {copy.apps.eyebrow}</p>
+    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.apps.title}</h2>
+    <p class="mt-4 text-lg text-geem-muted">{copy.apps.description}</p>
+  </div>
+
+  <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
+    {
+      copy.apps.items.map((item) => (
+        <article class="geem-card p-5">
+          <img src={icons[item.id]} alt="" width="36" height="36" class="size-9" loading="lazy" />
+          <h3 class="mt-4 font-semibold">{item.title}</h3>
+          <p class="mt-2 text-sm text-geem-muted">{item.description}</p>
+        </article>
+      ))
+    }
+  </div>
+</Section>

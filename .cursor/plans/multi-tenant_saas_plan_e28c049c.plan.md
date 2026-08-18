@@ -104,7 +104,7 @@ apps/
 ├── web/                 # Existing MVP UI — keep as-is (do not rename or delete)
 ├── workspace_web/       # New Workspace tenant product UI (this plan)
 ├── dashboard_web/       # Platform Admin UI (future — Phase 12, last)
-└── landpage_web/        # Marketing / landing site (future)
+└── landpage_web/        # Marketing / landing site (Astro static; independent of Phase 11/12)
 ```
 
 - **Today:** MVP UI lives at [`apps/web`](apps/web) and **stays there**.
@@ -426,8 +426,8 @@ Port into `apps/workspace_web` only what the AI shell needs (plus later product 
 ### 9. Authentication adaptation
 
 - Metronic AI has **no auth screens and no auth backend** — only a decorative user dropdown.
-- Build login/register/forgot-password using **AI Concept UI primitives** (Card, Input, Button) so visuals match the product; do **not** import another Metronic concept’s auth demo.
-- Wire exclusively to FastAPI Identity (`/api/auth/*`); session/JWT refresh owned by `services/auth`.
+- **Delivered:** login/register/forgot-password/reset-password (GuestRoute) and change-password (`/account`) using **AI Concept UI primitives** (Card, Input, Button) so visuals match the product; do **not** import another Metronic concept’s auth demo.
+- Wire exclusively to FastAPI Identity (`/api/auth/*`); session/JWT refresh owned by `services/auth`. Password reset uses HMAC tokens + email (same pattern as invitations); reset auto-logs in; change-password revokes other sessions.
 
 ### 10. Workspace adaptation
 
@@ -1392,7 +1392,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 | Product name | **Geem** |
 | Brand avatar | Vendored from `https://geem.ai/assets/geem-avatar.webp` |
 | Brand domain | `geem.ai` (tenant subdomains e.g. `{slug}.geem.ai` when configured) |
-| Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); later `dashboard_web` + `landpage_web` |
+| Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); `landpage_web` (Astro marketing); later `dashboard_web` |
 | Workspace UI path | **New** `apps/workspace_web` — do **not** rename `apps/web` |
 | UI foundation | Metronic Vite 9.5.0 **AI Concept only** (ported into `apps/workspace_web`), rebranded as Geem |
 | Samples | Read-only (`metronic_vite_9.5.0`, `clickpay_gateway`); no runtime dependency |
@@ -1407,7 +1407,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 | MCP | Deferred until after Experts + API |
 | Formats in Expert phase | PDF + TXT + Markdown |
 | Platform Admin UI | Separate app `apps/dashboard_web` (not inside `workspace_web`) |
-| Marketing site | Future `apps/landpage_web` |
+| Marketing site | `apps/landpage_web` (Astro static; independent of Phase 11/12) |
 
 ---
 

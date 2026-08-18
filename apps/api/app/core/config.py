@@ -52,7 +52,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Phase 2C+: Document/Query/Jobs HTTP always require authenticated Workspace.
-    # Public: /api/auth/login|register|refresh, /api/health/*, OpenAPI in local.
+    # Public: /api/auth/login|register|refresh|forgot-password|reset-password,
+    # /api/health/*, OpenAPI in local. Authenticated change-password under /api/auth.
     # /api/api-keys is session-authenticated Workspace management (owner/admin).
     # This flag documents production expectation and is echoed on GET /.
     auth_required: bool = True
@@ -210,6 +211,11 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 10.0
     # Empty → reuse API-key HMAC pepper (local derives from JWT_SECRET).
     invitation_token_hash_pepper: str = Field(default="", repr=False, exclude=True)
+
+    # Password reset (forgot / reset password). Public endpoints; short TTL.
+    password_reset_ttl_hours: int = 1
+    # Empty → reuse invitation / API-key HMAC pepper (local derives from JWT_SECRET).
+    password_reset_token_hash_pepper: str = Field(default="", repr=False, exclude=True)
 
     # Phase 9D — Google Drive knowledge connector (OAuth). Empty → unavailable.
     google_drive_client_id: str = ""
@@ -376,6 +382,18 @@ class Settings(BaseSettings):
     def effective_workspace_invite_ttl_hours(self) -> int:
         hours = int(self.workspace_invite_ttl_hours)
         return hours if hours > 0 else 72
+
+    @property
+    def effective_password_reset_token_hash_pepper(self) -> str:
+        raw = (self.password_reset_token_hash_pepper or "").strip()
+        if raw:
+            return raw
+        return self.effective_invitation_token_hash_pepper
+
+    @property
+    def effective_password_reset_ttl_hours(self) -> int:
+        hours = int(self.password_reset_ttl_hours)
+        return hours if hours > 0 else 1
 
     @property
     def google_drive_configured(self) -> bool:

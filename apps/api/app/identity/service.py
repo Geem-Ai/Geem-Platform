@@ -10,8 +10,15 @@ from sqlalchemy.orm import Session
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.identity.models import PlatformRole, Session as AuthSession, User, UserStatus
-from app.identity.repository import SessionRepository, UserRepository
+from app.identity.models import PlatformRole, Session as AuthSession, PasswordResetToken, User, UserStatus
+from app.identity.password_reset_email import render_password_reset_email
+from app.identity.password_reset_tokens import (
+    MAX_PASSWORD_RESET_TOKEN_LENGTH,
+    generate_password_reset_token,
+    hash_password_reset_token,
+    password_reset_url,
+)
+from app.identity.repository import PasswordResetTokenRepository, SessionRepository, UserRepository
 from app.identity.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
@@ -22,6 +29,7 @@ from app.identity.security import (
     validate_password,
     verify_password,
 )
+from app.notifications.protocol import EmailMessage, EmailProvider
 
 
 @dataclass(slots=True)
@@ -33,11 +41,19 @@ class AuthTokens:
 
 
 class AuthService:
-    def __init__(self, db: Session, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        settings: Settings | None = None,
+        *,
+        email: EmailProvider | None = None,
+    ) -> None:
         self.db = db
         self.settings = settings or get_settings()
         self.users = UserRepository(db)
         self.sessions = SessionRepository(db)
+        self.reset_tokens = PasswordResetTokenRepository(db)
+        self.email = email
 
     def register(
         self,
@@ -235,6 +251,124 @@ class AuthService:
         self.db.commit()
         security_log("auth.logout_all", user_id=str(user_id), revoked_count=count)
         return count
+
+    def forgot_password(self, *, email: str) -> None:
+        """Always succeeds from the caller's perspective (no email enumeration)."""
+        normalized = normalize_email(email)
+        user = self.users.get_by_email(normalized)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            security_log("auth.forgot_password_skipped", email=normalized, reason="unknown_or_disabled")
+            return
+
+        if self.email is None:
+            security_log("auth.forgot_password_failed", user_id=str(user.id), reason="no_email_provider")
+            return
+
+        now = datetime.now(timezone.utc)
+        self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
+        raw = generate_password_reset_token()
+        expires_at = now + timedelta(hours=self.settings.effective_password_reset_ttl_hours)
+        row = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_password_reset_token(raw, settings=self.settings),
+            expires_at=expires_at,
+        )
+        self.reset_tokens.create(row)
+        self.db.flush()
+
+        reset_link = password_reset_url(raw, settings=self.settings)
+        content = render_password_reset_email(
+            reset_url=reset_link,
+            expires_at=expires_at,
+            email=user.email,
+        )
+        try:
+            self.email.send(
+                EmailMessage(
+                    to=user.email,
+                    subject=content.subject,
+                    text_body=content.text_body,
+                    html_body=content.html_body,
+                )
+            )
+        except Exception:
+            self.db.rollback()
+            security_log("auth.forgot_password_failed", user_id=str(user.id), reason="email_delivery")
+            return
+
+        self.db.commit()
+        security_log("auth.forgot_password_sent", user_id=str(user.id))
+
+    def reset_password(
+        self,
+        *,
+        token: str,
+        password: str,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> tuple[User, AuthTokens]:
+        raw = (token or "").strip()
+        if not raw or len(raw) > MAX_PASSWORD_RESET_TOKEN_LENGTH:
+            raise AppError(ErrorCategory.INVALID_RESET_TOKEN, "Invalid or expired reset link.")
+
+        validate_password(password)
+        token_hash = hash_password_reset_token(raw, settings=self.settings)
+        row = self.reset_tokens.get_by_token_hash(token_hash)
+        if row is None or row.used_at is not None:
+            raise AppError(ErrorCategory.INVALID_RESET_TOKEN, "Invalid or expired reset link.")
+
+        now = datetime.now(timezone.utc)
+        if row.expires_at <= now:
+            row.used_at = now
+            self.db.commit()
+            raise AppError(ErrorCategory.RESET_TOKEN_EXPIRED, "Reset link has expired.")
+
+        user = self.users.get_by_id(row.user_id)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            row.used_at = now
+            self.db.commit()
+            raise AppError(ErrorCategory.INVALID_RESET_TOKEN, "Invalid or expired reset link.")
+
+        user.password_hash = hash_password(password)
+        row.used_at = now
+        self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
+        self.sessions.revoke_all_for_user(user.id, when=now)
+        tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
+        self.db.commit()
+        security_log("auth.password_reset", user_id=str(user.id), session_id=str(tokens.session_id))
+        return user, tokens
+
+    def change_password(
+        self,
+        *,
+        user: User,
+        current_password: str,
+        new_password: str,
+        current_session_id: uuid.UUID,
+    ) -> None:
+        if not verify_password(current_password, user.password_hash):
+            security_log("auth.change_password_failed", user_id=str(user.id), reason="bad_password")
+            raise AppError(ErrorCategory.INVALID_CREDENTIALS, "Invalid email or password.")
+
+        validate_password(new_password)
+        if verify_password(new_password, user.password_hash):
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "New password must be different from the current password.",
+            )
+
+        user.password_hash = hash_password(new_password)
+        revoked = self.sessions.revoke_all_for_user_except(
+            user.id,
+            except_session_id=current_session_id,
+        )
+        self.db.commit()
+        security_log(
+            "auth.change_password",
+            user_id=str(user.id),
+            session_id=str(current_session_id),
+            revoked_other_sessions=revoked,
+        )
 
     def get_user(self, user_id: uuid.UUID) -> User:
         user = self.users.get_by_id(user_id)
