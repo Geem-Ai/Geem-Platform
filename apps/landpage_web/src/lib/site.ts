@@ -32,7 +32,10 @@ export function getSiteConfig() {
     contactUrl,
     docsUrl,
     apiBaseUrl,
-    ogImageUrl: `${siteUrl}/og-image.webp`,
+    ogImageUrl: `${siteUrl}/og-geem.jpg`,
+    ogImageType: 'image/jpeg',
+    ogImageWidth: 1200,
+    ogImageHeight: 630,
   };
 }
 
