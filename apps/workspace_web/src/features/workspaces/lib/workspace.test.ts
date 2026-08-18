@@ -223,11 +223,16 @@ describe('i18n coverage', () => {
     expect(ar.billing.historyTitle).toBeTruthy();
     expect(en.billing.status.paid).toBeTruthy();
     expect(ar.billing.status.paid).toBeTruthy();
+    expect(en.billing.downloadInvoice).toBeTruthy();
+    expect(ar.billing.downloadInvoice).toBeTruthy();
     expect(en.errors.billingGatewayUnavailable).toBeTruthy();
     expect(ar.errors.billingGatewayUnavailable).toBeTruthy();
+    expect(en.errors.invoiceNotAvailable).toBeTruthy();
+    expect(ar.errors.invoiceNotAvailable).toBeTruthy();
     expect(errorMessageKey('billing_gateway_unavailable')).toBe(
       'errors.billingGatewayUnavailable',
     );
+    expect(errorMessageKey('invoice_not_available')).toBe('errors.invoiceNotAvailable');
     expect(errorMessageKey('plan_unavailable')).toBe('errors.planUnavailable');
     expect(queryKeys.billingPlans('ws-a')[1]).toBe('ws-a');
     expect(queryKeys.billingPurchase('ws-a', 'p1')).toEqual([

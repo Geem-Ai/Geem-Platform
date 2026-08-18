@@ -20,6 +20,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
+    Sequence,
     String,
     Text,
     UniqueConstraint,
@@ -30,6 +31,12 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+PURCHASE_INVOICE_SEQ = Sequence(
+    "purchase_invoice_number_seq",
+    metadata=Base.metadata,
+    start=1,
+)
 
 
 class PlanStatus(str, enum.Enum):
@@ -308,6 +315,8 @@ class Purchase(Base):
         server_default=text("'{}'::jsonb"),
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
+    invoice_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -107,6 +107,8 @@ class ErrorCategory(StrEnum):
     CREDIT_PACK_UNAVAILABLE = "credit_pack_unavailable"
     PLAN_UNAVAILABLE = "plan_unavailable"
     SYSTEM_WORKSPACE_CHECKOUT_FORBIDDEN = "system_workspace_checkout_forbidden"
+    INVOICE_NOT_AVAILABLE = "invoice_not_available"
+    INVOICE_NOT_CONFIGURED = "invoice_not_configured"
 
     # App Store (Phase 9A) — cross-workspace misses use not_found (404)
     APP_NOT_FOUND = "app_not_found"
@@ -284,6 +286,8 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "credit_pack_unavailable": 404,
     "plan_unavailable": 404,
     "system_workspace_checkout_forbidden": 403,
+    "invoice_not_available": 409,
+    "invoice_not_configured": 503,
     # Phase 7A — API keys
     "api_key_not_found": 404,
     # Phase 7B — public API rate limiting
