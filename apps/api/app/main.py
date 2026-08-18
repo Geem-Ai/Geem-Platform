@@ -106,7 +106,9 @@ app.include_router(public_widgets_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
 
-_WIDGET_JS = Path(__file__).resolve().parent / "widgets" / "static" / "geem-widget.js"
+_WIDGET_STATIC = Path(__file__).resolve().parent / "widgets" / "static"
+_WIDGET_JS = _WIDGET_STATIC / "geem-widget.js"
+_WIDGET_MASCOT = _WIDGET_STATIC / "geem-animated.svg"
 
 
 @app.get("/geem-widget.js", include_in_schema=False)
@@ -120,6 +122,20 @@ def geem_widget_script() -> FileResponse:
         _WIDGET_JS,
         media_type="application/javascript; charset=utf-8",
         headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@app.get("/geem-animated.svg", include_in_schema=False)
+def geem_animated_mascot() -> FileResponse:
+    if not _WIDGET_MASCOT.is_file():
+        raise AppError(
+            ErrorCategory.NOT_FOUND,
+            "Geem animated mascot is not available.",
+        )
+    return FileResponse(
+        _WIDGET_MASCOT,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 
