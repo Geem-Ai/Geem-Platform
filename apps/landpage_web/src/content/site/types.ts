@@ -54,6 +54,7 @@ export type SiteCopy = {
     eyebrow: string;
     title: string;
     description: string;
+    flowExpertLabel: string;
     formula: string[];
     cards: { title: string; description: string }[];
     diagramCaption: string;

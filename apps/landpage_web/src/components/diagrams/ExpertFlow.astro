@@ -1,45 +1,618 @@
 ---
+import { Image } from 'astro:assets';
 import type { SiteCopy } from '../../content/site/types';
+import avatar from '../../assets/brand/geem-avatar.webp';
+import chatWidgetIcon from '../../assets/apps/chat-widget.svg';
+import googleDriveIcon from '../../assets/apps/google-drive.svg';
+import oneDriveIcon from '../../assets/apps/microsoft-onedrive.svg';
+import whatsappIcon from '../../assets/apps/whatsapp.svg';
 
 type Props = { copy: SiteCopy };
 const { copy } = Astro.props;
-const chat = copy.channels.nodes.find((n) => n.id === 'chat')?.label ?? 'Chat';
-const systems = copy.channels.nodes.find((n) => n.id === 'api')?.label ?? 'Systems';
-const whatsapp = copy.channels.nodes.find((n) => n.id === 'whatsapp')?.label ?? 'WhatsApp';
-const website = copy.channels.nodes.find((n) => n.id === 'widget')?.label ?? 'Website';
-const expertLabel = copy.brand.product;
+
+const knowledgeSources = copy.knowledge.sources.slice(0, 4).map((label, index) => ({
+  label,
+  kind: ['pdf', 'text', 'google-drive', 'onedrive'][index] ?? 'text',
+}));
 ---
 
-<figure class="mt-10" data-reveal data-draw aria-label={copy.experts.diagramCaption}>
-  <svg viewBox="0 0 640 220" class="hidden w-full md:block" role="img">
-    <title>{copy.experts.diagramCaption}</title>
-    <line class="diagram-line" x1="120" y1="110" x2="280" y2="110" stroke="#6ab6d8" stroke-width="2" fill="none" />
-    <line class="diagram-line" x1="360" y1="110" x2="440" y2="40" stroke="#6ab6d8" stroke-width="2" fill="none" />
-    <line class="diagram-line" x1="360" y1="110" x2="520" y2="110" stroke="#6ab6d8" stroke-width="2" fill="none" />
-    <line class="diagram-line" x1="360" y1="110" x2="440" y2="180" stroke="#6ab6d8" stroke-width="2" fill="none" />
+<figure class="expert-flow" data-reveal data-draw aria-label={copy.experts.diagramCaption}>
+  <div class="flow-frame">
+    <div class="flow-toolbar" aria-hidden="true">
+      <span class="flow-toolbar__dots"><i></i><i></i><i></i></span>
+      <span class="flow-toolbar__track"></span>
+      <span class="flow-toolbar__status"><i></i></span>
+    </div>
 
-    <rect x="20" y="70" width="180" height="80" rx="18" fill="#0e2f44" />
-    <text x="110" y="116" text-anchor="middle" fill="#f7f5f2" font-size="14" font-family="IBM Plex Sans Arabic, sans-serif">
-      {copy.knowledge.eyebrow}
-    </text>
+    <div class="flow-grid">
+      <section class="flow-stage flow-stage--knowledge">
+        <header class="flow-stage__header">
+          <span class="flow-stage__marker">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.75 3.75h7.5l3 3v13.5H6.75z"></path>
+              <path d="M14.25 3.75v3h3M9.5 11h5M9.5 14.5h5"></path>
+            </svg>
+          </span>
+          <h3>{copy.knowledge.eyebrow}</h3>
+        </header>
 
-    <rect class="expert-pulse" x="250" y="70" width="120" height="80" rx="18" fill="#214b68" stroke="#e4d2ae" stroke-width="1.5" />
-    <text x="310" y="116" text-anchor="middle" fill="#e4d2ae" font-size="15" font-weight="600" font-family="IBM Plex Sans Arabic, sans-serif">
-      {expertLabel}
-    </text>
+        <ul class="source-grid">
+          {
+            knowledgeSources.map((source) => (
+              <li class="source-item">
+                <span class={`source-item__icon source-item__icon--${source.kind}`}>
+                  {source.kind === 'google-drive' && (
+                    <Image src={googleDriveIcon} alt="" width={28} height={28} loading="lazy" />
+                  )}
+                  {source.kind === 'onedrive' && (
+                    <Image src={oneDriveIcon} alt="" width={30} height={30} loading="lazy" />
+                  )}
+                  {source.kind === 'pdf' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7 3.75h7l3 3v13.5H7z"></path>
+                      <path d="M14 3.75v3h3"></path>
+                      <path class="source-item__icon-accent" d="M8.75 15.75h6.5"></path>
+                    </svg>
+                  )}
+                  {source.kind === 'text' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5.75 5.25h12.5v13.5H5.75z"></path>
+                      <path d="M8.75 9h6.5M8.75 12h6.5M8.75 15h4"></path>
+                    </svg>
+                  )}
+                </span>
+                <span>{source.label}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
 
-    <rect x="450" y="10" width="160" height="48" rx="14" fill="#ffffff" stroke="#d7e0e7" />
-    <text x="530" y="40" text-anchor="middle" fill="#0e2f44" font-size="12" font-family="IBM Plex Sans Arabic, sans-serif">{chat}</text>
-    <rect x="470" y="86" width="140" height="48" rx="14" fill="#ffffff" stroke="#d7e0e7" />
-    <text x="540" y="116" text-anchor="middle" fill="#0e2f44" font-size="12" font-family="IBM Plex Sans Arabic, sans-serif">{systems}</text>
-    <rect x="450" y="162" width="160" height="48" rx="14" fill="#ffffff" stroke="#d7e0e7" />
-    <text x="530" y="192" text-anchor="middle" fill="#0e2f44" font-size="12" font-family="IBM Plex Sans Arabic, sans-serif">{whatsapp} / {website}</text>
-  </svg>
+      <div class="flow-connector" aria-hidden="true"><i></i></div>
 
-  <ol class="grid gap-3 md:hidden">
-    <li class="geem-card p-4 text-sm">{copy.knowledge.eyebrow}</li>
-    <li class="geem-card p-4 text-sm font-semibold text-geem-navy-900">{expertLabel}</li>
-    <li class="geem-card p-4 text-sm">{chat} / {systems} / {whatsapp} / {website}</li>
-  </ol>
-  <figcaption class="mt-4 text-sm text-geem-muted">{copy.experts.diagramCaption}</figcaption>
+      <section class="flow-stage flow-stage--expert">
+        <div class="expert-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="expert-avatar">
+          <Image src={avatar} alt="" width={84} height={84} loading="lazy" />
+          <i aria-hidden="true"></i>
+        </div>
+        <p>{copy.experts.eyebrow}</p>
+        <h3>{copy.experts.flowExpertLabel}</h3>
+        <div class="expert-signals">
+          <span>{copy.experts.formula[2]}</span>
+          <span>{copy.experts.formula[3]}</span>
+        </div>
+      </section>
+
+      <div class="flow-connector flow-connector--out" aria-hidden="true"><i></i></div>
+
+      <section class="flow-stage flow-stage--channels">
+        <header class="flow-stage__header">
+          <span class="flow-stage__marker">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="2.25"></circle>
+              <circle cx="5.25" cy="6" r="1.75"></circle>
+              <circle cx="18.75" cy="6" r="1.75"></circle>
+              <circle cx="5.25" cy="18" r="1.75"></circle>
+              <circle cx="18.75" cy="18" r="1.75"></circle>
+              <path d="m10.25 10.45-3.4-3M13.75 10.45l3.4-3M10.25 13.55l-3.4 3M13.75 13.55l3.4 3"></path>
+            </svg>
+          </span>
+          <h3>{copy.channels.eyebrow}</h3>
+        </header>
+
+        <ul class="channel-grid">
+          {
+            copy.channels.nodes.map((channel) => (
+              <li class="channel-item">
+                <span class={`channel-item__icon channel-item__icon--${channel.id}`}>
+                  {channel.id === 'whatsapp' && (
+                    <Image src={whatsappIcon} alt="" width={27} height={27} loading="lazy" />
+                  )}
+                  {channel.id === 'widget' && (
+                    <Image src={chatWidgetIcon} alt="" width={29} height={29} loading="lazy" />
+                  )}
+                  {channel.id === 'chat' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4.25 5.25h15.5v10.5H11l-4.75 3v-3h-2z"></path>
+                      <path d="M8 9.5h8M8 12.5h5"></path>
+                    </svg>
+                  )}
+                  {channel.id === 'api' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m8.25 7-4 5 4 5M15.75 7l4 5-4 5M13.5 4.75l-3 14.5"></path>
+                    </svg>
+                  )}
+                </span>
+                <span>{channel.label}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <figcaption class="visually-hidden">{copy.experts.diagramCaption}</figcaption>
 </figure>
+
+<style>
+  .expert-flow {
+    margin-block-start: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .flow-frame {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(0.75rem, 2vw, 1.25rem);
+    border: 1px solid color-mix(in oklab, var(--geem-navy-900) 13%, white);
+    border-radius: clamp(1.5rem, 3vw, 2.25rem);
+    background:
+      radial-gradient(circle at 50% 42%, color-mix(in oklab, var(--geem-sky) 15%, transparent), transparent 30%),
+      radial-gradient(circle at 8% 92%, color-mix(in oklab, var(--geem-sand) 24%, transparent), transparent 28%),
+      linear-gradient(145deg, #fff, color-mix(in oklab, var(--geem-surface) 86%, white));
+    box-shadow:
+      0 28px 80px color-mix(in oklab, var(--geem-navy-950) 9%, transparent),
+      inset 0 1px 0 white;
+    isolation: isolate;
+  }
+
+  .flow-frame::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background-image: radial-gradient(color-mix(in oklab, var(--geem-navy-900) 9%, transparent) 0.75px, transparent 0.75px);
+    background-size: 18px 18px;
+    content: '';
+    opacity: 0.55;
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent 82%);
+    mask-image: linear-gradient(to bottom, black, transparent 82%);
+  }
+
+  .flow-toolbar {
+    display: grid;
+    grid-template-columns: 1fr minmax(5rem, 10rem) 1fr;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline: 0.45rem;
+    border-block-end: 1px solid color-mix(in oklab, var(--geem-navy-900) 8%, white);
+  }
+
+  .flow-toolbar__dots {
+    display: flex;
+    gap: 0.35rem;
+    justify-self: start;
+  }
+
+  .flow-toolbar__dots i {
+    inline-size: 0.42rem;
+    block-size: 0.42rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-navy-900) 18%, white);
+  }
+
+  .flow-toolbar__track {
+    inline-size: 100%;
+    block-size: 0.42rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-navy-900) 7%, white);
+  }
+
+  .flow-toolbar__status {
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    inline-size: 1.45rem;
+    block-size: 1.45rem;
+    border: 1px solid color-mix(in oklab, var(--geem-blue) 18%, white);
+    border-radius: 999px;
+    background: white;
+  }
+
+  .flow-toolbar__status i {
+    inline-size: 0.4rem;
+    block-size: 0.4rem;
+    border-radius: inherit;
+    background: #43a673;
+    box-shadow: 0 0 0 3px color-mix(in oklab, #43a673 14%, transparent);
+  }
+
+  .flow-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    padding: clamp(1.15rem, 3vw, 2rem) clamp(0.15rem, 1.4vw, 1rem) clamp(0.35rem, 1vw, 0.75rem);
+  }
+
+  .flow-stage {
+    position: relative;
+    border: 1px solid color-mix(in oklab, var(--geem-navy-900) 11%, white);
+    border-radius: 1.35rem;
+    background: color-mix(in oklab, white 88%, transparent);
+    box-shadow:
+      0 16px 38px color-mix(in oklab, var(--geem-navy-950) 7%, transparent),
+      inset 0 1px 0 white;
+    backdrop-filter: blur(10px);
+  }
+
+  .flow-stage--knowledge,
+  .flow-stage--channels {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1rem, 2.2vw, 1.4rem);
+  }
+
+  .flow-stage__header {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-block-end: 1rem;
+  }
+
+  .flow-stage__header h3 {
+    margin: 0;
+    font-size: clamp(1rem, 1.6vw, 1.15rem);
+    font-weight: 600;
+    color: var(--geem-navy-900);
+  }
+
+  .flow-stage__marker {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border: 1px solid color-mix(in oklab, var(--geem-sky) 28%, white);
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--geem-sky) 11%, white);
+    color: var(--geem-blue);
+  }
+
+  .flow-stage__marker svg,
+  .source-item__icon svg,
+  .channel-item__icon svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .source-grid,
+  .channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .source-item,
+  .channel-item {
+    display: flex;
+    min-width: 0;
+    min-height: 4.25rem;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem;
+    border: 1px solid color-mix(in oklab, var(--geem-navy-900) 9%, white);
+    border-radius: 1rem;
+    background: color-mix(in oklab, white 94%, var(--geem-surface));
+    color: var(--geem-navy-900);
+    font-size: clamp(0.76rem, 1.2vw, 0.88rem);
+    font-weight: 500;
+    line-height: 1.35;
+    box-shadow: 0 7px 18px color-mix(in oklab, var(--geem-navy-950) 4%, transparent);
+  }
+
+  .source-item__icon,
+  .channel-item__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: 2.35rem;
+    block-size: 2.35rem;
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--geem-surface) 76%, white);
+    color: var(--geem-blue);
+  }
+
+  .source-item__icon img,
+  .channel-item__icon img {
+    display: block;
+    inline-size: 1.65rem;
+    block-size: 1.65rem;
+    object-fit: contain;
+  }
+
+  .source-item__icon--pdf {
+    background: #fff1f1;
+    color: #c44848;
+  }
+
+  .source-item__icon-accent {
+    stroke-width: 2.4;
+  }
+
+  .channel-item__icon--chat,
+  .channel-item__icon--api {
+    background: color-mix(in oklab, var(--geem-sky) 12%, white);
+  }
+
+  .flow-stage--expert {
+    display: flex;
+    min-height: 15.5rem;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1.25rem;
+    border-color: color-mix(in oklab, var(--geem-sand) 58%, transparent);
+    background:
+      radial-gradient(circle at 50% 25%, color-mix(in oklab, var(--geem-sky) 23%, transparent), transparent 40%),
+      linear-gradient(155deg, var(--geem-navy-800), var(--geem-navy-950));
+    color: white;
+    text-align: center;
+    box-shadow:
+      0 24px 52px color-mix(in oklab, var(--geem-navy-950) 21%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--geem-sand) 20%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 16%, transparent);
+  }
+
+  .flow-stage--expert::after {
+    position: absolute;
+    inset: auto 10% -28% 10%;
+    block-size: 45%;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--geem-sand) 10%, transparent);
+    filter: blur(24px);
+    content: '';
+  }
+
+  .expert-orbit {
+    position: absolute;
+    inset: 1rem;
+    pointer-events: none;
+  }
+
+  .expert-orbit::before,
+  .expert-orbit::after {
+    position: absolute;
+    top: 32%;
+    left: 50%;
+    border: 1px solid color-mix(in oklab, var(--geem-sky) 16%, transparent);
+    border-radius: 50%;
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  .expert-orbit::before {
+    inline-size: 8.5rem;
+    block-size: 8.5rem;
+  }
+
+  .expert-orbit::after {
+    inline-size: 11rem;
+    block-size: 11rem;
+    opacity: 0.55;
+  }
+
+  .expert-orbit i {
+    position: absolute;
+    border-radius: 999px;
+    background: var(--geem-sky);
+    box-shadow: 0 0 14px color-mix(in oklab, var(--geem-sky) 64%, transparent);
+  }
+
+  .expert-orbit i:nth-child(1) { inset: 24% auto auto 6%; inline-size: 0.35rem; block-size: 0.35rem; }
+  .expert-orbit i:nth-child(2) { inset: 8% 9% auto auto; inline-size: 0.25rem; block-size: 0.25rem; }
+  .expert-orbit i:nth-child(3) { inset: auto 3% 32% auto; inline-size: 0.42rem; block-size: 0.42rem; }
+
+  .expert-avatar {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    inline-size: 5.3rem;
+    block-size: 5.3rem;
+    border: 3px solid color-mix(in oklab, var(--geem-sand) 86%, white);
+    border-radius: 1.65rem;
+    background: white;
+    box-shadow:
+      0 16px 32px color-mix(in oklab, black 22%, transparent),
+      0 0 0 7px color-mix(in oklab, white 8%, transparent);
+    transform: rotate(-2deg);
+  }
+
+  .expert-avatar img {
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 1.45rem;
+    object-fit: cover;
+  }
+
+  .expert-avatar i {
+    position: absolute;
+    inset-inline-end: -0.12rem;
+    inset-block-end: -0.12rem;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: 3px solid var(--geem-navy-900);
+    border-radius: 50%;
+    background: #56c58a;
+  }
+
+  .flow-stage--expert p {
+    position: relative;
+    z-index: 1;
+    margin: 1rem 0 0;
+    color: color-mix(in oklab, var(--geem-sand) 88%, white);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .flow-stage--expert h3 {
+    position: relative;
+    z-index: 1;
+    margin: 0.05rem 0 0;
+    color: white;
+    font-size: clamp(1.45rem, 2.6vw, 1.9rem);
+    font-weight: 600;
+  }
+
+  .expert-signals {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-block-start: 0.85rem;
+  }
+
+  .expert-signals span {
+    padding: 0.28rem 0.55rem;
+    border: 1px solid color-mix(in oklab, white 13%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, white 8%, transparent);
+    color: color-mix(in oklab, white 78%, var(--geem-sand));
+    font-size: 0.62rem;
+    line-height: 1.35;
+  }
+
+  .flow-connector {
+    position: relative;
+    justify-self: center;
+    inline-size: 2px;
+    block-size: 2.5rem;
+    background: linear-gradient(to bottom, color-mix(in oklab, var(--geem-sky) 30%, transparent), var(--geem-sky), color-mix(in oklab, var(--geem-sky) 30%, transparent));
+  }
+
+  .flow-connector::before,
+  .flow-connector::after {
+    position: absolute;
+    left: 50%;
+    inline-size: 0.55rem;
+    block-size: 0.55rem;
+    border: 2px solid white;
+    border-radius: 50%;
+    background: var(--geem-sky);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--geem-blue) 20%, transparent);
+    content: '';
+    transform: translateX(-50%);
+  }
+
+  .flow-connector::before { top: -0.2rem; }
+  .flow-connector::after { bottom: -0.2rem; }
+
+  .flow-connector i {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 50%;
+    inline-size: 0.42rem;
+    block-size: 0.42rem;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 0 2px var(--geem-sky), 0 0 12px var(--geem-sky);
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  .is-drawn .flow-connector i {
+    animation: signal-vertical 2.8s ease-in-out 0.7s infinite;
+  }
+
+  @media (min-width: 900px) {
+    .flow-grid {
+      grid-template-columns: minmax(0, 1.25fr) minmax(2.6rem, 0.26fr) minmax(11rem, 0.78fr) minmax(2.6rem, 0.26fr) minmax(0, 1.25fr);
+      align-items: center;
+    }
+
+    .flow-stage {
+      min-height: 17.5rem;
+    }
+
+    .flow-connector {
+      align-self: center;
+      inline-size: 100%;
+      block-size: 2px;
+      background: linear-gradient(to right, color-mix(in oklab, var(--geem-sky) 30%, transparent), var(--geem-sky), color-mix(in oklab, var(--geem-sky) 30%, transparent));
+    }
+
+    .flow-connector::before,
+    .flow-connector::after {
+      top: 50%;
+      left: auto;
+      transform: translateY(-50%);
+    }
+
+    .flow-connector::before { inset-inline-start: -0.2rem; }
+    .flow-connector::after { inset-inline-end: -0.2rem; }
+
+    .flow-connector i {
+      top: 50%;
+      left: auto;
+      inset-inline-start: 0;
+      transform: translate(-50%, -50%);
+    }
+
+    :global(html[dir='rtl']) .flow-connector i {
+      transform: translate(50%, -50%);
+    }
+
+    .is-drawn .flow-connector i {
+      animation-name: signal-horizontal;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .source-grid,
+    .channel-grid {
+      gap: 0.5rem;
+    }
+
+    .source-item,
+    .channel-item {
+      min-height: 3.9rem;
+      gap: 0.5rem;
+      padding: 0.55rem;
+      font-size: 0.72rem;
+    }
+
+    .source-item__icon,
+    .channel-item__icon {
+      inline-size: 2rem;
+      block-size: 2rem;
+    }
+
+    .source-item__icon img,
+    .channel-item__icon img {
+      inline-size: 1.4rem;
+      block-size: 1.4rem;
+    }
+  }
+
+  @keyframes signal-horizontal {
+    0% { inset-inline-start: 0; opacity: 0; }
+    18%, 78% { opacity: 1; }
+    100% { inset-inline-start: 100%; opacity: 0; }
+  }
+
+  @keyframes signal-vertical {
+    0% { top: 0; opacity: 0; }
+    18%, 78% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .is-drawn .flow-connector i {
+      animation: none;
+    }
+  }
+</style>

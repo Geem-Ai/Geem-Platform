@@ -87,6 +87,7 @@ export const en: SiteCopy = {
     title: 'An Expert for every task. Knowledge for every context.',
     description:
       'A Geem Expert brings together your guidance, your documents, and your organization context — so your team can rely on it wherever they work.',
+    flowExpertLabel: 'Geem Expert',
     formula: ['Your guidance', 'Your documents', 'Reliable answers', 'Your context'],
     cards: [
       {
