@@ -73,7 +73,7 @@ docker compose exec api python -m app.identity.bootstrap
 
 Local billing checkout uses the **Noop** gateway when `APP_ENV=local` / `test`. ClickPay credentials are optional until a ClickPay config is enabled.
 
-Tenant-subdomain DX (`*.geem.dm`), Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai`), and host-run API/UI are documented in [development.md](docs/development.md).
+Tenant-subdomain DX (`*.geem.dm`), Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai` / `landpage-uat.geem.ai`), and host-run API/UI are documented in [development.md](docs/development.md).
 
 ## Product flow
 

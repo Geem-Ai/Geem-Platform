@@ -25,6 +25,8 @@ export type SiteCopy = {
     skipToContent: string;
     openMenu: string;
     closeMenu: string;
+    primaryNavigation: string;
+    mobileNavigation: string;
     languageSwitch: string;
   };
   brand: {
@@ -40,9 +42,7 @@ export type SiteCopy = {
     eyebrow: string;
     title: string;
     description: string;
-    bullets: string[];
     primaryCta: string;
-    secondaryCta: string;
     tertiaryCta: string;
     imageAlt: string;
   };
@@ -61,19 +61,14 @@ export type SiteCopy = {
     note: string;
   };
   knowledge: {
-    number: string;
     eyebrow: string;
-    title: string;
-    description: string;
     sources: string[];
-    outcomes: string[];
   };
   integrations: {
     number: string;
     eyebrow: string;
     title: string;
     description: string;
-    cta: string;
     items: { id: string; title: string; description: string }[];
   };
   channels: {
@@ -105,20 +100,6 @@ export type SiteCopy = {
     description: string;
     points: { title: string; description: string }[];
     linkLabel: string;
-  };
-  apps: {
-    number: string;
-    eyebrow: string;
-    title: string;
-    description: string;
-    items: { id: string; title: string; description: string }[];
-  };
-  previews: {
-    number: string;
-    eyebrow: string;
-    title: string;
-    description: string;
-    items: { title: string; caption: string }[];
   };
   finalCta: {
     title: string;

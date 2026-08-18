@@ -7,6 +7,7 @@
 #   cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
 #   cloudflared tunnel route dns geem-uat app-uat.geem.ai
 #   cloudflared tunnel route dns geem-uat api-uat.geem.ai
+#   cloudflared tunnel route dns geem-uat landpage-uat.geem.ai
 
 # name: geem-uat
 tunnel: ff3689b0-3e00-44b1-bc9a-893bc84d37ad
@@ -24,4 +25,8 @@ ingress:
       # Chat SSE + large uploads
       connectTimeout: 30s
       keepAliveTimeout: 90s
+  - hostname: landpage-uat.geem.ai
+    service: http://landpage_web:4321
+    originRequest:
+      httpHostHeader: landpage-uat.geem.ai
   - service: http_status:404

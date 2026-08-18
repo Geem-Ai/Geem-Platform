@@ -13,8 +13,11 @@ export function initUi() {
   const menuButton = document.querySelector<HTMLButtonElement>('[data-menu-button]');
   const menu = document.querySelector<HTMLDialogElement>('[data-mobile-menu]');
   if (menuButton && menu) {
+    const openLabel = menuButton.getAttribute('aria-label') ?? '';
+    const closeLabel = menuButton.getAttribute('data-close-label') ?? openLabel;
     const sync = () => {
       menuButton.setAttribute('aria-expanded', menu.open ? 'true' : 'false');
+      menuButton.setAttribute('aria-label', menu.open ? closeLabel : openLabel);
     };
     menuButton.addEventListener('click', () => {
       if (menu.open) menu.close();

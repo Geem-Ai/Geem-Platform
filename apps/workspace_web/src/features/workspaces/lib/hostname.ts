@@ -13,6 +13,8 @@ const RESERVED_HOST_SLUGS = new Set([
   'app',
   'app-uat',
   'api-uat',
+  'landpage',
+  'landpage-uat',
   'dashboard',
   'status',
   'support',
