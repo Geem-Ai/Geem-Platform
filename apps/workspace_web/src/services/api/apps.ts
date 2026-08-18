@@ -102,6 +102,7 @@ export type ConnectionHealth = 'unknown' | 'healthy' | 'degraded' | 'failed';
 
 export type ConnectionCapabilities = {
   can_disconnect: boolean;
+  can_delete?: boolean;
   can_health_check: boolean;
   can_sync: boolean;
   can_reconnect: boolean;
@@ -522,6 +523,17 @@ export async function disconnectAppConnection(
 ): Promise<AppConnection> {
   return apiRequest<AppConnection>(
     `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** Permanently remove a disconnected WhatsApp connection (and OpenWA session). */
+export async function deleteAppConnectionPermanent(
+  slug: string,
+  connectionId: string,
+): Promise<void> {
+  await apiRequest<void>(
+    `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/permanent`,
     { method: 'DELETE' },
   );
 }

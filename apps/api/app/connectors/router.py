@@ -232,6 +232,36 @@ def disconnect_connection(
     return out
 
 
+@apps_connections_router.delete(
+    "/{app_slug}/connections/{connection_id}/permanent",
+    status_code=204,
+)
+def delete_connection_permanent(
+    app_slug: str,
+    connection_id: uuid.UUID,
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Hard-delete a disconnected WhatsApp connection (and OpenWA session)."""
+    workspace, membership = pair
+    require_manage_apps(membership.role)
+    if _app_connector_key(db, app_slug) != "openwa":
+        raise AppError(
+            ErrorCategory.CONNECTOR_NOT_SUPPORTED,
+            "Permanent delete is only supported for WhatsApp connections.",
+        )
+    OpenWAChannelService(db).delete_whatsapp_connection(
+        workspace,
+        membership.role,
+        user.id,
+        app_slug=app_slug,
+        connection_id=connection_id,
+    )
+    db.commit()
+    return Response(status_code=204)
+
+
 @apps_connections_router.post(
     "/{app_slug}/connections/{connection_id}/openwa/start",
     response_model=WhatsAppConnectionOut,

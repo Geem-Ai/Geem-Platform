@@ -8,10 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { canCreateExpert } from '@/features/experts/lib/capabilities';
 import { useExperts } from '@/features/experts/hooks/useExperts';
 import { ExpertCard } from '@/features/experts/components/ExpertCard';
+import { OverviewRecommendedApps } from '@/features/apps/components/OverviewRecommendedApps';
 import { OverviewUsageSummary } from '@/features/usage/components/OverviewUsageSummary';
 import { geemAvatarUrl } from '@/lib/helpers';
-
-const upcoming = [{ key: 'nav.apps', to: '/apps' }] as const;
 
 export function OverviewPage() {
   const { t } = useTranslation();
@@ -85,21 +84,7 @@ export function OverviewPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('overview.upcomingTitle')}</CardTitle>
-          <CardDescription>{t('overview.upcomingDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {upcoming.map((item) => (
-            <Button key={item.to} asChild variant="secondary" size="sm">
-              <Link to={item.to}>
-                {t(item.key)} — {t('shell.comingSoon')}
-              </Link>
-            </Button>
-          ))}
-        </CardContent>
-      </Card>
+      <OverviewRecommendedApps />
     </div>
   );
 }

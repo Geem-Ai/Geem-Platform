@@ -1,5 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Check, Link2Off, LoaderCircle, RefreshCw } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  LayoutGrid,
+  Link2Off,
+  LoaderCircle,
+  RefreshCw,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -218,9 +225,15 @@ export function AppGrid({
     return (
       <div
         data-testid="apps-empty"
-        className="rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground"
+        className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-6 py-12 text-center"
       >
-        {emptyLabel}
+        <div
+          className="flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground"
+          aria-hidden
+        >
+          <LayoutGrid className="size-6 opacity-70" />
+        </div>
+        <p className="text-sm font-medium text-foreground max-w-sm">{emptyLabel}</p>
       </div>
     );
   }

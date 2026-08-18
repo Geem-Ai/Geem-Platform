@@ -612,6 +612,60 @@ class OpenWAChannelService:
             can_manage=True,
         )
 
+    def delete_whatsapp_connection(
+        self,
+        workspace: Workspace,
+        role: str,
+        actor_id: uuid.UUID,
+        *,
+        app_slug: str,
+        connection_id: uuid.UUID,
+    ) -> None:
+        """Permanently remove a disconnected/revoked WhatsApp connection.
+
+        Tears down the OpenWA session (best-effort when already gone), then
+        hard-deletes the Geem ``app_connection`` row and related records.
+        """
+        self._require_manage(role)
+        app, installation = self._require_app_installation(
+            workspace.id, app_slug=app_slug, require_active_access=False
+        )
+        row = self._require_connection_row(
+            workspace_id=workspace.id,
+            connection_id=connection_id,
+            installation=installation,
+            for_update=True,
+        )
+        if row.status not in {
+            ConnectionStatus.DISCONNECTED.value,
+            ConnectionStatus.REVOKED.value,
+        }:
+            raise AppError(
+                ErrorCategory.CONNECTOR_INVALID_TRANSITION,
+                "Only disconnected WhatsApp connections can be deleted. Disconnect first.",
+            )
+
+        creds = dict(self.credentials.get_credentials(row) or {})
+        sync_state = dict(self.credentials.get_sync_state(row) or {})
+        cleanup_ok = self._best_effort_provider_disconnect(
+            creds=creds, sync_state=sync_state
+        )
+        if not cleanup_ok:
+            raise AppError(
+                ErrorCategory.OPENWA_UNAVAILABLE,
+                "Could not delete the OpenWA session. Try again shortly.",
+            )
+
+        self.repo.purge_connection(row)
+        _ = (actor_id, app)
+        logger.info(
+            "openwa_connection_deleted",
+            extra={
+                "workspace_id": str(workspace.id),
+                "connection_id": str(connection_id),
+            },
+        )
+
     def ensure_webhook_registered(self, connection: AppConnection) -> str:
         creds = dict(self.credentials.get_credentials(connection) or {})
         session_id = str(creds.get("session_id") or "").strip()

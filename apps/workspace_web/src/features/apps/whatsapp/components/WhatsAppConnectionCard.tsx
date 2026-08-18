@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Sparkles, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { inputVariants } from '@/components/ui/input';
+import { Input, inputVariants } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Tooltip,
@@ -29,7 +29,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { AppIcon } from '@/features/apps/components/AppIcon';
+import { ExpertPickerDialog } from '@/features/chat/components/ExpertPickerDialog';
 import { useExperts } from '@/features/experts/hooks/useExperts';
+import { localizeExpertDisplay } from '@/features/experts/lib/localize';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { invalidateAppsCache } from '@/features/apps/hooks/useAppsQueries';
 import { cn } from '@/lib/utils';
@@ -42,7 +44,10 @@ import {
   friendlyDisplayError,
 } from '@/services/api/errors';
 import { queryKeys } from '@/services/api/query-keys';
-import { useDisconnectConnection } from '../../connections/hooks/useConnectionQueries';
+import {
+  useDeleteConnectionPermanent,
+  useDisconnectConnection,
+} from '../../connections/hooks/useConnectionQueries';
 import {
   isConnectingStatus,
   resolveWhatsAppUiStatus,
@@ -50,6 +55,8 @@ import {
   type WhatsAppUiStatusKey,
 } from '../lib';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
+
+const DELETE_CONFIRM_WORD = 'DELETE';
 
 function titleFor(connection: WhatsAppConnection, t: (key: string) => string): string {
   return (
@@ -125,13 +132,16 @@ export function WhatsAppConnectionCard({
   onResumeConnect?: (connection: WhatsAppConnection) => void;
 }) {
   const { t } = useTranslation();
-  const expertSelectId = useId();
   const queryClient = useQueryClient();
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id ?? '';
   const expertsQuery = useExperts();
   const disconnect = useDisconnectConnection();
+  const deletePermanent = useDeleteConnectionPermanent();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [expertPickerOpen, setExpertPickerOpen] = useState(false);
   const [expertId, setExpertId] = useState(connection.expert_id ?? '');
   const [enabled, setEnabled] = useState(Boolean(connection.enabled ?? true));
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(
@@ -153,20 +163,35 @@ export function WhatsAppConnectionCard({
     connection.respond_to_groups,
   ]);
 
-  const experts = useMemo(() => {
-    const rows = expertsQuery.data ?? [];
-    return rows.filter((expert) => expert.status === 'ready');
-  }, [expertsQuery.data]);
+  const experts: Expert[] = useMemo(
+    () => expertsQuery.data ?? [],
+    [expertsQuery.data],
+  );
 
-  const selectedExpertExists = experts.some((expert) => expert.id === expertId);
+  const selectedExpert = expertId
+    ? experts.find((expert) => expert.id === expertId) ?? null
+    : null;
+  const selectedExpertLabel = selectedExpert
+    ? localizeExpertDisplay(selectedExpert, t).name
+    : expertId
+      ? expertId
+      : t('apps.whatsapp.connection.unassignedExpert');
   const uiStatus = resolveWhatsAppUiStatus(connection);
   const connecting = isConnectingStatus(connection);
+  const isDisconnected =
+    connection.status === 'disconnected' ||
+    connection.status === 'revoked' ||
+    Boolean(connection.capabilities?.can_delete);
+  const canDisconnect = Boolean(
+    connection.capabilities?.can_disconnect ?? !isDisconnected,
+  );
   const needsAttention =
     uiStatus.key === 'disconnected' ||
     uiStatus.key === 'failed' ||
     uiStatus.key === 'actionRequired';
   const statusHintKey: WhatsAppUiStatusKey | null =
     uiStatus.key === 'connected' ? null : uiStatus.key;
+  const deleteConfirmMatches = deleteConfirmText.trim() === DELETE_CONFIRM_WORD;
 
   const reconnectMutation = useMutation({
     mutationFn: () => reconnectWhatsApp(connection.app_slug, connection.id),
@@ -216,7 +241,9 @@ export function WhatsAppConnectionCard({
         ? errorMessageKey(updateMutation.error.code)
         : disconnect.error instanceof ApiError
           ? errorMessageKey(disconnect.error.code)
-          : null;
+          : deletePermanent.error instanceof ApiError
+            ? errorMessageKey(deletePermanent.error.code)
+            : null;
 
   const lastError =
     connection.last_error_code || connection.last_error_message
@@ -274,37 +301,60 @@ export function WhatsAppConnectionCard({
         ) : null}
 
         <div className="space-y-2">
-          <Label htmlFor={expertSelectId}>{t('apps.whatsapp.connection.expert')}</Label>
-          <div className="relative">
-            <select
-              id={expertSelectId}
+          <Label>{t('apps.whatsapp.connection.expert')}</Label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
               className={cn(
                 inputVariants({ variant: 'md' }),
-                'appearance-none pe-9',
+                'flex min-w-0 flex-1 items-center gap-2 text-start',
+                !canManage && 'pointer-events-none',
               )}
-              value={expertId}
-              onChange={(event) => setExpertId(event.target.value)}
+              onClick={() => setExpertPickerOpen(true)}
               disabled={!canManage || expertsQuery.isLoading}
-              data-testid="whatsapp-expert-select"
+              data-testid="whatsapp-expert-picker"
+              aria-haspopup="dialog"
+              aria-expanded={expertPickerOpen}
             >
-              <option value="">{t('apps.whatsapp.connection.unassignedExpert')}</option>
-              {!selectedExpertExists && connection.expert_id ? (
-                <option value={connection.expert_id}>{connection.expert_id}</option>
-              ) : null}
-              {experts.map((expert: Expert) => (
-                <option key={expert.id} value={expert.id}>
-                  {expert.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
+              <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate',
+                  !selectedExpert && !expertId && 'text-muted-foreground',
+                )}
+              >
+                {selectedExpertLabel}
+              </span>
+              <ChevronDown
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </button>
+            {expertId && canManage ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8.5 shrink-0"
+                onClick={() => setExpertId('')}
+                aria-label={t('apps.whatsapp.connection.clearExpert')}
+                data-testid="whatsapp-expert-clear"
+              >
+                <X className="size-4" />
+              </Button>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
             {t('apps.whatsapp.connection.expertHint')}
           </p>
+          <ExpertPickerDialog
+            open={expertPickerOpen}
+            onOpenChange={setExpertPickerOpen}
+            experts={experts}
+            selectedId={expertId || null}
+            onSelect={setExpertId}
+            isLoading={expertsQuery.isLoading}
+          />
         </div>
 
         <div className="space-y-1">
@@ -394,16 +444,33 @@ export function WhatsAppConnectionCard({
                 {t('apps.connections.reconnect')}
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/5"
-              onClick={() => setConfirmOpen(true)}
-              disabled={disconnect.isPending}
-              data-testid="whatsapp-disconnect"
-            >
-              {t('apps.connections.disconnect')}
-            </Button>
+            {canDisconnect ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/5"
+                onClick={() => setConfirmOpen(true)}
+                disabled={disconnect.isPending}
+                data-testid="whatsapp-disconnect"
+              >
+                {t('apps.connections.disconnect')}
+              </Button>
+            ) : null}
+            {isDisconnected ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/5"
+                onClick={() => {
+                  setDeleteConfirmText('');
+                  setDeleteOpen(true);
+                }}
+                disabled={deletePermanent.isPending}
+                data-testid="whatsapp-delete"
+              >
+                {t('apps.connections.delete')}
+              </Button>
+            ) : null}
           </div>
         </CardFooter>
       ) : null}
@@ -442,6 +509,82 @@ export function WhatsAppConnectionCard({
               }
             >
               {t('apps.connections.disconnect')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(next) => {
+          if (deletePermanent.isPending) return;
+          setDeleteOpen(next);
+          if (!next) setDeleteConfirmText('');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('apps.connections.deleteTitle')}</DialogTitle>
+            <DialogDescription>{t('apps.connections.deleteHint')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor={`whatsapp-delete-confirm-${connection.id}`}>
+              {t('apps.connections.deleteConfirmLabel', { word: DELETE_CONFIRM_WORD })}
+            </Label>
+            <Input
+              id={`whatsapp-delete-confirm-${connection.id}`}
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              placeholder={DELETE_CONFIRM_WORD}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={deletePermanent.isPending}
+              data-testid="whatsapp-delete-confirm-input"
+              dir="ltr"
+            />
+          </div>
+          {deletePermanent.isError ? (
+            <p className="text-sm text-destructive">
+              {t(
+                errorMessageKey(
+                  deletePermanent.error instanceof ApiError
+                    ? deletePermanent.error.code
+                    : 'unknown',
+                ),
+              )}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deletePermanent.isPending}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteConfirmMatches || deletePermanent.isPending}
+              data-testid="whatsapp-delete-confirm"
+              onClick={() =>
+                deletePermanent.mutate(
+                  {
+                    slug: connection.app_slug,
+                    connectionId: connection.id,
+                  },
+                  {
+                    onSuccess: () => {
+                      setDeleteOpen(false);
+                      setDeleteConfirmText('');
+                      toast.success(t('apps.whatsapp.toasts.deleted'));
+                    },
+                  },
+                )
+              }
+            >
+              {deletePermanent.isPending
+                ? t('apps.connections.deleting')
+                : t('apps.connections.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

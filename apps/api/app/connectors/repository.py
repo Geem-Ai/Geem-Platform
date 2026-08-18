@@ -7,7 +7,7 @@ import secrets
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.connectors.models import (
@@ -102,6 +102,35 @@ class ConnectorRepository:
         self.db.add(row)
         self.db.flush()
         return row
+
+    def purge_connection(self, row: AppConnection) -> None:
+        """Hard-delete a connection and RESTRICT child rows.
+
+        ``channel_bindings`` / ``channel_conversation_bindings`` CASCADE from
+        the connection FK; sync runs, items, and webhook events must go first.
+        """
+        connection_id = row.id
+        workspace_id = row.workspace_id
+        self.db.execute(
+            delete(ConnectorWebhookEvent).where(
+                ConnectorWebhookEvent.workspace_id == workspace_id,
+                ConnectorWebhookEvent.app_connection_id == connection_id,
+            )
+        )
+        self.db.execute(
+            delete(ConnectorItem).where(
+                ConnectorItem.workspace_id == workspace_id,
+                ConnectorItem.app_connection_id == connection_id,
+            )
+        )
+        self.db.execute(
+            delete(ConnectorSyncRun).where(
+                ConnectorSyncRun.workspace_id == workspace_id,
+                ConnectorSyncRun.app_connection_id == connection_id,
+            )
+        )
+        self.db.delete(row)
+        self.db.flush()
 
     def get_by_routing_token_hash(self, token_hash: str) -> AppConnection | None:
         return self.db.execute(

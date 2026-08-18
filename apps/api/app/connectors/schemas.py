@@ -39,6 +39,7 @@ class ConnectorCapabilityOut(BaseModel):
 
 class ConnectionCapabilitiesOut(BaseModel):
     can_disconnect: bool = False
+    can_delete: bool = False
     can_health_check: bool = False
     can_sync: bool = False
     can_reconnect: bool = False
@@ -195,6 +196,7 @@ def to_connection_out(
     reconnectable = disconnected or row.status == ConnectionStatus.ERROR.value
     caps = ConnectionCapabilitiesOut(
         can_disconnect=bool(can_manage and not disconnected),
+        can_delete=bool(can_manage and disconnected),
         can_health_check=bool(can_manage and usable and adapter_available),
         can_sync=bool(can_manage and usable and adapter_available and supports_sync),
         can_reconnect=bool(can_manage and reconnectable and adapter_available),

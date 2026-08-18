@@ -164,6 +164,13 @@ Also required for production webhooks: publicly reachable `APP_URL`.
 8. Install / purchase activation hooks re-register webhooks for any already-ready
    sessions under the installation.
 9. Never persist QR images or pairing codes.
+10. **Disconnect** fails closed locally, then best-effort logout + delete of the
+    OpenWA session. The Geem connection row remains (`disconnected`) so the
+    workspace can reconnect later.
+11. **Delete** (disconnected/revoked only): `DELETE
+    /api/apps/whatsapp/connections/{id}/permanent` — tears down any remaining
+    OpenWA session, then hard-deletes the Geem connection row (and cascaded
+    channel bindings). Workspace UI requires typing `DELETE` to confirm.
 
 ---
 
