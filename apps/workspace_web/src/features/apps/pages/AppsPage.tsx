@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Package, RefreshCw, Sparkles } from 'lucide-react';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
-import { canManageWorkspace } from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { CatalogApp } from '@/services/api/apps';
 import { AppGrid } from '../components/AppCard';
@@ -43,9 +43,8 @@ export function AppsPage() {
   const { slug } = useParams<{ slug?: string }>();
   const detailMatch = useMatch('/apps/:slug');
   const installedMatch = useMatch('/apps/installed');
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canManage = canManageWorkspace(role);
+  const { can } = usePermissions();
+  const canManage = can(WorkspacePermission.APPS_MANAGE);
   const [params, setParams] = useSearchParams();
   const category = params.get('category');
 

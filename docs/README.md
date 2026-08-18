@@ -8,5 +8,6 @@
 | [apps/google-drive.md](./apps/google-drive.md) | Configure the Google Drive knowledge app (Google Cloud → OAuth → Geem → Expert) |
 | [apps/microsoft-onedrive.md](./apps/microsoft-onedrive.md) | Configure the Microsoft OneDrive knowledge app (Entra → Graph → Geem → Expert) |
 | [invitations.md](./invitations.md) | Workspace email invitations (tokens, providers, accept contract) |
+| [rbac.md](./rbac.md) | Dynamic workspace roles, permission catalog, and permission-aware UI |
 
 API migration notes live in [`apps/api/migrations/README.md`](../apps/api/migrations/README.md).

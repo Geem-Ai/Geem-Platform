@@ -45,15 +45,11 @@ def _create_workspace(client: TestClient, user: dict, slug: str, name: str = "In
     return res.json()
 
 
-def _add_member(db, workspace_id: str, user_id: str, role: WorkspaceRole) -> None:
-    db.add(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(workspace_id),
-            user_id=uuid.UUID(user_id),
-            role=role.value,
-        )
-    )
-    db.commit()
+def _add_member(db, workspace_id: str, user_id: str, role=WorkspaceRole.MEMBER) -> None:
+    from tests.support.rbac import add_workspace_member
+    key = role.value if hasattr(role, "value") else role
+    add_workspace_member(db, workspace_id, user_id, key)
+
 
 
 @pytest.fixture()
@@ -69,11 +65,30 @@ def _invite(
     workspace_id: str,
     email: str,
     role: str = "member",
+    *,
+    db=None,
+    role_id: str | None = None,
 ) -> object:
+    from tests.support.rbac import role_id as lookup_role_id
+
+    close = False
+    session = db
+    if role_id is None:
+        if role in {"owner", "admin", "member"}:
+            if session is None:
+                session = TestingSessionLocal()
+                close = True
+            try:
+                role_id = str(lookup_role_id(session, workspace_id, role))
+            finally:
+                if close:
+                    session.close()
+        else:
+            role_id = str(uuid.uuid4())
     return client.post(
         f"/api/workspaces/{workspace_id}/invitations",
         headers=_auth(actor["access_token"]),
-        json={"email": email, "role": role},
+        json={"email": email, "role_id": role_id},
     )
 
 
@@ -84,13 +99,13 @@ def test_owner_invites_member_and_admin(client, register_user, inbox, db) -> Non
     assert member_invite.status_code == 201, member_invite.text
     body = member_invite.json()
     assert body["email"] == "new-member@example.com"
-    assert body["role"] == "member"
+    assert body["role"]["system_key"] == "member"
     assert body["status"] == "pending"
     assert "token_hash" not in body
     assert "token" not in body
     admin_invite = _invite(client, owner, ws["id"], "new-admin@example.com", "admin")
     assert admin_invite.status_code == 201, admin_invite.text
-    assert admin_invite.json()["role"] == "admin"
+    assert admin_invite.json()["role"]["system_key"] == "admin"
     assert len(inbox.messages) == 2
     raw = token_from_invite_email(inbox.messages[0])
     row = db.get(WorkspaceInvitation, uuid.UUID(body["id"]))
@@ -139,9 +154,11 @@ def test_invite_as_owner_and_invalid_role_rejected(client, register_user, inbox)
     owner = register_user(email="own-role@example.com")
     ws = _create_workspace(client, owner, "inv-bad-role")
     owner_role = _invite(client, owner, ws["id"], "x@example.com", "owner")
-    assert owner_role.status_code == 422
+    assert owner_role.status_code == 403
+    assert owner_role.json()["code"] == "role_protected"
     invalid = _invite(client, owner, ws["id"], "x@example.com", "superadmin")
-    assert invalid.status_code == 422
+    assert invalid.status_code == 404
+    assert invalid.json()["code"] == "role_not_found"
     assert inbox.messages == []
 
 
@@ -170,7 +187,7 @@ def test_existing_member_invite_conflicts(client, register_user, inbox, db) -> N
         headers=_auth(owner["access_token"]),
     )
     roles = {m["user_id"]: m["role"] for m in members.json()}
-    assert roles[member["user"]["id"]] == "member"
+    assert roles[member["user"]["id"]]["system_key"] == "member"
 
 
 def test_resend_and_list_hide_invite_after_email_is_member(
@@ -311,7 +328,7 @@ def test_resend_rotates_token_and_invalidates_old(client, register_user, inbox, 
         json={"token": new_token},
     )
     assert accepted.status_code == 200, accepted.text
-    assert accepted.json()["role"] == "member"
+    assert accepted.json()["role"]["system_key"] == "member"
     assert accepted.json()["workspace_id"] == ws["id"]
 
 
@@ -400,7 +417,7 @@ def test_accept_creates_membership_and_is_idempotent(client, register_user, inbo
     )
     assert first.status_code == 200, first.text
     body = first.json()
-    assert body["role"] == "admin"
+    assert body["role"]["system_key"] == "admin"
     assert body["already_member"] is False
     assert body["workspace_slug"] == "inv-acc"
 
@@ -419,7 +436,7 @@ def test_accept_creates_membership_and_is_idempotent(client, register_user, inbo
     )
     matches = [m for m in members.json() if m["user_id"] == invitee["user"]["id"]]
     assert len(matches) == 1
-    assert matches[0]["role"] == "admin"
+    assert matches[0]["role"]["system_key"] == "admin"
     row = db.get(WorkspaceInvitation, uuid.UUID(created.json()["id"]))
     assert row.accepted_at is not None
 
@@ -473,13 +490,13 @@ def test_accept_when_membership_already_exists_does_not_change_role(
     )
     assert res.status_code == 200, res.text
     assert res.json()["already_member"] is True
-    assert res.json()["role"] == "admin"
+    assert res.json()["role"]["system_key"] == "admin"
     members = client.get(
         f"/api/workspaces/{ws['id']}/members",
         headers=_auth(owner["access_token"]),
     )
     match = next(m for m in members.json() if m["user_id"] == invitee["user"]["id"])
-    assert match["role"] == "admin"
+    assert match["role"]["system_key"] == "admin"
     row = db.get(WorkspaceInvitation, uuid.UUID(created.json()["id"]))
     assert row.accepted_at is not None
 
@@ -562,15 +579,17 @@ def test_concurrent_accept_cannot_duplicate_membership(client, register_user, in
     assert row.accepted_at is not None
 
 
-def test_last_owner_rules_unchanged_with_invites(client, register_user, inbox) -> None:
+def test_last_owner_rules_unchanged_with_invites(client, register_user, inbox, db) -> None:
     owner = register_user(email="solo-inv@example.com")
     ws = _create_workspace(client, owner, "inv-last-owner")
     _invite(client, owner, ws["id"], "someone@example.com")
     uid = owner["user"]["id"]
+    from tests.support.rbac import role_id
+
     demote = client.patch(
         f"/api/workspaces/{ws['id']}/members/{uid}",
         headers=_auth(owner["access_token"]),
-        json={"role": "admin"},
+        json={"role_id": str(role_id(db, ws["id"], "admin"))},
     )
     assert demote.status_code == 409
     assert demote.json()["code"] == "last_workspace_owner"

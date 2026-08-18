@@ -65,15 +65,11 @@ def _as_test_path(url: str) -> str:
     return parsed.path + (f"?{parsed.query}" if parsed.query else "")
 
 
-def _add_member(db, workspace_id: str, user_id: str, role: WorkspaceRole) -> None:
-    db.add(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(workspace_id),
-            user_id=uuid.UUID(user_id),
-            role=role.value,
-        )
-    )
-    db.commit()
+def _add_member(db, workspace_id: str, user_id: str, role=WorkspaceRole.MEMBER) -> None:
+    from tests.support.rbac import add_workspace_member
+    key = role.value if hasattr(role, "value") else role
+    add_workspace_member(db, workspace_id, user_id, key)
+
 
 
 def _seed_paid_apps(db) -> tuple[CatalogApp, CatalogApp, AppPlan, list[AppPlan]]:

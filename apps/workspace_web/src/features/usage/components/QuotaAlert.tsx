@@ -3,12 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { errorMessageKey, isQuotaErrorCode, type ApiErrorCode } from '@/services/api/errors';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import type { QuotaWarningLevel } from '../lib/quota';
-
-function canManageBilling(role: string | null | undefined): boolean {
-  return role === 'owner' || role === 'admin';
-}
 
 function hintKeyForCode(code: ApiErrorCode): string {
   if (code === 'expert_limit_reached') return 'quota.expertHint';
@@ -36,9 +33,8 @@ export function QuotaAlert({
   className,
 }: QuotaAlertProps) {
   const { t } = useTranslation();
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const manage = canManageBilling(role);
+  const { can } = usePermissions();
+  const manage = can(WorkspacePermission.BILLING_MANAGE);
 
   const resolvedLevel: QuotaWarningLevel =
     level ??

@@ -325,26 +325,9 @@ def test_member_cannot_connect(client, register_user, db, monkeypatch) -> None:
         ).status_code
         == 201
     )
-    # Add member
-    invite = client.post(
-        f"/api/workspaces/{ws['id']}/members",
-        headers=_ws_headers(owner, ws),
-        json={"email": "od-member@example.com", "role": "member"},
-    )
-    # Some environments use invite flow; fall back to direct membership if available.
-    if invite.status_code not in {200, 201}:
-        from app.workspaces.models import WorkspaceMembership
-        from app.identity.models import User
+    from tests.support.rbac import add_workspace_member
 
-        u = db.query(User).filter(User.email == "od-member@example.com").one()
-        db.add(
-            WorkspaceMembership(
-                workspace_id=uuid.UUID(ws["id"]),
-                user_id=u.id,
-                role="member",
-            )
-        )
-        db.commit()
+    add_workspace_member(db, ws["id"], member["user"]["id"], "member")
 
     res = client.post(
         "/api/apps/microsoft-onedrive/connections",

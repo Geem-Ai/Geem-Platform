@@ -56,7 +56,7 @@ def test_forged_workspace_id_and_host_denied(client, register_user) -> None:
         client.patch(
             f"/api/workspaces/{ws_b['id']}/members/{user_b['user']['id']}",
             headers=_auth(user_a["access_token"]),
-            json={"role": "member"},
+            json={"role_id": str(__import__("uuid").uuid4())},
         ).status_code
         == 403
     )
@@ -86,20 +86,14 @@ def test_multi_workspace_membership_roles(client, register_user, db) -> None:
         json={"name": "Other", "slug": "other-ws"},
     ).json()
 
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws_b["id"]),
-            user_id=uuid.UUID(owner["user"]["id"]),
-            role=WorkspaceRole.MEMBER.value,
-        )
-    )
-    db.commit()
+    from tests.support.rbac import add_workspace_member
+    add_workspace_member(db, ws_b["id"], owner["user"]["id"], 'member')
 
     listed = client.get("/api/workspaces", headers=_auth(owner["access_token"]))
     assert listed.status_code == 200
     by_slug = {w["slug"]: w for w in listed.json()}
-    assert by_slug["owned-ws"]["role"] == "owner"
-    assert by_slug["other-ws"]["role"] == "member"
+    assert by_slug["owned-ws"]["role"]["system_key"] == "owner"
+    assert by_slug["other-ws"]["role"]["system_key"] == "member"
 
     # Owner privileges in A
     assert (
@@ -128,22 +122,17 @@ def test_two_owners_can_demote_one(client, register_user, db) -> None:
         headers=_auth(o1["access_token"]),
         json={"name": "Duo", "slug": "duo-ws"},
     ).json()
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws["id"]),
-            user_id=uuid.UUID(o2["user"]["id"]),
-            role=WorkspaceRole.OWNER.value,
-        )
-    )
-    db.commit()
+    from tests.support.rbac import add_workspace_member, role_id
+
+    add_workspace_member(db, ws["id"], o2["user"]["id"], "owner")
 
     demote = client.patch(
         f"/api/workspaces/{ws['id']}/members/{o2['user']['id']}",
         headers=_auth(o1["access_token"]),
-        json={"role": "admin"},
+        json={"role_id": str(role_id(db, ws["id"], "admin"))},
     )
     assert demote.status_code == 200
-    assert demote.json()["role"] == "admin"
+    assert demote.json()["role"]["system_key"] == "admin"
 
 
 def test_admin_cannot_remove_owner(client, register_user, db) -> None:
@@ -154,14 +143,8 @@ def test_admin_cannot_remove_owner(client, register_user, db) -> None:
         headers=_auth(owner["access_token"]),
         json={"name": "Prot", "slug": "prot-ws"},
     ).json()
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws["id"]),
-            user_id=uuid.UUID(admin["user"]["id"]),
-            role=WorkspaceRole.ADMIN.value,
-        )
-    )
-    db.commit()
+    from tests.support.rbac import add_workspace_member
+    add_workspace_member(db, ws["id"], admin["user"]["id"], 'admin')
 
     res = client.delete(
         f"/api/workspaces/{ws['id']}/members/{owner['user']['id']}",

@@ -9,15 +9,18 @@ from sqlalchemy.orm import Session
 from app.billing.schemas import PlanSummaryOut, SubscriptionOut
 from app.billing.service import SubscriptionService
 from app.db.session import get_db
-from app.workspaces.dependencies import require_workspace
+from app.workspaces.dependencies import require_workspace, require_workspace_action
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/subscription", tags=["subscription"])
 
 
 @router.get("", response_model=SubscriptionOut)
 def get_subscription(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(
+        require_workspace_action(WorkspaceAction.VIEW_BILLING)
+    ),
     db: Session = Depends(get_db),
 ) -> SubscriptionOut:
     workspace, _membership = pair

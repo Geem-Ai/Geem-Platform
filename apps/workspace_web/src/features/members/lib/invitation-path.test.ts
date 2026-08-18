@@ -4,7 +4,6 @@ import {
   isInvitationAcceptPath,
   readInvitationToken,
 } from './invitation-path';
-import { ROLE_MATRIX_ROWS } from './role-matrix';
 import { queryKeys } from '@/services/api/query-keys';
 import { errorMessageKey } from '@/services/api/errors';
 import en from '@/locales/en.json';
@@ -26,22 +25,13 @@ describe('invitation-path', () => {
   });
 });
 
-describe('role matrix', () => {
-  it('matches WorkspacePolicy: members cannot manage members or promote owners', () => {
-    const manage = ROLE_MATRIX_ROWS.find((row) => row.id === 'manage_members');
-    const promote = ROLE_MATRIX_ROWS.find((row) => row.id === 'promote_to_owner');
-    const knowledge = ROLE_MATRIX_ROWS.find((row) => row.id === 'knowledge');
-    expect(manage).toMatchObject({ owner: true, admin: true, member: false });
-    expect(promote).toMatchObject({ owner: true, admin: false, member: false });
-    expect(knowledge).toMatchObject({ owner: true, admin: true, member: true });
-  });
-});
-
 describe('invitation query keys and errors', () => {
   it('scopes invitation keys by workspace', () => {
     expect(queryKeys.invitations('ws-a')).toEqual(['workspace', 'ws-a', 'invitations']);
     expect(queryKeys.invitations('ws-a')[1]).not.toBe(queryKeys.invitations('ws-b')[1]);
-    expect(JSON.stringify(queryKeys.invitations('ws-a'))).not.toMatch(/token/i);
+    expect(queryKeys.roles('ws-a')).toEqual(['workspace', 'ws-a', 'roles']);
+    expect(queryKeys.roles('ws-a')[1]).not.toBe(queryKeys.roles('ws-b')[1]);
+    expect(queryKeys.assignableRoles('ws-a')[1]).toBe('ws-a');
   });
 
   it('maps typed invitation error codes', () => {

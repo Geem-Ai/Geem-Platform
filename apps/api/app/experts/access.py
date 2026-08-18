@@ -54,7 +54,7 @@ class ExpertAccessService:
         action: ExpertAction,
         actor_id: uuid.UUID | None = None,
     ) -> AuthorizedExpert:
-        ExpertPolicy.require(membership.role, action)
+        ExpertPolicy.require(membership, action)
         return self._resolve_expert(
             workspace=workspace,
             expert_id=expert_id,

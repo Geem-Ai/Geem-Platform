@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { canAskExpert } from '@/features/experts/lib/capabilities';
 import { useExperts } from '@/features/experts/hooks/useExperts';
@@ -27,6 +28,7 @@ export function ChatStartPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentWorkspace } = useWorkspace();
+  const { can, permissions } = usePermissions();
   const workspaceId = currentWorkspace?.id ?? '';
   const createConversation = useCreateConversation();
 
@@ -63,7 +65,10 @@ export function ChatStartPage() {
     // New chat always defaults to Geem General unless `?expert=` deep-link is present.
     if (expertIdParam) return;
     const geemGeneral = allExperts.find(
-      (e) => e.ownership === 'platform' && e.knowledge_mode === 'general' && canAskExpert(e.status),
+      (e) =>
+        e.ownership === 'platform' &&
+        e.knowledge_mode === 'general' &&
+        canAskExpert(can, e.status),
     );
     if (geemGeneral) {
       setSelectedExpertId(geemGeneral.id);
@@ -76,6 +81,7 @@ export function ChatStartPage() {
     selectedExpertId,
     setSearchParams,
     workspaceId,
+    permissions,
   ]);
 
   function handleSelectExpert(id: string) {
@@ -88,7 +94,7 @@ export function ChatStartPage() {
     ? allExperts.find((e) => e.id === selectedExpertId) ?? null
     : null;
 
-  const askEnabled = selectedExpert ? canAskExpert(selectedExpert.status) : false;
+  const askEnabled = selectedExpert ? canAskExpert(can, selectedExpert.status) : false;
 
   let askHint: string | null = null;
   if (selectedExpert && !askEnabled) {

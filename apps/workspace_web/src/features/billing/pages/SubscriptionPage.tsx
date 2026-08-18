@@ -9,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { useEntitlements, useSubscription } from '@/features/usage/hooks/useUsageQueries';
 import type { ByteUnitKey } from '@/features/usage/lib/quota';
 import type { PurchasablePlan } from '@/services/api/billing';
@@ -54,6 +56,8 @@ function PageSkeleton() {
 
 export function SubscriptionPage() {
   const { t, i18n } = useTranslation();
+  const { can } = usePermissions();
+  const canCheckout = can(WorkspacePermission.BILLING_MANAGE);
   const subscriptionQuery = useSubscription();
   const entitlementsQuery = useEntitlements();
   const plansQuery = useBillingPlans();
@@ -148,6 +152,7 @@ export function SubscriptionPage() {
                     key={plan.id}
                     plan={plan}
                     current={plan.id === subscription?.plan.id}
+                    canCheckout={canCheckout}
                     checkoutDisabled={gatewayUnavailable}
                     checkoutPending={checkout.isPending}
                     onChoose={(next) => {

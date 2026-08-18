@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from app.core.config import Settings
@@ -226,7 +228,7 @@ def test_derived_invitation_status() -> None:
     now = datetime.now(timezone.utc)
     row = WorkspaceInvitation(
         email="a@example.com",
-        role="member",
+        role_id=uuid.uuid4(),
         token_hash="a" * 64,
         expires_at=now + timedelta(hours=1),
     )
@@ -270,3 +272,21 @@ def test_invitation_email_template_is_bilingual_and_escapes_html() -> None:
     assert 'href="https://geem.ai/support"' in content.html_body
     assert "Website: https://geem.ai" in content.text_body
     assert "Support: https://geem.ai/support" in content.text_body
+
+
+def test_invitation_email_keeps_custom_role_display_name() -> None:
+    from datetime import datetime, timezone
+
+    from app.workspaces.invitation_email import render_invitation_email
+
+    content = render_invitation_email(
+        workspace_name="Acme",
+        role="API Developer",
+        accept_url="https://app.example.test/invitations/accept?token=abc",
+        expires_at=datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc),
+        invitee_email="join@example.com",
+        inviter_email=None,
+    )
+    assert "Role: API Developer" in content.text_body
+    assert "الدور: API Developer" in content.text_body
+    assert "Api Developer" not in content.text_body

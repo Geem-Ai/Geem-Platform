@@ -3,7 +3,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { toast } from 'sonner';
-import { canManageWorkspace } from '@/features/workspaces/lib/roles';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,9 +22,9 @@ import { ApiError, errorMessageKey } from '@/services/api/errors';
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { currentWorkspace, currentMembership, refreshWorkspaces } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canEdit = canManageWorkspace(role);
+  const { currentWorkspace, refreshWorkspaces } = useWorkspace();
+  const { can } = usePermissions();
+  const canEdit = can(WorkspacePermission.WORKSPACE_SETTINGS_MANAGE);
   const [name, setName] = useState(currentWorkspace?.name ?? '');
 
   useEffect(() => {

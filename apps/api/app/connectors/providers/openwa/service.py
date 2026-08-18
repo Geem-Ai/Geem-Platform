@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService
 from app.apps_catalog.models import AppInstallation, AppInstallationStatus, CatalogApp
-from app.apps_catalog.policy import can_manage_apps
+from app.apps_catalog.policy import can_connect_apps, can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
 from app.common.crypto import decrypt_secret
 from app.connectors.credentials import ConnectorCredentialService
@@ -129,14 +129,14 @@ class OpenWAChannelService:
     def start_session_connection(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         *,
         app_slug: str = APP_SLUG_DEFAULT,
         connection_id: uuid.UUID | None = None,
         connect_mode: str = "qr",
     ) -> WhatsAppConnectionOut:
-        self._require_manage(role)
+        self._require_manage(membership)
         self._require_registry_available()
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
@@ -144,7 +144,7 @@ class OpenWAChannelService:
 
         base = self.connections.start_connection(
             workspace=workspace,
-            role=role,
+            membership=membership,
             actor_id=actor_id,
             app_slug=app_slug,
             connection_id=connection_id,
@@ -223,13 +223,13 @@ class OpenWAChannelService:
     def get_session_status(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> WhatsAppConnectionOut:
         # Members may view status (read-only). Managers poll+sync while connecting.
-        can_manage = can_manage_apps(role)
+        can_manage = can_connect_apps(membership)
         app, installation = self._require_app_installation(
             workspace.id,
             app_slug=app_slug,
@@ -281,12 +281,12 @@ class OpenWAChannelService:
     def get_qr(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> OpenWAQrResponse:
-        self._require_manage(role)
+        self._require_manage(membership)
         _app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
@@ -308,13 +308,13 @@ class OpenWAChannelService:
     def request_pairing_code(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
         phone_number: str,
     ) -> dict[str, str]:
-        self._require_manage(role)
+        self._require_manage(membership)
         _app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
@@ -341,7 +341,7 @@ class OpenWAChannelService:
     def update_settings(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
@@ -350,7 +350,7 @@ class OpenWAChannelService:
         respond_to_groups: bool | None = None,
         enabled: bool | None = None,
     ) -> WhatsAppConnectionOut:
-        self._require_manage(role)
+        self._require_manage(membership)
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
@@ -397,13 +397,13 @@ class OpenWAChannelService:
     def reconnect(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> WhatsAppConnectionOut:
-        self._require_manage(role)
+        self._require_manage(membership)
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
@@ -434,7 +434,7 @@ class OpenWAChannelService:
         if not session_id:
             return self.start_session_connection(
                 workspace,
-                role,
+                membership,
                 actor_id,
                 app_slug=app_slug,
                 connection_id=connection_id,
@@ -446,7 +446,7 @@ class OpenWAChannelService:
             if session is None:
                 return self.start_session_connection(
                     workspace,
-                    role,
+                    membership,
                     actor_id,
                     app_slug=app_slug,
                     connection_id=connection_id,
@@ -469,15 +469,15 @@ class OpenWAChannelService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         limit: int = 50,
         offset: int = 0,
     ) -> AppConnectionListOut:
-        can_manage = can_manage_apps(role)
+        can_manage = can_connect_apps(membership)
         base = self.connections.list_connections(
             workspace=workspace,
-            role=role,
+            membership=membership,
             app_slug=app_slug,
             limit=limit,
             offset=offset,
@@ -513,11 +513,11 @@ class OpenWAChannelService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> WhatsAppConnectionOut:
-        can_manage = can_manage_apps(role)
+        can_manage = can_connect_apps(membership)
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=False
         )
@@ -538,13 +538,13 @@ class OpenWAChannelService:
     def disconnect_whatsapp(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         *,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> WhatsAppConnectionOut:
-        self._require_manage(role)
+        self._require_manage(membership)
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=False
         )
@@ -617,7 +617,7 @@ class OpenWAChannelService:
     def delete_whatsapp_connection(
         self,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         *,
         app_slug: str,
@@ -628,7 +628,7 @@ class OpenWAChannelService:
         Tears down the OpenWA session (best-effort when already gone), then
         hard-deletes the Geem ``app_connection`` row and related records.
         """
-        self._require_manage(role)
+        self._require_manage(membership)
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=False
         )
@@ -877,8 +877,8 @@ class OpenWAChannelService:
     def repo(self):  # type: ignore[override]
         return self.connections.repo
 
-    def _require_manage(self, role: str) -> None:
-        if not can_manage_apps(role):
+    def _require_manage(self, membership) -> None:
+        if not can_connect_apps(membership):
             raise AppError(
                 ErrorCategory.FORBIDDEN,
                 "Only owners and admins can manage WhatsApp connections.",

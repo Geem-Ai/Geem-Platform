@@ -195,7 +195,7 @@ def generate_expert_instructions_for_workspace(
     client: OpenRouterClient | None = None,
 ) -> str:
     """Owner/Admin only. Reserves and settles workspace AI tokens (CHAT family)."""
-    ExpertPolicy.require(membership.role, ExpertAction.CREATE)
+    ExpertPolicy.require(membership, ExpertAction.CREATE)
     cfg = settings or get_settings()
 
     meter = MeteredWorkspaceGeneration(

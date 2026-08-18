@@ -23,8 +23,9 @@ from app.common.public_model import public_model_or_none
 from app.db.session import get_db
 from app.usage.history import UsageHistoryService
 from app.usage.summary import MeterSnapshot, UsageSummaryService
-from app.workspaces.dependencies import require_workspace
+from app.workspaces.dependencies import require_workspace, require_workspace_action
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 
@@ -42,7 +43,7 @@ def _meter(snap: MeterSnapshot) -> MeterOut:
 
 @router.get("/summary", response_model=UsageSummaryOut)
 def get_usage_summary(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.READ_WORKSPACE)),
     db: Session = Depends(get_db),
 ) -> UsageSummaryOut:
     workspace, _membership = pair
@@ -78,7 +79,7 @@ def get_usage_summary(
 
 @router.get("/history", response_model=UsageHistoryOut)
 def get_usage_history(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.VIEW_BILLING)),
     db: Session = Depends(get_db),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

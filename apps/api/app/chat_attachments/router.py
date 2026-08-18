@@ -45,7 +45,7 @@ async def upload_chat_attachment(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> ChatAttachmentOut:
-    ConversationPolicy.require(access.membership.role, ConversationAction.CREATE)
+    ConversationPolicy.require(access.membership, ConversationAction.CREATE)
     settings = get_settings()
     data = await _read_upload_capped(file, settings.chat_attachment_max_bytes)
     row = ChatAttachmentService(db, settings).upload(
@@ -72,7 +72,7 @@ def delete_chat_attachment(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> None:
-    ConversationPolicy.require(access.membership.role, ConversationAction.CREATE)
+    ConversationPolicy.require(access.membership, ConversationAction.CREATE)
     ChatAttachmentService(db).delete_for_actor(
         workspace=access.workspace,
         actor=access.user,

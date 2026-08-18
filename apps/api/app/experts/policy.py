@@ -1,18 +1,4 @@
-"""Centralized Expert authorization (Phase 3A).
-
-Workspace role matrix (decision: Members may view/use; only Owner/Admin create/edit/delete/manage knowledge):
-
-                    Owner   Admin   Member
-View / Use            ✓       ✓       ✓
-Create Expert         ✓       ✓       -
-Edit Expert           ✓       ✓       -
-Delete Expert         ✓       ✓       -
-Manage knowledge      ✓       ✓       -
-
-Platform Expert management requires ``platform_role=admin``, not Workspace Owner.
-
-Quota / ``experts_included`` is Phase 5 — this policy answers role permission only.
-"""
+"""Expert authorization (Phase 10C) — maps ExpertAction → WorkspacePermission."""
 
 from __future__ import annotations
 
@@ -20,7 +6,9 @@ from enum import StrEnum
 
 from app.core.errors import AppError, ErrorCategory
 from app.identity.models import PlatformRole
-from app.workspaces.models import WorkspaceRole
+from app.workspaces.models import WorkspaceMembership
+from app.workspaces.permissions import WorkspacePermission
+from app.workspaces.rbac_service import has_permission, require_permission
 
 
 class ExpertAction(StrEnum):
@@ -32,6 +20,15 @@ class ExpertAction(StrEnum):
     MANAGE_KNOWLEDGE = "manage_expert_knowledge"
 
 
+_ACTION_PERMISSION: dict[ExpertAction, WorkspacePermission] = {
+    ExpertAction.VIEW: WorkspacePermission.EXPERTS_VIEW,
+    ExpertAction.USE: WorkspacePermission.EXPERTS_USE,
+    ExpertAction.CREATE: WorkspacePermission.EXPERTS_CREATE,
+    ExpertAction.UPDATE: WorkspacePermission.EXPERTS_UPDATE,
+    ExpertAction.DELETE: WorkspacePermission.EXPERTS_DELETE,
+    ExpertAction.MANAGE_KNOWLEDGE: WorkspacePermission.EXPERTS_MANAGE_KNOWLEDGE,
+}
+
 _MANAGE_ACTIONS = frozenset(
     {
         ExpertAction.CREATE,
@@ -41,43 +38,23 @@ _MANAGE_ACTIONS = frozenset(
     }
 )
 
-_ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[ExpertAction]] = {
-    WorkspaceRole.OWNER: frozenset(ExpertAction),
-    WorkspaceRole.ADMIN: frozenset(ExpertAction),
-    WorkspaceRole.MEMBER: frozenset({ExpertAction.VIEW, ExpertAction.USE}),
-}
-
 
 class ExpertPolicy:
     @staticmethod
-    def parse_role(role: str | WorkspaceRole) -> WorkspaceRole:
-        if isinstance(role, WorkspaceRole):
-            return role
-        try:
-            return WorkspaceRole(role)
-        except ValueError as exc:
-            raise AppError(
-                ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE,
-                "Unknown workspace role.",
-            ) from exc
+    def permission_for(action: ExpertAction) -> WorkspacePermission:
+        return _ACTION_PERMISSION[action]
 
     @classmethod
-    def can(cls, role: str | WorkspaceRole, action: ExpertAction) -> bool:
-        parsed = cls.parse_role(role)
-        return action in _ROLE_PERMISSIONS[parsed]
+    def can(cls, membership: WorkspaceMembership, action: ExpertAction) -> bool:
+        return has_permission(membership, cls.permission_for(action))
 
     @classmethod
-    def require(cls, role: str | WorkspaceRole, action: ExpertAction) -> None:
-        if not cls.can(role, action):
-            raise AppError(
-                ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE,
-                f"Role '{role}' cannot perform '{action.value}'.",
-                details={"required_action": action.value, "role": str(role)},
-            )
+    def require(cls, membership: WorkspaceMembership, action: ExpertAction) -> None:
+        require_permission(membership, cls.permission_for(action))
 
     @classmethod
-    def can_manage_workspace_experts(cls, role: str | WorkspaceRole) -> bool:
-        return cls.can(role, ExpertAction.CREATE)
+    def can_manage_workspace_experts(cls, membership: WorkspaceMembership) -> bool:
+        return cls.can(membership, ExpertAction.CREATE)
 
     @staticmethod
     def require_platform_admin(platform_role: str | None) -> None:

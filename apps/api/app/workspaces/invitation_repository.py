@@ -9,7 +9,21 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.identity.models import User
-from app.workspaces.models import InvitationStatus, WorkspaceInvitation, WorkspaceMembership
+from app.workspaces.models import (
+    InvitationStatus,
+    WorkspaceInvitation,
+    WorkspaceMembership,
+    WorkspaceRoleDef,
+    WorkspaceRolePermission,
+)
+
+
+_INVITE_LOAD = (
+    selectinload(WorkspaceInvitation.inviter),
+    selectinload(WorkspaceInvitation.workspace_role)
+    .selectinload(WorkspaceRoleDef.permission_links)
+    .selectinload(WorkspaceRolePermission.permission),
+)
 
 
 class InvitationRepository:
@@ -30,7 +44,7 @@ class InvitationRepository:
     ) -> WorkspaceInvitation | None:
         stmt = (
             select(WorkspaceInvitation)
-            .options(selectinload(WorkspaceInvitation.inviter))
+            .options(*_INVITE_LOAD)
             .where(
                 WorkspaceInvitation.id == invitation_id,
                 WorkspaceInvitation.workspace_id == workspace_id,
@@ -47,7 +61,7 @@ class InvitationRepository:
             select(WorkspaceInvitation)
             .options(
                 selectinload(WorkspaceInvitation.workspace),
-                selectinload(WorkspaceInvitation.inviter),
+                *_INVITE_LOAD,
             )
             .where(WorkspaceInvitation.token_hash == token_hash)
         )
@@ -96,7 +110,7 @@ class InvitationRepository:
         items = list(
             self.db.scalars(
                 select(WorkspaceInvitation)
-                .options(selectinload(WorkspaceInvitation.inviter))
+                .options(*_INVITE_LOAD)
                 .where(*pending)
                 .order_by(WorkspaceInvitation.created_at.desc())
                 .limit(limit)

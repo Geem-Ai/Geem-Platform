@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
 import type { Expert } from '@/services/api/types';
 import { canCreateExpert } from '../lib/capabilities';
 import { localizeExpertDisplay } from '../lib/localize';
@@ -47,9 +47,8 @@ export function ExpertsPage() {
   const editMatch = useMatch('/experts/:expertId/edit');
   const viewMatch = useMatch('/experts/:expertId');
 
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canCreate = canCreateExpert(role);
+  const { can } = usePermissions();
+  const canCreate = canCreateExpert(can);
 
   const expertsQuery = useExperts();
   const allExperts = useMemo(() => expertsQuery.data ?? [], [expertsQuery.data]);

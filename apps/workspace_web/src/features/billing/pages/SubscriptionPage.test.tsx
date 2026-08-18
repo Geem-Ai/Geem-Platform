@@ -8,9 +8,14 @@ import { queryKeys } from '@/services/api/query-keys';
 import { ApiError } from '@/services/api/errors';
 import type { PurchasablePlan } from '@/services/api/billing';
 import type { Entitlements, Subscription } from '@/services/api/usage';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { SubscriptionPage } from './SubscriptionPage';
 
-const workspaceState = { id: 'ws-a', role: 'owner' };
+const workspaceState: {
+  id: string;
+  role: string;
+  permissions?: string[];
+} = { id: 'ws-a', role: 'owner' };
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -19,6 +24,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       name: 'Acme',
       slug: 'acme',
       role: workspaceState.role,
+      permissions: workspaceState.permissions,
     },
     currentMembership: {
       id: 'm1',
@@ -26,6 +32,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       user_id: 'u1',
       role: workspaceState.role,
       created_at: '2026-01-01T00:00:00Z',
+      permissions: workspaceState.permissions,
     },
   }),
 }));
@@ -133,6 +140,7 @@ describe('SubscriptionPage', () => {
   beforeEach(async () => {
     workspaceState.id = 'ws-a';
     workspaceState.role = 'owner';
+    workspaceState.permissions = undefined;
     getSubscription.mockReset();
     getEntitlements.mockReset();
     listBillingPlans.mockReset();
@@ -239,8 +247,12 @@ describe('SubscriptionPage', () => {
     expect(redirectToCheckout).not.toHaveBeenCalled();
   });
 
-  it('keeps checkout CTAs for members to match backend policy', async () => {
+  it('keeps checkout CTAs for members who can manage billing', async () => {
     workspaceState.role = 'member';
+    workspaceState.permissions = [
+      WorkspacePermission.BILLING_VIEW,
+      WorkspacePermission.BILLING_MANAGE,
+    ];
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Growth')).toBeInTheDocument();
@@ -248,6 +260,18 @@ describe('SubscriptionPage', () => {
     expect(
       screen.getByTestId('billing-plan-plan-pro').querySelector('[data-testid="billing-plan-cta"]'),
     ).toBeEnabled();
+  });
+
+  it('hides checkout CTAs without billing.manage', async () => {
+    workspaceState.role = 'member';
+    workspaceState.permissions = [WorkspacePermission.BILLING_VIEW];
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Growth')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('billing-plan-plan-pro').querySelector('[data-testid="billing-plan-cta"]'),
+    ).toBeNull();
   });
 
   it('scopes plan query keys to the workspace', async () => {

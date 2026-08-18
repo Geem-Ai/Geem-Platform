@@ -2,15 +2,19 @@ import { useTranslation } from 'react-i18next';
 import { formatPeriodDate } from '@/features/usage/lib/quota';
 import { RoleBadge } from '@/features/members/components/RoleBadge';
 import { MemberRowActions } from '@/features/members/components/MemberRowActions';
-import type { Member } from '@/services/api/types';
+import { roleDisplayName } from '@/features/authz/role-summary';
+import type { Member, RoleSummary } from '@/services/api/types';
 
 type MembersTableProps = {
   members: Member[];
   currentUserId: string | undefined;
-  actorRole: string | null | undefined;
-  canManage: boolean;
+  assignableRoles: RoleSummary[];
+  ownerRole?: RoleSummary | null;
+  canChangeRole: boolean;
+  canRemove: boolean;
+  canAssignOwner: boolean;
   busy?: boolean;
-  onChangeRole: (userId: string, role: 'owner' | 'admin' | 'member') => void;
+  onChangeRole: (userId: string, roleId: string) => void;
   onRemove: (member: Member) => void;
 };
 
@@ -22,8 +26,11 @@ function initials(email: string | null, userId: string): string {
 export function MembersTable({
   members,
   currentUserId,
-  actorRole,
-  canManage,
+  assignableRoles,
+  ownerRole,
+  canChangeRole,
+  canRemove,
+  canAssignOwner,
   busy,
   onChangeRole,
   onRemove,
@@ -43,6 +50,7 @@ export function MembersTable({
       {members.map((member) => {
         const isSelf = member.user_id === currentUserId;
         const joined = formatPeriodDate(member.created_at, i18n.language);
+        const showActions = !isSelf && (canChangeRole || canRemove);
         return (
           <li
             key={member.id}
@@ -68,18 +76,22 @@ export function MembersTable({
                 <p className="text-xs text-muted-foreground">
                   {joined
                     ? t('members.joinedOn', { date: joined })
-                    : t(`roles.${member.role}`)}
+                    : roleDisplayName(member.role)}
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">
               <RoleBadge role={member.role} />
-              {canManage ? (
+              {showActions ? (
                 <MemberRowActions
-                  actorRole={actorRole}
                   memberRole={member.role}
+                  assignableRoles={assignableRoles}
+                  ownerRole={ownerRole}
+                  canChangeRole={canChangeRole}
+                  canRemove={canRemove}
+                  canAssignOwner={canAssignOwner}
                   disabled={busy}
-                  onChangeRole={(role) => onChangeRole(member.user_id, role)}
+                  onChangeRole={(roleId) => onChangeRole(member.user_id, roleId)}
                   onRemove={() => onRemove(member)}
                 />
               ) : null}

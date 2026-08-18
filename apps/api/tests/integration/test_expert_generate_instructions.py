@@ -142,14 +142,8 @@ def test_member_cannot_generate_instructions(client, register_user, db) -> None:
     owner = register_user(email="gen-inst-own@example.com")
     member = register_user(email="gen-inst-mem@example.com")
     ws = _create_workspace(client, owner["access_token"], "GenMem", "gen-inst-mem")
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws["id"]),
-            user_id=uuid.UUID(member["user"]["id"]),
-            role=WorkspaceRole.MEMBER.value,
-        )
-    )
-    db.commit()
+    from tests.support.rbac import add_workspace_member
+    add_workspace_member(db, ws["id"], member["user"]["id"], 'member')
 
     res = client.post(
         "/api/experts/generate-instructions",

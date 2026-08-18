@@ -135,12 +135,17 @@ def _bind_workspace_context(
     membership: WorkspaceMembership,
     resolution_source: str,
 ) -> None:
+    from app.workspaces.rbac_service import get_effective_permissions
+
+    perms = get_effective_permissions(membership)
     ctx = get_request_context()
     updated = replace(
         ctx,
         workspace_id=workspace.id,
         workspace_slug=workspace.slug,
         membership_role=membership.role,
+        membership_role_id=membership.role_id,
+        effective_permissions=perms,
         workspace_resolution=resolution_source,
     )
     set_request_context(updated)

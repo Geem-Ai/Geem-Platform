@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from html import escape
 from xml.sax.saxutils import quoteattr
 
-_ROLE_EN = {"admin": "Admin", "member": "Member"}
-_ROLE_AR = {"admin": "مشرف", "member": "عضو"}
+_ROLE_EN = {"owner": "Owner", "admin": "Admin", "member": "Member"}
+_ROLE_AR = {"owner": "مالك", "admin": "مشرف", "member": "عضو"}
 
 BRAND = "#0e2f44"
 BRAND_ACCENT = "#367d9e"
@@ -36,9 +36,7 @@ def render_invitation_email(
     inviter_email: str | None,
 ) -> InvitationEmailContent:
     name = _one_line(workspace_name) or "a workspace"
-    role_key = (role or "").strip().lower()
-    role_en = _ROLE_EN.get(role_key, role_key.title() or "Member")
-    role_ar = _ROLE_AR.get(role_key, role_en)
+    role_en, role_ar = _role_labels(role)
     expires = _format_expiry(expires_at)
     inviter = (inviter_email or "").strip() or None
     invitee = (invitee_email or "").strip()
@@ -67,6 +65,16 @@ def render_invitation_email(
 
 def _one_line(value: str) -> str:
     return " ".join((value or "").split())
+
+
+def _role_labels(role: str) -> tuple[str, str]:
+    display = _one_line(role)
+    key = display.lower()
+    if key in _ROLE_EN:
+        return _ROLE_EN[key], _ROLE_AR[key]
+    if not display:
+        return _ROLE_EN["member"], _ROLE_AR["member"]
+    return display, display
 
 
 def _format_expiry(expires_at: datetime) -> str:

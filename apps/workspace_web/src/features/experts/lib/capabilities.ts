@@ -3,31 +3,32 @@
  * Backend ExpertPolicy remains the authoritative guard.
  */
 
-export function canCreateExpert(role: string | null | undefined): boolean {
-  return role === 'owner' || role === 'admin';
+import { WorkspacePermission } from '@/features/authz/permissions';
+
+type Can = (permission: string) => boolean;
+
+export function canCreateExpert(can: Can): boolean {
+  return can(WorkspacePermission.EXPERTS_CREATE);
 }
 
-export function canEditExpert(
-  role: string | null | undefined,
-  ownership: string,
-): boolean {
-  return (role === 'owner' || role === 'admin') && ownership === 'workspace';
+export function canEditExpert(can: Can, ownership: string): boolean {
+  return can(WorkspacePermission.EXPERTS_UPDATE) && ownership === 'workspace';
 }
 
-export function canDeleteExpert(
-  role: string | null | undefined,
-  ownership: string,
-): boolean {
-  return (role === 'owner' || role === 'admin') && ownership === 'workspace';
+export function canDeleteExpert(can: Can, ownership: string): boolean {
+  return can(WorkspacePermission.EXPERTS_DELETE) && ownership === 'workspace';
 }
 
-export function canManageExpertKnowledge(
-  role: string | null | undefined,
-  ownership: string,
-): boolean {
-  return (role === 'owner' || role === 'admin') && ownership === 'workspace';
+export function canManageExpertKnowledge(can: Can, ownership: string): boolean {
+  return (
+    can(WorkspacePermission.EXPERTS_MANAGE_KNOWLEDGE) && ownership === 'workspace'
+  );
 }
 
-export function canAskExpert(status: string): boolean {
-  return status === 'ready';
+export function canAskExpert(can: Can, status: string): boolean {
+  return (
+    can(WorkspacePermission.EXPERTS_USE) &&
+    can(WorkspacePermission.CHAT_USE) &&
+    status === 'ready'
+  );
 }

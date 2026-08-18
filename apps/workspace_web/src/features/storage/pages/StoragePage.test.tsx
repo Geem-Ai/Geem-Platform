@@ -7,9 +7,14 @@ import i18n from '@/lib/i18n';
 import { queryKeys } from '@/services/api/query-keys';
 import type { DocumentListPage, DocumentSummary } from '@/services/api/types';
 import type { Meter, UsageSummary } from '@/services/api/usage';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { StoragePage } from './StoragePage';
 
-const workspaceState = { id: 'ws-a', role: 'owner' };
+const workspaceState: {
+  id: string;
+  role: string;
+  permissions?: string[];
+} = { id: 'ws-a', role: 'owner' };
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -18,6 +23,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       name: 'Acme',
       slug: 'acme',
       role: workspaceState.role,
+      permissions: workspaceState.permissions,
     },
     currentMembership: {
       id: 'm1',
@@ -25,6 +31,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       user_id: 'u1',
       role: workspaceState.role,
       created_at: '2026-01-01T00:00:00Z',
+      permissions: workspaceState.permissions,
     },
   }),
 }));
@@ -145,6 +152,7 @@ describe('StoragePage', () => {
   beforeEach(async () => {
     workspaceState.id = 'ws-a';
     workspaceState.role = 'owner';
+    workspaceState.permissions = undefined;
     listDocuments.mockReset();
     deleteDocument.mockReset();
     downloadDocumentFile.mockReset();
@@ -182,12 +190,27 @@ describe('StoragePage', () => {
     expect(screen.getByText(i18n.t('storage.orphan'))).toBeInTheDocument();
   });
 
-  it('hides delete for members', async () => {
+  it('hides delete for members who can still download', async () => {
     workspaceState.role = 'member';
+    workspaceState.permissions = [
+      WorkspacePermission.STORAGE_VIEW,
+      WorkspacePermission.STORAGE_DOWNLOAD,
+    ];
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('storage-download-doc-1')).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('storage-delete-doc-1')).not.toBeInTheDocument();
+  });
+
+  it('hides download without storage.download', async () => {
+    workspaceState.role = 'member';
+    workspaceState.permissions = [WorkspacePermission.STORAGE_VIEW];
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Policy')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('storage-download-doc-1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('storage-delete-doc-1')).not.toBeInTheDocument();
   });
 

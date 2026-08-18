@@ -18,6 +18,11 @@ export const queryKeys = {
   members: (workspaceId: string) => workspaceQueryKey(workspaceId, 'members'),
   invitations: (workspaceId: string) =>
     workspaceQueryKey(workspaceId, 'invitations'),
+  roles: (workspaceId: string) => workspaceQueryKey(workspaceId, 'roles'),
+  assignableRoles: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'roles', 'assignable'),
+  permissionCatalog: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'permissions'),
   workspace: (workspaceId: string) => workspaceQueryKey(workspaceId, 'detail'),
   documents: (
     workspaceId: string,

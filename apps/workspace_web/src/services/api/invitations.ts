@@ -1,6 +1,5 @@
 import { apiRequest } from './client';
-
-export type InvitationRole = 'admin' | 'member';
+import type { RoleSummary } from './types';
 
 export type WorkspaceInvitationInviter = {
   id: string;
@@ -11,7 +10,7 @@ export type WorkspaceInvitationSummary = {
   id: string;
   workspace_id: string;
   email: string;
-  role: InvitationRole | string;
+  role: RoleSummary;
   status: string;
   expires_at: string;
   created_at: string;
@@ -30,7 +29,7 @@ export type InvitationAcceptResult = {
   workspace_id: string;
   workspace_name: string;
   workspace_slug: string;
-  role: string;
+  role: RoleSummary;
   membership_id: string;
   already_member: boolean;
 };
@@ -51,7 +50,7 @@ export function listWorkspaceInvitations(
 
 export function createWorkspaceInvitation(
   workspaceId: string,
-  input: { email: string; role: InvitationRole },
+  input: { email: string; role_id: string },
 ): Promise<WorkspaceInvitationSummary> {
   return apiRequest<WorkspaceInvitationSummary>(
     `/api/workspaces/${workspaceId}/invitations`,

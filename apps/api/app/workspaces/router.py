@@ -16,24 +16,12 @@ from app.workspaces.schemas import (
     WorkspaceCreateRequest,
     WorkspaceOut,
     WorkspaceUpdateRequest,
+    to_member_out,
+    to_workspace_out,
 )
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
-
-
-def _workspace_out(workspace: Workspace, role: str | None = None) -> WorkspaceOut:
-    return WorkspaceOut(
-        id=workspace.id,
-        name=workspace.name,
-        slug=workspace.slug,
-        status=workspace.status,
-        created_by=workspace.created_by,
-        settings=workspace.settings or {},
-        created_at=workspace.created_at,
-        updated_at=workspace.updated_at,
-        role=role,
-    )
 
 
 @router.get("", response_model=list[WorkspaceOut])
@@ -42,7 +30,7 @@ def list_workspaces(
     db: Session = Depends(get_db),
 ) -> list[WorkspaceOut]:
     pairs = WorkspaceService(db).list_for_user(user.id)
-    return [_workspace_out(w, role=m.role) for w, m in pairs]
+    return [to_workspace_out(w, m) for w, m in pairs]
 
 
 @router.post("", response_model=WorkspaceOut, status_code=201)
@@ -57,7 +45,7 @@ def create_workspace(
         created_by=user.id,
         settings=body.settings,
     )
-    return _workspace_out(workspace, role=membership.role)
+    return to_workspace_out(workspace, membership)
 
 
 @router.get("/current", response_model=WorkspaceOut)
@@ -66,7 +54,7 @@ def current_workspace(
 ) -> WorkspaceOut:
     """Resolve the current workspace from Host / local header hints + membership."""
     workspace, membership = pair
-    return _workspace_out(workspace, role=membership.role)
+    return to_workspace_out(workspace, membership)
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceOut)
@@ -76,7 +64,7 @@ def get_workspace(
     db: Session = Depends(get_db),
 ) -> WorkspaceOut:
     workspace, membership = WorkspaceService(db).get_workspace_for_user(workspace_id, user.id)
-    return _workspace_out(workspace, role=membership.role)
+    return to_workspace_out(workspace, membership)
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceOut)
@@ -93,7 +81,7 @@ def update_workspace(
         settings=body.settings,
     )
     _, membership = WorkspaceService(db).get_workspace_for_user(workspace_id, user.id)
-    return _workspace_out(workspace, role=membership.role)
+    return to_workspace_out(workspace, membership)
 
 
 @router.get("/{workspace_id}/members", response_model=list[MemberOut])
@@ -103,16 +91,7 @@ def list_members(
     db: Session = Depends(get_db),
 ) -> list[MemberOut]:
     members = WorkspaceService(db).list_members(workspace_id=workspace_id, actor_id=user.id)
-    return [
-        MemberOut(
-            id=m.id,
-            user_id=m.user_id,
-            email=m.user.email if m.user else None,
-            role=m.role,
-            created_at=m.created_at,
-        )
-        for m in members
-    ]
+    return [to_member_out(m) for m in members]
 
 
 @router.patch("/{workspace_id}/members/{target_user_id}", response_model=MemberOut)
@@ -127,15 +106,10 @@ def update_member_role(
         workspace_id=workspace_id,
         actor_id=user.id,
         target_user_id=target_user_id,
-        new_role=body.role,
+        new_role_id=body.role_id,
     )
-    return MemberOut(
-        id=m.id,
-        user_id=m.user_id,
-        email=None,
-        role=m.role,
-        created_at=m.created_at,
-    )
+    loaded = WorkspaceService(db).memberships.get(workspace_id, target_user_id)
+    return to_member_out(loaded or m)
 
 
 @router.delete("/{workspace_id}/members/{target_user_id}", status_code=204)

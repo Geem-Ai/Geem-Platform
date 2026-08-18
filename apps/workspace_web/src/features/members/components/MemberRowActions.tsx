@@ -8,29 +8,37 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
-import {
-  canChangeMemberRoles,
-  canPromoteToOwner,
-} from '@/features/workspaces/lib/roles';
+import { isOwnerRole } from '@/features/authz/role-summary';
+import type { RoleSummary } from '@/services/api/types';
 
 type MemberRowActionsProps = {
-  actorRole: string | null | undefined;
-  memberRole: string;
+  memberRole: RoleSummary;
+  assignableRoles: RoleSummary[];
+  canChangeRole: boolean;
+  canRemove: boolean;
+  canAssignOwner: boolean;
+  ownerRole?: RoleSummary | null;
   disabled?: boolean;
-  onChangeRole: (role: 'owner' | 'admin' | 'member') => void;
+  onChangeRole: (roleId: string) => void;
   onRemove: () => void;
 };
 
 export function MemberRowActions({
-  actorRole,
   memberRole,
+  assignableRoles,
+  canChangeRole,
+  canRemove,
+  canAssignOwner,
+  ownerRole,
   disabled,
   onChangeRole,
   onRemove,
 }: MemberRowActionsProps) {
   const { t } = useTranslation();
-  const canRoles = canChangeMemberRoles(actorRole);
-  const canOwner = canPromoteToOwner(actorRole);
+  const options = [...assignableRoles];
+  if (canAssignOwner && ownerRole && !options.some((row) => row.id === ownerRole.id)) {
+    options.unshift(ownerRole);
+  }
 
   return (
     <DropdownMenu>
@@ -47,29 +55,29 @@ export function MemberRowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
-        {canRoles ? (
-          <>
-            {memberRole !== 'member' ? (
-              <DropdownMenuItem onSelect={() => onChangeRole('member')}>
-                {t('members.makeRole', { role: t('roles.member') })}
-              </DropdownMenuItem>
-            ) : null}
-            {memberRole !== 'admin' ? (
-              <DropdownMenuItem onSelect={() => onChangeRole('admin')}>
-                {t('members.makeRole', { role: t('roles.admin') })}
-              </DropdownMenuItem>
-            ) : null}
-            {canOwner && memberRole !== 'owner' ? (
-              <DropdownMenuItem onSelect={() => onChangeRole('owner')}>
-                {t('members.makeRole', { role: t('roles.owner') })}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuSeparator />
-          </>
+        {canChangeRole
+          ? options
+              .filter((row) => row.id !== memberRole.id)
+              .map((row) => (
+                <DropdownMenuItem
+                  key={row.id}
+                  onSelect={() => onChangeRole(row.id)}
+                  data-testid={`assign-role-${row.id}`}
+                >
+                  {t('members.makeRole', { role: row.name })}
+                </DropdownMenuItem>
+              ))
+          : null}
+        {canChangeRole && canRemove ? <DropdownMenuSeparator /> : null}
+        {canRemove && !isOwnerRole(memberRole) ? (
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={onRemove}
+            data-testid="remove-member"
+          >
+            {t('members.remove')}
+          </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem variant="destructive" onSelect={onRemove}>
-          {t('members.remove')}
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

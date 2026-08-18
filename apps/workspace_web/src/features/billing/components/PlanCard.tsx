@@ -17,12 +17,14 @@ import { MoneyAmount } from './MoneyAmount';
 export function PlanCard({
   plan,
   current,
+  canCheckout = true,
   checkoutDisabled,
   checkoutPending,
   onChoose,
 }: {
   plan: PurchasablePlan;
   current: boolean;
+  canCheckout?: boolean;
   checkoutDisabled?: boolean;
   checkoutPending?: boolean;
   onChoose: (plan: PurchasablePlan) => void;
@@ -128,7 +130,7 @@ export function PlanCard({
               {t('billing.currentPlanHint')}
             </p>
           </div>
-        ) : (
+        ) : canCheckout ? (
           <div className="space-y-1.5">
             <Button
               type="button"
@@ -143,7 +145,7 @@ export function PlanCard({
               {t('billing.choosePlanHint')}
             </p>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

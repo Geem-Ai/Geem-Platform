@@ -30,22 +30,53 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.rbac_service import get_effective_permissions
+from app.workspaces.schemas import RoleSummaryOut, to_role_summary
+
+
+def workspace_summary_out(workspace: Workspace, membership: WorkspaceMembership) -> WorkspaceSummaryOut:
+    summary = to_role_summary(membership.workspace_role)
+    assert summary is not None
+    return WorkspaceSummaryOut(
+        id=workspace.id,
+        name=workspace.name,
+        slug=workspace.slug,
+        status=workspace.status,
+        role=summary,
+        permissions=sorted(get_effective_permissions(membership)),
+    )
+
+
+def membership_out(membership: WorkspaceMembership) -> MembershipOut:
+    summary = to_role_summary(membership.workspace_role)
+    assert summary is not None
+    return MembershipOut(
+        id=membership.id,
+        workspace_id=membership.workspace_id,
+        user_id=membership.user_id,
+        role=summary,
+        created_at=membership.created_at,
+        permissions=sorted(get_effective_permissions(membership)),
+    )
+
+
 class WorkspaceSummaryOut(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
     status: str
-    role: str
+    role: RoleSummaryOut
+    permissions: list[str] = Field(default_factory=list)
 
 
 class MembershipOut(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     user_id: uuid.UUID
-    role: str
+    role: RoleSummaryOut
     created_at: datetime
-
-    model_config = {"from_attributes": True}
+    permissions: list[str] = Field(default_factory=list)
 
 
 class AuthTokenResponse(BaseModel):

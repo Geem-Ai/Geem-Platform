@@ -8,7 +8,7 @@ import { queryKeys } from '@/services/api/query-keys';
 import type { ApiKey, CreatedApiKey } from '@/services/api/api-keys';
 import { ApiKeysPage } from './ApiKeysPage';
 
-const workspaceState = { id: 'ws-a', role: 'owner' };
+const workspaceState = { id: 'ws-a', role: 'owner' as string, permissions: [] as string[] };
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -17,6 +17,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       name: 'Acme',
       slug: 'acme',
       role: workspaceState.role,
+      permissions: workspaceState.permissions,
     },
     currentMembership: {
       id: 'm1',
@@ -24,6 +25,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       user_id: 'u1',
       role: workspaceState.role,
       created_at: '2026-01-01T00:00:00Z',
+      permissions: workspaceState.permissions,
     },
   }),
 }));
@@ -98,6 +100,7 @@ describe('ApiKeysPage', () => {
   beforeEach(async () => {
     workspaceState.id = 'ws-a';
     workspaceState.role = 'owner';
+    workspaceState.permissions = [];
     listApiKeys.mockReset();
     createApiKey.mockReset();
     revokeApiKey.mockReset();
@@ -141,6 +144,11 @@ describe('ApiKeysPage', () => {
 
   it('lets admin create and shows the plaintext secret once', async () => {
     workspaceState.role = 'admin';
+    workspaceState.permissions = [
+      'api_keys.view',
+      'api_keys.create',
+      'api_keys.revoke',
+    ];
     listApiKeys.mockResolvedValue([]);
     const created: CreatedApiKey = {
       ...key({ id: 'key-new', name: 'Staging' }),

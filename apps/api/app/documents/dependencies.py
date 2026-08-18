@@ -38,7 +38,7 @@ class DocumentAccess:
         return True
 
     def require_action(self, action: WorkspaceAction) -> None:
-        WorkspacePolicy.require(self.membership.role, action)
+        WorkspacePolicy.require(self.membership, action)
 
 
 def _authorization_header_present(request: Request) -> bool:

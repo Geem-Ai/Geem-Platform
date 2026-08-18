@@ -6,20 +6,30 @@ export type User = {
   created_at: string;
 };
 
+export type RoleSummary = {
+  id: string;
+  name: string;
+  is_system: boolean;
+  is_owner_role: boolean;
+  system_key: string | null;
+};
+
 export type WorkspaceSummary = {
   id: string;
   name: string;
   slug: string;
   status: string;
-  role: string;
+  role: RoleSummary;
+  permissions: string[];
 };
 
 export type Membership = {
   id: string;
   workspace_id: string;
   user_id: string;
-  role: string;
+  role: RoleSummary;
   created_at: string;
+  permissions: string[];
 };
 
 export type AuthTokenResponse = {
@@ -45,18 +55,17 @@ export type Workspace = {
   settings: Record<string, unknown>;
   created_at: string;
   updated_at: string;
-  role: string | null;
+  role: RoleSummary | null;
+  permissions: string[];
 };
 
 export type Member = {
   id: string;
   user_id: string;
   email: string | null;
-  role: string;
+  role: RoleSummary;
   created_at: string;
 };
-
-export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
 export type DocumentExpertRef = {
   id: string;

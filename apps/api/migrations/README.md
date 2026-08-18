@@ -31,7 +31,8 @@
 - Fix: `0020_storage_event_reasons.py` — expand `ck_storage_usage_events_reason` for Phase 5C audit reasons (`reserve` / `release` / `restore`).
 - Chat attach multimodal: `0021_message_attachments.py` — `messages.attachments` JSONB snapshot for composer files sent to the model (no Expert ingest).
 - Phase 9F: `0022_openwa_channel.py` — `channel_bindings`, `channel_conversation_bindings`, `conversations.source`, and nullable `conversations.user_id` for WhatsApp/OpenWA channel conversations. Runtime registration remains application code (`register_openwa_connector`).
-- Phase 10A: `0023_workspace_invitations.py` — `workspace_invitations` (HMAC-hashed tokens, pending unique `(workspace_id, email)`, invite roles `admin|member`). Email via `EmailProvider` (`console` local/test only; optional SMTP). See [`docs/invitations.md`](../../docs/invitations.md).
+- Phase 10A: `0023_workspace_invitations.py` — `workspace_invitations` (HMAC-hashed tokens, pending unique `(workspace_id, email)`). Invite role is `role_id` after 10C. Email via `EmailProvider` (`console` local/test only; optional SMTP). See [`docs/invitations.md`](../../docs/invitations.md).
+- Phase 10C: `0024_workspace_rbac.py` — `permissions`, `workspace_roles`, `workspace_role_permissions`; memberships/invitations `role_id`; seed catalog + default Owner/Administrator/Member; drop legacy string `role` after backfill. See [`docs/rbac.md`](../../docs/rbac.md).
 
 ### Document tenancy (Phase 2C final)
 

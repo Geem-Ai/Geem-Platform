@@ -36,11 +36,11 @@ export async function listMembers(workspaceId: string): Promise<Member[]> {
 export async function updateMemberRole(
   workspaceId: string,
   userId: string,
-  role: 'owner' | 'admin' | 'member',
+  roleId: string,
 ): Promise<Member> {
   return apiRequest<Member>(`/api/workspaces/${workspaceId}/members/${userId}`, {
     method: 'PATCH',
-    json: { role },
+    json: { role_id: roleId },
   });
 }
 

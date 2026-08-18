@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { Expert } from '@/services/api/types';
+import { usePermissions } from '@/features/authz/usePermissions';
 import { canAskExpert } from '@/features/experts/lib/capabilities';
 import { localizeExpertDisplay } from '@/features/experts/lib/localize';
 import { ExpertStatusBadge } from '@/features/experts/components/ExpertStatusBadge';
@@ -50,7 +51,8 @@ function ExpertRow({
   onSelect: () => void;
 }) {
   const { t } = useTranslation();
-  const usable = canAskExpert(expert.status);
+  const { can } = usePermissions();
+  const usable = canAskExpert(can, expert.status);
   const isPlatform = expert.ownership === 'platform';
   const isGeneral = expert.knowledge_mode === 'general';
   const display = localizeExpertDisplay(expert, t);

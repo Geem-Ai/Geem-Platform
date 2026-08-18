@@ -11,8 +11,8 @@ import {
   floatingSheetPanel,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { canManageWorkspace } from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { CatalogApp } from '@/services/api/apps';
 import { useApp } from '../hooks/useAppsQueries';
@@ -83,9 +83,9 @@ function AppPlansSection({
 
 export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps) {
   const { t } = useTranslation();
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canManage = canManageWorkspace(role);
+  const { can } = usePermissions();
+  const canManage = can(WorkspacePermission.APPS_MANAGE);
+  const canConnect = can(WorkspacePermission.APPS_CONNECT);
   const query = useApp(open ? slug : undefined);
   const app = query.data;
   const localized = app ? localizeCatalogApp(app, t) : null;
@@ -239,7 +239,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                       <TabsContent value="connections" className="space-y-3">
                         <AppConnectionsPanel
                           app={app}
-                          canManage={canManage}
+                          canManage={canConnect}
                           showTitle={false}
                           showSyncHistory={false}
                         />
@@ -262,7 +262,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                       ) : null}
                     </Tabs>
                   ) : app?.connector ? (
-                    <AppConnectionsPanel app={app} canManage={canManage} />
+                    <AppConnectionsPanel app={app} canManage={canConnect} />
                   ) : (
                     <AppPlansSection app={app} canManage={canManage} />
                   )}

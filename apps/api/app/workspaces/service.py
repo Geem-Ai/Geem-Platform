@@ -13,10 +13,13 @@ from app.workspaces.models import (
     Workspace,
     WorkspaceKind,
     WorkspaceMembership,
-    WorkspaceRole,
+    WorkspaceRoleDef,
     WorkspaceStatus,
 )
+from app.workspaces.permissions import SystemRoleKey, WorkspacePermission
 from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
+from app.workspaces.rbac_seed import ensure_default_workspace_roles, seed_permission_catalog
+from app.workspaces.rbac_service import is_owner_membership, require_permission
 from app.workspaces.repository import MembershipRepository, WorkspaceRepository
 from app.workspaces.slug import validate_workspace_slug
 
@@ -63,14 +66,16 @@ class WorkspaceService:
             created_by=created_by,
             settings=settings or {},
         )
-        membership = WorkspaceMembership(
-            workspace=workspace,
-            user_id=created_by,
-            role=WorkspaceRole.OWNER.value,
-        )
         try:
-            # Single commit: workspace + owner membership + bootstrap billing succeed or roll back.
+            # Single commit: workspace + default roles + owner membership + billing.
             self.workspaces.create(workspace)
+            seed_permission_catalog(self.db)
+            roles = ensure_default_workspace_roles(self.db, workspace.id)
+            membership = WorkspaceMembership(
+                workspace=workspace,
+                user_id=created_by,
+                role_id=roles[SystemRoleKey.OWNER.value].id,
+            )
             self.memberships.create(membership)
             self._provision_tenant_billing(workspace)
             self.db.commit()
@@ -143,7 +148,7 @@ class WorkspaceService:
         settings: dict[str, Any] | None = None,
     ) -> Workspace:
         workspace, membership = self.get_workspace_for_user(workspace_id, actor_id)
-        WorkspacePolicy.require(membership.role, WorkspaceAction.UPDATE_WORKSPACE)
+        WorkspacePolicy.require(membership, WorkspaceAction.UPDATE_WORKSPACE)
         if name is not None:
             clean = name.strip()
             if not clean or len(clean) > 200:
@@ -163,8 +168,16 @@ class WorkspaceService:
         self, *, workspace_id: uuid.UUID, actor_id: uuid.UUID
     ) -> list[WorkspaceMembership]:
         _, membership = self.get_workspace_for_user(workspace_id, actor_id)
-        WorkspacePolicy.require(membership.role, WorkspaceAction.VIEW_MEMBERS)
+        WorkspacePolicy.require(membership, WorkspaceAction.VIEW_MEMBERS)
         return self.memberships.list_for_workspace(workspace_id)
+
+    def _role_in_workspace(
+        self, workspace_id: uuid.UUID, role_id: uuid.UUID
+    ) -> WorkspaceRoleDef:
+        role = self.db.get(WorkspaceRoleDef, role_id)
+        if role is None or role.workspace_id != workspace_id:
+            raise AppError(ErrorCategory.ROLE_NOT_FOUND, "Role not found.")
+        return role
 
     def update_member_role(
         self,
@@ -172,53 +185,51 @@ class WorkspaceService:
         workspace_id: uuid.UUID,
         actor_id: uuid.UUID,
         target_user_id: uuid.UUID,
-        new_role: str,
+        new_role_id: uuid.UUID,
     ) -> WorkspaceMembership:
         _, actor_membership = self.get_workspace_for_user(workspace_id, actor_id)
-        WorkspacePolicy.require(actor_membership.role, WorkspaceAction.CHANGE_MEMBER_ROLES)
+        require_permission(actor_membership, WorkspacePermission.MEMBERS_UPDATE_ROLE)
 
-        try:
-            role = WorkspaceRole(new_role)
-        except ValueError as exc:
-            raise AppError(ErrorCategory.VALIDATION, "Invalid workspace role.") from exc
+        new_role = self._role_in_workspace(workspace_id, new_role_id)
+        actor_is_owner = is_owner_membership(actor_membership)
 
-        if role == WorkspaceRole.OWNER:
-            WorkspacePolicy.require(actor_membership.role, WorkspaceAction.PROMOTE_TO_OWNER)
+        if new_role.is_owner_role:
+            if not actor_is_owner:
+                raise AppError(
+                    ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE,
+                    "Only the workspace owner can assign the Owner role.",
+                )
+            require_permission(actor_membership, WorkspacePermission.MEMBERS_PROMOTE_OWNER)
 
         target = self.memberships.get_for_update(workspace_id, target_user_id)
         if target is None:
             raise AppError(ErrorCategory.MEMBERSHIP_NOT_FOUND, "Membership not found.")
 
-        # Admins cannot change owner roles (check before last-owner for clearer errors).
-        if (
-            actor_membership.role == WorkspaceRole.ADMIN.value
-            and target.role == WorkspaceRole.OWNER.value
-        ):
+        target_is_owner = is_owner_membership(target)
+        if target_is_owner and not actor_is_owner:
             raise AppError(
                 ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE,
-                "Admins cannot modify owner memberships.",
+                "Only the workspace owner can modify owner memberships.",
             )
 
         owners = self.memberships.lock_owners(workspace_id)
-        # Prevent demoting / changing the last owner.
-        if (
-            target.role == WorkspaceRole.OWNER.value
-            and role != WorkspaceRole.OWNER
-            and len(owners) <= 1
-        ):
+        if target_is_owner and not new_role.is_owner_role and len(owners) <= 1:
             raise AppError(
                 ErrorCategory.LAST_WORKSPACE_OWNER,
                 "Cannot demote the last workspace owner.",
             )
 
-        target.role = role.value
+        target.role_id = new_role.id
+        target.workspace_role = new_role
         self.db.commit()
+        self.db.refresh(target)
         security_log(
             "workspace.membership_role_changed",
             workspace_id=str(workspace_id),
             actor_id=str(actor_id),
             target_user_id=str(target_user_id),
-            role=role.value,
+            role_id=str(new_role.id),
+            system_key=new_role.system_key,
         )
         return target
 
@@ -230,23 +241,22 @@ class WorkspaceService:
         target_user_id: uuid.UUID,
     ) -> None:
         _, actor_membership = self.get_workspace_for_user(workspace_id, actor_id)
-        WorkspacePolicy.require(actor_membership.role, WorkspaceAction.MANAGE_MEMBERS)
+        require_permission(actor_membership, WorkspacePermission.MEMBERS_REMOVE)
 
         target = self.memberships.get_for_update(workspace_id, target_user_id)
         if target is None:
             raise AppError(ErrorCategory.MEMBERSHIP_NOT_FOUND, "Membership not found.")
 
-        if (
-            actor_membership.role == WorkspaceRole.ADMIN.value
-            and target.role == WorkspaceRole.OWNER.value
-        ):
+        actor_is_owner = is_owner_membership(actor_membership)
+        target_is_owner = is_owner_membership(target)
+        if target_is_owner and not actor_is_owner:
             raise AppError(
                 ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE,
-                "Admins cannot remove owners.",
+                "Only the workspace owner can remove owners.",
             )
 
         owners = self.memberships.lock_owners(workspace_id)
-        if target.role == WorkspaceRole.OWNER.value and len(owners) <= 1:
+        if target_is_owner and len(owners) <= 1:
             raise AppError(
                 ErrorCategory.LAST_WORKSPACE_OWNER,
                 "Cannot remove the last workspace owner.",
@@ -272,11 +282,13 @@ class WorkspaceService:
                     "Default workspace slug collides with a system Workspace.",
                 )
             if created_by is not None and self.memberships.get(existing.id, created_by) is None:
+                seed_permission_catalog(self.db)
+                roles = ensure_default_workspace_roles(self.db, existing.id)
                 self.memberships.create(
                     WorkspaceMembership(
                         workspace_id=existing.id,
                         user_id=created_by,
-                        role=WorkspaceRole.OWNER.value,
+                        role_id=roles[SystemRoleKey.OWNER.value].id,
                     )
                 )
                 if existing.created_by is None:
@@ -288,6 +300,8 @@ class WorkspaceService:
                     actor_id=str(created_by),
                 )
             self._provision_tenant_billing(existing)
+            seed_permission_catalog(self.db)
+            ensure_default_workspace_roles(self.db, existing.id)
             self.db.commit()
             return existing
 
@@ -300,12 +314,14 @@ class WorkspaceService:
             settings={"migration": True},
         )
         self.workspaces.create(workspace)
+        seed_permission_catalog(self.db)
+        roles = ensure_default_workspace_roles(self.db, workspace.id)
         if created_by is not None:
             self.memberships.create(
                 WorkspaceMembership(
                     workspace_id=workspace.id,
                     user_id=created_by,
-                    role=WorkspaceRole.OWNER.value,
+                    role_id=roles[SystemRoleKey.OWNER.value].id,
                 )
             )
         self._provision_tenant_billing(workspace)

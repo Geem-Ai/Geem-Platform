@@ -192,7 +192,7 @@ def download_file(
     db: Session = Depends(get_db),
 ) -> Response:
     svc = DocumentService(db)
-    access.require_action(WorkspaceAction.READ_DOCUMENT)
+    access.require_action(WorkspaceAction.DOWNLOAD_DOCUMENT)
     data, filename, mime_type = svc.get_file_for_workspace(access.workspace, document_id)
     return Response(
         content=data,

@@ -1,11 +1,12 @@
-"""App Store workspace actions — owner/admin mutate; members browse."""
+"""App Store workspace actions — permission-based (Phase 10C)."""
 
 from __future__ import annotations
 
 from enum import StrEnum
 
-from app.workspaces.models import WorkspaceRole
-from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
+from app.workspaces.models import WorkspaceMembership
+from app.workspaces.permissions import WorkspacePermission
+from app.workspaces.rbac_service import has_permission, require_permission
 
 
 class AppStoreAction(StrEnum):
@@ -13,19 +14,24 @@ class AppStoreAction(StrEnum):
     VIEW_INSTALLATIONS = "view_app_installations"
     INSTALL_APP = "install_app"
     UNINSTALL_APP = "uninstall_app"
+    CONNECT_APP = "connect_app"
 
 
-# Mapped onto WorkspaceAction for central role matrix.
-# INSTALL/UNINSTALL → MANAGE_APPS; browse/view → READ_WORKSPACE.
+def require_browse(membership: WorkspaceMembership) -> None:
+    require_permission(membership, WorkspacePermission.APPS_VIEW)
 
 
-def require_browse(role: str | WorkspaceRole) -> None:
-    WorkspacePolicy.require(role, WorkspaceAction.READ_WORKSPACE)
+def require_manage_apps(membership: WorkspaceMembership) -> None:
+    require_permission(membership, WorkspacePermission.APPS_MANAGE)
 
 
-def require_manage_apps(role: str | WorkspaceRole) -> None:
-    WorkspacePolicy.require(role, WorkspaceAction.MANAGE_APPS)
+def require_connect_apps(membership: WorkspaceMembership) -> None:
+    require_permission(membership, WorkspacePermission.APPS_CONNECT)
 
 
-def can_manage_apps(role: str | WorkspaceRole) -> bool:
-    return WorkspacePolicy.can(role, WorkspaceAction.MANAGE_APPS)
+def can_manage_apps(membership: WorkspaceMembership) -> bool:
+    return has_permission(membership, WorkspacePermission.APPS_MANAGE)
+
+
+def can_connect_apps(membership: WorkspaceMembership) -> bool:
+    return has_permission(membership, WorkspacePermission.APPS_CONNECT)

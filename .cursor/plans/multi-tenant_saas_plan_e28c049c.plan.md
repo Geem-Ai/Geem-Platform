@@ -33,7 +33,7 @@ todos:
     content: "Phase 9: COMPLETE — 9A–9G PASS (App Store catalog, commerce, Drive, OneDrive, WhatsApp/OpenWA, Apps management + E2E gate). Do not start Phase 10 until requested."
     status: completed
   - id: phase-10
-    content: "Phase 10: COMPLETE — 10A PASS (workspace invitations backend) + 10B PASS (Members UX, invite accept, role matrix). Do not start Phase 11 until requested."
+    content: "Phase 10: COMPLETE — 10A PASS + 10B PASS + 10C PASS (dynamic workspace RBAC + permission-aware UI). Do not start Phase 11 until requested."
     status: completed
   - id: phase-11
     content: "Phase 11: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
@@ -1259,7 +1259,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 10 — Members UX (invites + role matrix + polish)
 
-**Status:** completed — **10A PASS** + **10B PASS**. Phase 10 COMPLETE. Do not start Phase 11 until requested.
+**Status:** completed — **10A PASS** + **10B PASS** + **10C PASS**. Phase 10 COMPLETE. Do not start Phase 11 until requested.
 
 **Baseline already shipped (Phase 1):** sidebar **Members** item → `/members`; list / change role / remove for existing members; `WorkspacePolicy` role matrix.
 
@@ -1326,6 +1326,22 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 - API client under `services/api/` only; no `samples/` imports; raw tokens never in query keys, toasts, or `localStorage`
 
 **Acceptance (full Phase 10):** Owner/admin invites by email; invitee accepts after auth and appears in members list with the invited role; pending invites list/revoke/resend work; members without manage rights see list + matrix only; EN/AR + RTL; Playwright smoke: invite → accept → appear in Members; no ESP required for CI (mocked API + fixture token).
+
+#### 10C — Dynamic Workspace Roles, Permissions & Permission-Aware UI
+
+**Status:** completed — **10C PASS**. Dynamic RBAC migration PASS. Permission-aware navigation PASS. Do not start Phase 11 until requested.
+
+**Locked decisions:** Permissions are Geem-defined (`WorkspacePermission`). Roles belong to a Workspace. Owner remains a protected full-access authority (`is_owner_role`), not a custom role. Administrator/Member are seeded system defaults (rename/delete protected; permissions editable). Memberships and invitations use `role_id`. Frontend permission checks are UX only.
+
+**Delivered:**
+- `permissions` / `workspace_roles` / `workspace_role_permissions` + Alembic `0024_workspace_rbac` (seed, backfill, drop legacy string `role`)
+- `PermissionService` + `require_workspace_permission` on Phase 1–10 workspace APIs
+- Role CRUD APIs + permission catalog; `/api/auth/me` effective `permissions`
+- `usePermissions()`, sidebar filtering, nested parent hiding, `RequirePermission` 403
+- Members + Roles UI, dynamic invite/role assignment, EN/AR + RTL
+- Docs: [`docs/rbac.md`](../../docs/rbac.md)
+
+**Out of scope:** ABAC, field/document ACL, SSO/SCIM, Platform Admin RBAC, Phase 11 Hardening.
 
 ---
 

@@ -1,8 +1,8 @@
 # Workspace invitations
 
-Tokenized **email invitations** let a workspace owner or admin invite someone by email. Accepting the invite creates a `workspace_membership` row. Membership is **not** created until the invitee authenticates with the same email and calls `POST /api/invitations/accept`.
+Tokenized **email invitations** let an authorized member invite someone by email. Accepting the invite creates a `workspace_membership` row with the invitation’s **dynamic role** (`role_id`). Membership is **not** created until the invitee authenticates with the same email and calls `POST /api/invitations/accept`.
 
-Phase 10A is the invitations backend. Phase 10B is the Workspace Members UI: `/members` invite/pending/resend/revoke, `/invitations/accept?token=`, and the role matrix.
+Phase 10A is the invitations backend. Phase 10B is the Workspace Members UI. Phase 10C replaced static `admin|member` invite roles with workspace role IDs. See [rbac.md](./rbac.md).
 
 ## Lifecycle
 
@@ -26,13 +26,13 @@ If a non-finalized invitation has already expired, creating a new invite for the
 
 ## Authorization
 
-Workspace invitation **management** (`POST/GET` list, resend, revoke) requires `WorkspaceAction.MANAGE_MEMBERS` (owner/admin today). Members receive `insufficient_workspace_role`.
+Invitation **management** (create/list/resend/revoke) requires `members.invite`. Members without that permission receive `insufficient_workspace_role`.
 
 Create and resend also require the workspace `status` to be `active` (`workspace_access_denied` otherwise), matching API-key creation. List and revoke remain available so pending invites can be inspected or cancelled on a suspended workspace.
 
 `POST /api/invitations/accept` is session-authenticated but **not** workspace-scoped — the caller is joining.
 
-Invite roles are `admin` or `member` only. `owner` cannot be assigned by invitation.
+Invite roles are **assignable workspace roles** (`role_id`). The Owner role cannot be assigned by invitation. The server revalidates that the role exists in the invitation’s workspace and is not `is_owner_role`. Cross-workspace role IDs fail closed.
 
 Inviting an email that already has an active membership returns `already_workspace_member` (409). Resend of a still-open invite for that address is the same 409. The pending list omits those rows (they reappear if the membership is removed). Invitations are not a role-update API.
 
@@ -40,7 +40,7 @@ Inviting an email that already has an active membership returns `already_workspa
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `POST` | `/api/workspaces/{workspace_id}/invitations` | `{ "email", "role" }` |
+| `POST` | `/api/workspaces/{workspace_id}/invitations` | `{ "email", "role_id" }` |
 | `GET` | `/api/workspaces/{workspace_id}/invitations` | Pending only (`items`, `total`, `limit`, `offset`) |
 | `POST` | `/api/workspaces/{workspace_id}/invitations/{id}/resend` | Rotates token |
 | `DELETE` | `/api/workspaces/{workspace_id}/invitations/{id}` | Revoke (idempotent if already revoked) |
@@ -107,8 +107,8 @@ Accept URLs use `WORKSPACE_WEB_URL` (`Settings.effective_workspace_web_url`):
 - Email normalization uses `identity.security.normalize_email` (strip + lower).
 - Last-owner membership rules are unchanged; invitations cannot create owner memberships.
 
-## Workspace UI (Phase 10B)
+## Workspace UI (Phase 10B / 10C)
 
-- Members page: `/members` (existing nav). Owner/admin can invite (`admin` or `member` only), list pending invitations, resend, and revoke. Members can view the roster and role matrix only.
-- Accept route: `/invitations/accept?token=...` (outside the workspace shell). Logged-out invitees sign in or register with `location.state.from` pointing back to this path. After a successful accept the app switches to the joined workspace and replaces the token URL with `/members`.
+- Members page: `/members` (existing nav) with Members and Roles tabs. Users with `members.invite` can invite using assignable role IDs (Owner is excluded). Users with only `members.view` see the roster without management controls.
+- Accept route: `/invitations/accept?token=...` (outside the workspace shell). Logged-out invitees sign in or register with `location.state.from` pointing back to this path. After a successful accept the app switches to the joined workspace and replaces the token URL with `/` (HomeRedirect chooses chat, overview, or the first allowed page).
 - The raw token is sent only to `POST /api/invitations/accept`. It is not stored in `localStorage`, not placed in React Query keys, and not shown in toasts.

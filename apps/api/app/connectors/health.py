@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.apps_catalog.policy import can_manage_apps
+from app.apps_catalog.policy import can_connect_apps, can_manage_apps
 from app.common.security_log import security_log
 from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.registry import ConnectorRegistry, connector_registry
@@ -38,12 +38,12 @@ class ConnectorHealthService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> AppConnectionOut:
-        if not can_manage_apps(role):
+        if not can_connect_apps(membership):
             raise AppError(
                 ErrorCategory.FORBIDDEN,
                 "Only owners and admins can run connection health checks.",

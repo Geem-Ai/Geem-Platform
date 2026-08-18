@@ -28,11 +28,44 @@ const bob = {
   created_at: '2026-01-03T00:00:00Z',
 };
 
+type RoleSummary = {
+  id: string;
+  name: string;
+  is_system: boolean;
+  is_owner_role: boolean;
+  system_key: string | null;
+};
+
+const ownerRole: RoleSummary = {
+  id: 'role-owner',
+  name: 'Owner',
+  is_system: true,
+  is_owner_role: true,
+  system_key: 'owner',
+};
+const adminRole: RoleSummary = {
+  id: 'role-admin',
+  name: 'Administrator',
+  is_system: true,
+  is_owner_role: false,
+  system_key: 'admin',
+};
+const memberRole: RoleSummary = {
+  id: 'role-member',
+  name: 'Member',
+  is_system: true,
+  is_owner_role: false,
+  system_key: 'member',
+};
+
+const OWNER_PERMISSIONS = ['workspace.view', 'chat.use', 'experts.view', 'members.view', 'members.invite', 'members.update_role', 'members.remove', 'roles.view', 'roles.manage', 'billing.view'];
+const MEMBER_PERMISSIONS = ['workspace.view', 'chat.use', 'experts.view', 'members.view', 'billing.view', 'apps.view', 'storage.view'];
+
 type MemberRow = {
   id: string;
   user_id: string;
   email: string;
-  role: 'owner' | 'admin' | 'member';
+  role: RoleSummary;
   created_at: string;
 };
 
@@ -40,20 +73,21 @@ type InviteRow = {
   id: string;
   workspace_id: string;
   email: string;
-  role: 'admin' | 'member';
+  role: RoleSummary;
   status: string;
   expires_at: string;
   created_at: string;
   invited_by: { id: string; email: string };
 };
 
-function workspace(role: 'owner' | 'admin' | 'member') {
+function workspace(role: RoleSummary, permissions: string[]) {
   return {
     id: workspaceId,
     name: 'E2E Workspace',
     slug: 'e2e',
     status: 'active',
     role,
+    permissions,
     kind: 'tenant',
   };
 }
@@ -81,7 +115,7 @@ function createStore() {
       id: 'mem-owner',
       user_id: owner.id,
       email: owner.email,
-      role: 'owner',
+      role: ownerRole,
       created_at: '2026-01-01T00:00:00Z',
     },
   ];
@@ -135,12 +169,13 @@ async function mockApi(
                   created_at: '2026-01-01T00:00:00Z',
                 }
               : null;
-    const role: 'owner' | 'admin' | 'member' =
-      session === 'member' ? 'member' : 'owner';
-    const ws = workspace(role);
+    const role = session === 'member' ? memberRole : ownerRole;
+    const permissions =
+      session === 'member' ? MEMBER_PERMISSIONS : OWNER_PERMISSIONS;
+    const ws = workspace(role, permissions);
     const joined = store.members.some((m) => m.user_id === actor?.id);
     const meWorkspaces = actor && (session === 'invitee' ? joined : session !== 'bob')
-      ? [session === 'invitee' ? workspace('member') : ws]
+      ? [session === 'invitee' ? workspace(memberRole, MEMBER_PERMISSIONS) : ws]
       : [];
 
     if (path.endsWith('/auth/refresh') && method === 'POST') {
@@ -180,12 +215,28 @@ async function mockApi(
               user_id: actor.id,
               role: current.role,
               created_at: '2026-01-01T00:00:00Z',
+              permissions: current.permissions,
             }
           : null,
       });
     }
     if (path.endsWith('/workspaces') && method === 'GET') {
       return fulfillJson(route, meWorkspaces);
+    }
+    if (path.includes(`/workspaces/${workspaceId}/roles/assignable`) && method === 'GET') {
+      return fulfillJson(route, { items: [adminRole, memberRole] });
+    }
+    if (path.includes(`/workspaces/${workspaceId}/roles`) && method === 'GET') {
+      return fulfillJson(route, {
+        items: [
+          { ...ownerRole, workspace_id: workspaceId, description: null, assigned_count: 1, permissions: [] },
+          { ...adminRole, workspace_id: workspaceId, description: null, assigned_count: 0, permissions: [] },
+          { ...memberRole, workspace_id: workspaceId, description: null, assigned_count: 0, permissions: [] },
+        ],
+      });
+    }
+    if (path.includes(`/workspaces/${workspaceId}/permissions`) && method === 'GET') {
+      return fulfillJson(route, { items: [] });
     }
     if (path.includes(`/workspaces/${workspaceId}/members`) && method === 'GET') {
       return fulfillJson(route, store.members);
@@ -211,7 +262,7 @@ async function mockApi(
     if (path.includes(`/workspaces/${workspaceId}/invitations`) && method === 'POST') {
       const body = route.request().postDataJSON() as {
         email?: string;
-        role?: 'admin' | 'member';
+        role_id?: string;
       };
       if (store.members.some((m) => m.email === body.email)) {
         return fulfillJson(route, { code: 'already_workspace_member' }, 409);
@@ -219,11 +270,13 @@ async function mockApi(
       if (store.invitations.some((i) => i.email === body.email)) {
         return fulfillJson(route, { code: 'invitation_already_exists' }, 409);
       }
+      const invitedRole =
+        body.role_id === adminRole.id ? adminRole : memberRole;
       const item: InviteRow = {
         id: 'inv-1',
         workspace_id: workspaceId,
         email: (body.email ?? '').toLowerCase(),
-        role: body.role ?? 'member',
+        role: invitedRole,
         status: 'pending',
         expires_at: '2026-08-21T12:00:00Z',
         created_at: '2026-08-18T12:00:00Z',
@@ -257,7 +310,7 @@ async function mockApi(
           id: 'mem-invitee',
           user_id: invitee.id,
           email: invitee.email,
-          role: 'member',
+          role: memberRole,
           created_at: '2026-08-18T12:00:00Z',
         });
         store.invitations.splice(0, store.invitations.length);
@@ -267,7 +320,7 @@ async function mockApi(
         workspace_id: workspaceId,
         workspace_name: 'E2E Workspace',
         workspace_slug: 'e2e',
-        role: 'member',
+        role: memberRole,
         membership_id: 'mem-invitee',
         already_member: already,
       });
@@ -304,7 +357,8 @@ test.describe('Members Phase 10B invitations', () => {
     await inviteePage.locator('#email').fill(invitee.email);
     await inviteePage.locator('#password').fill('password12');
     await inviteePage.getByRole('button', { name: 'Sign in' }).click();
-    await expect(inviteePage).toHaveURL(/\/members/, { timeout: 15_000 });
+    await expect(inviteePage).not.toHaveURL(/token=/, { timeout: 15_000 });
+    await inviteePage.goto('/members');
     await expect(inviteePage.getByTestId('members-page')).toContainText(invitee.email);
     expect(inviteePage.url()).not.toContain('token=');
 
@@ -322,7 +376,7 @@ test.describe('Members Phase 10B invitations', () => {
       id: 'mem-member',
       user_id: 'user-member',
       email: 'member@example.com',
-      role: 'member',
+      role: memberRole,
       created_at: '2026-01-04T00:00:00Z',
     });
     await mockApi(page, store, session);
@@ -330,7 +384,7 @@ test.describe('Members Phase 10B invitations', () => {
     await expect(page.getByTestId('members-page')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('invite-member-button')).toHaveCount(0);
     await expect(page.getByTestId('pending-invitations')).toHaveCount(0);
-    await expect(page.getByTestId('role-matrix')).toBeVisible();
+    await expect(page.getByTestId('roles-tab')).toHaveCount(0);
   });
 
   test('email mismatch blocks acceptance', async ({ page }) => {
@@ -339,7 +393,7 @@ test.describe('Members Phase 10B invitations', () => {
       id: 'inv-1',
       workspace_id: workspaceId,
       email: invitee.email,
-      role: 'member',
+      role: memberRole,
       status: 'pending',
       expires_at: '2026-08-21T12:00:00Z',
       created_at: '2026-08-18T12:00:00Z',
@@ -369,7 +423,7 @@ test.describe('Members Phase 10B invitations', () => {
       id: 'inv-1',
       workspace_id: workspaceId,
       email: invitee.email,
-      role: 'member',
+      role: memberRole,
       status: 'pending',
       expires_at: '2026-08-21T12:00:00Z',
       created_at: '2026-08-18T12:00:00Z',
@@ -391,7 +445,9 @@ test.describe('Members Phase 10B invitations', () => {
     const freshPage = await (await browser.newContext()).newPage();
     await mockApi(freshPage, store, { current: 'invitee' });
     await freshPage.goto(`/invitations/accept?token=${resentToken}`);
-    await expect(freshPage).toHaveURL(/\/members/, { timeout: 15_000 });
+    await expect(freshPage).not.toHaveURL(/token=/, { timeout: 15_000 });
+    await freshPage.goto('/members');
+    await expect(freshPage.getByTestId('members-page')).toBeVisible();
 
     await ownerContext.close();
   });

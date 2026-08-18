@@ -34,8 +34,9 @@ from app.entitlements.keys import entitlement_display_sort_key
 from app.entitlements.values import entitlement_value_from_row
 from app.identity.dependencies import client_ip, get_current_user
 from app.identity.models import User
-from app.workspaces.dependencies import require_workspace
+from app.workspaces.dependencies import require_workspace, require_workspace_action
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -233,7 +234,9 @@ def _spa_payment_result_url(purchase: Purchase) -> str | None:
 
 @router.get("/plans", response_model=list[PurchasablePlanOut])
 def list_plans(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(
+        require_workspace_action(WorkspaceAction.VIEW_BILLING)
+    ),
     db: Session = Depends(get_db),
 ) -> list[PurchasablePlanOut]:
     _workspace, _membership = pair
@@ -242,7 +245,9 @@ def list_plans(
 
 @router.get("/credit-packs", response_model=list[CreditPackOut])
 def list_credit_packs(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(
+        require_workspace_action(WorkspaceAction.VIEW_BILLING)
+    ),
     db: Session = Depends(get_db),
 ) -> list[CreditPackOut]:
     _workspace, _membership = pair
@@ -253,7 +258,9 @@ def list_credit_packs(
 def checkout_subscription(
     body: SubscriptionCheckoutRequest,
     request: Request,
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(
+        require_workspace_action(WorkspaceAction.MANAGE_BILLING)
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
@@ -273,7 +280,9 @@ def checkout_subscription(
 def checkout_credit_pack(
     body: CreditPackCheckoutRequest,
     request: Request,
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(
+        require_workspace_action(WorkspaceAction.PURCHASE_CREDITS)
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
@@ -291,7 +300,7 @@ def checkout_credit_pack(
 
 @router.get("/purchases", response_model=PurchaseListOut)
 def list_purchases(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.VIEW_BILLING)),
     db: Session = Depends(get_db),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -317,7 +326,7 @@ def list_purchases(
 @router.get("/purchases/{purchase_id}", response_model=PurchaseOut)
 def get_purchase(
     purchase_id: uuid.UUID,
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.VIEW_BILLING)),
     db: Session = Depends(get_db),
 ) -> PurchaseOut:
     workspace, _membership = pair

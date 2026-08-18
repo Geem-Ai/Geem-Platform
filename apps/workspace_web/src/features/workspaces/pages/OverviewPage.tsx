@@ -5,6 +5,8 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { roleDisplayName } from '@/features/authz/role-summary';
 import { canCreateExpert } from '@/features/experts/lib/capabilities';
 import { useExperts } from '@/features/experts/hooks/useExperts';
 import { ExpertCard } from '@/features/experts/components/ExpertCard';
@@ -15,9 +17,9 @@ import { geemAvatarUrl } from '@/lib/helpers';
 export function OverviewPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { currentWorkspace, currentMembership } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role ?? 'member';
-  const canCreate = canCreateExpert(role);
+  const { currentWorkspace } = useWorkspace();
+  const { can, role } = usePermissions();
+  const canCreate = canCreateExpert(can);
   const expertsQuery = useExperts();
   const experts = (expertsQuery.data ?? []).filter((e) => e.status === 'ready').slice(0, 4);
 
@@ -35,7 +37,7 @@ export function OverviewPage() {
             {t('overview.welcome', { name: currentWorkspace?.name ?? t('app.name') })}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {user?.email} · {t(`roles.${role}`)}
+            {user?.email} · {roleDisplayName(role) || t('app.name')}
           </p>
         </div>
       </div>

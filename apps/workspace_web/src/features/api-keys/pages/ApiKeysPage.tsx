@@ -11,8 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { canManageApiKeys } from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { ApiKey, CreatedApiKey } from '@/services/api/api-keys';
 import { ApiKeysList } from '../components/ApiKeysList';
@@ -34,11 +34,11 @@ function KeysSkeleton() {
 
 export function ApiKeysPage() {
   const { t } = useTranslation();
-  const { currentWorkspace, currentMembership } = useWorkspace();
-  const workspaceId = currentWorkspace?.id ?? '';
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canManage = canManageApiKeys(role);
-  const keysQuery = useApiKeys({ enabled: canManage });
+  const { workspaceId, can } = usePermissions();
+  const canView = can(WorkspacePermission.API_KEYS_VIEW);
+  const canCreate = can(WorkspacePermission.API_KEYS_CREATE);
+  const canRevoke = can(WorkspacePermission.API_KEYS_REVOKE);
+  const keysQuery = useApiKeys({ enabled: canView });
   const revoke = useRevokeApiKey();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -76,7 +76,7 @@ export function ApiKeysPage() {
 
   const keys = keysQuery.data ?? [];
   const forbidden =
-    !canManage ||
+    !canView ||
     (keysQuery.isError &&
       keysQuery.error instanceof ApiError &&
       (keysQuery.error.code === 'forbidden' ||
@@ -118,7 +118,7 @@ export function ApiKeysPage() {
             <RefreshCw className={keysQuery.isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />
             {t('apiKeys.refresh')}
           </Button>
-          {canManage ? (
+          {canCreate ? (
             <Button
               type="button"
               size="sm"
@@ -140,14 +140,14 @@ export function ApiKeysPage() {
         <CardContent>
           {keysQuery.isLoading ? <KeysSkeleton /> : null}
 
-          {!canManage || forbidden ? (
+          {!canView || forbidden ? (
             <div className="py-10 text-center space-y-2" data-testid="api-keys-forbidden">
               <KeyRound className="size-8 mx-auto text-muted-foreground" aria-hidden />
               <p className="text-sm text-muted-foreground">{t('apiKeys.memberHint')}</p>
             </div>
           ) : null}
 
-          {canManage && keysQuery.isError && !forbidden ? (
+          {canView && keysQuery.isError && !forbidden ? (
             <div className="py-10 text-center space-y-3" data-testid="api-keys-error">
               <p className="text-sm text-destructive">{t('apiKeys.loadError')}</p>
               <Button type="button" onClick={() => void keysQuery.refetch()}>
@@ -156,27 +156,29 @@ export function ApiKeysPage() {
             </div>
           ) : null}
 
-          {canManage && !keysQuery.isLoading && !keysQuery.isError && keys.length === 0 ? (
+          {canView && !keysQuery.isLoading && !keysQuery.isError && keys.length === 0 ? (
             <div className="py-12 text-center space-y-3" data-testid="api-keys-empty">
               <KeyRound className="size-8 mx-auto text-muted-foreground" aria-hidden />
               <p className="font-medium">{t('apiKeys.emptyTitle')}</p>
               <p className="text-sm text-muted-foreground">{t('apiKeys.emptyHint')}</p>
+              {canCreate ? (
               <Button type="button" onClick={() => setCreateOpen(true)}>
                 <Plus className="size-3.5" />
                 {t('apiKeys.create')}
               </Button>
+              ) : null}
             </div>
           ) : null}
 
-          {canManage && !keysQuery.isLoading && !keysQuery.isError && keys.length > 0 ? (
-            <ApiKeysList keys={keys} canManage={canManage} onRevoke={setRevokeTarget} />
+          {canView && !keysQuery.isLoading && !keysQuery.isError && keys.length > 0 ? (
+            <ApiKeysList keys={keys} canManage={canRevoke} onRevoke={setRevokeTarget} />
           ) : null}
         </CardContent>
       </Card>
 
       <ApiQuickStart open={quickStartOpen} onOpenChange={setQuickStartOpen} />
 
-      {canManage ? (
+      {canCreate ? (
         <CreateApiKeyDialog
           open={createOpen}
           onOpenChange={setCreateOpen}

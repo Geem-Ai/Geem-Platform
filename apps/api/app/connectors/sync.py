@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService
-from app.apps_catalog.policy import can_manage_apps
+from app.apps_catalog.policy import can_connect_apps, can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
 from app.common.security_log import security_log
 from app.connectors.adapters import KnowledgeSourceConnectorAdapter, SyncResult
@@ -52,13 +52,13 @@ class ConnectorSyncService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         connection_id: uuid.UUID,
         limit: int = 50,
         offset: int = 0,
     ) -> ConnectorSyncRunListOut:
-        _ = role
+        _ = membership
         self._require_owned_connection(workspace.id, app_slug, connection_id)
         self.access.require_active(workspace.id, app_slug=app_slug)
         rows, total = self.repo.list_sync_runs(
@@ -75,12 +75,12 @@ class ConnectorSyncService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         connection_id: uuid.UUID,
         run_id: uuid.UUID,
     ) -> ConnectorSyncRunOut:
-        _ = role
+        _ = membership
         self._require_owned_connection(workspace.id, app_slug, connection_id)
         self.access.require_active(workspace.id, app_slug=app_slug)
         run = self.repo.get_sync_run(workspace.id, connection_id, run_id)
@@ -92,14 +92,14 @@ class ConnectorSyncService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         app_slug: str,
         connection_id: uuid.UUID,
         idempotency_key: str | None = None,
         enqueue: bool = True,
     ) -> ConnectorSyncRunOut:
-        if not can_manage_apps(role):
+        if not can_connect_apps(membership):
             raise AppError(
                 ErrorCategory.FORBIDDEN,
                 "Only owners and admins can request sync.",
