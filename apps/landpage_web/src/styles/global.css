@@ -275,6 +275,119 @@ body {
 .hero-enter-3 { animation-delay: 400ms; }
 .hero-enter-4 { animation-delay: 540ms; }
 
+.hero-typewriter-heading {
+  min-inline-size: 0;
+}
+
+.hero-typewriter-heading-visual {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.25em;
+}
+
+.hero-typewriter-heading .hero-typewriter {
+  max-inline-size: 100%;
+  color: var(--geem-sand);
+  white-space: nowrap;
+}
+
+.hero-typewriter {
+  display: inline-grid;
+  min-inline-size: 0;
+  max-inline-size: min(32rem, calc(100vw - 8.5rem));
+  align-items: center;
+}
+
+.hero-typewriter-measure,
+.hero-typewriter-output {
+  grid-area: 1 / 1;
+}
+
+.hero-typewriter-measure {
+  visibility: hidden;
+}
+
+.hero-typewriter-measure::after {
+  display: inline-block;
+  inline-size: 0.45rem;
+  content: '';
+}
+
+.hero-typewriter-output {
+  display: block;
+  min-inline-size: 0;
+  justify-self: start;
+}
+
+.hero-typewriter-caret {
+  display: inline-block;
+  inline-size: 1px;
+  block-size: 1.05em;
+  margin-inline-start: 0.35rem;
+  vertical-align: -0.12em;
+  visibility: hidden;
+  background: currentColor;
+}
+
+.hero-typewriter.is-active .hero-typewriter-caret {
+  visibility: visible;
+  animation: typewriter-caret 800ms steps(1, end) infinite;
+}
+
+.hero-typewriter.is-paused .hero-typewriter-caret {
+  animation: none;
+  opacity: 0.45;
+}
+
+.hero-typewriter-toggle {
+  display: inline-grid;
+  inline-size: 1.625rem;
+  block-size: 1.625rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, currentColor 28%, transparent);
+  border-radius: 999px;
+  color: inherit;
+  opacity: 0.62;
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--geem-duration-fast) var(--geem-ease-out),
+    background-color var(--geem-duration-fast) var(--geem-ease-out);
+}
+
+.hero-typewriter-toggle.is-ready {
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.hero-typewriter-toggle:hover,
+.hero-typewriter-toggle:focus-visible {
+  background: color-mix(in oklab, currentColor 12%, transparent);
+  opacity: 1;
+}
+
+.hero-typewriter-toggle svg {
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.hero-typewriter-toggle [data-typewriter-play] {
+  fill: currentColor;
+  stroke: none;
+}
+
+.hero-typewriter-toggle .is-hidden {
+  display: none;
+}
+
 [data-reveal] {
   opacity: 0;
   transform: translateY(18px);
@@ -339,11 +452,17 @@ body {
   }
 }
 
+@keyframes typewriter-caret {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 
   .hero-media img,
-  .hero-enter {
+  .hero-enter,
+  .hero-typewriter-caret {
     animation: none !important;
   }
 

@@ -28,6 +28,8 @@ export type SiteCopy = {
     primaryNavigation: string;
     mobileNavigation: string;
     languageSwitch: string;
+    pauseTypewriter: string;
+    resumeTypewriter: string;
   };
   brand: {
     product: string;
@@ -40,7 +42,8 @@ export type SiteCopy = {
   };
   hero: {
     eyebrow: string;
-    title: string;
+    specialtyPrompt: string;
+    specialties: string[];
     description: string;
     primaryCta: string;
     tertiaryCta: string;

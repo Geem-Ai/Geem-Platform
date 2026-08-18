@@ -27,6 +27,8 @@ export const en: SiteCopy = {
     primaryNavigation: 'Primary navigation',
     mobileNavigation: 'Mobile navigation',
     languageSwitch: 'العربية',
+    pauseTypewriter: 'Pause rotating phrases',
+    resumeTypewriter: 'Resume rotating phrases',
   },
   brand: {
     product: 'Geem',
@@ -44,8 +46,16 @@ export const en: SiteCopy = {
     login: 'Workspace Login',
   },
   hero: {
-    eyebrow: 'AI for your organization',
-    title: 'Give your team answers grounded in your organization’s knowledge.',
+    eyebrow: 'An AI platform purpose-built for the Saudi market',
+    specialtyPrompt: 'Need an Expert in',
+    specialties: [
+      'Human Resources',
+      'Finance',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Customer Support',
+    ],
     description:
       'Create a Geem Expert for each function, connect the documents it should use, and make it available in your workspace, on your website, through WhatsApp, or in internal systems.',
     primaryCta: 'Start with Geem',
