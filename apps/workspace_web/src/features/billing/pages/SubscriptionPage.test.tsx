@@ -163,9 +163,11 @@ describe('SubscriptionPage', () => {
     });
     expect(screen.getByTestId('billing-plan-plan-dev')).toHaveAttribute('data-current', 'true');
     expect(screen.getByTestId('billing-plan-current')).toHaveTextContent('Current');
-    expect(screen.getByTestId('billing-current-plan-price')).toHaveTextContent('SAR 49.00');
+    expect(
+      screen.getByTestId('billing-current-plan-price').querySelector('[aria-label="SAR 49.00"]'),
+    ).toBeTruthy();
     expect(screen.getByText('Growth')).toBeInTheDocument();
-    expect(screen.getByText('SAR 99.00')).toBeInTheDocument();
+    expect(screen.getByLabelText('SAR 99.00')).toBeInTheDocument();
   });
 
   it('renders allowance cards daily then weekly then monthly', async () => {

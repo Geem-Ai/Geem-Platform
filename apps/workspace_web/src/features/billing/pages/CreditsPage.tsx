@@ -19,8 +19,8 @@ import { BillingPageHeader } from '../components/BillingPageHeader';
 import { PaymentOutcomeDialog } from '../components/PaymentOutcomeDialog';
 import { CheckoutConfirmDialog } from '../components/CheckoutConfirmDialog';
 import { CreditPackCard } from '../components/CreditPackCard';
+import { MoneyAmount } from '../components/MoneyAmount';
 import { useCreditPackCheckout, useCreditPacks } from '../hooks/useBillingQueries';
-import { formatMoney } from '../lib/money';
 
 function PageSkeleton() {
   return (
@@ -189,7 +189,12 @@ export function CreditsPage() {
                 },
                 {
                   label: t('billing.price'),
-                  value: formatMoney(selected.price_amount, selected.currency),
+                  value: (
+                    <MoneyAmount
+                      amount={selected.price_amount}
+                      currency={selected.currency}
+                    />
+                  ),
                 },
               ]
             : []

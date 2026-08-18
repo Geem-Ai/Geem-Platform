@@ -145,7 +145,7 @@ describe('CreditsPage', () => {
       expect(screen.getByTestId('billing-credits-balance')).toHaveTextContent('250');
     });
     expect(screen.getByText('Starter pack')).toBeInTheDocument();
-    expect(screen.getByText('SAR 25.00')).toBeInTheDocument();
+    expect(screen.getByLabelText('SAR 25.00')).toBeInTheDocument();
   });
 
   it('creates checkout with the pack id only and redirects', async () => {

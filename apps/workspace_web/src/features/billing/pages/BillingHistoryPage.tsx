@@ -24,7 +24,7 @@ import {
   type PurchaseKindFilter,
   type PurchaseStatusFilter,
 } from '../lib/history';
-import { formatMoney } from '../lib/money';
+import { MoneyAmount } from '../components/MoneyAmount';
 import { purchaseKindLabelKey, formatPurchaseHistoryTitle } from '../lib/status';
 
 function parsePage(raw: string | null): number {
@@ -191,8 +191,8 @@ export function BillingHistoryPage() {
                       {item.id}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold tabular-nums shrink-0">
-                    {formatMoney(item.amount, item.currency)}
+                  <p className="text-sm font-semibold shrink-0">
+                    <MoneyAmount amount={item.amount} currency={item.currency} />
                   </p>
                 </li>
               ))}

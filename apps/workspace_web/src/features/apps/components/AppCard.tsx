@@ -12,16 +12,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import type { CatalogApp, ConnectionStatus } from '@/services/api/apps';
 import {
-  formatAppBillingLabel,
   localizeCatalogApp,
   resolveAppAccessBadge,
 } from '../lib/billing-label';
+import { AppBillingLabel } from './AppBillingLabel';
 import { AppIcon } from './AppIcon';
 
 export function AppBillingBadge({ app }: { app: CatalogApp }) {
   const { t } = useTranslation();
   const accessBadge = resolveAppAccessBadge(app);
-  const priceLabel = formatAppBillingLabel(app, t);
   const showPriceHint =
     accessBadge.labelKey === 'apps.billing.oneTime' ||
     accessBadge.labelKey === 'apps.billing.subscription';
@@ -35,7 +34,7 @@ export function AppBillingBadge({ app }: { app: CatalogApp }) {
       data-testid={`app-badge-${app.slug}`}
       data-access-status={app.access?.status ?? app.status}
     >
-      {showPriceHint ? priceLabel : t(accessBadge.labelKey)}
+      {showPriceHint ? <AppBillingLabel app={app} /> : t(accessBadge.labelKey)}
     </Badge>
   );
 }

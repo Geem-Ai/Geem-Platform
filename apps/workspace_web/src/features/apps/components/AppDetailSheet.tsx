@@ -17,10 +17,10 @@ import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { CatalogApp } from '@/services/api/apps';
 import { useApp } from '../hooks/useAppsQueries';
 import {
-  formatAppBillingLabel,
   localizeCatalogApp,
 } from '../lib/billing-label';
 import { AppBillingBadge } from './AppCard';
+import { AppBillingLabel } from './AppBillingLabel';
 import { AppIcon } from './AppIcon';
 import { AppInstallButton } from './AppInstallButton';
 import { AppPlanCard } from './AppPlanCard';
@@ -164,7 +164,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                       </div>
                       <p className="text-sm text-muted-foreground">{categoryLabel}</p>
                       <p className="text-sm text-muted-foreground">
-                        {formatAppBillingLabel(app, t)}
+                        <AppBillingLabel app={app} />
                       </p>
                       {access?.status === 'entitled_not_installed' &&
                       app.billing_type === 'one_time' ? (

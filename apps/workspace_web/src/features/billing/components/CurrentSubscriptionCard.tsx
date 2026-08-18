@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { formatPeriodDate, formatRelativeTime } from '@/features/usage/lib/quota';
 import type { PurchasablePlan } from '@/services/api/billing';
 import type { Entitlements, Subscription } from '@/services/api/usage';
-import { formatMoney } from '../lib/money';
+import { MoneyAmount } from './MoneyAmount';
 import { EntitlementTiles } from './EntitlementTiles';
 
 function planStatusVariant(status: string): 'success' | 'warning' | 'secondary' {
@@ -77,10 +77,13 @@ export function CurrentSubscriptionCard({
                   {t('billing.catalogPrice')}
                 </dt>
                 <dd
-                  className="text-sm font-semibold tabular-nums tracking-tight"
+                  className="text-sm font-semibold tracking-tight"
                   data-testid="billing-current-plan-price"
                 >
-                  {formatMoney(catalogPlan.price_amount, catalogPlan.currency)}
+                  <MoneyAmount
+                    amount={catalogPlan.price_amount}
+                    currency={catalogPlan.currency}
+                  />
                 </dd>
               </div>
             ) : null}

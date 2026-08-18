@@ -165,3 +165,80 @@ describe('formatAppEntitlement', () => {
     );
   });
 });
+
+describe('resolveAppAccessBadge', () => {
+  it('prefers expired over installed', () => {
+    const badge = resolveAppAccessBadge(
+      app({
+        billing_type: 'subscription',
+        installation_status: 'active',
+        access: {
+          status: 'expired',
+          plan_id: 'p1',
+          plan_code: 'desk',
+          plan_name: 'Desk',
+          current_period_start: null,
+          current_period_end: '2026-01-01T00:00:00Z',
+          commercially_entitled: false,
+          can_purchase: false,
+          can_renew: true,
+          can_install: false,
+          can_uninstall: true,
+        },
+      }),
+    );
+    expect(badge.labelKey).toBe('apps.billing.expired');
+  });
+
+  it('shows purchased when entitled but not installed', () => {
+    const badge = resolveAppAccessBadge(
+      app({
+        billing_type: 'one_time',
+        installation_status: null,
+        access: {
+          status: 'entitled_not_installed',
+          plan_id: 'p1',
+          plan_code: 'buy',
+          plan_name: 'Buy',
+          current_period_start: null,
+          current_period_end: null,
+          commercially_entitled: true,
+          can_purchase: false,
+          can_renew: false,
+          can_install: true,
+          can_uninstall: false,
+        },
+      }),
+    );
+    expect(badge.labelKey).toBe('apps.billing.purchased');
+  });
+
+  it('shows subscribed when subscription entitled but not installed', () => {
+    const badge = resolveAppAccessBadge(
+      app({
+        billing_type: 'subscription',
+        installation_status: null,
+        access: {
+          status: 'entitled_not_installed',
+          plan_id: 'p1',
+          plan_code: 'line',
+          plan_name: 'Line',
+          current_period_start: null,
+          current_period_end: null,
+          commercially_entitled: true,
+          can_purchase: false,
+          can_renew: false,
+          can_install: true,
+          can_uninstall: false,
+        },
+      }),
+    );
+    expect(badge.labelKey).toBe('apps.billing.subscribed');
+  });
+
+  it('shows coming soon', () => {
+    expect(
+      resolveAppAccessBadge(app({ status: 'coming_soon' })).labelKey,
+    ).toBe('apps.billing.comingSoon');
+  });
+});
