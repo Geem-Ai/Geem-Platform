@@ -1,33 +1,777 @@
 ---
+import { Image } from 'astro:assets';
 import type { SiteCopy } from '../../content/site/types';
+import avatar from '../../assets/brand/geem-avatar.webp';
+import chatWidgetIcon from '../../assets/apps/chat-widget.svg';
+import whatsappIcon from '../../assets/apps/whatsapp.svg';
 import Section from '../ui/Section.astro';
 
 type Props = { copy: SiteCopy };
 const { copy } = Astro.props;
-const byId = Object.fromEntries(copy.channels.nodes.map((n) => [n.id, n.label]));
+
+const nodeOrder = ['chat', 'whatsapp', 'widget', 'api'] as const;
+const nodes = nodeOrder
+  .map((id) => copy.channels.nodes.find((node) => node.id === id))
+  .filter((node): node is SiteCopy['channels']['nodes'][number] => Boolean(node));
 ---
 
-<Section id="channels" tone="dark">
+<Section id="channels" tone="dark" class="channels-section">
   <div class="max-w-3xl" data-reveal>
     <p class="eyebrow"><span class="section-number">{copy.channels.number}</span> {copy.channels.eyebrow}</p>
-    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.channels.title}</h2>
-    <p class="mt-4 text-lg text-white/75">{copy.channels.description}</p>
+    <h2 id="channels-title" class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.channels.title}</h2>
+    <p id="channels-description" class="mt-4 text-lg text-white/75">{copy.channels.description}</p>
   </div>
 
-  <div class="mt-12" data-reveal data-draw>
-    <div class="mx-auto hidden max-w-3xl md:grid md:grid-cols-3 md:grid-rows-3 md:gap-4 md:place-items-center">
-      <div class="col-start-2 row-start-1 geem-card px-4 py-3 text-sm">{byId.chat}</div>
-      <div class="col-start-1 row-start-2 geem-card px-4 py-3 text-sm">{byId.whatsapp}</div>
-      <div class="col-start-2 row-start-2 expert-pulse rounded-2xl border border-geem-sand/50 bg-geem-navy-800 px-6 py-5 text-center font-semibold text-geem-sand">
-        {copy.brand.product}
+  <figure class="channel-board" aria-labelledby="channels-title" aria-describedby="channels-description" data-reveal>
+    <header class="expert-rail">
+      <div class="expert-rail__identity">
+        <span class="expert-rail__avatar">
+          <Image src={avatar} alt="" width={64} height={64} loading="lazy" />
+          <i aria-hidden="true"></i>
+        </span>
+        <span>
+          <small>{copy.experts.eyebrow}</small>
+          <strong>{copy.experts.flowExpertLabel}</strong>
+        </span>
       </div>
-      <div class="col-start-3 row-start-2 geem-card px-4 py-3 text-sm">{byId.api}</div>
-      <div class="col-start-2 row-start-3 geem-card px-4 py-3 text-sm">{byId.widget}</div>
-    </div>
 
-    <ul class="grid gap-3 md:hidden">
-      <li class="geem-card p-4 text-center font-semibold text-geem-sand">{copy.brand.product}</li>
-      {copy.channels.nodes.map((node) => <li class="geem-card p-4 text-sm">{node.label}</li>)}
+      <div class="expert-rail__signal" aria-hidden="true">
+        <i></i><span></span><i></i>
+      </div>
+
+      <div class="expert-rail__qualities">
+        <span>{copy.experts.formula[2]}</span>
+        <span>{copy.experts.formula[3]}</span>
+      </div>
+    </header>
+
+    <ul class="channel-bento" data-reveal-stagger>
+      {
+        nodes.map((node) => (
+          <li class:list={['channel-card', `channel-card--${node.id}`]}>
+            <article>
+              <header class="channel-card__header">
+                <span class="channel-card__icon">
+                  {node.id === 'whatsapp' && (
+                    <img src={whatsappIcon.src} alt="" width="30" height="30" loading="lazy" />
+                  )}
+                  {node.id === 'widget' && (
+                    <img src={chatWidgetIcon.src} alt="" width="32" height="32" loading="lazy" />
+                  )}
+                  {node.id === 'chat' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4.25 5.25h15.5v10.5H11l-4.75 3v-3h-2z"></path>
+                      <path d="M8 9.5h8M8 12.5h5"></path>
+                    </svg>
+                  )}
+                  {node.id === 'api' && (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m8.25 7-4 5 4 5M15.75 7l4 5-4 5M13.5 4.75l-3 14.5"></path>
+                    </svg>
+                  )}
+                </span>
+                <span class="channel-card__copy">
+                  <small>{node.context}</small>
+                  <h3>{node.label}</h3>
+                </span>
+                <span class="channel-card__status" aria-hidden="true"><i></i></span>
+              </header>
+
+              <p class="channel-card__description">{node.description}</p>
+
+              {node.id === 'chat' && (
+                <div class="channel-preview chat-preview" aria-hidden="true">
+                  <div class="chat-preview__message chat-preview__message--user">
+                    <span class="preview-lines preview-lines--short"><i></i><i></i></span>
+                  </div>
+                  <div class="chat-preview__message chat-preview__message--expert">
+                    <Image src={avatar} alt="" width={30} height={30} loading="lazy" />
+                    <span class="preview-lines"><i></i><i></i><i></i></span>
+                  </div>
+                  <div class="chat-preview__sources"><i></i><i></i></div>
+                  <div class="chat-preview__composer"><span></span><i></i></div>
+                </div>
+              )}
+
+              {node.id === 'whatsapp' && (
+                <div class="channel-preview whatsapp-preview" aria-hidden="true">
+                  <div class="whatsapp-preview__bar">
+                    <img src={whatsappIcon.src} alt="" width="24" height="24" loading="lazy" />
+                    <span class="preview-lines preview-lines--name"><i></i><i></i></span>
+                    <b></b>
+                  </div>
+                  <div class="whatsapp-preview__conversation">
+                    <span class="whatsapp-bubble whatsapp-bubble--in"><i></i><i></i></span>
+                    <span class="whatsapp-bubble whatsapp-bubble--out"><i></i><i></i></span>
+                  </div>
+                  <div class="whatsapp-preview__composer"><span></span><i></i></div>
+                </div>
+              )}
+
+              {node.id === 'widget' && (
+                <div class="channel-preview widget-preview" aria-hidden="true">
+                  <div class="widget-preview__browser">
+                    <span class="widget-preview__dots"><i></i><i></i><i></i></span>
+                    <span class="widget-preview__url"></span>
+                  </div>
+                  <div class="widget-preview__page">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <div class="widget-preview__window">
+                    <div>
+                      <Image src={avatar} alt="" width={24} height={24} loading="lazy" />
+                      <span></span>
+                    </div>
+                    <i></i><i></i>
+                  </div>
+                </div>
+              )}
+
+              {node.id === 'api' && (
+                <div class="channel-preview api-preview" dir="ltr" aria-hidden="true">
+                  <div class="api-preview__bar">
+                    <span><i></i><i></i><i></i></span>
+                    <b>200 OK</b>
+                  </div>
+                  <code>
+                    <span><em>POST</em> /v1/chat/completions</span>
+                    <span>{'{'}</span>
+                    <span>&nbsp;&nbsp;&quot;expert_id&quot;: &quot;geem-expert&quot;,</span>
+                    <span>&nbsp;&nbsp;&quot;stream&quot;: true</span>
+                    <span>{'}'}</span>
+                  </code>
+                </div>
+              )}
+            </article>
+          </li>
+        ))
+      }
     </ul>
-  </div>
+  </figure>
 </Section>
+
+<style>
+  .channel-board {
+    position: relative;
+    overflow: hidden;
+    margin-block-start: clamp(2.5rem, 5vw, 4rem);
+    padding: clamp(1rem, 2.8vw, 2rem);
+    border: 1px solid color-mix(in oklab, white 12%, transparent);
+    border-radius: clamp(1.5rem, 3vw, 2.25rem);
+    background:
+      radial-gradient(circle at 50% -10%, color-mix(in oklab, var(--geem-blue) 30%, transparent), transparent 38%),
+      radial-gradient(circle at 7% 95%, color-mix(in oklab, var(--geem-sand) 8%, transparent), transparent 27%),
+      linear-gradient(150deg, color-mix(in oklab, white 5%, transparent), color-mix(in oklab, black 12%, transparent));
+    box-shadow:
+      0 34px 90px color-mix(in oklab, black 24%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+    isolation: isolate;
+  }
+
+  .channel-board::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background-image: radial-gradient(color-mix(in oklab, white 9%, transparent) 0.7px, transparent 0.7px);
+    background-size: 19px 19px;
+    content: '';
+    opacity: 0.55;
+    -webkit-mask-image: linear-gradient(to bottom, black, transparent 78%);
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+
+  .expert-rail {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    padding: clamp(0.85rem, 2vw, 1.15rem);
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 22%, transparent);
+    border-radius: 1.25rem;
+    background:
+      linear-gradient(100deg, color-mix(in oklab, var(--geem-navy-800) 76%, transparent), color-mix(in oklab, white 7%, transparent));
+    box-shadow:
+      0 16px 38px color-mix(in oklab, black 18%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 9%, transparent);
+  }
+
+  .expert-rail__identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .expert-rail__avatar {
+    position: relative;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: 3.75rem;
+    block-size: 3.75rem;
+    border: 2px solid color-mix(in oklab, var(--geem-sand) 72%, white);
+    border-radius: 1.1rem;
+    background: white;
+    box-shadow: 0 10px 25px color-mix(in oklab, black 20%, transparent);
+  }
+
+  .expert-rail__avatar img {
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 0.95rem;
+    object-fit: cover;
+  }
+
+  .expert-rail__avatar i {
+    position: absolute;
+    inset-inline-end: -0.15rem;
+    inset-block-end: -0.15rem;
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+    border: 2px solid var(--geem-navy-900);
+    border-radius: 50%;
+    background: #56c58a;
+  }
+
+  .expert-rail__identity small {
+    display: block;
+    overflow: hidden;
+    color: color-mix(in oklab, var(--geem-sand) 76%, white);
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .expert-rail__identity strong {
+    display: block;
+    margin-block-start: 0.12rem;
+    color: white;
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    font-weight: 600;
+  }
+
+  .expert-rail__signal {
+    display: none;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .expert-rail__signal span {
+    flex: 1;
+    block-size: 1px;
+    background: linear-gradient(to right, transparent, color-mix(in oklab, var(--geem-sky) 58%, transparent), transparent);
+  }
+
+  .expert-rail__signal i {
+    inline-size: 0.45rem;
+    block-size: 0.45rem;
+    border: 1px solid color-mix(in oklab, var(--geem-sky) 62%, white);
+    border-radius: 50%;
+    background: var(--geem-blue);
+    box-shadow: 0 0 12px color-mix(in oklab, var(--geem-sky) 50%, transparent);
+  }
+
+  .expert-rail__qualities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .expert-rail__qualities span {
+    padding: 0.35rem 0.65rem;
+    border: 1px solid color-mix(in oklab, white 12%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, white 7%, transparent);
+    color: color-mix(in oklab, white 76%, var(--geem-sand));
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
+
+  .channel-bento {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.9rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .channel-card {
+    --channel-accent: var(--geem-sky);
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, white 11%, transparent);
+    border-radius: 1.3rem;
+    background:
+      radial-gradient(circle at 90% 4%, color-mix(in oklab, var(--channel-accent) 11%, transparent), transparent 30%),
+      linear-gradient(145deg, color-mix(in oklab, white 8%, transparent), color-mix(in oklab, white 4%, transparent));
+    box-shadow:
+      0 18px 44px color-mix(in oklab, black 18%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .channel-card--whatsapp { --channel-accent: #67c15e; }
+  .channel-card--widget { --channel-accent: var(--geem-sand); }
+  .channel-card--api { --channel-accent: #8ba9bb; }
+
+  .channel-card article {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    padding: clamp(1rem, 2vw, 1.35rem);
+  }
+
+  .channel-card__header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .channel-card__icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    inline-size: 2.8rem;
+    block-size: 2.8rem;
+    border: 1px solid color-mix(in oklab, var(--channel-accent) 30%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in oklab, var(--channel-accent) 12%, white 3%);
+    color: var(--channel-accent);
+    box-shadow: 0 8px 20px color-mix(in oklab, black 16%, transparent);
+  }
+
+  .channel-card__icon svg {
+    inline-size: 1.45rem;
+    block-size: 1.45rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .channel-card__icon img {
+    inline-size: 1.85rem;
+    block-size: 1.85rem;
+    object-fit: contain;
+  }
+
+  .channel-card__copy {
+    min-width: 0;
+  }
+
+  .channel-card__copy small {
+    display: block;
+    overflow: hidden;
+    color: color-mix(in oklab, white 54%, var(--geem-muted));
+    font-size: 0.68rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .channel-card__copy h3 {
+    margin: 0.12rem 0 0;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .channel-card__status {
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border: 1px solid color-mix(in oklab, white 10%, transparent);
+    border-radius: 50%;
+    background: color-mix(in oklab, white 5%, transparent);
+  }
+
+  .channel-card__status i {
+    inline-size: 0.42rem;
+    block-size: 0.42rem;
+    border-radius: inherit;
+    background: var(--channel-accent);
+    box-shadow: 0 0 10px color-mix(in oklab, var(--channel-accent) 55%, transparent);
+  }
+
+  .channel-card__description {
+    margin: 0.9rem 0 1rem;
+    color: color-mix(in oklab, white 64%, var(--geem-muted));
+    font-size: 0.82rem;
+    line-height: 1.65;
+  }
+
+  .channel-preview {
+    position: relative;
+    min-height: 9.5rem;
+    overflow: hidden;
+    margin-block-start: auto;
+    border: 1px solid color-mix(in oklab, white 9%, transparent);
+    border-radius: 1rem;
+    background: color-mix(in oklab, var(--geem-navy-950) 72%, black);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 5%, transparent),
+      0 10px 28px color-mix(in oklab, black 15%, transparent);
+  }
+
+  .preview-lines {
+    display: grid;
+    flex: 1;
+    gap: 0.32rem;
+  }
+
+  .preview-lines i {
+    display: block;
+    inline-size: 100%;
+    block-size: 0.3rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, white 17%, transparent);
+  }
+
+  .preview-lines i:nth-child(2) { inline-size: 78%; }
+  .preview-lines i:nth-child(3) { inline-size: 46%; }
+  .preview-lines--short { max-inline-size: 55%; }
+  .preview-lines--name { max-inline-size: 5.5rem; }
+
+  .chat-preview {
+    display: flex;
+    min-height: 11rem;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.85rem;
+  }
+
+  .chat-preview__message {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    inline-size: min(82%, 17rem);
+    padding: 0.65rem;
+    border: 1px solid color-mix(in oklab, white 7%, transparent);
+    border-radius: 0.85rem;
+  }
+
+  .chat-preview__message--user {
+    align-self: flex-end;
+    justify-content: flex-end;
+    background: color-mix(in oklab, var(--geem-blue) 18%, transparent);
+  }
+
+  .chat-preview__message--expert {
+    align-self: flex-start;
+    background: color-mix(in oklab, white 6%, transparent);
+  }
+
+  .chat-preview__message--expert img {
+    flex: 0 0 auto;
+    inline-size: 1.65rem;
+    block-size: 1.65rem;
+    border-radius: 0.55rem;
+  }
+
+  .chat-preview__sources {
+    display: flex;
+    gap: 0.35rem;
+    padding-inline-start: 2.2rem;
+  }
+
+  .chat-preview__sources i {
+    inline-size: 2.8rem;
+    block-size: 0.8rem;
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 20%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-sand) 8%, transparent);
+  }
+
+  .chat-preview__composer,
+  .whatsapp-preview__composer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-block-start: auto;
+    padding: 0.48rem 0.55rem;
+    border: 1px solid color-mix(in oklab, white 8%, transparent);
+    border-radius: 0.7rem;
+    background: color-mix(in oklab, white 4%, transparent);
+  }
+
+  .chat-preview__composer span,
+  .whatsapp-preview__composer span {
+    flex: 1;
+    block-size: 0.3rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, white 12%, transparent);
+  }
+
+  .chat-preview__composer i,
+  .whatsapp-preview__composer i {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    border-radius: 0.4rem;
+    background: var(--geem-blue);
+  }
+
+  .whatsapp-preview {
+    display: flex;
+    min-height: 11rem;
+    flex-direction: column;
+    padding: 0.75rem;
+    background:
+      linear-gradient(color-mix(in oklab, var(--geem-navy-950) 88%, transparent), color-mix(in oklab, var(--geem-navy-950) 88%, transparent)),
+      radial-gradient(circle at 20% 20%, color-mix(in oklab, #67c15e 15%, transparent), transparent 36%);
+  }
+
+  .whatsapp-preview__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block-end: 0.55rem;
+    border-block-end: 1px solid color-mix(in oklab, white 7%, transparent);
+  }
+
+  .whatsapp-preview__bar img {
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+  }
+
+  .whatsapp-preview__bar b {
+    margin-inline-start: auto;
+    inline-size: 0.42rem;
+    block-size: 0.42rem;
+    border-radius: 50%;
+    background: #67c15e;
+  }
+
+  .whatsapp-preview__conversation {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+    padding-block: 0.65rem;
+  }
+
+  .whatsapp-bubble {
+    display: grid;
+    gap: 0.28rem;
+    inline-size: 68%;
+    padding: 0.58rem;
+    border-radius: 0.75rem;
+  }
+
+  .whatsapp-bubble i {
+    inline-size: 100%;
+    block-size: 0.28rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, white 18%, transparent);
+  }
+
+  .whatsapp-bubble i:last-child { inline-size: 64%; }
+  .whatsapp-bubble--in { align-self: flex-start; background: color-mix(in oklab, white 7%, transparent); }
+  .whatsapp-bubble--out { align-self: flex-end; background: color-mix(in oklab, #67c15e 18%, transparent); }
+  .whatsapp-preview__composer i { background: #67c15e; }
+
+  .widget-preview {
+    min-height: 11rem;
+    background: color-mix(in oklab, white 92%, var(--geem-surface));
+  }
+
+  .widget-preview__browser {
+    display: flex;
+    min-height: 2rem;
+    align-items: center;
+    gap: 0.65rem;
+    padding-inline: 0.75rem;
+    border-block-end: 1px solid color-mix(in oklab, var(--geem-navy-900) 8%, white);
+    background: white;
+  }
+
+  .widget-preview__dots {
+    display: flex;
+    gap: 0.22rem;
+  }
+
+  .widget-preview__dots i {
+    inline-size: 0.3rem;
+    block-size: 0.3rem;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--geem-navy-900) 18%, white);
+  }
+
+  .widget-preview__url {
+    inline-size: 42%;
+    block-size: 0.32rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-navy-900) 8%, white);
+  }
+
+  .widget-preview__page {
+    display: grid;
+    gap: 0.55rem;
+    padding: 1rem;
+  }
+
+  .widget-preview__page span {
+    display: block;
+    inline-size: 42%;
+    block-size: 0.42rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-navy-900) 10%, white);
+  }
+
+  .widget-preview__page span:first-child { inline-size: 62%; block-size: 0.65rem; background: color-mix(in oklab, var(--geem-navy-900) 18%, white); }
+  .widget-preview__page span:last-child { inline-size: 52%; }
+
+  .widget-preview__window {
+    position: absolute;
+    inset-inline-end: 0.65rem;
+    inset-block-end: 0.65rem;
+    inline-size: min(54%, 11rem);
+    padding: 0.55rem;
+    border: 1px solid color-mix(in oklab, var(--geem-navy-900) 10%, white);
+    border-radius: 0.8rem;
+    background: white;
+    box-shadow: 0 12px 28px color-mix(in oklab, var(--geem-navy-950) 16%, transparent);
+  }
+
+  .widget-preview__window div {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: -0.55rem -0.55rem 0.55rem;
+    padding: 0.45rem;
+    border-radius: 0.75rem 0.75rem 0 0;
+    background: var(--geem-navy-900);
+  }
+
+  .widget-preview__window img {
+    inline-size: 1.35rem;
+    block-size: 1.35rem;
+    border-radius: 0.4rem;
+  }
+
+  .widget-preview__window div span {
+    inline-size: 46%;
+    block-size: 0.28rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, white 34%, transparent);
+  }
+
+  .widget-preview__window > i {
+    display: block;
+    inline-size: 100%;
+    block-size: 0.3rem;
+    margin-block-start: 0.35rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--geem-navy-900) 10%, white);
+  }
+
+  .widget-preview__window > i:last-child { inline-size: 68%; }
+
+  .api-preview {
+    min-height: 11rem;
+    background: color-mix(in oklab, black 34%, var(--geem-navy-950));
+  }
+
+  .api-preview__bar {
+    display: flex;
+    min-height: 2.2rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 0.75rem;
+    border-block-end: 1px solid color-mix(in oklab, white 7%, transparent);
+  }
+
+  .api-preview__bar > span {
+    display: flex;
+    gap: 0.28rem;
+  }
+
+  .api-preview__bar i {
+    inline-size: 0.35rem;
+    block-size: 0.35rem;
+    border-radius: 50%;
+    background: color-mix(in oklab, white 22%, transparent);
+  }
+
+  .api-preview__bar b {
+    padding: 0.18rem 0.45rem;
+    border: 1px solid color-mix(in oklab, #56c58a 22%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, #56c58a 9%, transparent);
+    color: #78d7a4;
+    font-family: 'IBM Plex Sans', ui-monospace, monospace;
+    font-size: 0.56rem;
+    font-weight: 500;
+  }
+
+  .api-preview code {
+    display: grid;
+    gap: 0.32rem;
+    padding: 0.85rem;
+    color: color-mix(in oklab, white 62%, var(--geem-sky));
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: clamp(0.58rem, 1.3vw, 0.7rem);
+    line-height: 1.45;
+    white-space: nowrap;
+  }
+
+  .api-preview code em {
+    color: var(--geem-sand);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  @media (min-width: 640px) {
+    .expert-rail {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .expert-rail__qualities {
+      justify-content: flex-end;
+    }
+
+    .channel-bento {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 900px) {
+    .expert-rail {
+      grid-template-columns: minmax(14rem, 0.75fr) minmax(5rem, 1fr) minmax(14rem, 0.75fr);
+    }
+
+    .expert-rail__signal {
+      display: flex;
+    }
+
+    .channel-bento {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .channel-card--chat { grid-column: span 7; }
+    .channel-card--whatsapp { grid-column: span 5; }
+    .channel-card--widget { grid-column: span 5; }
+    .channel-card--api { grid-column: span 7; }
+
+    .channel-card__description {
+      min-height: 2.7rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .channel-card,
+    .channel-preview * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+</style>
