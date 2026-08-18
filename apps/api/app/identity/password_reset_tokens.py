@@ -1,0 +1,51 @@
+"""Password-reset token generation and deterministic lookup hashing.
+
+Reset tokens are high-entropy secrets, not passwords. Lookup uses
+HMAC-SHA256 with a server-side pepper so the digest is indexable. The raw
+token is never stored.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import secrets
+
+from app.core.config import Settings, get_settings
+
+# 32 bytes = 256 bits of entropy before url-safe encoding.
+PASSWORD_RESET_TOKEN_RANDOM_BYTES = 32
+HMAC_DIGEST_HEX_LENGTH = 64
+# Reject oversized presented tokens before hashing (DoS).
+MAX_PASSWORD_RESET_TOKEN_LENGTH = 256
+_HMAC_MESSAGE_PREFIX = "geem-pwreset:"
+
+
+def generate_password_reset_token() -> str:
+    """Return a url-safe random token with ≥256 bits of entropy."""
+    return secrets.token_urlsafe(PASSWORD_RESET_TOKEN_RANDOM_BYTES)
+
+
+def hash_password_reset_token(raw_token: str, *, settings: Settings | None = None) -> str:
+    """HMAC-SHA256(key=pepper, msg='geem-pwreset:' + token) as lowercase hex."""
+    pepper = (settings or get_settings()).effective_password_reset_token_hash_pepper
+    digest = hmac.new(
+        pepper.encode("utf-8"),
+        f"{_HMAC_MESSAGE_PREFIX}{raw_token}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return digest
+
+
+def hashes_equal(stored_hex: str, computed_hex: str) -> bool:
+    """Constant-time compare of two hex digests."""
+    if len(stored_hex) != HMAC_DIGEST_HEX_LENGTH or len(computed_hex) != HMAC_DIGEST_HEX_LENGTH:
+        return False
+    return hmac.compare_digest(stored_hex, computed_hex)
+
+
+def password_reset_url(raw_token: str, *, settings: Settings | None = None) -> str:
+    """Build the Workspace SPA reset URL for email links."""
+    cfg = settings or get_settings()
+    base = cfg.effective_workspace_web_url.rstrip("/")
+    return f"{base}/reset-password?token={raw_token}"

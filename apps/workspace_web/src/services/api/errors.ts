@@ -15,6 +15,8 @@ export type ApiErrorCode =
   | 'session_expired'
   | 'session_revoked'
   | 'weak_password'
+  | 'invalid_reset_token'
+  | 'reset_token_expired'
   | 'workspace_slug_taken'
   | 'workspace_slug_invalid'
   | 'workspace_not_found'
@@ -160,6 +162,8 @@ const KNOWN_CODES = new Set<string>([
   'session_expired',
   'session_revoked',
   'weak_password',
+  'invalid_reset_token',
+  'reset_token_expired',
   'workspace_slug_taken',
   'workspace_slug_invalid',
   'workspace_not_found',
@@ -347,6 +351,8 @@ export function errorMessageKey(code: string): string {
     session_revoked: 'errors.sessionExpired',
     unauthorized: 'errors.sessionExpired',
     weak_password: 'errors.weakPassword',
+    invalid_reset_token: 'errors.invalidResetToken',
+    reset_token_expired: 'errors.resetTokenExpired',
     workspace_slug_taken: 'errors.workspaceSlugTaken',
     workspace_slug_invalid: 'errors.workspaceSlugInvalid',
     workspace_not_found: 'errors.workspaceNotFound',

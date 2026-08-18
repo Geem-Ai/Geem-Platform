@@ -68,6 +68,10 @@ describe('LoginPage', () => {
     expect(
       screen.getByRole('button', { name: i18n.t('auth.signIn') }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('forgot-password-link')).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
     expect(screen.getByTestId('auth-language-ar')).toBeInTheDocument();
     expect(screen.getByTestId('auth-theme-toggle')).toBeInTheDocument();
   });
@@ -76,7 +80,7 @@ describe('LoginPage', () => {
     await renderLogin();
 
     const password = screen.getByLabelText(i18n.t('auth.password'));
-    const toggle = screen.getByTestId('auth-password-toggle');
+    const toggle = screen.getByTestId('auth-password-toggle-password');
     expect(password).toHaveAttribute('type', 'password');
 
     fireEvent.click(toggle);

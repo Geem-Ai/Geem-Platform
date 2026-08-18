@@ -1,0 +1,21 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+
+type Props = { copy: SiteCopy };
+const { copy } = Astro.props;
+---
+
+<section class="border-y border-geem-border bg-white" aria-label="Platform pillars">
+  <div class="container-shell py-8">
+    <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" data-reveal-stagger>
+      {
+        copy.valueStrip.items.map((item) => (
+          <li class="rounded-2xl border border-geem-border bg-geem-surface/70 p-4">
+            <h2 class="text-sm font-semibold text-geem-navy-900">{item.title}</h2>
+            <p class="mt-2 text-sm text-geem-muted">{item.description}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

@@ -18,11 +18,15 @@ from app.identity.dependencies import (
 from app.identity.models import User
 from app.identity.schemas import (
     AuthTokenResponse,
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     MeResponse,
     MembershipOut,
+    OkResponse,
     RefreshRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     UserOut,
     WorkspaceSummaryOut,
     membership_out,
@@ -30,6 +34,8 @@ from app.identity.schemas import (
 )
 from app.identity.security import decode_access_token
 from app.identity.service import AuthService, AuthTokens
+from app.notifications.factory import get_email_provider
+from app.notifications.protocol import EmailProvider
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -111,6 +117,59 @@ def login(
         ip_address=client_ip(request),
     )
     return _token_response(user, tokens, response, settings)
+
+
+@router.post("/forgot-password", response_model=OkResponse)
+def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    email: EmailProvider = Depends(get_email_provider),
+) -> OkResponse:
+    check_auth_rate_limit("forgot_password", _rate_key(request, str(body.email)), settings=settings)
+    AuthService(db, settings, email=email).forgot_password(email=str(body.email))
+    return OkResponse(ok=True)
+
+
+@router.post("/reset-password", response_model=AuthTokenResponse)
+def reset_password(
+    body: ResetPasswordRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> AuthTokenResponse:
+    check_auth_rate_limit("reset_password", _rate_key(request), settings=settings)
+    svc = AuthService(db, settings)
+    user, tokens = svc.reset_password(
+        token=body.token,
+        password=body.password,
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=client_ip(request),
+    )
+    return _token_response(user, tokens, response, settings)
+
+
+@router.post("/change-password", response_model=OkResponse)
+def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> OkResponse:
+    check_auth_rate_limit("change_password", _rate_key(request, user.email), settings=settings)
+    session = getattr(request.state, "auth_session", None)
+    if session is None:
+        raise AppError(ErrorCategory.UNAUTHORIZED, "Authentication required.")
+    AuthService(db, settings).change_password(
+        user=user,
+        current_password=body.current_password,
+        new_password=body.new_password,
+        current_session_id=session.id,
+    )
+    return OkResponse(ok=True)
 
 
 @router.post("/refresh", response_model=AuthTokenResponse)

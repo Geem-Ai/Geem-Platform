@@ -182,6 +182,19 @@ services:
         condition: service_started
     command: npm run dev -- --host 0.0.0.0 --port 5174
 
+  landpage_web:
+    build:
+      context: ../apps/landpage_web
+      dockerfile: Dockerfile
+    env_file:
+      - ../apps/landpage_web/.env
+    ports:
+      - "4321:4321"
+    volumes:
+      - ../apps/landpage_web:/app
+      - /app/node_modules
+    command: npm run dev
+
 volumes:
   postgres_data:
   redis_data:

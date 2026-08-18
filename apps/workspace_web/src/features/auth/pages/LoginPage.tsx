@@ -88,6 +88,15 @@ export function LoginPage() {
           autoComplete="current-password"
           minLength={1}
         />
+        <p className="text-end text-sm">
+          <Link
+            to="/forgot-password"
+            className="font-medium text-primary hover:underline"
+            data-testid="forgot-password-link"
+          >
+            {t('auth.forgotLink')}
+          </Link>
+        </p>
         <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           {submitting ? (
             <LoaderCircle className="animate-spin" aria-hidden />

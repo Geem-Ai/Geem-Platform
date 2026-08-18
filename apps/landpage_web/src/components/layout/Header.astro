@@ -1,0 +1,87 @@
+---
+import type { Locale } from '../../lib/i18n';
+import type { SiteCopy } from '../../content/site/types';
+import { homeHash } from '../../lib/routes';
+import { contactHref, getSiteConfig, localizedPath } from '../../lib/site';
+import { otherLocale } from '../../lib/i18n';
+import { switchLocalePath } from '../../lib/routes';
+import Button from '../ui/Button.astro';
+import avatar from '../../assets/brand/geem-avatar.webp';
+import { Image } from 'astro:assets';
+
+type Props = {
+  locale: Locale;
+  copy: SiteCopy;
+  pathname: string;
+};
+
+const { locale, copy, pathname } = Astro.props;
+const { signupUrl, loginUrl } = getSiteConfig();
+const nextLocale = otherLocale(locale);
+const langHref = switchLocalePath(locale, nextLocale, pathname);
+
+function navHref(item: SiteCopy['nav']['items'][number]) {
+  if (item.href === 'security') return localizedPath(locale, 'security');
+  if (item.href === 'contact') return contactHref(locale);
+  return homeHash(locale, item.href === 'product' ? 'product' : item.href);
+}
+---
+
+<header class="site-header bg-geem-navy-950/85 text-white backdrop-blur-md" data-site-header>
+  <div class="container-shell flex items-center justify-between gap-4">
+    <a href={localizedPath(locale)} class="flex items-center gap-3 no-underline text-white">
+      <Image src={avatar} alt="" width={40} height={40} class="size-10 rounded-full" />
+      <span class="font-semibold tracking-tight text-lg">{copy.brand.product}</span>
+    </a>
+
+    <nav class="hidden lg:flex items-center gap-6" aria-label="Primary">
+      {
+        copy.nav.items.map((item) => (
+          <a class="text-sm text-white/80 hover:text-white no-underline" href={navHref(item)}>
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="hidden lg:flex items-center gap-3">
+      <a class="text-sm text-white/85 no-underline hover:text-white" href={langHref} hreflang={nextLocale}>
+        {copy.a11y.languageSwitch}
+      </a>
+      <Button href={loginUrl} variant="secondary">{copy.nav.login}</Button>
+      <Button href={signupUrl} variant="primary">{copy.nav.primaryCta}</Button>
+    </div>
+
+    <button
+      type="button"
+      class="lg:hidden inline-flex items-center justify-center rounded-full border border-white/25 px-3 py-2 text-sm"
+      data-menu-button
+      aria-expanded="false"
+      aria-controls="mobile-menu"
+      aria-label={copy.a11y.openMenu}
+    >
+      Menu
+    </button>
+  </div>
+
+  <dialog
+    id="mobile-menu"
+    data-mobile-menu
+    class="m-0 ms-auto me-4 mt-16 w-[min(20rem,calc(100%-2rem))] rounded-2xl border border-white/15 bg-geem-navy-950 p-4 text-white backdrop:bg-black/40"
+  >
+    <nav class="flex flex-col gap-3" aria-label="Mobile">
+      {
+        copy.nav.items.map((item) => (
+          <a class="rounded-lg px-3 py-2 text-white/90 no-underline hover:bg-white/10" href={navHref(item)}>
+            {item.label}
+          </a>
+        ))
+      }
+      <a class="rounded-lg px-3 py-2 text-white/90 no-underline hover:bg-white/10" href={langHref}>
+        {copy.a11y.languageSwitch}
+      </a>
+      <Button href={loginUrl} variant="secondary">{copy.nav.login}</Button>
+      <Button href={signupUrl} variant="primary">{copy.nav.primaryCta}</Button>
+    </nav>
+  </dialog>
+</header>

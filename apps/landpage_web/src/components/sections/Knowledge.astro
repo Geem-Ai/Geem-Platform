@@ -1,0 +1,64 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import Section from '../ui/Section.astro';
+import googleDrive from '../../assets/apps/google-drive.svg';
+import oneDrive from '../../assets/apps/microsoft-onedrive.svg';
+
+type Props = { copy: SiteCopy };
+const { copy } = Astro.props;
+
+const sourceIcons = [
+  '/icons/file-pdf.png',
+  '/icons/file-txt.png',
+  googleDrive.src,
+  oneDrive.src,
+] as const;
+---
+
+<Section id="knowledge" tone="light" class="!pt-0">
+  <div class="grid items-center gap-10 lg:grid-cols-2">
+    <div data-reveal>
+      <p class="eyebrow"><span class="section-number">{copy.knowledge.number}</span> {copy.knowledge.eyebrow}</p>
+      <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.knowledge.title}</h2>
+      <p class="mt-4 text-lg text-geem-muted">{copy.knowledge.description}</p>
+      <div class="mt-6 flex flex-wrap gap-2">
+        {copy.knowledge.sources.map((source) => (
+          <span class="rounded-full bg-geem-navy-900 px-3 py-1 text-sm text-white">{source}</span>
+        ))}
+      </div>
+    </div>
+
+    <div class="geem-card p-6" data-reveal data-draw>
+      <ul class="knowledge-float-row" aria-label={copy.knowledge.eyebrow}>
+        {
+          copy.knowledge.sources.slice(0, 4).map((source, index) => (
+            <li class={`knowledge-float-icon knowledge-float-icon--${index + 1}`}>
+              <span class="knowledge-float-badge">
+                <img
+                  src={sourceIcons[index]}
+                  alt=""
+                  width="40"
+                  height="40"
+                  class="size-10 object-contain"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="visually-hidden">{source}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <div class="my-4 flex justify-center text-geem-blue" aria-hidden="true">↓</div>
+      <div class="expert-pulse rounded-xl bg-geem-navy-900 px-4 py-4 text-center font-semibold text-geem-sand">
+        Geem Expert
+      </div>
+      <div class="my-4 flex justify-center text-geem-blue" aria-hidden="true">↓</div>
+      <ul class="grid gap-2 sm:grid-cols-2">
+        {copy.knowledge.outcomes.map((item) => (
+          <li class="rounded-xl border border-geem-border bg-geem-surface px-3 py-3 text-sm">{item}</li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</Section>

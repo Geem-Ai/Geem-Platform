@@ -1,0 +1,123 @@
+---
+import MarketingLayout from '../../layouts/MarketingLayout.astro';
+import type { Locale } from '../../lib/i18n';
+import type { SiteCopy } from '../../content/site/types';
+import { company } from '../../lib/company';
+
+export type LegalKind = 'privacy' | 'terms' | 'pdpl';
+
+type Props = {
+  locale: Locale;
+  copy: SiteCopy;
+  kind: LegalKind;
+};
+
+const { locale, copy, kind } = Astro.props;
+
+const metaMap = {
+  privacy: {
+    title: copy.meta.privacyTitle,
+    description: copy.meta.privacyDescription,
+  },
+  terms: {
+    title: copy.meta.termsTitle,
+    description: copy.meta.termsDescription,
+  },
+  pdpl: {
+    title: copy.meta.pdplTitle,
+    description: copy.meta.pdplDescription,
+  },
+} as const;
+
+const meta = metaMap[kind];
+const operator = locale === 'ar' ? company.legalNameAr : company.legalNameEn;
+const address = locale === 'ar' ? company.addressAr : company.addressEn;
+
+const sections =
+  kind === 'privacy'
+    ? locale === 'ar'
+      ? [
+          { h: '1. الجهة المشغلة والنطاق', p: `تشغّل ${operator} منصة جيم. تسري هذه السياسة عند زيارة مواقع جيم، أو إنشاء حساب، أو دخول مساحة عمل، أو التواصل مع المبيعات أو الدعم، أو استخدام خدمات جيم.` },
+          { h: '2. أدوار جهة التحكم وجهة المعالجة', p: 'تكون دال سين عادة جهة التحكم في بيانات الحسابات واستفسارات الموقع وسجلات الأمن. أما المحتوى الخاص داخل مساحة عمل منشأة، فتكون المنشأة عادة جهة التحكم وتعالج دال سين البيانات كجهة معالجة وفق الاتفاقية ذات الصلة.' },
+          { h: '3. فئات البيانات', p: 'قد نعالج بيانات الهوية والتواصل، وبيانات الحساب والعضوية والصلاحيات، ومحتوى مساحة العمل المصرّح به، وبيانات الفوترة والدعم، والبيانات التقنية والأمنية اللازمة لتشغيل الخدمة وحمايتها.' },
+          { h: '4. الأغراض', p: 'نستخدم البيانات لإنشاء الحسابات وحمايتها، وتقديم مساحات العمل والخبراء والقنوات، واسترجاع المعرفة المصرّح بها، وتقديم الدعم، وإصدار الفواتير عند الاقتضاء، ومنع إساءة الاستخدام، والوفاء بالالتزامات النظامية.' },
+          { h: '5. ملفات الارتباط', p: 'يستخدم جيم ملفات ارتباط وتقنيات محلية ضرورية للجلسات والأمن واللغة. لا نضيف أدوات تتبع تسويقية في هذا الموقع ما لم يُعلن عن مزوّد معتمد لاحقًا.' },
+          { h: '6. الإفصاح', p: 'لا نبيع البيانات الشخصية أو معرفة المنشآت الخاصة. قد يُفصح عن الحد الأدنى اللازم لمقدمي الخدمات المتعاقد معهم، أو للمنشأة التي تدير مساحة عملك، أو للجهات المختصة عندما يكون الإفصاح مطلوبًا نظامًا.' },
+          { h: '7. حقوقك', p: `يمكنك طلب الوصول أو التصحيح أو الإتلاف أو العدول عن الموافقة حيث ينطبق ذلك عبر ${company.emails.info}، مع مراعاة نظام حماية البيانات الشخصية ولوائحه.` },
+        ]
+      : [
+          { h: '1. Operator and scope', p: `${operator} operates Geem. This policy applies when you visit Geem sites, create an account, access a workspace, contact sales or support, or otherwise use Geem services.` },
+          { h: '2. Controller and processor roles', p: 'Dal Seen generally acts as controller for account records, website enquiries, and security logs. For private workspace content, the customer organization generally acts as controller and Dal Seen acts as processor under the applicable agreement.' },
+          { h: '3. Categories of data', p: 'We may process identity and contact data, account membership and permission data, authorized workspace content, billing and support records, and technical/security data needed to operate and protect the service.' },
+          { h: '4. Purposes', p: 'We use data to create and secure accounts, provide workspaces, Experts, and channels, retrieve authorized knowledge, support customers, issue invoices where applicable, prevent misuse, and meet legal obligations.' },
+          { h: '5. Cookies', p: 'Geem uses essential cookies and similar local technologies for sessions, security, and locale. This marketing site does not load marketing trackers unless an approved provider is added later.' },
+          { h: '6. Disclosure', p: 'We do not sell personal data or private organizational knowledge. Minimum necessary data may be disclosed to contracted service providers, the organization administering your workspace, or competent authorities when legally required.' },
+          { h: '7. Your rights', p: `You may request access, correction, destruction, or withdrawal of consent where applicable by contacting ${company.emails.info}, subject to the Saudi Personal Data Protection Law and its regulations.` },
+        ]
+    : kind === 'terms'
+      ? locale === 'ar'
+        ? [
+            { h: '1. القبول', p: 'باستخدام جيم أو إنشاء حساب أو قبول دعوة مساحة عمل، فإنك توافق على هذه الشروط وتقر بالاطلاع على سياسة الخصوصية وإشعار PDPL.' },
+            { h: '2. مساحات العمل', p: 'تُدار مساحات العمل بواسطة المنشأة. تتحكم المنشأة في الأعضاء والأدوار والمعرفة المصرّح بها والتكاملات ضمن حدود الخدمة.' },
+            { h: '3. الاستخدام المسموح', p: 'لا يجوز استخدام جيم إلا لأغراض مشروعة. يحظر تجاوز الضوابط الأمنية، أو إساءة استخدام المفاتيح وواجهات البرمجة، أو تقديم محتوى غير مشروع.' },
+            { h: '4. مخرجات الذكاء الاصطناعي', p: 'ينتج جيم مخرجات احتمالية قد تكون ناقصة أو غير صحيحة. يجب مراجعة المخرجات المهمة وتطبيق إشراف بشري مناسب.' },
+            { h: '5. الملكية الفكرية', p: 'تبقى منصة جيم وعلاماتها وبرمجياتها وتوثيقها مملوكة لدال سين أو لمرخّصيها. يحتفظ العميل بحقوقه في البيانات التي يقدمها.' },
+            { h: '6. القانون الحاكم', p: 'تخضع هذه الشروط لأنظمة المملكة العربية السعودية. يُعتد بالنص العربي عند اختلاف النسختين ما لم تنص اتفاقية منشأة موقعة على خلاف ذلك.' },
+          ]
+        : [
+            { h: '1. Acceptance', p: 'By using Geem, creating an account, or accepting a workspace invitation, you agree to these terms and acknowledge the Privacy Policy and PDPL Notice.' },
+            { h: '2. Workspaces', p: 'Workspaces are administered by the organization. The organization controls members, roles, authorized knowledge, and integrations within the service scope.' },
+            { h: '3. Acceptable use', p: 'Use Geem only for lawful purposes. Do not bypass security controls, misuse API keys, or submit unlawful content.' },
+            { h: '4. AI outputs', p: 'Geem generates probabilistic outputs that may be incomplete or incorrect. Review important outputs and apply human oversight.' },
+            { h: '5. Intellectual property', p: 'Geem’s platform, marks, software, and documentation remain owned by Dal Seen or its licensors. Customers retain rights in data they submit.' },
+            { h: '6. Governing law', p: 'These terms are governed by the laws of Saudi Arabia. The Arabic version controls if the public language versions differ, unless a signed enterprise agreement states otherwise.' },
+          ]
+      : locale === 'ar'
+        ? [
+            { h: '1. الإطار النظامي', p: 'يكمل هذا الإشعار سياسة الخصوصية ويستند إلى نظام حماية البيانات الشخصية ولوائحه التنفيذية ولائحة النقل.' },
+            { h: '2. جهة التحكم', p: `تكون دال سين عادة جهة التحكم في بيانات الحسابات والتواصل المباشر والأمن. لبيانات مساحة عمل منشأة، تكون المنشأة عادة جهة التحكم. تواصل: ${company.emails.info}.` },
+            { h: '3. الحقوق', p: 'مع مراعاة النظام والتحقق من الهوية، يحق لك العلم والوصول والحصول على نسخة مقروءة والتصحيح وطلب الإتلاف والعدول عن الموافقة عندما تكون أساس المعالجة.' },
+            { h: '4. ممارسة الحقوق', p: `أرسل الطلب إلى ${company.emails.info} بعنوان «طلب بيانات شخصية». نستهدف الرد خلال 30 يومًا وفق ما تسمح به اللائحة.` },
+            { h: '5. الشكاوى', p: 'إذا لم ترضَ عن المعالجة، يمكنك تقديم شكوى إلى الهيئة السعودية للبيانات والذكاء الاصطناعي عبر منصة حوكمة البيانات الوطنية.' },
+            { h: '6. المعالجة المدعومة بالذكاء الاصطناعي', p: 'يستخدم جيم معالجة مدعومة بالذكاء الاصطناعي لاسترجاع المعرفة المصرّح بها وتوليد النصوص وتشغيل الخدمة. لا تتخذ المخرجات بذاتها قرارًا ملزمًا نظامًا عن فرد.' },
+          ]
+        : [
+            { h: '1. Legal framework', p: 'This notice supplements the Privacy Policy and is informed by the Saudi Personal Data Protection Law, its Implementing Regulations, and the Transfer Regulation.' },
+            { h: '2. Controller', p: `Dal Seen generally acts as controller for account, direct communication, and security data. For workspace content, the customer organization generally acts as controller. Contact: ${company.emails.info}.` },
+            { h: '3. Rights', p: 'Subject to the Law and identity verification, you may request to be informed, access data, obtain a readable copy, correct it, request destruction, and withdraw consent where consent is the basis.' },
+            { h: '4. Exercising rights', p: `Email ${company.emails.info} with the subject “Personal Data Request”. We aim to respond within 30 days as permitted by the regulations.` },
+            { h: '5. Complaints', p: 'If you are dissatisfied, you may complain to the Saudi Data and AI Authority through the National Data Governance Platform.' },
+            { h: '6. AI-assisted processing', p: 'Geem uses AI-assisted processing to retrieve authorized knowledge, generate text, and operate the service. Outputs do not by themselves make a legally binding decision about an individual.' },
+          ];
+---
+
+<MarketingLayout
+  locale={locale}
+  copy={copy}
+  title={meta.title}
+  description={meta.description}
+  path={kind}
+>
+  <section class="section-shell section-light">
+    <article class="container-shell prose-legal" data-reveal>
+      <h1 class="text-4xl font-semibold tracking-tight">{meta.title}</h1>
+      <p class="mt-3 text-sm text-geem-muted">
+        {copy.legal.lastUpdatedLabel}: {copy.legal.lastUpdated}
+      </p>
+      <p class="mt-2 text-sm text-geem-muted">
+        {operator} · {company.phoneDisplay} · {address}
+      </p>
+      <p class="mt-4 rounded-xl border border-geem-border bg-white p-4 text-sm text-geem-muted">
+        {copy.legal.notice}
+      </p>
+      {
+        sections.map((section) => (
+          <section class="mt-8">
+            <h2>{section.h}</h2>
+            <p>{section.p}</p>
+          </section>
+        ))
+      }
+    </article>
+  </section>
+</MarketingLayout>

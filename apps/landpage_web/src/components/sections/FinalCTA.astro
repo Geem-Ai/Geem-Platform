@@ -1,0 +1,22 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import type { Locale } from '../../lib/i18n';
+import Section from '../ui/Section.astro';
+import Button from '../ui/Button.astro';
+import { contactHref, getSiteConfig } from '../../lib/site';
+
+type Props = { locale: Locale; copy: SiteCopy };
+const { locale, copy } = Astro.props;
+const { signupUrl } = getSiteConfig();
+---
+
+<Section tone="dark">
+  <div class="mx-auto max-w-3xl text-center" data-reveal>
+    <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">{copy.finalCta.title}</h2>
+    <p class="mt-4 text-lg text-white/75">{copy.finalCta.description}</p>
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <Button href={signupUrl} variant="primary">{copy.finalCta.primaryCta}</Button>
+      <Button href={contactHref(locale)} variant="secondary">{copy.finalCta.secondaryCta}</Button>
+    </div>
+  </div>
+</Section>

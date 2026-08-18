@@ -20,6 +20,24 @@ class RefreshRequest(BaseModel):
     refresh_token: str | None = None
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=1, max_length=128)
+
+
+class OkResponse(BaseModel):
+    ok: bool = True
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     email: str

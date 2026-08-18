@@ -1,0 +1,36 @@
+---
+import type { Locale } from '../../lib/i18n';
+import { buildSeo } from '../../lib/seo';
+
+type Props = {
+  locale: Locale;
+  title: string;
+  description: string;
+  path?: string;
+};
+
+const { locale, title, description, path = '' } = Astro.props;
+const seo = buildSeo({ locale, title, description, path });
+---
+
+<title>{seo.title}</title>
+<meta name="description" content={seo.description} />
+<meta name="robots" content={seo.robots} />
+<link rel="canonical" href={seo.canonical} />
+<link rel="alternate" hreflang="ar" href={seo.alternateAr} />
+<link rel="alternate" hreflang="en" href={seo.alternateEn} />
+<link rel="alternate" hreflang="x-default" href={seo.xDefault} />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Geem" />
+<meta property="og:title" content={seo.title} />
+<meta property="og:description" content={seo.description} />
+<meta property="og:url" content={seo.canonical} />
+<meta property="og:image" content={seo.ogImage} />
+<meta property="og:locale" content={seo.ogLocale} />
+<meta property="og:locale:alternate" content={seo.ogLocaleAlt} />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={seo.title} />
+<meta name="twitter:description" content={seo.description} />
+<meta name="twitter:image" content={seo.ogImage} />

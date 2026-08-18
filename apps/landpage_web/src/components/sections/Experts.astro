@@ -1,0 +1,43 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import Section from '../ui/Section.astro';
+import ExpertFlow from '../diagrams/ExpertFlow.astro';
+import { Image } from 'astro:assets';
+import avatar from '../../assets/brand/geem-avatar.webp';
+
+type Props = { copy: SiteCopy };
+const { copy } = Astro.props;
+---
+
+<Section id="experts" tone="light">
+  <div class="max-w-3xl" data-reveal>
+    <p class="eyebrow"><span class="section-number">{copy.experts.number}</span> {copy.experts.eyebrow}</p>
+    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.experts.title}</h2>
+    <p class="mt-4 text-lg text-geem-muted">{copy.experts.description}</p>
+    <div class="mt-6 flex flex-wrap gap-2">
+      {
+        copy.experts.formula.map((item, index) => (
+          <>
+            {index > 0 && <span class="text-geem-muted self-center">+</span>}
+            <span class="rounded-full border border-geem-border bg-white px-3 py-1 text-sm font-medium">{item}</span>
+          </>
+        ))
+      }
+    </div>
+  </div>
+
+  <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal-stagger>
+    {
+      copy.experts.cards.map((card) => (
+        <article class="geem-card p-5">
+          <Image src={avatar} alt="" width={40} height={40} class="size-10 rounded-full" loading="lazy" />
+          <h3 class="mt-4 text-lg font-semibold">{card.title}</h3>
+          <p class="mt-2 text-sm text-geem-muted">{card.description}</p>
+        </article>
+      ))
+    }
+  </div>
+
+  <ExpertFlow copy={copy} />
+  <p class="mt-4 text-sm text-geem-muted" data-reveal>{copy.experts.note}</p>
+</Section>

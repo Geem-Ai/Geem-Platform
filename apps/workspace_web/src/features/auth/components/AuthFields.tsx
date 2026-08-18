@@ -71,6 +71,10 @@ type AuthPasswordFieldProps = {
   minLength?: number;
   maxLength?: number;
   hint?: ReactNode;
+  label?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  name?: string;
 };
 
 export function AuthPasswordField({
@@ -82,31 +86,36 @@ export function AuthPasswordField({
   minLength,
   maxLength,
   hint,
+  label,
+  placeholder,
+  autoFocus,
+  name = 'password',
 }: AuthPasswordFieldProps) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{t('auth.password')}</Label>
+      <Label htmlFor={id}>{label ?? t('auth.password')}</Label>
       <InputWrapper variant="lg">
         <Lock aria-hidden />
         <Input
           id={id}
-          name="password"
+          name={name}
           type={visible ? 'text' : 'password'}
           autoComplete={autoComplete}
           required
+          autoFocus={autoFocus}
           minLength={minLength}
           maxLength={maxLength}
-          placeholder={t('auth.passwordPlaceholder')}
+          placeholder={placeholder ?? t('auth.passwordPlaceholder')}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
         />
         <button
           type="button"
-          data-testid="auth-password-toggle"
+          data-testid={`auth-password-toggle-${id}`}
           className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           aria-label={visible ? t('auth.hidePassword') : t('auth.showPassword')}
           aria-pressed={visible}

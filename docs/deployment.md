@@ -4,7 +4,7 @@ How to run **Geem** on a Linux VPS managed with [aaPanel](https://www.aapanel.co
 
 This stack is **not** a single PHP site. You need Docker for Postgres, Redis, Qdrant, MinIO, FastAPI, and Celery. aaPanel supplies Nginx, TLS, the firewall, and a place to host the Workspace static files.
 
-`apps/dashboard_web` and `apps/landpage_web` are not deployed yet.
+`apps/dashboard_web` is not deployed yet. `apps/landpage_web` is a static marketing site — build it separately and serve `dist/` from Nginx (see § Marketing site below).
 
 ## What you are deploying
 
@@ -302,6 +302,20 @@ npm run build
 ```
 
 Output: `apps/workspace_web/dist/`. Point the aaPanel site root at that folder (or copy `dist/` into `/www/wwwroot/geem-app`).
+
+### Marketing site (`apps/landpage_web`)
+
+Build the static Astro site separately (no API proxy required):
+
+```bash
+cd /www/wwwroot/geem/apps/landpage_web
+cp .env.example .env   # set PUBLIC_WORKSPACE_URL / PUBLIC_SIGNUP_URL for production
+npm ci
+npm run build
+npm run verify
+```
+
+Output: `apps/landpage_web/dist/`. Create a **separate** aaPanel site for `geem.ai` / `www.geem.ai` with that document root. Use static `try_files` (not SPA fallback). Redirect `/` → `/ar` (see `apps/landpage_web/nginx.conf`).
 
 ## 6. aaPanel website + reverse proxy
 

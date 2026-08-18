@@ -1,0 +1,47 @@
+---
+import MarketingLayout from '../../layouts/MarketingLayout.astro';
+import { getSiteCopy } from '../../content/site';
+import { isLocale, localeStaticPaths } from '../../lib/i18n';
+import Hero from '../../components/sections/Hero.astro';
+import ValueStrip from '../../components/sections/ValueStrip.astro';
+import Experts from '../../components/sections/Experts.astro';
+import Knowledge from '../../components/sections/Knowledge.astro';
+import Integrations from '../../components/sections/Integrations.astro';
+import Channels from '../../components/sections/Channels.astro';
+import DeveloperApi from '../../components/sections/DeveloperApi.astro';
+import Security from '../../components/sections/Security.astro';
+import AppStore from '../../components/sections/AppStore.astro';
+import ProductPreviews from '../../components/sections/ProductPreviews.astro';
+import FinalCTA from '../../components/sections/FinalCTA.astro';
+
+export function getStaticPaths() {
+  return localeStaticPaths();
+}
+
+const raw = Astro.params.locale;
+if (!isLocale(raw)) {
+  return Astro.redirect('/ar', 302);
+}
+const locale = raw;
+const copy = getSiteCopy(locale);
+---
+
+<MarketingLayout
+  locale={locale}
+  copy={copy}
+  title={copy.meta.homeTitle}
+  description={copy.meta.homeDescription}
+  preloadHero
+>
+  <Hero locale={locale} copy={copy} />
+  <ValueStrip copy={copy} />
+  <Experts copy={copy} />
+  <Knowledge copy={copy} />
+  <Integrations locale={locale} copy={copy} />
+  <Channels copy={copy} />
+  <DeveloperApi copy={copy} />
+  <Security locale={locale} copy={copy} />
+  <AppStore copy={copy} />
+  <ProductPreviews copy={copy} />
+  <FinalCTA locale={locale} copy={copy} />
+</MarketingLayout>

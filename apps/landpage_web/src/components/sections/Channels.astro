@@ -1,0 +1,33 @@
+---
+import type { SiteCopy } from '../../content/site/types';
+import Section from '../ui/Section.astro';
+
+type Props = { copy: SiteCopy };
+const { copy } = Astro.props;
+const byId = Object.fromEntries(copy.channels.nodes.map((n) => [n.id, n.label]));
+---
+
+<Section id="channels" tone="dark">
+  <div class="max-w-3xl" data-reveal>
+    <p class="eyebrow"><span class="section-number">{copy.channels.number}</span> {copy.channels.eyebrow}</p>
+    <h2 class="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">{copy.channels.title}</h2>
+    <p class="mt-4 text-lg text-white/75">{copy.channels.description}</p>
+  </div>
+
+  <div class="mt-12" data-reveal data-draw>
+    <div class="mx-auto hidden max-w-3xl md:grid md:grid-cols-3 md:grid-rows-3 md:gap-4 md:place-items-center">
+      <div class="col-start-2 row-start-1 geem-card px-4 py-3 text-sm">{byId.chat}</div>
+      <div class="col-start-1 row-start-2 geem-card px-4 py-3 text-sm">{byId.whatsapp}</div>
+      <div class="col-start-2 row-start-2 expert-pulse rounded-2xl border border-geem-sand/50 bg-geem-navy-800 px-6 py-5 text-center font-semibold text-geem-sand">
+        {copy.brand.product}
+      </div>
+      <div class="col-start-3 row-start-2 geem-card px-4 py-3 text-sm">{byId.api}</div>
+      <div class="col-start-2 row-start-3 geem-card px-4 py-3 text-sm">{byId.widget}</div>
+    </div>
+
+    <ul class="grid gap-3 md:hidden">
+      <li class="geem-card p-4 text-center font-semibold text-geem-sand">{copy.brand.product}</li>
+      {copy.channels.nodes.map((node) => <li class="geem-card p-4 text-sm">{node.label}</li>)}
+    </ul>
+  </div>
+</Section>

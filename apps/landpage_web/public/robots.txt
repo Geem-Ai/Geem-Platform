@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://geem.ai/sitemap-index.xml

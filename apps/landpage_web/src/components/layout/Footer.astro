@@ -1,0 +1,122 @@
+---
+import type { Locale } from '../../lib/i18n';
+import type { SiteCopy } from '../../content/site/types';
+import { company } from '../../lib/company';
+import { homeHash } from '../../lib/routes';
+import { getSiteConfig, localizedPath } from '../../lib/site';
+import { Image } from 'astro:assets';
+import avatar from '../../assets/brand/geem-avatar.webp';
+
+type Props = {
+  locale: Locale;
+  copy: SiteCopy;
+};
+
+const { locale, copy } = Astro.props;
+const { loginUrl, docsUrl } = getSiteConfig();
+const madeIn = locale === 'ar' ? company.madeInMadinahAr : company.madeInMadinahEn;
+
+function resolveHref(href: string) {
+  if (href === 'login') return loginUrl;
+  if (href === 'security') return localizedPath(locale, 'security');
+  if (href === 'about') return localizedPath(locale, 'about');
+  if (href === 'contact') return localizedPath(locale, 'contact');
+  if (href === 'privacy') return localizedPath(locale, 'privacy');
+  if (href === 'terms') return localizedPath(locale, 'terms');
+  if (href === 'pdpl') return localizedPath(locale, 'pdpl');
+  if (href === 'product' || href === 'experts' || href === 'integrations' || href === 'api') {
+    return homeHash(locale, href);
+  }
+  return localizedPath(locale);
+}
+
+const resourceLinks = [
+  ...copy.footer.resourceLinks,
+  ...(docsUrl ? [{ label: locale === 'ar' ? 'التوثيق' : 'Documentation', href: 'docs' }] : []),
+];
+---
+
+<footer class="section-dark border-t border-white/10">
+  <div class="container-shell py-14">
+    <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-5" data-reveal>
+      <div class="lg:col-span-1 space-y-4">
+        <div class="flex items-center gap-3">
+          <Image src={avatar} alt="" width={44} height={44} class="size-11 rounded-full" loading="lazy" />
+          <div>
+            <div class="font-semibold text-lg">{copy.brand.product}</div>
+            <div class="text-sm text-white/65">{copy.brand.tagline}</div>
+          </div>
+        </div>
+        <p class="text-sm text-geem-sand/90">{madeIn}</p>
+      </div>
+
+      <div>
+        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.product}</h2>
+        <ul class="space-y-2 text-sm text-white/70">
+          {
+            copy.footer.productLinks.map((link) => (
+              <li>
+                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.resources}</h2>
+        <ul class="space-y-2 text-sm text-white/70">
+          {
+            resourceLinks.map((link) => (
+              <li>
+                <a
+                  class="hover:text-white no-underline"
+                  href={link.href === 'docs' ? docsUrl : resolveHref(link.href)}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.company}</h2>
+        <ul class="space-y-2 text-sm text-white/70">
+          {
+            copy.footer.companyLinks.map((link) => (
+              <li>
+                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div>
+        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.legal}</h2>
+        <ul class="space-y-2 text-sm text-white/70">
+          {
+            copy.footer.legalLinks.map((link) => (
+              <li>
+                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-12 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
+      <p>© {new Date().getFullYear()} {copy.footer.rights}</p>
+      <p>{locale === 'ar' ? company.legalNameAr : company.legalNameEn}</p>
+    </div>
+  </div>
+</footer>

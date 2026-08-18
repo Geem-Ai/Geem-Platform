@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.identity.models import Session as AuthSession
-from app.identity.models import User
+from app.identity.models import PasswordResetToken, User
 from app.identity.security import normalize_email
 
 
@@ -30,6 +30,34 @@ class UserRepository:
         self.db.add(user)
         self.db.flush()
         return user
+
+
+class PasswordResetTokenRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def get_by_token_hash(self, token_hash: str) -> PasswordResetToken | None:
+        return self.db.scalar(
+            select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+        )
+
+    def create(self, token: PasswordResetToken) -> PasswordResetToken:
+        self.db.add(token)
+        self.db.flush()
+        return token
+
+    def invalidate_unused_for_user(self, user_id: uuid.UUID, *, when: datetime | None = None) -> int:
+        """Mark unused tokens for the user as used so only the newest reset link works."""
+        now = when or datetime.now(timezone.utc)
+        rows = self.db.scalars(
+            select(PasswordResetToken).where(
+                PasswordResetToken.user_id == user_id,
+                PasswordResetToken.used_at.is_(None),
+            )
+        ).all()
+        for row in rows:
+            row.used_at = now
+        return len(rows)
 
 
 class SessionRepository:
@@ -58,6 +86,25 @@ class SessionRepository:
             select(AuthSession).where(
                 AuthSession.user_id == user_id,
                 AuthSession.revoked_at.is_(None),
+            )
+        ).all()
+        for s in sessions:
+            s.revoked_at = now
+        return len(sessions)
+
+    def revoke_all_for_user_except(
+        self,
+        user_id: uuid.UUID,
+        *,
+        except_session_id: uuid.UUID,
+        when: datetime | None = None,
+    ) -> int:
+        now = when or datetime.now(timezone.utc)
+        sessions = self.db.scalars(
+            select(AuthSession).where(
+                AuthSession.user_id == user_id,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.id != except_session_id,
             )
         ).all()
         for s in sessions:
