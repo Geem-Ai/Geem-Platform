@@ -33,6 +33,12 @@ _BLOCKED_KEYS = frozenset(
         "webhook_secret",
         "delta_link",
         "sync_cursor",
+        "token_hash",
+        "raw_token",
+        "invitation_token",
+        "smtp_password",
+        "smtp_username",
+        "invitation_token_hash_pepper",
     }
 )
 

@@ -74,15 +74,14 @@ Status tracking for Geem App Store slices **9A–9G**. Mark **PASS** only when b
 | Free E2E: install → connect → Expert source | `TestE2EFreeDrive` | PASS |
 | Paid WhatsApp E2E: subscribe → install → connect | `TestE2EWhatsAppPaid` | PASS |
 | Expired → renew restores access | `TestWhatsAppExpireRenew` | PASS |
-| Browser smoke (catalog / installed / member) | Vitest Apps UI smoke + API E2E gate (no prior Playwright infra) | PASS* |
-
-\*Playwright was not present in-repo; Phase 9G proves backend↔frontend integration via API E2E + Vitest. Dedicated Playwright browser smoke remains optional hardening (Phase 11).
+| Browser smoke (catalog / installed / member / WhatsApp plans) | `apps/workspace_web` Playwright `e2e/apps-smoke.spec.ts` + API E2E gate | PASS |
 
 ## Gate summary
 
-- **9A–9F regression:** `pytest` Phase 9 integration suites — PASS
-- **9G management suite:** `test_apps_management_phase9g.py` — PASS
-- **workspace_web Apps Vitest:** PASS
-- **workspace_web typecheck/build:** PASS when clean
+- **9A–9F regression:** `pytest` Phase 9 integration suites — PASS (110 tests in combined run)
+- **9G management suite:** `test_apps_management_phase9g.py` — PASS (11 tests)
+- **workspace_web Apps Vitest:** PASS (66 tests)
+- **Playwright Apps smoke:** `npm run test:e2e` — PASS (4 tests)
+- **workspace_web typecheck/build:** PASS
 
-**Phase 9 overall:** COMPLETE when this checklist matches CI/local green runs above.
+**Phase 9 overall:** COMPLETE

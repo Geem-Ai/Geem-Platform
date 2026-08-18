@@ -170,32 +170,22 @@ def test_admin_cannot_remove_owner(client, register_user, db) -> None:
     assert res.status_code == 403
 
 
-def test_prod_ignores_x_workspace_slug(monkeypatch) -> None:
+def test_prod_ignores_x_workspace_slug() -> None:
     from app.common.workspace_resolver import resolve_workspace_hint
-    from app.core.config import get_settings
+    from app.core.config import Settings
     from starlette.requests import Request
 
-    get_settings.cache_clear()
-    monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("JWT_SECRET", "a" * 40)
-    monkeypatch.setenv("CORS_ORIGINS", "https://app.geem.ai")
-    monkeypatch.setenv("API_KEY_HASH_PEPPER", "b" * 40)
-    get_settings.cache_clear()
-    try:
-        req = Request(
-            {
-                "type": "http",
-                "method": "GET",
-                "path": "/",
-                "headers": [(b"x-workspace-slug", b"other-prod-slug")],
-            }
-        )
-        hint = resolve_workspace_hint(req, get_settings())
-        assert hint.slug is None
-        assert hint.source == "none"
-    finally:
-        monkeypatch.setenv("APP_ENV", "test")
-        get_settings.cache_clear()
+    req = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"x-workspace-slug", b"other-prod-slug")],
+        }
+    )
+    hint = resolve_workspace_hint(req, Settings(_env_file=None, app_env="production"))
+    assert hint.slug is None
+    assert hint.source == "none"
 
 
 def test_slug_adversarial_rejected(client, register_user) -> None:

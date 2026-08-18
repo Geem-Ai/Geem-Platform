@@ -196,6 +196,17 @@ class ErrorCategory(StrEnum):
     CHANNEL_BINDING_REQUIRED = "channel_binding_required"
     CHANNEL_EXPERT_INVALID = "channel_expert_invalid"
 
+    # Workspace invitations (Phase 10A)
+    INVITATION_NOT_FOUND = "invitation_not_found"
+    INVITATION_ALREADY_EXISTS = "invitation_already_exists"
+    ALREADY_WORKSPACE_MEMBER = "already_workspace_member"
+    INVALID_INVITATION = "invalid_invitation"
+    INVITATION_EXPIRED = "invitation_expired"
+    INVITATION_REVOKED = "invitation_revoked"
+    INVITATION_EMAIL_MISMATCH = "invitation_email_mismatch"
+    INVITATION_ALREADY_ACCEPTED = "invitation_already_accepted"
+    EMAIL_DELIVERY_FAILED = "email_delivery_failed"
+
 
 # HTTP status mapping for AppError.category
 HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
@@ -354,6 +365,16 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "openwa_send_failed": 502,
     "channel_binding_required": 422,
     "channel_expert_invalid": 422,
+    # Phase 10A — workspace invitations
+    "invitation_not_found": 404,
+    "invitation_already_exists": 409,
+    "already_workspace_member": 409,
+    "invalid_invitation": 400,
+    "invitation_expired": 410,
+    "invitation_revoked": 409,
+    "invitation_email_mismatch": 403,
+    "invitation_already_accepted": 409,
+    "email_delivery_failed": 502,
 }
 
 
