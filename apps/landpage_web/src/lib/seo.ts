@@ -8,14 +8,22 @@ export type SeoInput = {
   path?: string;
   robots?: string;
   ogImage?: string;
+  ogImageAlt?: string;
+  ogImageType?: string;
+  ogImageWidth?: number;
+  ogImageHeight?: number;
 };
 
 export function buildSeo(input: SeoInput) {
-  const { ogImageUrl } = getSiteConfig();
+  const { ogImageUrl, ogImageType, ogImageWidth, ogImageHeight } = getSiteConfig();
   const path = input.path ?? '';
   const canonical = absoluteUrl(input.locale, path);
   const alternateAr = absoluteUrl('ar', path);
   const alternateEn = absoluteUrl('en', path);
+  const defaultImageAlt =
+    input.locale === 'ar'
+      ? 'هوية جيم البصرية مع خبير ذكاء اصطناعي متصل بمعرفة المنشأة وأنظمتها فوق أفق سعودي'
+      : 'Geem AI Expert connected to an organization’s knowledge and systems over a Saudi skyline';
 
   return {
     title: input.title,
@@ -23,6 +31,10 @@ export function buildSeo(input: SeoInput) {
     canonical,
     robots: input.robots ?? 'index,follow',
     ogImage: input.ogImage ?? ogImageUrl,
+    ogImageAlt: input.ogImageAlt ?? defaultImageAlt,
+    ogImageType: input.ogImageType ?? ogImageType,
+    ogImageWidth: input.ogImageWidth ?? ogImageWidth,
+    ogImageHeight: input.ogImageHeight ?? ogImageHeight,
     alternateAr,
     alternateEn,
     xDefault: alternateAr,
