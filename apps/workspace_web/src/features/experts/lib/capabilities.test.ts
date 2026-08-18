@@ -6,62 +6,66 @@ import {
   canEditExpert,
   canManageExpertKnowledge,
 } from './capabilities';
+import { WorkspacePermission } from '@/features/authz/permissions';
+
+const allow =
+  (...keys: string[]) =>
+  (permission: string) =>
+    keys.includes(permission);
 
 describe('canCreateExpert', () => {
-  it('allows owner and admin', () => {
-    expect(canCreateExpert('owner')).toBe(true);
-    expect(canCreateExpert('admin')).toBe(true);
-  });
-  it('denies member and undefined', () => {
-    expect(canCreateExpert('member')).toBe(false);
-    expect(canCreateExpert(null)).toBe(false);
-    expect(canCreateExpert(undefined)).toBe(false);
-  });
-});
-
-describe('canEditExpert', () => {
-  it('allows owner/admin for workspace experts', () => {
-    expect(canEditExpert('owner', 'workspace')).toBe(true);
-    expect(canEditExpert('admin', 'workspace')).toBe(true);
-  });
-  it('denies platform experts regardless of role', () => {
-    expect(canEditExpert('owner', 'platform')).toBe(false);
-    expect(canEditExpert('admin', 'platform')).toBe(false);
-  });
-  it('denies member for workspace experts', () => {
-    expect(canEditExpert('member', 'workspace')).toBe(false);
+  it('requires experts.create', () => {
+    expect(canCreateExpert(allow(WorkspacePermission.EXPERTS_CREATE))).toBe(true);
+    expect(canCreateExpert(allow(WorkspacePermission.EXPERTS_VIEW))).toBe(false);
   });
 });
 
 describe('canDeleteExpert', () => {
-  it('allows owner/admin for workspace experts', () => {
-    expect(canDeleteExpert('owner', 'workspace')).toBe(true);
-    expect(canDeleteExpert('admin', 'workspace')).toBe(true);
+  it('requires experts.delete and workspace ownership', () => {
+    expect(canDeleteExpert(allow(WorkspacePermission.EXPERTS_DELETE), 'workspace')).toBe(
+      true,
+    );
+    expect(canDeleteExpert(allow(WorkspacePermission.EXPERTS_DELETE), 'platform')).toBe(
+      false,
+    );
   });
-  it('denies platform experts', () => {
-    expect(canDeleteExpert('owner', 'platform')).toBe(false);
+});
+
+describe('canEditExpert', () => {
+  it('requires experts.update and workspace ownership', () => {
+    expect(canEditExpert(allow(WorkspacePermission.EXPERTS_UPDATE), 'workspace')).toBe(
+      true,
+    );
+    expect(canEditExpert(allow(WorkspacePermission.EXPERTS_VIEW), 'workspace')).toBe(
+      false,
+    );
   });
 });
 
 describe('canManageExpertKnowledge', () => {
-  it('allows owner/admin for workspace experts', () => {
-    expect(canManageExpertKnowledge('owner', 'workspace')).toBe(true);
-    expect(canManageExpertKnowledge('admin', 'workspace')).toBe(true);
-  });
-  it('denies member and platform', () => {
-    expect(canManageExpertKnowledge('member', 'workspace')).toBe(false);
-    expect(canManageExpertKnowledge('owner', 'platform')).toBe(false);
+  it('requires experts.manage_knowledge on workspace experts', () => {
+    expect(
+      canManageExpertKnowledge(
+        allow(WorkspacePermission.EXPERTS_MANAGE_KNOWLEDGE),
+        'workspace',
+      ),
+    ).toBe(true);
+    expect(
+      canManageExpertKnowledge(
+        allow(WorkspacePermission.EXPERTS_MANAGE_KNOWLEDGE),
+        'platform',
+      ),
+    ).toBe(false);
   });
 });
 
 describe('canAskExpert', () => {
-  it('allows ready status', () => {
-    expect(canAskExpert('ready')).toBe(true);
-  });
-  it('denies non-ready statuses', () => {
-    expect(canAskExpert('draft')).toBe(false);
-    expect(canAskExpert('processing')).toBe(false);
-    expect(canAskExpert('failed')).toBe(false);
-    expect(canAskExpert('disabled')).toBe(false);
+  it('requires experts.use, chat.use, and ready status', () => {
+    const ask = allow(WorkspacePermission.EXPERTS_USE, WorkspacePermission.CHAT_USE);
+    expect(canAskExpert(ask, 'ready')).toBe(true);
+    expect(canAskExpert(ask, 'draft')).toBe(false);
+    expect(canAskExpert(allow(WorkspacePermission.EXPERTS_VIEW), 'ready')).toBe(false);
+    expect(canAskExpert(allow(WorkspacePermission.EXPERTS_USE), 'ready')).toBe(false);
+    expect(canAskExpert(allow(WorkspacePermission.CHAT_USE), 'ready')).toBe(false);
   });
 });

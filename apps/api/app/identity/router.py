@@ -25,6 +25,8 @@ from app.identity.schemas import (
     RegisterRequest,
     UserOut,
     WorkspaceSummaryOut,
+    membership_out,
+    workspace_summary_out,
 )
 from app.identity.security import decode_access_token
 from app.identity.service import AuthService, AuthTokens
@@ -188,19 +190,10 @@ def me(
     """
     ws_svc = WorkspaceService(db)
     pairs = ws_svc.list_for_user(user.id)
-    summaries = [
-        WorkspaceSummaryOut(
-            id=w.id,
-            name=w.name,
-            slug=w.slug,
-            status=w.status,
-            role=m.role,
-        )
-        for w, m in pairs
-    ]
+    summaries = [workspace_summary_out(w, m) for w, m in pairs]
 
     current: WorkspaceSummaryOut | None = None
-    membership_out: MembershipOut | None = None
+    membership_out_row: MembershipOut | None = None
     try:
         if hint.workspace_id is not None:
             w, m = ws_svc.get_workspace_for_user(hint.workspace_id, user.id)
@@ -209,17 +202,15 @@ def me(
         else:
             w = m = None  # type: ignore[assignment]
         if w is not None and m is not None:
-            current = WorkspaceSummaryOut(
-                id=w.id, name=w.name, slug=w.slug, status=w.status, role=m.role
-            )
-            membership_out = MembershipOut.model_validate(m)
+            current = workspace_summary_out(w, m)
+            membership_out_row = membership_out(m)
     except AppError:
         current = None
-        membership_out = None
+        membership_out_row = None
 
     return MeResponse(
         user=UserOut.model_validate(user),
         workspaces=summaries,
         current_workspace=current,
-        membership=membership_out,
+        membership=membership_out_row,
     )

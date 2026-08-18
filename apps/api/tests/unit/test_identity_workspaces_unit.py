@@ -8,8 +8,9 @@ from app.common.workspace_resolver import extract_subdomain_slug, resolve_worksp
 from app.core.config import Settings
 from app.core.errors import AppError, ErrorCategory
 from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
-from app.workspaces.models import WorkspaceRole
+from app.workspaces.permissions import ADMIN_PERMISSION_KEYS, MEMBER_PERMISSION_KEYS
 from app.workspaces.service import _is_slug_unique_violation
+from tests.support.rbac import fake_membership
 from app.workspaces.slug import validate_workspace_slug
 
 
@@ -62,22 +63,25 @@ def test_x_workspace_slug_local_only() -> None:
 
 
 def test_workspace_policy_matrix() -> None:
-    assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.READ_WORKSPACE)
-    assert not WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.UPDATE_WORKSPACE)
-    assert WorkspacePolicy.can(WorkspaceRole.ADMIN, WorkspaceAction.MANAGE_MEMBERS)
-    assert not WorkspacePolicy.can(WorkspaceRole.ADMIN, WorkspaceAction.PROMOTE_TO_OWNER)
-    assert WorkspacePolicy.can(WorkspaceRole.OWNER, WorkspaceAction.DELETE_WORKSPACE)
-    # Phase 2A document actions available to members
-    assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.UPLOAD_DOCUMENT)
-    assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.LIST_DOCUMENTS)
-    assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.DELETE_DOCUMENT)
-    assert WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.UPDATE_DOCUMENT)
-    assert WorkspacePolicy.can(WorkspaceRole.OWNER, WorkspaceAction.MANAGE_API_KEYS)
-    assert WorkspacePolicy.can(WorkspaceRole.ADMIN, WorkspaceAction.MANAGE_API_KEYS)
-    assert not WorkspacePolicy.can(WorkspaceRole.MEMBER, WorkspaceAction.MANAGE_API_KEYS)
+    member = fake_membership(keys=MEMBER_PERMISSION_KEYS)
+    admin = fake_membership(keys=ADMIN_PERMISSION_KEYS)
+    owner = fake_membership(is_owner=True)
+
+    assert WorkspacePolicy.can(member, WorkspaceAction.READ_WORKSPACE)
+    assert not WorkspacePolicy.can(member, WorkspaceAction.UPDATE_WORKSPACE)
+    assert WorkspacePolicy.can(admin, WorkspaceAction.MANAGE_MEMBERS)
+    assert not WorkspacePolicy.can(admin, WorkspaceAction.PROMOTE_TO_OWNER)
+    assert WorkspacePolicy.can(owner, WorkspaceAction.DELETE_WORKSPACE)
+    assert WorkspacePolicy.can(member, WorkspaceAction.UPLOAD_DOCUMENT)
+    assert WorkspacePolicy.can(member, WorkspaceAction.LIST_DOCUMENTS)
+    assert WorkspacePolicy.can(member, WorkspaceAction.DELETE_DOCUMENT)
+    assert WorkspacePolicy.can(member, WorkspaceAction.UPDATE_DOCUMENT)
+    assert WorkspacePolicy.can(owner, WorkspaceAction.MANAGE_API_KEYS)
+    assert WorkspacePolicy.can(admin, WorkspaceAction.MANAGE_API_KEYS)
+    assert not WorkspacePolicy.can(member, WorkspaceAction.MANAGE_API_KEYS)
 
     with pytest.raises(AppError):
-        WorkspacePolicy.require(WorkspaceRole.MEMBER, WorkspaceAction.DELETE_WORKSPACE)
+        WorkspacePolicy.require(member, WorkspaceAction.DELETE_WORKSPACE)
 
 
 class _FakePgOrig:

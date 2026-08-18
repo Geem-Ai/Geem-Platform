@@ -6,8 +6,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { MembersPage } from './MembersPage';
 import { queryKeys } from '@/services/api/query-keys';
+import { ALL_PERMISSION_KEYS, WorkspacePermission } from '@/features/authz/permissions';
+import type { RoleSummary } from '@/services/api/types';
 
-const workspaceState = { id: 'ws-a', role: 'owner' as string };
+function roleSummary(key: 'owner' | 'admin' | 'member'): RoleSummary {
+  return {
+    id: `role-${key}`,
+    name: key === 'admin' ? 'Administrator' : key === 'owner' ? 'Owner' : 'Member',
+    is_system: true,
+    is_owner_role: key === 'owner',
+    system_key: key,
+  };
+}
+
+function memberPerms() {
+  return [WorkspacePermission.MEMBERS_VIEW];
+}
+
+function adminPerms() {
+  return [
+    WorkspacePermission.MEMBERS_VIEW,
+    WorkspacePermission.MEMBERS_INVITE,
+    WorkspacePermission.MEMBERS_UPDATE_ROLE,
+    WorkspacePermission.MEMBERS_REMOVE,
+    WorkspacePermission.ROLES_VIEW,
+    WorkspacePermission.ROLES_MANAGE,
+  ];
+}
+
+const workspaceState = {
+  id: 'ws-a',
+  role: roleSummary('owner'),
+  permissions: [...ALL_PERMISSION_KEYS] as string[],
+};
 const authState = { id: 'u-owner', email: 'owner@example.com' };
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
@@ -17,6 +48,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       name: 'Acme',
       slug: 'acme',
       role: workspaceState.role,
+      permissions: workspaceState.permissions,
     },
     currentMembership: {
       id: 'm1',
@@ -24,6 +56,7 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       user_id: authState.id,
       role: workspaceState.role,
       created_at: '2026-01-01T00:00:00Z',
+      permissions: workspaceState.permissions,
     },
   }),
 }));
@@ -43,6 +76,9 @@ const listWorkspaceInvitations = vi.fn();
 const createWorkspaceInvitation = vi.fn();
 const resendWorkspaceInvitation = vi.fn();
 const revokeWorkspaceInvitation = vi.fn();
+const listAssignableRoles = vi.fn();
+const listWorkspaceRoles = vi.fn();
+const listWorkspacePermissions = vi.fn();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
 
@@ -55,6 +91,19 @@ vi.mock('@/services/api/workspaces', async () => {
     listMembers: (...args: unknown[]) => listMembers(...args),
     updateMemberRole: (...args: unknown[]) => updateMemberRole(...args),
     removeMember: (...args: unknown[]) => removeMember(...args),
+  };
+});
+
+vi.mock('@/services/api/roles', async () => {
+  const actual = await vi.importActual<typeof import('@/services/api/roles')>(
+    '@/services/api/roles',
+  );
+  return {
+    ...actual,
+    listAssignableRoles: (...args: unknown[]) => listAssignableRoles(...args),
+    listWorkspaceRoles: (...args: unknown[]) => listWorkspaceRoles(...args),
+    listWorkspacePermissions: (...args: unknown[]) =>
+      listWorkspacePermissions(...args),
   };
 });
 
@@ -88,18 +137,25 @@ function renderPage() {
 
 describe('MembersPage', () => {
   beforeEach(async () => {
-    workspaceState.role = 'owner';
+    workspaceState.role = roleSummary('owner');
+    workspaceState.permissions = [...ALL_PERMISSION_KEYS];
     listMembers.mockReset();
     listWorkspaceInvitations.mockReset();
     createWorkspaceInvitation.mockReset();
     resendWorkspaceInvitation.mockReset();
     revokeWorkspaceInvitation.mockReset();
+    listAssignableRoles.mockReset();
+    listWorkspaceRoles.mockReset();
+    listWorkspacePermissions.mockReset();
+    const ownerRole = roleSummary('owner');
+    const adminRole = roleSummary('admin');
+    const memberRole = roleSummary('member');
     listMembers.mockResolvedValue([
       {
         id: 'mem-1',
         user_id: 'u-owner',
         email: 'owner@example.com',
-        role: 'owner',
+        role: ownerRole,
         created_at: '2026-01-01T00:00:00Z',
       },
     ]);
@@ -109,7 +165,7 @@ describe('MembersPage', () => {
           id: 'inv-1',
           workspace_id: 'ws-a',
           email: 'new@example.com',
-          role: 'member',
+          role: memberRole,
           status: 'pending',
           expires_at: '2026-08-21T12:00:00Z',
           created_at: '2026-08-18T12:00:00Z',
@@ -120,6 +176,15 @@ describe('MembersPage', () => {
       limit: 50,
       offset: 0,
     });
+    listAssignableRoles.mockResolvedValue({ items: [adminRole, memberRole] });
+    listWorkspaceRoles.mockResolvedValue({
+      items: [
+        { ...ownerRole, description: null, assigned_count: 1, permissions: [] },
+        { ...adminRole, description: null, assigned_count: 0, permissions: [] },
+        { ...memberRole, description: null, assigned_count: 0, permissions: [] },
+      ],
+    });
+    listWorkspacePermissions.mockResolvedValue({ items: [] });
     await i18n.changeLanguage('en');
   });
 
@@ -132,26 +197,28 @@ describe('MembersPage', () => {
     expect(await screen.findByTestId('invite-member-button')).toBeInTheDocument();
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(await screen.findByText('new@example.com')).toBeInTheDocument();
-    expect(screen.getByTestId('role-matrix')).toBeInTheDocument();
+    expect(screen.getByTestId('members-tabs')).toBeInTheDocument();
     expect(screen.getByTestId('role-badge-owner')).toBeInTheDocument();
     expect(screen.getByText('1 person')).toBeInTheDocument();
     expect(queryKeys.invitations('ws-a')[1]).toBe('ws-a');
   });
 
   it('lets an admin invite', async () => {
-    workspaceState.role = 'admin';
+    workspaceState.role = roleSummary('admin');
+    workspaceState.permissions = adminPerms();
     renderPage();
     expect(await screen.findByTestId('invite-member-button')).toBeInTheDocument();
     expect(await screen.findByTestId('pending-invitations')).toBeInTheDocument();
   });
 
   it('hides invite and pending management for members', async () => {
-    workspaceState.role = 'member';
+    workspaceState.role = roleSummary('member');
+    workspaceState.permissions = memberPerms();
     renderPage();
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(screen.queryByTestId('invite-member-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('pending-invitations')).not.toBeInTheDocument();
-    expect(screen.getByTestId('role-matrix')).toBeInTheDocument();
+    expect(screen.queryByTestId('roles-tab')).not.toBeInTheDocument();
   });
 
   it('validates email and does not offer owner as an invite role', async () => {
@@ -184,7 +251,7 @@ describe('MembersPage', () => {
       id: 'inv-2',
       workspace_id: 'ws-a',
       email: 'ok@example.com',
-      role: 'admin',
+      role: roleSummary('admin'),
       status: 'pending',
       expires_at: '2026-08-21T12:00:00Z',
       created_at: '2026-08-18T12:00:00Z',
@@ -197,7 +264,7 @@ describe('MembersPage', () => {
     await waitFor(() => {
       expect(createWorkspaceInvitation).toHaveBeenCalledWith('ws-a', {
         email: 'ok@example.com',
-        role: 'admin',
+        role_id: 'role-admin',
       });
     });
   });
@@ -223,9 +290,9 @@ describe('MembersPage', () => {
       id: 'inv-1',
       workspace_id: 'ws-a',
       email: 'new@example.com',
-      role: 'member',
-      status: 'pending',
-      expires_at: '2026-08-22T12:00:00Z',
+          role: roleSummary('member'),
+          status: 'pending',
+          expires_at: '2026-08-22T12:00:00Z',
       created_at: '2026-08-18T12:00:00Z',
       invited_by: { id: 'u-owner', email: 'owner@example.com' },
     });
@@ -242,12 +309,10 @@ describe('MembersPage', () => {
     });
   });
 
-  it('renders Arabic role matrix labels', async () => {
+  it('renders Arabic members/roles tabs', async () => {
     await i18n.changeLanguage('ar');
     renderPage();
-    expect(await screen.findByTestId('role-matrix')).toHaveTextContent(
-      i18n.t('members.matrix.manageMembers'),
-    );
+    expect(await screen.findByTestId('roles-tab')).toHaveTextContent('الأدوار');
     expect(document.documentElement.dir).toBe('rtl');
     expect(screen.getByRole('heading', { name: 'الأعضاء' })).toBeInTheDocument();
   });

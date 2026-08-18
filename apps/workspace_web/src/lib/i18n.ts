@@ -33,4 +33,17 @@ i18n.on('languageChanged', (lng) => {
   applyDocumentLocale(lng === 'ar' ? 'ar' : 'en');
 });
 
+if (import.meta.hot) {
+  import.meta.hot.accept('../locales/en.json', (mod) => {
+    if (mod?.default) {
+      i18n.addResourceBundle('en', 'translation', mod.default, true, true);
+    }
+  });
+  import.meta.hot.accept('../locales/ar.json', (mod) => {
+    if (mod?.default) {
+      i18n.addResourceBundle('ar', 'translation', mod.default, true, true);
+    }
+  });
+}
+
 export default i18n;

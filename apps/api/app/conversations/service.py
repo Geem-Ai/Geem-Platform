@@ -57,7 +57,7 @@ class ConversationService:
         expert_id: uuid.UUID,
         title: str | None = None,
     ) -> Conversation:
-        ConversationPolicy.require(membership.role, ConversationAction.CREATE)
+        ConversationPolicy.require(membership, ConversationAction.CREATE)
 
         # Resolve Expert through existing access layer (Workspace + Platform grants).
         auth = self.expert_access.resolve_for_workspace(
@@ -88,7 +88,7 @@ class ConversationService:
         limit: int | None = 100,
         offset: int = 0,
     ) -> list[ConversationOut]:
-        ConversationPolicy.require(membership.role, ConversationAction.VIEW)
+        ConversationPolicy.require(membership, ConversationAction.VIEW)
         rows = self.repo.list_for_user(
             workspace_id=workspace.id,
             user_id=actor.id,
@@ -105,7 +105,7 @@ class ConversationService:
         actor: User,
         conversation_id: uuid.UUID,
     ) -> ConversationOut:
-        ConversationPolicy.require(membership.role, ConversationAction.VIEW)
+        ConversationPolicy.require(membership, ConversationAction.VIEW)
         conversation = self._require_owned(
             conversation_id=conversation_id,
             workspace_id=workspace.id,
@@ -126,7 +126,7 @@ class ConversationService:
         is_pinned: bool | None = None,
         is_favorite: bool | None = None,
     ) -> Conversation:
-        ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
+        ConversationPolicy.require(membership, ConversationAction.UPDATE)
         conversation = self._require_owned(
             conversation_id=conversation_id,
             workspace_id=workspace.id,
@@ -171,7 +171,7 @@ class ConversationService:
         actor: User,
         conversation_id: uuid.UUID,
     ) -> None:
-        ConversationPolicy.require(membership.role, ConversationAction.DELETE)
+        ConversationPolicy.require(membership, ConversationAction.DELETE)
         conversation = self._require_owned(
             conversation_id=conversation_id,
             workspace_id=workspace.id,
@@ -189,7 +189,7 @@ class ConversationService:
         actor: User,
     ) -> int:
         """Soft-delete all of the actor's conversations in this workspace."""
-        ConversationPolicy.require(membership.role, ConversationAction.DELETE)
+        ConversationPolicy.require(membership, ConversationAction.DELETE)
         deleted = self.repo.soft_delete_all_for_user(
             workspace_id=workspace.id,
             user_id=actor.id,
@@ -207,7 +207,7 @@ class ConversationService:
         limit: int | None = None,
         offset: int = 0,
     ) -> list[MessageOut]:
-        ConversationPolicy.require(membership.role, ConversationAction.LIST_MESSAGES)
+        ConversationPolicy.require(membership, ConversationAction.LIST_MESSAGES)
         conversation = self._require_owned(
             conversation_id=conversation_id,
             workspace_id=workspace.id,
@@ -243,7 +243,7 @@ class ConversationService:
         must not reassign ``expert_id``; selecting another Expert starts a new
         Conversation.
         """
-        ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
+        ConversationPolicy.require(membership, ConversationAction.UPDATE)
         conversation = self._require_owned(
             conversation_id=conversation_id,
             workspace_id=workspace.id,

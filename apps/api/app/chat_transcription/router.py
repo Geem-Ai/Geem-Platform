@@ -44,7 +44,7 @@ async def transcribe_chat_audio(
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> ChatTranscribeOut:
-    ConversationPolicy.require(access.membership.role, ConversationAction.CREATE)
+    ConversationPolicy.require(access.membership, ConversationAction.CREATE)
     settings = get_settings()
     data = await _read_upload_capped(file, settings.chat_transcribe_max_bytes)
     result = ChatTranscriptionService(db, settings).transcribe(

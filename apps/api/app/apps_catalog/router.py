@@ -36,7 +36,7 @@ def list_categories(
     db: Session = Depends(get_db),
 ) -> list[AppCategoryOut]:
     workspace, membership = pair
-    require_browse(membership.role)
+    require_browse(membership)
     _ = workspace
     return AppCatalogService(db).list_categories()
 
@@ -49,10 +49,10 @@ def list_installations(
     db: Session = Depends(get_db),
 ) -> AppInstallationListOut:
     workspace, membership = pair
-    require_browse(membership.role)
+    require_browse(membership)
     return AppInstallationService(db).list_installations(
         workspace=workspace,
-        role=membership.role,
+        membership=membership,
         limit=limit,
         offset=offset,
     )
@@ -65,10 +65,10 @@ def get_installation(
     db: Session = Depends(get_db),
 ) -> AppInstallationOut:
     workspace, membership = pair
-    require_browse(membership.role)
+    require_browse(membership)
     return AppInstallationService(db).get_installation(
         workspace=workspace,
-        role=membership.role,
+        membership=membership,
         installation_id=installation_id,
     )
 
@@ -85,10 +85,10 @@ def list_apps(
     db: Session = Depends(get_db),
 ) -> CatalogAppListOut:
     workspace, membership = pair
-    require_browse(membership.role)
+    require_browse(membership)
     return AppCatalogService(db).list_apps(
         workspace=workspace,
-        role=membership.role,
+        membership=membership,
         category=category,
         billing_type=billing_type,
         installed=installed,
@@ -105,10 +105,10 @@ def get_app(
     db: Session = Depends(get_db),
 ) -> CatalogAppOut:
     workspace, membership = pair
-    require_browse(membership.role)
+    require_browse(membership)
     return AppCatalogService(db).get_app(
         workspace=workspace,
-        role=membership.role,
+        membership=membership,
         slug=app_slug,
     )
 
@@ -123,7 +123,7 @@ def checkout_app(
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
     workspace, membership = pair
-    require_manage_apps(membership.role)
+    require_manage_apps(membership)
     purchase, _token = AppCommerceService(db).create_checkout(
         workspace,
         user,
@@ -146,7 +146,7 @@ def renew_app(
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
     workspace, membership = pair
-    require_manage_apps(membership.role)
+    require_manage_apps(membership)
     plan_id = body.plan_id if body else None
     purchase, _token = AppCommerceService(db).create_renewal_checkout(
         workspace,
@@ -167,7 +167,7 @@ def install_app(
     db: Session = Depends(get_db),
 ) -> AppInstallationOut:
     workspace, membership = pair
-    require_manage_apps(membership.role)
+    require_manage_apps(membership)
     return AppInstallationService(db).install_app(
         workspace=workspace,
         actor_id=membership.user_id,
@@ -182,7 +182,7 @@ def uninstall_app(
     db: Session = Depends(get_db),
 ) -> AppInstallationOut:
     workspace, membership = pair
-    require_manage_apps(membership.role)
+    require_manage_apps(membership)
     return AppInstallationService(db).uninstall_app(
         workspace=workspace,
         actor_id=membership.user_id,

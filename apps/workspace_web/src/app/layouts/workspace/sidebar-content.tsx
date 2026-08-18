@@ -21,6 +21,9 @@ import { QuickActions } from '@/features/chat/components/QuickActions';
 import { useConversations } from '@/features/chat/hooks/useConversations';
 import { useLayout } from './context';
 import { workspaceNav, type NavItem } from './nav-config';
+import { filterNavByPermissions } from '@/features/authz/filter-nav';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 
 const navItemClass = (
   collapsed: boolean,
@@ -110,6 +113,7 @@ function NavLinkItem({
       // /billing/* child as active under a shared prefix.
       end={nested}
       className={({ isActive }) => navItemClass(collapsed, nested, isActive)}
+      data-testid={`nav-item-${item.id}`}
     >
       <Icon className="size-4 shrink-0" />
       {!collapsed && <span className="min-w-0 truncate">{label}</span>}
@@ -130,6 +134,8 @@ function NavLinkItem({
 
 function WorkspaceNav({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation();
+  const { permissions } = usePermissions();
+  const items = filterNavByPermissions(workspaceNav, permissions);
 
   return (
     <nav
@@ -137,7 +143,7 @@ function WorkspaceNav({ collapsed }: { collapsed: boolean }) {
       aria-label={t('shell.workspaceSettings')}
       data-testid="workspace-nav"
     >
-      {workspaceNav.map((item) => {
+      {items.map((item) => {
         const isGroup = Boolean(item.children?.length);
 
         return (
@@ -262,8 +268,11 @@ function ChatHistorySections({ collapsed }: { collapsed: boolean }) {
 export function SidebarContent() {
   const { i18n } = useTranslation();
   const { isSidebarOpen, sidebarMode } = useLayout();
+  const { can } = usePermissions();
   const collapsed = !isSidebarOpen;
   const dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
+  const canChat = can(WorkspacePermission.CHAT_USE);
+  const mode = canChat ? sidebarMode : 'workspace';
 
   return (
     <div
@@ -272,16 +281,18 @@ export function SidebarContent() {
     >
       <div
         className="flex flex-col gap-1 py-2 min-w-0 w-full max-w-full"
-        data-testid={`sidebar-mode-${sidebarMode}`}
+        data-testid={`sidebar-mode-${mode}`}
       >
-        {sidebarMode === 'chat' ? (
+        {mode === 'chat' ? (
           <ChatHistorySections collapsed={collapsed} />
         ) : (
           <div className="space-y-1 min-w-0 w-full">
-            <div className="px-2.5 pb-1">
-              <BackToChats collapsed={collapsed} />
-            </div>
-            <Separator className="mx-2.5 my-1 opacity-80" />
+            {canChat ? (
+              <div className="px-2.5 pb-1">
+                <BackToChats collapsed={collapsed} />
+              </div>
+            ) : null}
+            {canChat ? <Separator className="mx-2.5 my-1 opacity-80" /> : null}
             <WorkspaceNav collapsed={collapsed} />
           </div>
         )}

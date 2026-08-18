@@ -40,7 +40,6 @@ from app.usage.ai_usage import AiUsageService
 from app.usage.attribution import GenerationUsageContext
 from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace, WorkspaceMembership
-from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +74,7 @@ class ChatOrchestrator:
         attachment_id: uuid.UUID | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Persist user + assistant messages and stream Expert-scoped RAG."""
-        WorkspacePolicy.require(membership.role, WorkspaceAction.READ_DOCUMENT)
-        ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
+        ConversationPolicy.require(membership, ConversationAction.UPDATE)
 
         turn_attachment = None
         if attachment_id is not None:
@@ -358,8 +356,7 @@ class ChatOrchestrator:
         Creates a **new** assistant message after the failed one. Only the latest
         assistant message in the conversation may be retried.
         """
-        WorkspacePolicy.require(membership.role, WorkspaceAction.READ_DOCUMENT)
-        ConversationPolicy.require(membership.role, ConversationAction.UPDATE)
+        ConversationPolicy.require(membership, ConversationAction.UPDATE)
 
         conversation = self._require_owned(
             conversation_id=conversation_id,

@@ -48,7 +48,7 @@ def create_invitation(
         workspace_id=workspace_id,
         actor_id=user.id,
         email=body.email,
-        role=body.role,
+        role_id=body.role_id,
     )
     return to_invitation_out(row)
 
@@ -119,16 +119,20 @@ def accept_invitation(
     user: User = Depends(get_current_user),
     svc: InvitationService = Depends(get_invitation_service),
 ) -> InvitationAcceptOut:
+    from app.workspaces.schemas import to_role_summary
+
     invitation, membership, workspace, already_member = svc.accept(
         user=user,
         raw_token=body.token,
     )
+    summary = to_role_summary(membership.workspace_role)
+    assert summary is not None
     return InvitationAcceptOut(
         invitation_id=invitation.id,
         workspace_id=workspace.id,
         workspace_name=workspace.name,
         workspace_slug=workspace.slug,
-        role=membership.role,
+        role=summary,
         membership_id=membership.id,
         already_member=already_member,
     )

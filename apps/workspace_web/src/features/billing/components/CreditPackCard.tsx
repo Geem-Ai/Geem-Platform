@@ -7,11 +7,13 @@ import { MoneyAmount } from './MoneyAmount';
 
 export function CreditPackCard({
   pack,
+  canCheckout = true,
   checkoutDisabled,
   checkoutPending,
   onBuy,
 }: {
   pack: CreditPack;
+  canCheckout?: boolean;
   checkoutDisabled?: boolean;
   checkoutPending?: boolean;
   onBuy: (pack: CreditPack) => void;
@@ -37,14 +39,16 @@ export function CreditPackCard({
             <MoneyAmount amount={pack.price_amount} currency={pack.currency} />
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => onBuy(pack)}
-          disabled={checkoutDisabled || checkoutPending}
-          data-testid="billing-pack-cta"
-        >
-          {t('billing.buyPack')}
-        </Button>
+        {canCheckout ? (
+          <Button
+            type="button"
+            onClick={() => onBuy(pack)}
+            disabled={checkoutDisabled || checkoutPending}
+            data-testid="billing-pack-cta"
+          >
+            {t('billing.buyPack')}
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );

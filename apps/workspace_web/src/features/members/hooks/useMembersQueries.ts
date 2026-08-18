@@ -5,8 +5,15 @@ import {
   listWorkspaceInvitations,
   resendWorkspaceInvitation,
   revokeWorkspaceInvitation,
-  type InvitationRole,
 } from '@/services/api/invitations';
+import {
+  createWorkspaceRole,
+  deleteWorkspaceRole,
+  listAssignableRoles,
+  listWorkspacePermissions,
+  listWorkspaceRoles,
+  updateWorkspaceRole,
+} from '@/services/api/roles';
 import { listMembers, removeMember, updateMemberRole } from '@/services/api/workspaces';
 import { queryKeys } from '@/services/api/query-keys';
 
@@ -33,19 +40,42 @@ export function usePendingInvitations(options?: { enabled?: boolean }) {
   });
 }
 
+export function useWorkspaceRoles(options?: { enabled?: boolean }) {
+  const workspaceId = useWorkspaceId();
+  return useQuery({
+    queryKey: queryKeys.roles(workspaceId),
+    queryFn: () => listWorkspaceRoles(workspaceId),
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
+  });
+}
+
+export function useAssignableRoles(options?: { enabled?: boolean }) {
+  const workspaceId = useWorkspaceId();
+  return useQuery({
+    queryKey: queryKeys.assignableRoles(workspaceId),
+    queryFn: () => listAssignableRoles(workspaceId),
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
+  });
+}
+
+export function usePermissionCatalog(options?: { enabled?: boolean }) {
+  const workspaceId = useWorkspaceId();
+  return useQuery({
+    queryKey: queryKeys.permissionCatalog(workspaceId),
+    queryFn: () => listWorkspacePermissions(workspaceId),
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
+  });
+}
+
 export function useUpdateMemberRole() {
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      userId,
-      nextRole,
-    }: {
-      userId: string;
-      nextRole: 'owner' | 'admin' | 'member';
-    }) => updateMemberRole(workspaceId, userId, nextRole),
+    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
+      updateMemberRole(workspaceId, userId, roleId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles(workspaceId) });
     },
   });
 }
@@ -57,6 +87,7 @@ export function useRemoveMember() {
     mutationFn: (userId: string) => removeMember(workspaceId, userId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles(workspaceId) });
     },
   });
 }
@@ -65,7 +96,7 @@ export function useCreateInvitation() {
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { email: string; role: InvitationRole }) =>
+    mutationFn: (input: { email: string; role_id: string }) =>
       createWorkspaceInvitation(workspaceId, input),
     gcTime: 0,
     onSuccess: async () => {
@@ -99,6 +130,61 @@ export function useRevokeInvitation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.invitations(workspaceId),
+      });
+    },
+  });
+}
+
+export function useCreateRole() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      description?: string | null;
+      permissions: string[];
+    }) => createWorkspaceRole(workspaceId, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles(workspaceId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignableRoles(workspaceId),
+      });
+    },
+  });
+}
+
+export function useUpdateRole() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      roleId,
+      ...input
+    }: {
+      roleId: string;
+      name?: string;
+      description?: string | null;
+      permissions?: string[];
+    }) => updateWorkspaceRole(workspaceId, roleId, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles(workspaceId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignableRoles(workspaceId),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    },
+  });
+}
+
+export function useDeleteRole() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (roleId: string) => deleteWorkspaceRole(workspaceId, roleId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles(workspaceId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignableRoles(workspaceId),
       });
     },
   });

@@ -14,15 +14,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.usage.api_activity import DEFAULT_PERIOD, ApiActivityService
 from app.usage.api_activity_schemas import ApiUsageHistoryOut, ApiUsageSummaryOut
-from app.workspaces.dependencies import require_workspace
+from app.workspaces.dependencies import require_workspace_action
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/api-usage", tags=["api-usage"])
 
 
 @router.get("/summary", response_model=ApiUsageSummaryOut)
 def get_api_usage_summary(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.VIEW_API_USAGE)),
     db: Session = Depends(get_db),
     period: str = Query(default=DEFAULT_PERIOD, max_length=8),
 ) -> ApiUsageSummaryOut:
@@ -32,7 +33,7 @@ def get_api_usage_summary(
 
 @router.get("/history", response_model=ApiUsageHistoryOut)
 def get_api_usage_history(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.VIEW_API_USAGE)),
     db: Session = Depends(get_db),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

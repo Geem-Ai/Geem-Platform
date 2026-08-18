@@ -26,15 +26,16 @@ from app.workspaces.invitation_tokens import (
 )
 from app.workspaces.invitation_urls import invitation_accept_url
 from app.workspaces.models import (
-    InvitationRole,
     InvitationStatus,
     Workspace,
     WorkspaceInvitation,
     WorkspaceKind,
     WorkspaceMembership,
+    WorkspaceRoleDef,
     WorkspaceStatus,
 )
-from app.workspaces.policy import WorkspaceAction, WorkspacePolicy
+from app.workspaces.permissions import WorkspacePermission
+from app.workspaces.rbac_service import require_permission
 from app.workspaces.repository import MembershipRepository, WorkspaceRepository
 from app.workspaces.service import WorkspaceService
 
@@ -79,11 +80,11 @@ class InvitationService:
         workspace_id: uuid.UUID,
         actor_id: uuid.UUID,
         email: str,
-        role: str,
+        role_id: uuid.UUID,
     ) -> WorkspaceInvitation:
-        workspace, membership = self._require_manage_members(workspace_id, actor_id)
+        workspace, membership = self._require_invite(workspace_id, actor_id)
         self._require_active_workspace(workspace)
-        invite_role = self._parse_invite_role(role)
+        invite_role = self._require_assignable_role(workspace.id, role_id)
         normalized = self._normalize_invite_email(email)
         self._reject_existing_member(workspace.id, normalized)
 
@@ -103,7 +104,7 @@ class InvitationService:
                 invitation=existing,
                 workspace=workspace,
                 actor_id=actor_id,
-                role=invite_role.value,
+                role_id=invite_role.id,
                 log_event="workspace_invitation_created",
             )
 
@@ -111,7 +112,7 @@ class InvitationService:
         invitation = WorkspaceInvitation(
             workspace_id=workspace.id,
             email=normalized,
-            role=invite_role.value,
+            role_id=invite_role.id,
             token_hash=hash_invitation_token(raw_token, settings=self.settings),
             invited_by=actor_id,
             expires_at=_now() + timedelta(hours=self.settings.effective_workspace_invite_ttl_hours),
@@ -156,7 +157,7 @@ class InvitationService:
         limit: int,
         offset: int,
     ) -> tuple[list[WorkspaceInvitation], int]:
-        self._require_manage_members(workspace_id, actor_id)
+        self._require_invite(workspace_id, actor_id)
         return self.invitations.list_pending(workspace_id, limit=limit, offset=offset)
 
     def resend(
@@ -166,7 +167,7 @@ class InvitationService:
         actor_id: uuid.UUID,
         invitation_id: uuid.UUID,
     ) -> WorkspaceInvitation:
-        workspace, _membership = self._require_manage_members(workspace_id, actor_id)
+        workspace, _membership = self._require_invite(workspace_id, actor_id)
         self._require_active_workspace(workspace)
         invitation = self.invitations.get_by_id_for_workspace(
             workspace.id, invitation_id, for_update=True
@@ -198,7 +199,7 @@ class InvitationService:
         actor_id: uuid.UUID,
         invitation_id: uuid.UUID,
     ) -> None:
-        workspace, _membership = self._require_manage_members(workspace_id, actor_id)
+        workspace, _membership = self._require_invite(workspace_id, actor_id)
         invitation = self.invitations.get_by_id_for_workspace(
             workspace.id, invitation_id, for_update=True
         )
@@ -271,10 +272,13 @@ class InvitationService:
 
         already_member = existing is not None
         if existing is None:
+            invite_role = self._require_assignable_role(
+                invitation.workspace_id, invitation.role_id
+            )
             existing = WorkspaceMembership(
                 workspace_id=invitation.workspace_id,
                 user_id=user.id,
-                role=invitation.role,
+                role_id=invite_role.id,
             )
             try:
                 self.memberships.create(existing)
@@ -334,7 +338,7 @@ class InvitationService:
         workspace: Workspace,
         actor_id: uuid.UUID,
         log_event: str,
-        role: str | None = None,
+        role_id: uuid.UUID | None = None,
     ) -> WorkspaceInvitation:
         raw_token = generate_invitation_token()
         invitation.token_hash = hash_invitation_token(raw_token, settings=self.settings)
@@ -342,8 +346,8 @@ class InvitationService:
             hours=self.settings.effective_workspace_invite_ttl_hours
         )
         invitation.invited_by = actor_id
-        if role is not None:
-            invitation.role = role
+        if role_id is not None:
+            invitation.role_id = role_id
         try:
             self._deliver(invitation, workspace, raw_token, actor_id=actor_id)
             self.db.commit()
@@ -406,14 +410,27 @@ class InvitationService:
         user = UserRepository(self.db).get_by_id(actor_id)
         return user.email if user is not None else None
 
-    def _require_manage_members(
+    def _require_invite(
         self, workspace_id: uuid.UUID, actor_id: uuid.UUID
     ) -> tuple[Workspace, WorkspaceMembership]:
         workspace, membership = self._workspace_svc.get_workspace_for_user(workspace_id, actor_id)
-        WorkspacePolicy.require(membership.role, WorkspaceAction.MANAGE_MEMBERS)
+        require_permission(membership, WorkspacePermission.MEMBERS_INVITE)
         if workspace.kind != WorkspaceKind.TENANT.value:
             raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
         return workspace, membership
+
+    def _require_assignable_role(
+        self, workspace_id: uuid.UUID, role_id: uuid.UUID
+    ) -> WorkspaceRoleDef:
+        role = self.db.get(WorkspaceRoleDef, role_id)
+        if role is None or role.workspace_id != workspace_id:
+            raise AppError(ErrorCategory.ROLE_NOT_FOUND, "Role not found.")
+        if role.is_owner_role:
+            raise AppError(
+                ErrorCategory.ROLE_PROTECTED,
+                "The Owner role cannot be assigned by invitation.",
+            )
+        return role
 
     @staticmethod
     def _require_active_workspace(workspace: Workspace) -> None:
@@ -430,16 +447,6 @@ class InvitationService:
                 ErrorCategory.ALREADY_WORKSPACE_MEMBER,
                 "This email already belongs to a workspace member.",
             )
-
-    @staticmethod
-    def _parse_invite_role(role: str) -> InvitationRole:
-        try:
-            return InvitationRole(role)
-        except ValueError as exc:
-            raise AppError(
-                ErrorCategory.VALIDATION,
-                "Invitation role must be admin or member.",
-            ) from exc
 
     @staticmethod
     def _normalize_invite_email(email: str) -> str:

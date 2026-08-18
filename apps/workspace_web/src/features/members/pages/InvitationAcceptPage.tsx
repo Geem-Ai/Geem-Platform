@@ -62,6 +62,7 @@ function summaryFromAccept(result: InvitationAcceptResult): WorkspaceSummary {
     slug: result.workspace_slug,
     status: 'active',
     role: result.role,
+    permissions: [],
   };
 }
 
@@ -84,7 +85,7 @@ export function InvitationAcceptPage() {
   const [joined, setJoined] = useState<{
     workspace_id: string;
     workspace_name: string;
-    role: string;
+    role: InvitationAcceptResult['role'];
   } | null>(null);
 
   const returnTo = useMemo(
@@ -138,7 +139,7 @@ export function InvitationAcceptPage() {
         await ctx.refreshWorkspaces();
         ctx.selectWorkspace(joinedWorkspace.id, joinedWorkspace);
         setPhase('success');
-        ctx.navigate('/members', { replace: true });
+        ctx.navigate('/', { replace: true });
       } catch (err) {
         if (cancelled) return;
         const next = stateFromError(err);

@@ -26,7 +26,7 @@ import {
   isGooglePickerOpen,
   subscribeGooglePickerOpen,
 } from '@/features/apps/google-drive/picker';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import {
   canAskExpert,
@@ -66,8 +66,7 @@ export function ExpertDetailSheet({
   onDeleted,
 }: ExpertDetailSheetProps) {
   const { t } = useTranslation();
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
+  const { can } = usePermissions();
 
   const expertQuery = useExpert(open ? expertId : undefined);
   const expert = expertQuery.data;
@@ -95,12 +94,12 @@ export function ExpertDetailSheet({
     }
   }
 
-  const canEdit = expert ? canEditExpert(role, expert.ownership) : false;
-  const canDelete = expert ? canDeleteExpert(role, expert.ownership) : false;
+  const canEdit = expert ? canEditExpert(can, expert.ownership) : false;
+  const canDelete = expert ? canDeleteExpert(can, expert.ownership) : false;
   const canManageKnowledge = expert
-    ? canManageExpertKnowledge(role, expert.ownership)
+    ? canManageExpertKnowledge(can, expert.ownership)
     : false;
-  const canAsk = expert ? canAskExpert(expert.status) : false;
+  const canAsk = expert ? canAskExpert(can, expert.status) : false;
   const display = expert ? localizeExpertDisplay(expert, t) : null;
 
   function handleDelete() {

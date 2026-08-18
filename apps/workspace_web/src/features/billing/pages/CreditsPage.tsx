@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { useUsageSummary } from '@/features/usage/hooks/useUsageQueries';
 import { formatCount } from '@/features/usage/lib/quota';
 import type { CreditPack } from '@/services/api/billing';
@@ -47,6 +49,8 @@ function PageSkeleton() {
 
 export function CreditsPage() {
   const { t, i18n } = useTranslation();
+  const { can } = usePermissions();
+  const canCheckout = can(WorkspacePermission.BILLING_PURCHASE_CREDITS);
   const summaryQuery = useUsageSummary();
   const packsQuery = useCreditPacks();
   const checkout = useCreditPackCheckout();
@@ -153,6 +157,7 @@ export function CreditsPage() {
                   <CreditPackCard
                     key={pack.id}
                     pack={pack}
+                    canCheckout={canCheckout}
                     checkoutDisabled={gatewayUnavailable}
                     checkoutPending={checkout.isPending}
                     onBuy={(next) => {

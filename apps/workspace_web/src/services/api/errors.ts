@@ -22,6 +22,11 @@ export type ApiErrorCode =
   | 'workspace_access_denied'
   | 'insufficient_workspace_role'
   | 'last_workspace_owner'
+  | 'unknown_permission'
+  | 'role_not_found'
+  | 'role_in_use'
+  | 'role_protected'
+  | 'role_name_taken'
   | 'document_not_found'
   | 'document_already_exists'
   | 'document_deleted'
@@ -160,6 +165,11 @@ const KNOWN_CODES = new Set<string>([
   'workspace_access_denied',
   'insufficient_workspace_role',
   'last_workspace_owner',
+  'unknown_permission',
+  'role_not_found',
+  'role_in_use',
+  'role_protected',
+  'role_name_taken',
   'document_not_found',
   'document_already_exists',
   'document_deleted',
@@ -339,6 +349,11 @@ export function errorMessageKey(code: string): string {
     workspace_access_denied: 'errors.workspaceAccessDenied',
     insufficient_workspace_role: 'errors.insufficientRole',
     last_workspace_owner: 'errors.lastWorkspaceOwner',
+    unknown_permission: 'errors.unknownPermission',
+    role_not_found: 'errors.roleNotFound',
+    role_in_use: 'errors.roleInUse',
+    role_protected: 'errors.roleProtected',
+    role_name_taken: 'errors.roleNameTaken',
     rate_limited: 'errors.rateLimited',
     network: 'errors.network',
     validation: 'errors.validation',

@@ -4,17 +4,16 @@ import { ArrowLeft, RefreshCw, Store } from 'lucide-react';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { canManageWorkspace } from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import { InstalledAppCard } from '../components/InstalledAppCard';
 import { useAppInstallations } from '../hooks/useAppsQueries';
 
 export function InstalledAppsPage() {
   const { t } = useTranslation();
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canManage = canManageWorkspace(role);
+  const { can } = usePermissions();
+  const canManage = can(WorkspacePermission.APPS_MANAGE);
   const query = useAppInstallations();
 
   const error =

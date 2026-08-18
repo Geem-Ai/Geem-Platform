@@ -11,26 +11,26 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { WorkspacePermission } from '@/features/authz/permissions';
+import { usePermissions } from '@/features/authz/usePermissions';
 import { ConfirmMemberRemoveDialog } from '@/features/members/components/ConfirmMemberRemoveDialog';
 import { ConfirmRevokeInvitationDialog } from '@/features/members/components/ConfirmRevokeInvitationDialog';
 import { InviteMemberDialog } from '@/features/members/components/InviteMemberDialog';
 import { MembersTable } from '@/features/members/components/MembersTable';
 import { PendingInvitations } from '@/features/members/components/PendingInvitations';
-import { RoleMatrix } from '@/features/members/components/RoleMatrix';
+import { RolesPanel } from '@/features/members/components/RolesPanel';
 import {
+  useAssignableRoles,
   useMembersList,
   usePendingInvitations,
   useRemoveMember,
   useResendInvitation,
   useRevokeInvitation,
   useUpdateMemberRole,
+  useWorkspaceRoles,
 } from '@/features/members/hooks/useMembersQueries';
-import {
-  canManageMembers,
-  canPromoteToOwner,
-} from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { WorkspaceInvitationSummary } from '@/services/api/invitations';
 import type { Member } from '@/services/api/types';
@@ -48,12 +48,21 @@ function ListSkeleton({ testId }: { testId: string }) {
 export function MembersPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { currentWorkspace, currentMembership } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canManage = canManageMembers(role);
+  const { can } = usePermissions();
+  const canViewMembers = can(WorkspacePermission.MEMBERS_VIEW);
+  const canInvite = can(WorkspacePermission.MEMBERS_INVITE);
+  const canChangeRole = can(WorkspacePermission.MEMBERS_UPDATE_ROLE);
+  const canRemove = can(WorkspacePermission.MEMBERS_REMOVE);
+  const canAssignOwner = can(WorkspacePermission.MEMBERS_PROMOTE_OWNER);
+  const canViewRoles = can(WorkspacePermission.ROLES_VIEW);
+  const canManageRoles = can(WorkspacePermission.ROLES_MANAGE);
 
-  const membersQuery = useMembersList();
-  const invitationsQuery = usePendingInvitations({ enabled: canManage });
+  const membersQuery = useMembersList({ enabled: canViewMembers });
+  const invitationsQuery = usePendingInvitations({ enabled: canInvite });
+  const assignableQuery = useAssignableRoles({
+    enabled: canInvite || canChangeRole,
+  });
+  const rolesQuery = useWorkspaceRoles({ enabled: canViewRoles || canChangeRole });
   const roleMutation = useUpdateMemberRole();
   const removeMutation = useRemoveMember();
   const resendMutation = useResendInvitation();
@@ -65,13 +74,9 @@ export function MembersPage() {
     null,
   );
 
-  function handleRoleChange(userId: string, nextRole: 'owner' | 'admin' | 'member') {
-    if (nextRole === 'owner' && !canPromoteToOwner(role)) {
-      toast.error(t('errors.insufficientRole'));
-      return;
-    }
+  function handleRoleChange(userId: string, roleId: string) {
     roleMutation.mutate(
-      { userId, nextRole },
+      { userId, roleId },
       {
         onSuccess: () => toast.success(t('members.roleUpdated')),
         onError: (err: unknown) => {
@@ -122,6 +127,9 @@ export function MembersPage() {
 
   const members = membersQuery.data ?? [];
   const invitations = invitationsQuery.data?.items ?? [];
+  const assignableRoles = assignableQuery.data?.items ?? [];
+  const ownerRole = (rolesQuery.data?.items ?? []).find((row) => row.is_owner_role) ?? null;
+  const defaultTab = canViewMembers ? 'members' : 'roles';
 
   return (
     <div
@@ -141,7 +149,7 @@ export function MembersPage() {
             {t('members.description')}
           </p>
         </div>
-        {canManage ? (
+        {canInvite ? (
           <Button
             type="button"
             onClick={() => setInviteOpen(true)}
@@ -153,75 +161,99 @@ export function MembersPage() {
         ) : null}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('members.listTitle')}</CardTitle>
-          <CardDescription>
-            {t(
-              members.length === 1 ? 'members.memberCountOne' : 'members.memberCount',
-              { count: members.length },
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          {membersQuery.isLoading ? <ListSkeleton testId="members-loading" /> : null}
-          {membersQuery.isError ? (
-            <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
+      <Tabs defaultValue={defaultTab}>
+        <TabsList data-testid="members-tabs">
+          {canViewMembers ? (
+            <TabsTrigger value="members">{t('members.tabs.members')}</TabsTrigger>
           ) : null}
-          {!membersQuery.isLoading && !membersQuery.isError ? (
-            <MembersTable
-              members={members}
-              currentUserId={user?.id}
-              actorRole={role}
-              canManage={canManage}
-              busy={roleMutation.isPending || removeMutation.isPending}
-              onChangeRole={handleRoleChange}
-              onRemove={setRemoveTarget}
-            />
+          {canViewRoles ? (
+            <TabsTrigger value="roles" data-testid="roles-tab">
+              {t('members.tabs.roles')}
+            </TabsTrigger>
           ) : null}
-        </CardContent>
-      </Card>
+        </TabsList>
+        {canViewMembers ? (
+          <TabsContent value="members" className="space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('members.listTitle')}</CardTitle>
+                <CardDescription>
+                  {t(
+                    members.length === 1
+                      ? 'members.memberCountOne'
+                      : 'members.memberCount',
+                    { count: members.length },
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-0 pb-0">
+                {membersQuery.isLoading ? <ListSkeleton testId="members-loading" /> : null}
+                {membersQuery.isError ? (
+                  <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
+                ) : null}
+                {!membersQuery.isLoading && !membersQuery.isError ? (
+                  <MembersTable
+                    members={members}
+                    currentUserId={user?.id}
+                    assignableRoles={assignableRoles}
+                    ownerRole={ownerRole}
+                    canChangeRole={canChangeRole}
+                    canRemove={canRemove}
+                    canAssignOwner={canAssignOwner}
+                    busy={roleMutation.isPending || removeMutation.isPending}
+                    onChangeRole={handleRoleChange}
+                    onRemove={setRemoveTarget}
+                  />
+                ) : null}
+              </CardContent>
+            </Card>
 
-      {canManage ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('members.pendingTitle')}</CardTitle>
-            <CardDescription>{t('members.pendingDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0 pb-0">
-            {invitationsQuery.isLoading ? (
-              <ListSkeleton testId="invitations-loading" />
+            {canInvite ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('members.pendingTitle')}</CardTitle>
+                  <CardDescription>{t('members.pendingDescription')}</CardDescription>
+                </CardHeader>
+                <CardContent className="px-0 pb-0">
+                  {invitationsQuery.isLoading ? (
+                    <ListSkeleton testId="invitations-loading" />
+                  ) : null}
+                  {invitationsQuery.isError ? (
+                    <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
+                  ) : null}
+                  {!invitationsQuery.isLoading && !invitationsQuery.isError ? (
+                    <PendingInvitations
+                      invitations={invitations}
+                      busyId={
+                        resendMutation.isPending
+                          ? (resendMutation.variables ?? null)
+                          : revokeMutation.isPending
+                            ? (revokeMutation.variables ?? null)
+                            : null
+                      }
+                      onResend={handleResend}
+                      onRevoke={setRevokeTarget}
+                    />
+                  ) : null}
+                </CardContent>
+              </Card>
             ) : null}
-            {invitationsQuery.isError ? (
-              <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
-            ) : null}
-            {!invitationsQuery.isLoading && !invitationsQuery.isError ? (
-              <PendingInvitations
-                invitations={invitations}
-                busyId={
-                  resendMutation.isPending
-                    ? (resendMutation.variables ?? null)
-                    : revokeMutation.isPending
-                      ? (revokeMutation.variables ?? null)
-                      : null
-                }
-                onResend={handleResend}
-                onRevoke={setRevokeTarget}
-              />
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('members.matrixTitle')}</CardTitle>
-          <CardDescription>{t('members.matrixDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <RoleMatrix />
-        </CardContent>
-      </Card>
+          </TabsContent>
+        ) : null}
+        {canViewRoles ? (
+          <TabsContent value="roles">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('members.roles.title')}</CardTitle>
+                <CardDescription>{t('members.roles.descriptionPage')}</CardDescription>
+              </CardHeader>
+              <CardContent className="px-0 pb-4">
+                <RolesPanel canManage={canManageRoles} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+      </Tabs>
 
       <InviteMemberDialog
         open={inviteOpen}

@@ -5,15 +5,8 @@ import {
   workspaceHostSuffix,
   workspaceRootDomain,
 } from '@/features/workspaces/lib/hostname';
-import {
-  canDeleteStorageFiles,
-  canDeleteWorkspace,
-  canManageApiKeys,
-  canManageMembers,
-  canManageWorkspace,
-  canPromoteToOwner,
-} from '@/features/workspaces/lib/roles';
 import { pickInitialWorkspace } from '@/features/workspaces/lib/pick-workspace';
+import { isOwnerRole } from '@/features/authz/role-summary';
 import { queryKeys, workspaceQueryKey } from '@/services/api/query-keys';
 import { errorMessageKey } from '@/services/api/errors';
 import en from '@/locales/en.json';
@@ -54,22 +47,10 @@ describe('workspace host suffix', () => {
   });
 });
 
-describe('role helpers', () => {
-  it('matches owner/admin/member UX matrix', () => {
-    expect(canManageWorkspace('owner')).toBe(true);
-    expect(canManageWorkspace('admin')).toBe(true);
-    expect(canManageWorkspace('member')).toBe(false);
-    expect(canManageMembers('member')).toBe(false);
-    expect(canPromoteToOwner('admin')).toBe(false);
-    expect(canPromoteToOwner('owner')).toBe(true);
-    expect(canDeleteWorkspace('owner')).toBe(true);
-    expect(canDeleteWorkspace('admin')).toBe(false);
-    expect(canManageApiKeys('owner')).toBe(true);
-    expect(canManageApiKeys('admin')).toBe(true);
-    expect(canManageApiKeys('member')).toBe(false);
-    expect(canDeleteStorageFiles('owner')).toBe(true);
-    expect(canDeleteStorageFiles('admin')).toBe(true);
-    expect(canDeleteStorageFiles('member')).toBe(false);
+describe('role metadata', () => {
+  it('treats owner metadata as full-access authority, not a display name', () => {
+    expect(isOwnerRole({ id: '1', name: 'Owner', is_system: true, is_owner_role: true, system_key: 'owner' })).toBe(true);
+    expect(isOwnerRole({ id: '2', name: 'Support', is_system: false, is_owner_role: false, system_key: null })).toBe(false);
   });
 });
 
@@ -79,14 +60,28 @@ describe('pickInitialWorkspace', () => {
     name: 'Acme',
     slug: 'acme',
     status: 'active',
-    role: 'owner',
+    role: {
+      id: 'role-owner',
+      name: 'Owner',
+      is_system: true,
+      is_owner_role: true,
+      system_key: 'owner',
+    },
+    permissions: [],
   };
   const globex = {
     id: 'ws-b',
     name: 'Globex',
     slug: 'globex',
     status: 'active',
-    role: 'member',
+    role: {
+      id: 'role-member',
+      name: 'Member',
+      is_system: true,
+      is_owner_role: false,
+      system_key: 'member',
+    },
+    permissions: [],
   };
 
   afterEach(() => {

@@ -1,5 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { ForbiddenPage } from '@/features/authz/pages/ForbiddenPage';
+import { usePermissions } from '@/features/authz/usePermissions';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ScreenLoader } from '@/components/shared/ScreenLoader';
 
@@ -146,6 +148,25 @@ export function WorkspaceShellRoute() {
         state={{ from: internalReturnPath(location) }}
       />
     );
+  }
+  return <Outlet />;
+}
+
+/** Permission-aware page guard. Unauthorized routes render a 403, not `/`. */
+export function RequirePermission({
+  permission,
+  permissions,
+}: {
+  permission?: string;
+  permissions?: readonly string[];
+}) {
+  const { ready, can, canAny } = usePermissions();
+  if (!ready) {
+    return <ScreenLoader />;
+  }
+  const needed = permissions ?? (permission ? [permission] : []);
+  if (needed.length > 0 && !canAny(needed) && !(permission && can(permission))) {
+    return <ForbiddenPage />;
   }
   return <Outlet />;
 }

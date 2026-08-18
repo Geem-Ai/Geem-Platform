@@ -6,9 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import type { CreditPack } from '@/services/api/billing';
 import type { Meter, UsageSummary } from '@/services/api/usage';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { CreditsPage } from './CreditsPage';
 
-const workspaceState = { id: 'ws-a' };
+const workspaceState: {
+  id: string;
+  role: string;
+  permissions?: string[];
+} = { id: 'ws-a', role: 'owner' };
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -16,14 +21,16 @@ vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
       id: workspaceState.id,
       name: 'Acme',
       slug: 'acme',
-      role: 'owner',
+      role: workspaceState.role,
+      permissions: workspaceState.permissions,
     },
     currentMembership: {
       id: 'm1',
       workspace_id: workspaceState.id,
       user_id: 'u1',
-      role: 'owner',
+      role: workspaceState.role,
       created_at: '2026-01-01T00:00:00Z',
+      permissions: workspaceState.permissions,
     },
   }),
 }));
@@ -118,6 +125,8 @@ function renderPage() {
 describe('CreditsPage', () => {
   beforeEach(async () => {
     workspaceState.id = 'ws-a';
+    workspaceState.role = 'owner';
+    workspaceState.permissions = undefined;
     getUsageSummary.mockReset();
     listCreditPacks.mockReset();
     createCreditPackCheckout.mockReset();
@@ -164,5 +173,15 @@ describe('CreditsPage', () => {
     await waitFor(() => {
       expect(redirectToCheckout).toHaveBeenCalledWith('https://pay.example/credits');
     });
+  });
+
+  it('hides pack checkout without billing.purchase_credits', async () => {
+    workspaceState.role = 'member';
+    workspaceState.permissions = [WorkspacePermission.BILLING_VIEW];
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Starter pack')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('billing-pack-cta')).not.toBeInTheDocument();
   });
 });

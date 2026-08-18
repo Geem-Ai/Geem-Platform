@@ -135,11 +135,22 @@ function whatsappApp() {
 }
 
 function workspace(role: 'owner' | 'admin' | 'member') {
+  const isOwner = role === 'owner';
   return {
     id: workspaceId,
     name: 'E2E Workspace',
     slug: 'e2e',
-    role,
+    status: 'active',
+    role: {
+      id: `role-${role}`,
+      name: role === 'admin' ? 'Administrator' : role === 'owner' ? 'Owner' : 'Member',
+      is_system: true,
+      is_owner_role: isOwner,
+      system_key: role,
+    },
+    permissions: isOwner
+      ? []
+      : ['workspace.view', 'apps.view', 'chat.use', 'experts.view'],
     kind: 'tenant',
   };
 }

@@ -71,15 +71,11 @@ def _force_expert_ready(db, expert_id: str) -> None:
     db.commit()
 
 
-def _add_member(db, workspace_id: str, user_id: str, role: str = WorkspaceRole.MEMBER.value) -> None:
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(workspace_id),
-            user_id=uuid.UUID(user_id),
-            role=role,
-        )
-    )
-    db.commit()
+def _add_member(db, workspace_id: str, user_id: str, role=WorkspaceRole.MEMBER) -> None:
+    from tests.support.rbac import add_workspace_member
+    key = role.value if hasattr(role, "value") else role
+    add_workspace_member(db, workspace_id, user_id, key)
+
 
 
 def _parse_sse(raw: str) -> list[tuple[str, dict]]:

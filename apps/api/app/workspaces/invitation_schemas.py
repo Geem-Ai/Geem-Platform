@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.workspaces.models import WorkspaceInvitation
+from app.workspaces.schemas import RoleSummaryOut, to_role_summary
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -22,7 +23,7 @@ class InvitationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
-    role: str = Field(pattern="^(admin|member)$")
+    role_id: uuid.UUID
 
 
 class InvitationAcceptRequest(BaseModel):
@@ -42,7 +43,7 @@ class InvitationOut(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     email: str
-    role: str
+    role: RoleSummaryOut
     status: str
     expires_at: datetime
     created_at: datetime
@@ -61,7 +62,7 @@ class InvitationAcceptOut(BaseModel):
     workspace_id: uuid.UUID
     workspace_name: str
     workspace_slug: str
-    role: str
+    role: RoleSummaryOut
     membership_id: uuid.UUID
     already_member: bool = False
 
@@ -77,11 +78,13 @@ def to_invitation_out(row: WorkspaceInvitation) -> InvitationOut:
     created = _utc(row.created_at)
     expires = _utc(row.expires_at)
     assert created is not None and expires is not None
+    summary = to_role_summary(row.workspace_role)
+    assert summary is not None
     return InvitationOut(
         id=row.id,
         workspace_id=row.workspace_id,
         email=row.email,
-        role=row.role,
+        role=summary,
         status=row.derived_status().value,
         expires_at=expires,
         created_at=created,

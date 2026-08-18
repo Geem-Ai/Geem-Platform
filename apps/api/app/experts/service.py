@@ -248,7 +248,7 @@ class ExpertService:
         icon_url: str | None = None,
     ) -> Expert:
         # Ownership always from trusted RequestContext — never client-submitted workspace_id.
-        ExpertPolicy.require(membership.role, ExpertAction.CREATE)
+        ExpertPolicy.require(membership, ExpertAction.CREATE)
         if workspace.kind != WorkspaceKind.TENANT.value:
             raise AppError(ErrorCategory.VALIDATION, "Experts require a tenant Workspace.")
 
@@ -400,7 +400,7 @@ class ExpertService:
         expert_id: uuid.UUID,
     ) -> Expert:
         """Undo logical deletion after re-checking Workspace Expert allowance."""
-        ExpertPolicy.require(membership.role, ExpertAction.CREATE)
+        ExpertPolicy.require(membership, ExpertAction.CREATE)
         if workspace.kind != WorkspaceKind.TENANT.value:
             raise AppError(ErrorCategory.VALIDATION, "Experts require a tenant Workspace.")
         expert = self.repo.get_workspace_expert(

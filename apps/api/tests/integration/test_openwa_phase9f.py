@@ -74,15 +74,11 @@ def _create_workspace(client: TestClient, user: dict, slug: str) -> dict:
     return res.json()
 
 
-def _add_member(db: Session, workspace_id: str, user_id: str, role: WorkspaceRole) -> None:
-    db.add(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(workspace_id),
-            user_id=uuid.UUID(user_id),
-            role=role.value,
-        )
-    )
-    db.commit()
+def _add_member(db, workspace_id: str, user_id: str, role=WorkspaceRole.MEMBER) -> None:
+    from tests.support.rbac import add_workspace_member
+    key = role.value if hasattr(role, "value") else role
+    add_workspace_member(db, workspace_id, user_id, key)
+
 
 
 def _seed(db: Session) -> None:
@@ -384,9 +380,15 @@ def _mark_connection_ready(
     FakeOpenWAClient.sessions[session_id]["pushName"] = "Sales Line"
     workspace = db.get(Workspace, uuid.UUID(workspace_id))
     assert workspace is not None
+    membership = db.scalar(
+        select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == workspace.id
+        )
+    )
+    assert membership is not None
     OpenWAChannelService(db, client_factory=FakeOpenWAClient).get_session_status(
         workspace,
-        WorkspaceRole.OWNER.value,
+        membership,
         app_slug="whatsapp",
         connection_id=uuid.UUID(connection_id),
     )

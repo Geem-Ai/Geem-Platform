@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.documents.dependencies import DocumentAccess, get_document_access
 from app.experts.models import Expert, ExpertType
-from app.experts.policy import ExpertAction
+from app.experts.policy import ExpertAction, ExpertPolicy
 from app.experts.generate_instructions import generate_expert_instructions_for_workspace
 from app.experts.schemas import (
     AddConnectorSourcesRequest,
@@ -70,6 +70,7 @@ def list_experts(
     db: Session = Depends(get_db),
 ) -> list[ExpertOut]:
     """Workspace Experts owned by current Workspace + granted/published Platform Experts."""
+    ExpertPolicy.require(access.membership, ExpertAction.VIEW)
     svc = ExpertService(db)
     rows = svc.list_for_workspace(access.workspace)
     return [

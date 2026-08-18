@@ -14,6 +14,13 @@ const authState: {
   user: null,
 };
 
+const memberRole = {
+  id: 'role-member',
+  name: 'Member',
+  is_system: true,
+  is_owner_role: false,
+  system_key: 'member',
+};
 const logout = vi.fn();
 const reloadMe = vi.fn();
 const selectWorkspace = vi.fn();
@@ -77,6 +84,7 @@ function renderAccept(search = '?token=invite-token') {
         <MemoryRouter initialEntries={[`/invitations/accept${search}`]}>
           <Routes>
             <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
+            <Route path="/" element={<div>workspace-home</div>} />
             <Route path="/members" element={<div>members-home</div>} />
             <Route path="/login" element={<div>login-page</div>} />
           </Routes>
@@ -134,7 +142,7 @@ describe('InvitationAcceptPage', () => {
       workspace_id: 'ws-a',
       workspace_name: 'Acme',
       workspace_slug: 'acme',
-      role: 'member',
+      role: memberRole,
       membership_id: 'mem-2',
       already_member: false,
     });
@@ -156,7 +164,7 @@ describe('InvitationAcceptPage', () => {
     await waitFor(() => {
       expect(acceptWorkspaceInvitation).toHaveBeenCalledWith('invite-token');
     });
-    expect(await screen.findByText('members-home')).toBeInTheDocument();
+    expect(await screen.findByText('workspace-home')).toBeInTheDocument();
     expect(saveWorkspacePreference).toHaveBeenCalledWith('u2', 'ws-a');
     expect(selectWorkspace).toHaveBeenCalledWith(
       'ws-a',
@@ -164,7 +172,7 @@ describe('InvitationAcceptPage', () => {
         id: 'ws-a',
         name: 'Acme',
         slug: 'acme',
-        role: 'member',
+        role: memberRole,
       }),
     );
   });
@@ -177,7 +185,7 @@ describe('InvitationAcceptPage', () => {
       workspace_id: 'ws-a',
       workspace_name: 'Acme',
       workspace_slug: 'acme',
-      role: 'member',
+      role: memberRole,
       membership_id: 'mem-2',
       already_member: true,
     });
@@ -191,7 +199,7 @@ describe('InvitationAcceptPage', () => {
     await waitFor(() => {
       expect(acceptWorkspaceInvitation).toHaveBeenCalledWith('invite-token');
     });
-    expect(await screen.findByText('members-home')).toBeInTheDocument();
+    expect(await screen.findByText('workspace-home')).toBeInTheDocument();
   });
 
   it('renders expired, revoked, mismatch, and already-accepted states', async () => {

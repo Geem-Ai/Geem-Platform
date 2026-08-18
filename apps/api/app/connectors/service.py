@@ -19,7 +19,7 @@ from app.apps_catalog.models import (
     AppInstallationStatus,
     CatalogApp,
 )
-from app.apps_catalog.policy import can_manage_apps
+from app.apps_catalog.policy import can_connect_apps, can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
 from app.common.crypto import decrypt_secret, encrypt_secret
 from app.common.security_log import security_log
@@ -110,12 +110,12 @@ class ConnectorConnectionService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         limit: int = 50,
         offset: int = 0,
     ) -> AppConnectionListOut:
-        can_manage = can_manage_apps(role)
+        can_manage = can_connect_apps(membership)
         app, installation = self._require_app_and_installation(
             workspace.id, app_slug, require_active_access=False
         )
@@ -172,11 +172,11 @@ class ConnectorConnectionService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> AppConnectionOut:
-        can_manage = can_manage_apps(role)
+        can_manage = can_connect_apps(membership)
         app, installation = self._require_app_and_installation(
             workspace.id, app_slug, require_active_access=False
         )
@@ -205,7 +205,7 @@ class ConnectorConnectionService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         app_slug: str,
         display_name: str | None = None,
@@ -214,7 +214,7 @@ class ConnectorConnectionService:
         return_path: str | None = None,
     ) -> AppConnectionOut:
         """Create or reopen a connection in ``connecting`` (requires registered adapter)."""
-        if not can_manage_apps(role):
+        if not can_connect_apps(membership):
             raise AppError(
                 ErrorCategory.FORBIDDEN,
                 "Only owners and admins can manage connections.",
@@ -471,12 +471,12 @@ class ConnectorConnectionService:
         self,
         *,
         workspace: Workspace,
-        role: str,
+        membership,
         actor_id: uuid.UUID,
         app_slug: str,
         connection_id: uuid.UUID,
     ) -> AppConnectionOut:
-        if not can_manage_apps(role):
+        if not can_connect_apps(membership):
             raise AppError(
                 ErrorCategory.FORBIDDEN,
                 "Only owners and admins can disconnect connections.",

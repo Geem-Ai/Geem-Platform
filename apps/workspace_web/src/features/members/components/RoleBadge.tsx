@@ -1,22 +1,31 @@
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
+import { asRoleSummary } from '@/features/authz/role-summary';
+import type { RoleSummary } from '@/services/api/types';
 
-const VARIANT: Record<string, 'primary' | 'info' | 'secondary'> = {
-  owner: 'primary',
-  admin: 'info',
-  member: 'secondary',
+type RoleBadgeProps = {
+  role: RoleSummary | string;
 };
 
-export function RoleBadge({ role }: { role: string }) {
+export function RoleBadge({ role }: RoleBadgeProps) {
   const { t } = useTranslation();
-  const key = `roles.${role}`;
-  const label = t(key, { defaultValue: role });
+  const summary = asRoleSummary(role);
+  if (!summary) return null;
+  const systemKey = summary.system_key;
+  const label = systemKey
+    ? t(`roles.${systemKey}`, { defaultValue: summary.name })
+    : summary.name;
+  const variant = summary.is_owner_role
+    ? 'primary'
+    : summary.is_system
+      ? 'info'
+      : 'secondary';
   return (
     <Badge
-      variant={VARIANT[role] ?? 'outline'}
+      variant={variant}
       appearance="light"
       size="sm"
-      data-testid={`role-badge-${role}`}
+      data-testid={`role-badge-${systemKey ?? summary.id}`}
     >
       {label}
     </Badge>

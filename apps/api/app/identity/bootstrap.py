@@ -79,6 +79,21 @@ def bootstrap_platform_admin(
         db.commit()
         db.refresh(user)
 
+        from app.workspaces.rbac_seed import ensure_default_workspace_roles, seed_permission_catalog
+        from app.workspaces.models import Workspace, WorkspaceKind
+        from sqlalchemy import select
+
+        seed_permission_catalog(db)
+        tenant_ids = db.scalars(
+            select(Workspace.id).where(
+                Workspace.kind == WorkspaceKind.TENANT.value,
+                Workspace.deleted_at.is_(None),
+            )
+        ).all()
+        for workspace_id in tenant_ids:
+            ensure_default_workspace_roles(db, workspace_id)
+        db.commit()
+
         if ensure_default_workspace:
             WorkspaceService(db, settings).ensure_migration_workspace(created_by=user.id)
 

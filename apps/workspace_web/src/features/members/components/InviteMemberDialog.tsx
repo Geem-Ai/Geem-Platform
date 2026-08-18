@@ -11,10 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { INVITE_ROLES } from '@/features/members/lib/role-matrix';
-import { useCreateInvitation } from '@/features/members/hooks/useMembersQueries';
+import { useAssignableRoles, useCreateInvitation } from '@/features/members/hooks/useMembersQueries';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
-import type { InvitationRole } from '@/services/api/invitations';
 
 type InviteMemberDialogProps = {
   open: boolean;
@@ -33,19 +31,27 @@ export function InviteMemberDialog({
 }: InviteMemberDialogProps) {
   const { t } = useTranslation();
   const create = useCreateInvitation();
+  const rolesQuery = useAssignableRoles({ enabled: open });
+  const roles = rolesQuery.data?.items ?? [];
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<InvitationRole>('member');
+  const [roleId, setRoleId] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setEmail('');
-    setRole('member');
+    setRoleId('');
     setErrorKey(null);
     create.reset();
     // Reset only when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    if (!open || roleId || roles.length === 0) return;
+    const member = roles.find((row) => row.system_key === 'member');
+    setRoleId((member ?? roles[0]).id);
+  }, [open, roleId, roles]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -54,9 +60,13 @@ export function InviteMemberDialog({
       setErrorKey('members.errors.invalidEmail');
       return;
     }
+    if (!roleId || rolesQuery.isError) {
+      setErrorKey('members.errors.rolesUnavailable');
+      return;
+    }
     setErrorKey(null);
     try {
-      await create.mutateAsync({ email: trimmed, role });
+      await create.mutateAsync({ email: trimmed, role_id: roleId });
       onSent?.(trimmed);
       onOpenChange(false);
     } catch (err) {
@@ -99,31 +109,40 @@ export function InviteMemberDialog({
 
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">{t('members.role')}</legend>
-            <div className="grid gap-2">
-              {INVITE_ROLES.map((option) => (
-                <label
-                  key={option}
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                >
-                  <input
-                    type="radio"
-                    name="invite-role"
-                    value={option}
-                    checked={role === option}
-                    onChange={() => setRole(option)}
-                    disabled={create.isPending}
-                    className="mt-1"
-                    data-testid={`invite-role-${option}`}
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium">{t(`roles.${option}`)}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground leading-relaxed">
-                      {t(`members.inviteRoleHint.${option}`)}
+            {rolesQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">{t('shell.loading')}</p>
+            ) : null}
+            {rolesQuery.isError ? (
+              <p className="text-sm text-destructive">{t('members.errors.rolesUnavailable')}</p>
+            ) : (
+              <div className="grid gap-2 max-h-56 overflow-y-auto">
+                {roles.map((option) => (
+                  <label
+                    key={option.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                  >
+                    <input
+                      type="radio"
+                      name="invite-role"
+                      value={option.id}
+                      checked={roleId === option.id}
+                      onChange={() => setRoleId(option.id)}
+                      disabled={create.isPending}
+                      className="mt-1"
+                      data-testid={`invite-role-${option.system_key ?? option.id}`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{option.name}</span>
+                      {option.description ? (
+                        <span className="mt-0.5 block text-xs text-muted-foreground leading-relaxed">
+                          {option.description}
+                        </span>
+                      ) : null}
                     </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+                  </label>
+                ))}
+              </div>
+            )}
           </fieldset>
 
           <DialogFooter>
@@ -135,7 +154,11 @@ export function InviteMemberDialog({
             >
               {t('common.cancel')}
             </Button>
-            <Button type="submit" disabled={create.isPending} data-testid="invite-submit">
+            <Button
+              type="submit"
+              disabled={create.isPending || !roleId || rolesQuery.isError}
+              data-testid="invite-submit"
+            >
               {create.isPending ? t('members.sending') : t('members.sendInvite')}
             </Button>
           </DialogFooter>

@@ -8,22 +8,27 @@ from app.core.errors import AppError, ErrorCategory
 from app.experts.models import ExpertVisibility
 from app.experts.policy import ExpertAction, ExpertPolicy
 from app.experts.service import normalize_rag_config, normalize_system_instructions
-from app.workspaces.models import WorkspaceRole
+from app.workspaces.permissions import ADMIN_PERMISSION_KEYS, MEMBER_PERMISSION_KEYS
+from tests.support.rbac import fake_membership
 
 
 def test_expert_policy_matrix() -> None:
-    assert ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.VIEW)
-    assert ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.USE)
-    assert not ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.CREATE)
-    assert not ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.UPDATE)
-    assert not ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.DELETE)
-    assert not ExpertPolicy.can(WorkspaceRole.MEMBER, ExpertAction.MANAGE_KNOWLEDGE)
+    member = fake_membership(keys=MEMBER_PERMISSION_KEYS)
+    admin = fake_membership(keys=ADMIN_PERMISSION_KEYS)
+    owner = fake_membership(is_owner=True)
 
-    assert ExpertPolicy.can(WorkspaceRole.ADMIN, ExpertAction.CREATE)
-    assert ExpertPolicy.can(WorkspaceRole.OWNER, ExpertAction.DELETE)
+    assert ExpertPolicy.can(member, ExpertAction.VIEW)
+    assert ExpertPolicy.can(member, ExpertAction.USE)
+    assert not ExpertPolicy.can(member, ExpertAction.CREATE)
+    assert not ExpertPolicy.can(member, ExpertAction.UPDATE)
+    assert not ExpertPolicy.can(member, ExpertAction.DELETE)
+    assert not ExpertPolicy.can(member, ExpertAction.MANAGE_KNOWLEDGE)
+
+    assert ExpertPolicy.can(admin, ExpertAction.CREATE)
+    assert ExpertPolicy.can(owner, ExpertAction.DELETE)
 
     with pytest.raises(AppError) as exc:
-        ExpertPolicy.require(WorkspaceRole.MEMBER, ExpertAction.CREATE)
+        ExpertPolicy.require(member, ExpertAction.CREATE)
     assert exc.value.category == ErrorCategory.INSUFFICIENT_WORKSPACE_ROLE
 
 

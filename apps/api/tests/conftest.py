@@ -47,6 +47,11 @@ def prepare_database() -> Generator[None, None, None]:
     import app.db.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    from app.workspaces.rbac_seed import seed_permission_catalog
+
+    with TestingSessionLocal() as session:
+        seed_permission_catalog(session)
+        session.commit()
     yield
     Base.metadata.drop_all(bind=engine)
 
@@ -68,7 +73,8 @@ def clean_tables() -> Generator[None, None, None]:
                 "messages, conversations, "
                 "expert_documents, expert_sources, workspace_expert_grants, experts, "
                 "usage_events, chunks, document_pages, ingestion_jobs, documents, "
-                "api_keys, sessions, workspace_invitations, workspace_memberships, workspaces, users "
+                "api_keys, sessions, workspace_invitations, workspace_role_permissions, "
+                "workspace_memberships, workspace_roles, workspaces, users "
                 "RESTART IDENTITY CASCADE"
             )
         )

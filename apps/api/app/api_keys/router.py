@@ -26,7 +26,7 @@ def _created_response(row: ApiKey, plaintext: str) -> ApiKeyCreateResponse:
 @router.get("", response_model=list[ApiKeyOut])
 def list_api_keys(
     pair: tuple[Workspace, WorkspaceMembership] = Depends(
-        require_workspace_action(WorkspaceAction.MANAGE_API_KEYS)
+        require_workspace_action(WorkspaceAction.VIEW_API_KEYS)
     ),
     db: Session = Depends(get_db),
 ) -> list[ApiKeyOut]:
@@ -38,7 +38,7 @@ def list_api_keys(
 def create_api_key(
     body: ApiKeyCreateRequest,
     pair: tuple[Workspace, WorkspaceMembership] = Depends(
-        require_workspace_action(WorkspaceAction.MANAGE_API_KEYS)
+        require_workspace_action(WorkspaceAction.CREATE_API_KEYS)
     ),
     db: Session = Depends(get_db),
 ) -> ApiKeyCreateResponse:
@@ -57,7 +57,7 @@ def create_api_key(
 def revoke_api_key(
     api_key_id: uuid.UUID,
     pair: tuple[Workspace, WorkspaceMembership] = Depends(
-        require_workspace_action(WorkspaceAction.MANAGE_API_KEYS)
+        require_workspace_action(WorkspaceAction.REVOKE_API_KEYS)
     ),
     db: Session = Depends(get_db),
 ) -> ApiKeyOut:

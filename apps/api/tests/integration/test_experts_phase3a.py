@@ -514,17 +514,8 @@ def test_member_cannot_create_expert(client, register_user, db, mock_storage_and
     ws = _create_workspace(client, owner["access_token"], "MemWS", "mem-ws")
 
     # Add member via direct membership (service)
-    from app.workspaces.models import WorkspaceMembership, WorkspaceRole
-    from app.workspaces.repository import MembershipRepository
-
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws["id"]),
-            user_id=uuid.UUID(member["user"]["id"]),
-            role=WorkspaceRole.MEMBER.value,
-        )
-    )
-    db.commit()
+    from tests.support.rbac import add_workspace_member
+    add_workspace_member(db, ws["id"], member["user"]["id"], 'member')
 
     res = client.post(
         "/api/experts",

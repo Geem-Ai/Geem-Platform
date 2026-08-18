@@ -28,6 +28,7 @@ import { StorageFileGlyph } from './StorageFileGlyph';
 type StorageFileListProps = {
   items: DocumentSummary[];
   canDelete: boolean;
+  canDownload: boolean;
   downloadingId: string | null;
   onDownload: (item: DocumentSummary) => void;
   onDelete: (item: DocumentSummary) => void;
@@ -45,6 +46,7 @@ function pageCountLabel(
 export function StorageFileList({
   items,
   canDelete,
+  canDownload,
   downloadingId,
   onDownload,
   onDelete,
@@ -58,7 +60,7 @@ export function StorageFileList({
         className={cn(
           'hidden sm:grid items-center gap-4 px-5 h-9 border-b border-border',
           'bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground',
-          canDelete
+          canDelete || canDownload
             ? 'grid-cols-[minmax(0,1fr)_6.5rem_11rem]'
             : 'grid-cols-[minmax(0,1fr)_6.5rem_7.5rem]',
         )}
@@ -100,7 +102,7 @@ export function StorageFileList({
               className={cn(
                 'group px-4 py-4 sm:px-5 transition-colors hover:bg-muted/35',
                 'flex flex-col gap-3 sm:grid sm:items-center sm:gap-4',
-                canDelete
+                canDelete || canDownload
                   ? 'sm:grid-cols-[minmax(0,1fr)_6.5rem_11rem]'
                   : 'sm:grid-cols-[minmax(0,1fr)_6.5rem_7.5rem]',
               )}
@@ -189,29 +191,31 @@ export function StorageFileList({
               </p>
 
               <div className="flex items-center justify-stretch sm:justify-end gap-2 shrink-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onDownload(item)}
-                      disabled={downloading}
-                      data-testid={`storage-download-${item.id}`}
-                      aria-label={t('common.download')}
-                      className="flex-1 sm:flex-none"
-                    >
-                      {downloading ? (
-                        <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                      ) : (
-                        <Download className="size-3.5" aria-hidden />
-                      )}
-                      <span>
-                        {downloading ? t('storage.downloading') : t('common.download')}
-                      </span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">{t('storage.downloadHint')}</TooltipContent>
-                </Tooltip>
+                {canDownload ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDownload(item)}
+                        disabled={downloading}
+                        data-testid={`storage-download-${item.id}`}
+                        aria-label={t('common.download')}
+                        className="flex-1 sm:flex-none"
+                      >
+                        {downloading ? (
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Download className="size-3.5" aria-hidden />
+                        )}
+                        <span>
+                          {downloading ? t('storage.downloading') : t('common.download')}
+                        </span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{t('storage.downloadHint')}</TooltipContent>
+                  </Tooltip>
+                ) : null}
                 {canDelete ? (
                   <Tooltip>
                     <TooltipTrigger asChild>

@@ -88,6 +88,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         user_id: user.id,
         role: selected.role,
         created_at: '',
+        permissions: selected.permissions ?? [],
       });
     } else {
       setCurrentMembership(null);
@@ -123,6 +124,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         user_id: user.id,
         role: next.role,
         created_at: currentMembership?.created_at ?? '',
+        permissions: next.permissions ?? currentMembership?.permissions ?? [],
       });
       syncClientHints(next);
       saveWorkspacePreference(user.id, next.id);
@@ -143,7 +145,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         name: created.name,
         slug: created.slug,
         status: created.status,
-        role: created.role ?? 'owner',
+        role: created.role ?? {
+          id: '',
+          name: 'Owner',
+          is_system: true,
+          is_owner_role: true,
+          system_key: 'owner',
+        },
+        permissions: created.permissions ?? [],
       };
       await refreshWorkspaces();
       selectWorkspace(summary.id, summary);

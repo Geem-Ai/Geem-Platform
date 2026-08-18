@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/features/authz/usePermissions';
 import type { Expert } from '@/services/api/types';
 import { canAskExpert } from '../lib/capabilities';
 import { localizeExpertDisplay } from '../lib/localize';
@@ -20,7 +21,8 @@ interface ExpertCardProps {
 export function ExpertCard({ expert, onAsk, onOpen }: ExpertCardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const canAsk = canAskExpert(expert.status);
+  const { can } = usePermissions();
+  const canAsk = canAskExpert(can, expert.status);
   const isPlatform = expert.ownership === 'platform';
   const display = localizeExpertDisplay(expert, t);
 

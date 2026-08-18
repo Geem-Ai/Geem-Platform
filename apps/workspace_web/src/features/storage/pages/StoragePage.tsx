@@ -23,8 +23,8 @@ import {
   CardToolbar,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { canDeleteStorageFiles } from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import { QuotaAlert } from '@/features/usage/components/QuotaAlert';
 import { QuotaMeter } from '@/features/usage/components/QuotaMeter';
 import { useUsageSummary } from '@/features/usage/hooks/useUsageQueries';
@@ -84,9 +84,9 @@ function StorageSkeleton() {
 
 export function StoragePage() {
   const { t } = useTranslation();
-  const { currentMembership, currentWorkspace } = useWorkspace();
-  const role = currentMembership?.role ?? currentWorkspace?.role;
-  const canDelete = canDeleteStorageFiles(role);
+  const { can } = usePermissions();
+  const canDelete = can(WorkspacePermission.STORAGE_DELETE);
+  const canDownload = can(WorkspacePermission.STORAGE_DOWNLOAD);
   const [params, setParams] = useSearchParams();
   const page = parseStoragePage(params.get('page'));
   const q = params.get('q') ?? '';
@@ -361,6 +361,7 @@ export function StoragePage() {
                 <StorageFileList
                   items={items}
                   canDelete={canDelete}
+                  canDownload={canDownload}
                   downloadingId={download.isPending ? download.variables ?? null : null}
                   onDownload={handleDownload}
                   onDelete={setDeleteTarget}

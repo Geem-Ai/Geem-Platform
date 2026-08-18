@@ -10,15 +10,16 @@ from app.billing.schemas import EntitlementItemOut, EntitlementsOut, PlanSummary
 from app.db.session import get_db
 from app.entitlements.keys import entitlement_display_sort_key
 from app.entitlements.service import EntitlementService
-from app.workspaces.dependencies import require_workspace
+from app.workspaces.dependencies import require_workspace_action
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.workspaces.policy import WorkspaceAction
 
 router = APIRouter(prefix="/api/entitlements", tags=["entitlements"])
 
 
 @router.get("", response_model=EntitlementsOut)
 def get_entitlements(
-    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace_action(WorkspaceAction.READ_WORKSPACE)),
     db: Session = Depends(get_db),
 ) -> EntitlementsOut:
     workspace, _membership = pair

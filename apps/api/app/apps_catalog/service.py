@@ -34,7 +34,7 @@ from app.common.security_log import security_log
 from app.connectors.types import CONNECTION_USABLE_STATUSES, ConnectionStatus
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.workspaces.models import Workspace, WorkspaceKind, WorkspaceRole
+from app.workspaces.models import Workspace, WorkspaceKind
 
 # Prefer attention-needed statuses when summarizing multiple connections.
 _CONNECTION_STATUS_RANK: dict[str, int] = {
@@ -181,7 +181,7 @@ class AppCatalogService:
         self,
         *,
         workspace: Workspace,
-        role: str | WorkspaceRole,
+        membership,
         category: str | None = None,
         billing_type: str | None = None,
         installed: bool | None = None,
@@ -192,7 +192,7 @@ class AppCatalogService:
         self._require_tenant(workspace)
         limit = max(1, min(limit, 100))
         offset = max(0, offset)
-        manage = can_manage_apps(role)
+        manage = can_manage_apps(membership)
 
         items, total = self.repo.list_catalog_apps(
             category_slug=category,
@@ -275,7 +275,7 @@ class AppCatalogService:
         self,
         *,
         workspace: Workspace,
-        role: str | WorkspaceRole,
+        membership,
         slug: str,
     ) -> CatalogAppOut:
         self._require_tenant(workspace)
@@ -285,7 +285,7 @@ class AppCatalogService:
             AppStatus.DISABLED.value,
         }:
             raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
-        manage = can_manage_apps(role)
+        manage = can_manage_apps(membership)
         inst = self.repo.get_installation_by_app(workspace.id, app.id)
         active = (
             inst is not None and inst.status == AppInstallationStatus.ACTIVE.value
@@ -343,7 +343,7 @@ class AppInstallationService:
         self,
         *,
         workspace: Workspace,
-        role: str | WorkspaceRole,
+        membership,
         limit: int = 50,
         offset: int = 0,
     ) -> AppInstallationListOut:
@@ -356,7 +356,7 @@ class AppInstallationService:
             limit=limit,
             offset=offset,
         )
-        manage = can_manage_apps(role)
+        manage = can_manage_apps(membership)
         connection_statuses = _connection_status_by_installation(
             self.db, workspace.id, [r.id for r in rows]
         )
@@ -404,7 +404,7 @@ class AppInstallationService:
         self,
         *,
         workspace: Workspace,
-        role: str | WorkspaceRole,
+        membership,
         installation_id: uuid.UUID,
     ) -> AppInstallationOut:
         self._require_tenant(workspace)
@@ -414,7 +414,7 @@ class AppInstallationService:
                 ErrorCategory.APP_INSTALLATION_NOT_FOUND,
                 "App installation not found.",
             )
-        manage = can_manage_apps(role)
+        manage = can_manage_apps(membership)
         access = self.access.resolve(
             workspace.id, app=row.app, can_manage=manage, installation=row
         )

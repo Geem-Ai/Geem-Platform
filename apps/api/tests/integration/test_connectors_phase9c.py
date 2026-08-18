@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tests.support.rbac import get_membership
 
 from app.apps_catalog.models import (
     AppBillingType,
@@ -60,15 +61,11 @@ def _create_workspace(client: TestClient, user: dict, slug: str) -> dict:
     return res.json()
 
 
-def _add_member(db: Session, workspace_id: str, user_id: str, role: WorkspaceRole) -> None:
-    db.add(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(workspace_id),
-            user_id=uuid.UUID(user_id),
-            role=role.value,
-        )
-    )
-    db.commit()
+def _add_member(db, workspace_id: str, user_id: str, role=WorkspaceRole.MEMBER) -> None:
+    from tests.support.rbac import add_workspace_member
+    key = role.value if hasattr(role, "value") else role
+    add_workspace_member(db, workspace_id, user_id, key)
+
 
 
 def _seed(db: Session) -> None:
@@ -403,7 +400,7 @@ def test_connection_limit_and_concurrency(client, register_user, db) -> None:
             try:
                 ConnectorConnectionService(local, registry=connector_registry).start_connection(
                     workspace=workspace,
-                    role=membership.role,
+                    membership=membership,
                     actor_id=uuid.UUID(user["user"]["id"]),
                     app_slug=app.slug,
                     display_name="race",
@@ -726,7 +723,7 @@ def test_sync_run_lifecycle(client, register_user, db) -> None:
     assert workspace is not None
     run_out = sync_svc.request_manual_sync(
         workspace=workspace,
-        role=WorkspaceRole.OWNER.value,
+        membership=get_membership(db, ws['id'], user['user']['id']),
         actor_id=uuid.UUID(user["user"]["id"]),
         app_slug=app.slug,
         connection_id=uuid.UUID(started["id"]),
@@ -753,7 +750,7 @@ def test_sync_run_lifecycle(client, register_user, db) -> None:
     # Idempotent request
     again = sync_svc.request_manual_sync(
         workspace=workspace,
-        role=WorkspaceRole.OWNER.value,
+        membership=get_membership(db, ws['id'], user['user']['id']),
         actor_id=uuid.UUID(user["user"]["id"]),
         app_slug=app.slug,
         connection_id=uuid.UUID(started["id"]),
@@ -765,7 +762,7 @@ def test_sync_run_lifecycle(client, register_user, db) -> None:
     # Concurrent sync blocked
     pending = sync_svc.request_manual_sync(
         workspace=workspace,
-        role=WorkspaceRole.OWNER.value,
+        membership=get_membership(db, ws['id'], user['user']['id']),
         actor_id=uuid.UUID(user["user"]["id"]),
         app_slug=app.slug,
         connection_id=uuid.UUID(started["id"]),
@@ -776,7 +773,7 @@ def test_sync_run_lifecycle(client, register_user, db) -> None:
     try:
         sync_svc.request_manual_sync(
             workspace=workspace,
-            role=WorkspaceRole.OWNER.value,
+            membership=get_membership(db, ws['id'], user['user']['id']),
             actor_id=uuid.UUID(user["user"]["id"]),
             app_slug=app.slug,
             connection_id=uuid.UUID(started["id"]),
@@ -1022,7 +1019,7 @@ def test_failed_celery_sync_finalizes_pending_run(client, register_user, db) -> 
     sync_svc = ConnectorSyncService(db)
     run_out = sync_svc.request_manual_sync(
         workspace=workspace,
-        role=WorkspaceRole.OWNER.value,
+        membership=get_membership(db, ws['id'], user['user']['id']),
         actor_id=uuid.UUID(user["user"]["id"]),
         app_slug=app.slug,
         connection_id=uuid.UUID(started["id"]),
@@ -1051,7 +1048,7 @@ def test_failed_celery_sync_finalizes_pending_run(client, register_user, db) -> 
     # Slot cleared — another sync request must succeed.
     next_run = sync_svc.request_manual_sync(
         workspace=workspace,
-        role=WorkspaceRole.OWNER.value,
+        membership=get_membership(db, ws['id'], user['user']['id']),
         actor_id=uuid.UUID(user["user"]["id"]),
         app_slug=app.slug,
         connection_id=uuid.UUID(started["id"]),

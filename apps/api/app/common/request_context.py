@@ -13,6 +13,9 @@ class RequestContext:
     Frontend hostname/slug is UX context only; backend always re-resolves and authorizes.
     ``workspace_resolution`` records how the candidate was obtained (host|header_slug|
     header_id|api_key|none) so Phase 7 API-key resolution can share this system.
+
+    ``effective_permissions`` is derived server-side from membership + role (never
+    trusted from the client). Resolution is per-request from the database.
     """
 
     request_id: str | None = None
@@ -20,6 +23,8 @@ class RequestContext:
     workspace_id: UUID | None = None
     workspace_slug: str | None = None
     membership_role: str | None = None
+    membership_role_id: UUID | None = None
+    effective_permissions: frozenset[str] = field(default_factory=frozenset)
     platform_role: str | None = None
     session_id: UUID | None = None
     workspace_resolution: str | None = None

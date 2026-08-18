@@ -20,7 +20,8 @@ def test_create_workspace_normalized_slug_and_owner(client, register_user) -> No
     assert res.status_code == 201, res.text
     body = res.json()
     assert body["slug"] == "acme-co"
-    assert body["role"] == "owner"
+    assert body["role"]["system_key"] == "owner"
+    assert body["role"]["is_owner_role"] is True
 
 
 def test_duplicate_and_reserved_slug(client, register_user) -> None:
@@ -53,11 +54,13 @@ def test_create_workspace_owner_membership_atomic(db, register_user) -> None:
     assert membership.role == WorkspaceRole.OWNER.value
     assert membership.workspace_id == workspace.id
     before = len(svc.list_for_user(uuid.UUID(user["user"]["id"])))
+    from tests.support.rbac import role_id
+
     db.add(
         WorkspaceMembership(
             workspace_id=workspace.id,
             user_id=uuid.UUID(user["user"]["id"]),
-            role=WorkspaceRole.MEMBER.value,
+            role_id=role_id(db, workspace.id, "member"),
         )
     )
     try:
@@ -91,16 +94,9 @@ def test_member_cannot_update_workspace(client, register_user, db) -> None:
     )
     ws_id = create.json()["id"]
 
-    from app.workspaces.repository import MembershipRepository
+    from tests.support.rbac import add_workspace_member
 
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws_id),
-            user_id=uuid.UUID(member["user"]["id"]),
-            role=WorkspaceRole.MEMBER.value,
-        )
-    )
-    db.commit()
+    add_workspace_member(db, ws_id, member["user"]["id"], "member")
 
     denied = client.patch(
         f"/api/workspaces/{ws_id}",
@@ -119,7 +115,7 @@ def test_member_cannot_update_workspace(client, register_user, db) -> None:
     assert allowed.json()["name"] == "Roles Updated"
 
 
-def test_last_owner_cannot_demote_or_remove_self(client, register_user) -> None:
+def test_last_owner_cannot_demote_or_remove_self(client, register_user, db) -> None:
     owner = register_user(email="solo-owner@example.com")
     create = client.post(
         "/api/workspaces",
@@ -128,11 +124,12 @@ def test_last_owner_cannot_demote_or_remove_self(client, register_user) -> None:
     )
     ws_id = create.json()["id"]
     uid = owner["user"]["id"]
+    from tests.support.rbac import role_id as _role_id
 
     demote = client.patch(
         f"/api/workspaces/{ws_id}/members/{uid}",
         headers=_auth(owner["access_token"]),
-        json={"role": "admin"},
+        json={"role_id": str(_role_id(db, ws_id, "admin"))},
     )
     assert demote.status_code == 409
     assert demote.json()["code"] == "last_workspace_owner"
@@ -154,21 +151,14 @@ def test_admin_cannot_promote_to_owner(client, register_user, db) -> None:
         json={"name": "Promote", "slug": "promote-ws"},
     )
     ws_id = create.json()["id"]
-    from app.workspaces.repository import MembershipRepository
+    from tests.support.rbac import add_workspace_member, role_id
 
-    MembershipRepository(db).create(
-        WorkspaceMembership(
-            workspace_id=uuid.UUID(ws_id),
-            user_id=uuid.UUID(admin["user"]["id"]),
-            role=WorkspaceRole.ADMIN.value,
-        )
-    )
-    db.commit()
+    add_workspace_member(db, ws_id, admin["user"]["id"], "admin")
 
     res = client.patch(
         f"/api/workspaces/{ws_id}/members/{admin['user']['id']}",
         headers=_auth(admin["access_token"]),
-        json={"role": "owner"},
+        json={"role_id": str(role_id(db, ws_id, "owner"))},
     )
     assert res.status_code == 403
     assert res.json()["code"] == "insufficient_workspace_role"

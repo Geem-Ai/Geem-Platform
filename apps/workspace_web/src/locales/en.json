@@ -29,9 +29,182 @@
     "billingHistory": "Billing History",
     "settings": "Settings"
   },
+  "permissions": {
+    "groups": {
+      "workspace": "Workspace",
+      "workspace_settings": "Settings",
+      "chat": "Chat",
+      "experts": "Experts",
+      "storage": "Storage",
+      "apps": "Apps",
+      "members": "Members",
+      "roles": "Roles",
+      "api_keys": "API keys",
+      "api_usage": "API usage",
+      "billing": "Billing"
+    },
+    "workspace": {
+      "view": {
+        "name": "View workspace",
+        "description": "See the workspace home and overview."
+      },
+      "delete": {
+        "name": "Delete workspace",
+        "description": "Permanently delete this workspace and its data."
+      }
+    },
+    "workspace_settings": {
+      "view": {
+        "name": "View settings",
+        "description": "Open workspace settings."
+      },
+      "manage": {
+        "name": "Manage settings",
+        "description": "Change the workspace name and other settings."
+      }
+    },
+    "chat": {
+      "use": {
+        "name": "Use chat",
+        "description": "Start and continue conversations."
+      }
+    },
+    "experts": {
+      "view": {
+        "name": "View Experts",
+        "description": "See Experts available in this workspace."
+      },
+      "use": {
+        "name": "Use Experts",
+        "description": "Ask workspace and platform Experts in chat."
+      },
+      "create": {
+        "name": "Create Experts",
+        "description": "Create new workspace Experts."
+      },
+      "update": {
+        "name": "Edit Experts",
+        "description": "Edit workspace Expert details."
+      },
+      "delete": {
+        "name": "Delete Experts",
+        "description": "Delete workspace Experts."
+      },
+      "manage_knowledge": {
+        "name": "Manage knowledge",
+        "description": "Attach and manage Expert knowledge."
+      }
+    },
+    "storage": {
+      "view": {
+        "name": "View storage",
+        "description": "Browse workspace files."
+      },
+      "download": {
+        "name": "Download files",
+        "description": "Download files from storage."
+      },
+      "upload": {
+        "name": "Upload files",
+        "description": "Upload files to storage."
+      },
+      "update": {
+        "name": "Update files",
+        "description": "Rename or update stored files."
+      },
+      "delete": {
+        "name": "Delete files",
+        "description": "Delete files from storage."
+      },
+      "reprocess": {
+        "name": "Reprocess files",
+        "description": "Re-index files for search and chat."
+      }
+    },
+    "apps": {
+      "view": {
+        "name": "View Apps",
+        "description": "Browse the App Store and installed apps."
+      },
+      "manage": {
+        "name": "Manage Apps",
+        "description": "Install, purchase, or uninstall apps."
+      },
+      "connect": {
+        "name": "Connect apps",
+        "description": "Connect or disconnect external app accounts."
+      }
+    },
+    "members": {
+      "view": {
+        "name": "View members",
+        "description": "See people in this workspace."
+      },
+      "invite": {
+        "name": "Invite members",
+        "description": "Send and manage invitations."
+      },
+      "update_role": {
+        "name": "Change roles",
+        "description": "Assign a different role to a member."
+      },
+      "remove": {
+        "name": "Remove members",
+        "description": "Remove people from this workspace."
+      },
+      "promote_owner": {
+        "name": "Transfer ownership",
+        "description": "Promote another member to Owner. Owner only."
+      }
+    },
+    "roles": {
+      "view": {
+        "name": "View roles",
+        "description": "See workspace roles and their permissions."
+      },
+      "manage": {
+        "name": "Manage roles",
+        "description": "Create, edit, and delete custom roles."
+      }
+    },
+    "api_keys": {
+      "view": {
+        "name": "View API keys",
+        "description": "See workspace API keys."
+      },
+      "create": {
+        "name": "Create API keys",
+        "description": "Issue new API keys."
+      },
+      "revoke": {
+        "name": "Revoke API keys",
+        "description": "Revoke existing API keys."
+      }
+    },
+    "api_usage": {
+      "view": {
+        "name": "View API usage",
+        "description": "See API request usage for this workspace."
+      }
+    },
+    "billing": {
+      "view": {
+        "name": "View billing",
+        "description": "See subscription, usage, credits, and history."
+      },
+      "manage": {
+        "name": "Manage subscription",
+        "description": "Change plans and manage the subscription."
+      },
+      "purchase_credits": {
+        "name": "Purchase credits",
+        "description": "Buy additional credit packs."
+      }
+    }
+  },
   "roles": {
     "owner": "Owner",
-    "admin": "Admin",
+    "admin": "Administrator",
     "member": "Member"
   },
   "auth": {
@@ -719,6 +892,46 @@
     "pendingDescription": "Invites that have not been accepted yet.",
     "matrixTitle": "Roles & permissions",
     "matrixDescription": "What each workspace role can do. The server always has the final say.",
+    "tabs": {
+      "members": "Members",
+      "roles": "Roles"
+    },
+    "roles": {
+      "title": "Roles",
+      "descriptionPage": "Define workspace roles and the permissions they grant.",
+      "listHint": "System roles are protected. Custom roles can be edited or deleted when unused.",
+      "create": "Create role",
+      "createTitle": "Create a role",
+      "editTitle": "Edit role",
+      "editorDescription": "Choose a name and the permissions this role should grant.",
+      "name": "Role name",
+      "namePlaceholder": "e.g. Analyst",
+      "description": "Description",
+      "descriptionOptional": "Optional. Shown when inviting people to this role.",
+      "permissionsHeading": "Permissions",
+      "selectedCount": "{{selected}} of {{total}} selected",
+      "groupCount": "{{selected}} of {{total}}",
+      "search": "Find a permission",
+      "emptyFilter": "No permissions match this search.",
+      "loadingPermissions": "Loading permissions…",
+      "toggleGroup": "Select all {{group}} permissions",
+      "systemNameLocked": "System role names can’t be changed.",
+      "saving": "Saving…",
+      "edit": "Edit",
+      "view": "View",
+      "created": "Role created",
+      "updated": "Role updated",
+      "deleted": "Role deleted",
+      "deleteConfirm": "Delete role {{name}}? Members must be reassigned first.",
+      "system": "System",
+      "systemOwner": "System · full access",
+      "custom": "Custom",
+      "assignedCount": "{{count}} assigned",
+      "ownerLocked": "The Workspace Owner always has full access.",
+      "ownerFullAccess": "The Workspace Owner always has full access.",
+      "selectGroup": "Select all",
+      "clearGroup": "Clear"
+    },
     "invite": "Invite member",
     "inviteTitle": "Invite a member",
     "inviteDescription": "They will receive an email and must sign in with the same address to join.",
@@ -782,7 +995,8 @@
       "alreadyInvited": "An invitation has already been sent to this email.",
       "invalidEmail": "Enter a valid email address.",
       "notFound": "Invitation not found.",
-      "emailFailed": "The invitation email could not be sent. Try again."
+      "emailFailed": "The invitation email could not be sent. Try again.",
+      "rolesUnavailable": "Assignable roles could not be loaded. Try again before sending."
     }
   },
   "invitations": {
@@ -1302,6 +1516,14 @@
     "validation": "Please check your input",
     "conflict": "This action conflicts with the current state",
     "forbidden": "You do not have permission for this action",
+    "forbiddenTitle": "Access denied",
+    "forbiddenPage": "You do not have permission to view this page. Ask a workspace owner to grant access, or choose another area from the sidebar.",
+    "goHome": "Go to Geem",
+    "unknownPermission": "That permission is not available.",
+    "roleNotFound": "That role was not found in this workspace.",
+    "roleInUse": "Reassign members before deleting this role.",
+    "roleProtected": "This system role cannot be changed that way.",
+    "roleNameTaken": "A role with this name already exists.",
     "expertNotFound": "Expert not found",
     "expertAccessDenied": "You do not have access to this expert",
     "expertImmutable": "This expert cannot be modified",

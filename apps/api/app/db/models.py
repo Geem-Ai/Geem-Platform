@@ -25,7 +25,14 @@ from app.db.session import Base
 
 # Domain models registered on the same Base metadata (Phase 1A+).
 from app.identity.models import Session, User  # noqa: E402
-from app.workspaces.models import Workspace, WorkspaceInvitation, WorkspaceMembership  # noqa: E402
+from app.workspaces.models import (  # noqa: E402
+    Permission,
+    Workspace,
+    WorkspaceInvitation,
+    WorkspaceMembership,
+    WorkspaceRoleDef,
+    WorkspaceRolePermission,
+)
 from app.experts.models import (  # noqa: E402
     Expert,
     ExpertDocument,
@@ -81,6 +88,9 @@ __all__ = [
     "Workspace",
     "WorkspaceMembership",
     "WorkspaceInvitation",
+    "Permission",
+    "WorkspaceRoleDef",
+    "WorkspaceRolePermission",
     "Expert",
     "ExpertSource",
     "ExpertDocument",
