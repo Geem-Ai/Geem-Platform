@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { Meter } from '@/services/api/usage';
 import {
+  DAY_MS,
   formatBytesLabel,
   formatCount,
   formatPeriodDateTime,
@@ -19,7 +21,9 @@ import {
   meterPercentage,
   meterWarningLevel,
   quotaProgressClass,
+  remainingHoursMinutes,
   type QuotaWarningLevel,
+  type RemainingHoursMinutes,
 } from '../lib/quota';
 
 type QuotaMeterProps = {
@@ -31,7 +35,35 @@ type QuotaMeterProps = {
   layout?: 'card' | 'row';
   icon?: LucideIcon;
   className?: string;
+  /** Relative countdown: days when ≥24h, otherwise hours and minutes. */
+  resetDisplay?: 'absolute' | 'countdown';
 };
+
+function resetCountdownLabel(
+  remaining: RemainingHoursMinutes | null,
+  t: TFunction,
+): string {
+  if (!remaining || remaining.totalMs < 60_000) {
+    return t('usage.periodResetsSoon');
+  }
+  if (remaining.totalMs >= DAY_MS) {
+    return t('usage.periodResetsIn', {
+      duration: t('usage.day', { count: remaining.days }),
+    });
+  }
+  const hoursLabel = t('usage.hour', { count: remaining.hours });
+  const minutesLabel = t('usage.minute', { count: remaining.minutes });
+  if (remaining.hours > 0 && remaining.minutes > 0) {
+    return t('usage.periodResetsInCompound', {
+      hours: hoursLabel,
+      minutes: minutesLabel,
+    });
+  }
+  if (remaining.hours > 0) {
+    return t('usage.periodResetsIn', { duration: hoursLabel });
+  }
+  return t('usage.periodResetsIn', { duration: minutesLabel });
+}
 
 function statusBadgeVariant(
   level: QuotaWarningLevel,
@@ -50,6 +82,7 @@ export function QuotaMeter({
   layout = 'card',
   icon: Icon,
   className,
+  resetDisplay = 'absolute',
 }: QuotaMeterProps) {
   const { t, i18n } = useTranslation();
   const unlimited = isUnlimitedLimit(meter.limit);
@@ -61,7 +94,13 @@ export function QuotaMeter({
     format === 'bytes'
       ? formatBytesLabel(n, i18n.language, (unit) => t(`usage.units.${unit}`))
       : formatCount(n, i18n.language);
-  const periodEnd = formatPeriodDateTime(meter.period_end, i18n.language);
+  const periodEndAbsolute = formatPeriodDateTime(meter.period_end, i18n.language);
+  const periodEndLabel =
+    resetDisplay === 'countdown' && meter.period_end
+      ? resetCountdownLabel(remainingHoursMinutes(meter.period_end), t)
+      : periodEndAbsolute
+        ? t('usage.periodEnds', { time: periodEndAbsolute })
+        : null;
   const showBadge = level !== 'normal';
 
   const status = (
@@ -129,9 +168,13 @@ export function QuotaMeter({
       ) : meter.limit <= 0 ? (
         <CardDescription>{t('usage.noAllowance')}</CardDescription>
       ) : null}
-      {periodEnd ? (
-        <p className="text-xs text-muted-foreground" data-testid={`${testId}-period`}>
-          {t('usage.periodEnds', { time: periodEnd })}
+      {periodEndLabel ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid={`${testId}-period`}
+          title={resetDisplay === 'countdown' ? (periodEndAbsolute ?? undefined) : undefined}
+        >
+          {periodEndLabel}
         </p>
       ) : null}
       {format === 'bytes' && !unlimited ? (

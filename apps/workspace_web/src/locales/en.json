@@ -649,6 +649,15 @@
     "remaining": "Remaining",
     "percentage": "Used",
     "periodEnds": "Resets {{time}}",
+    "periodResetsIn": "Resets in {{duration}}",
+    "periodResetsInCompound": "Resets in {{hours}} and {{minutes}}",
+    "periodResetsSoon": "Resets soon",
+    "hour_one": "{{count}} hour",
+    "hour_other": "{{count}} hours",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes",
+    "day_one": "{{count}} day",
+    "day_other": "{{count}} days",
     "currentPeriod": "Current period",
     "exactBytes": "{{bytes}} bytes",
     "units": {
@@ -1362,10 +1371,15 @@
       "ops": {
         "name": "WhatsApp Ops",
         "description": "Up to ten WhatsApp connections for operations teams."
+      },
+      "standard": {
+        "name": "Chat Widget Standard",
+        "description": "One embeddable chat widget grounded on a Geem Expert."
       }
     },
     "entitlements": {
       "connections": "{{count}} connections",
+      "widgets": "{{count}} widgets",
       "sessions": "{{count}} sessions",
       "other": "{{key}}: {{value}}"
     },
@@ -1420,7 +1434,50 @@
         "name": "WhatsApp",
         "shortDescription": "Connect WhatsApp conversations to a Geem Expert.",
         "description": "Subscribe to a WhatsApp plan, install the app, then connect one or more WhatsApp numbers. Bind each connection to an Expert to answer inbound messages."
+      },
+      "chat-widget": {
+        "name": "Chat Widget",
+        "shortDescription": "Embed a Geem Expert chat widget on your website.",
+        "description": "Subscribe monthly, install Chat Widget, bind one Expert for private RAG grounding, customize appearance, and paste a script tag on your site. Optional allowed origins restrict which domains can load the widget."
       }
+    },
+    "chatWidget": {
+      "configure": "Configure widget",
+      "title": "Chat widget embed",
+      "grounding": "Private RAG grounding",
+      "groundingHint": "Select a Geem Expert. Its knowledge grounds visitor answers and supplements Geem Core skills.",
+      "selectExpert": "Select Expert",
+      "changeExpert": "Change Expert",
+      "noExpert": "No Expert selected",
+      "appearance": "Appearance",
+      "fieldTitle": "Title",
+      "fieldSubtitle": "Subtitle",
+      "fieldGreeting": "Greeting message",
+      "fieldLogoUrl": "Logo URL",
+      "fieldLanguage": "Language",
+      "fieldPosition": "Position",
+      "fieldPrimaryColor": "Primary color",
+      "fieldTextColor": "Text color",
+      "positionBottomRight": "Bottom right",
+      "positionBottomLeft": "Bottom left",
+      "langAr": "Arabic",
+      "langEn": "English",
+      "allowedOrigins": "Allowed origins",
+      "allowedOriginsHint": "Optional. One https origin per line (exact match). Leave empty to allow any site.",
+      "allowedOriginsPlaceholder": "https://www.example.com",
+      "embedCode": "Embed code",
+      "embedHint": "Add this script before the closing </body> tag on your site.",
+      "embedNote": "Appearance updates apply automatically after saving — you do not need to change the script tag.",
+      "copyEmbed": "Copy embed code",
+      "copied": "Copied",
+      "save": "Save changes",
+      "saved": "Widget settings saved",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disable this widget and uninstall Chat Widget from the workspace?",
+      "close": "Close",
+      "statusActive": "Active",
+      "statusDisabled": "Disabled",
+      "needsExpert": "Choose an Expert before embedding the widget on your site."
     },
     "toasts": {
       "installed": "{{name}} installed",

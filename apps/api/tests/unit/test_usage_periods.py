@@ -44,25 +44,25 @@ def test_daily_converts_offset_to_utc() -> None:
     assert window.end == datetime(2026, 8, 14, tzinfo=timezone.utc)
 
 
-def test_weekly_iso_monday_boundary() -> None:
-    # 2026-08-10 is Monday; 2026-08-09 is Sunday of the previous ISO week.
-    sunday = datetime(2026, 8, 9, 23, 59, 59, tzinfo=timezone.utc)
-    monday = datetime(2026, 8, 10, 0, 0, 0, tzinfo=timezone.utc)
-    prev = period_containing(sunday, PeriodType.WEEKLY)
-    nxt = period_containing(monday, PeriodType.WEEKLY)
-    assert prev.start == datetime(2026, 8, 3, tzinfo=timezone.utc)
-    assert prev.end == monday
-    assert nxt.start == monday
-    assert nxt.end == datetime(2026, 8, 17, tzinfo=timezone.utc)
-    assert prev.contains(sunday)
-    assert not prev.contains(monday)
+def test_weekly_saturday_friday_boundary() -> None:
+    # KSA week: Saturday 00:00 UTC inclusive; Friday is the last included day.
+    friday = datetime(2026, 8, 14, 23, 59, 59, tzinfo=timezone.utc)
+    saturday = datetime(2026, 8, 15, 0, 0, 0, tzinfo=timezone.utc)
+    prev = period_containing(friday, PeriodType.WEEKLY)
+    nxt = period_containing(saturday, PeriodType.WEEKLY)
+    assert prev.start == datetime(2026, 8, 8, tzinfo=timezone.utc)
+    assert prev.end == saturday
+    assert nxt.start == saturday
+    assert nxt.end == datetime(2026, 8, 22, tzinfo=timezone.utc)
+    assert prev.contains(friday)
+    assert not prev.contains(saturday)
 
 
 def test_weekly_midweek() -> None:
     thursday = datetime(2026, 8, 13, 16, 0, tzinfo=timezone.utc)
     window = period_containing(thursday, PeriodType.WEEKLY)
-    assert window.start == datetime(2026, 8, 10, tzinfo=timezone.utc)
-    assert window.end == datetime(2026, 8, 17, tzinfo=timezone.utc)
+    assert window.start == datetime(2026, 8, 8, tzinfo=timezone.utc)
+    assert window.end == datetime(2026, 8, 15, tzinfo=timezone.utc)
     assert window.contains(thursday)
 
 

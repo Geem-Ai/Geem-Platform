@@ -76,6 +76,7 @@ from app.connectors.models import (  # noqa: E402
     ConnectorSyncRun,
     ConnectorWebhookEvent,
 )
+from app.widgets.models import WidgetInstance  # noqa: E402
 
 __all__ = [
     "Document",
@@ -125,6 +126,7 @@ __all__ = [
     "ConnectorSyncRun",
     "ConnectorItem",
     "ConnectorWebhookEvent",
+    "WidgetInstance",
 ]
 
 

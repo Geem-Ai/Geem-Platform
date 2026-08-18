@@ -5,6 +5,7 @@ import {
   isUnlimitedLimit,
   meterPercentage,
   quotaWarningLevel,
+  remainingHoursMinutes,
   worstWarningLevel,
 } from './quota';
 
@@ -67,5 +68,37 @@ describe('byte formatting', () => {
     expect(formatBytesLabel(1536, 'en', enUnit)).toContain('KB');
     expect(formatBytesLabel(1048576, 'en', enUnit)).toContain('MB');
     expect(formatBytesLabel(1048576, 'ar', arUnit)).toContain('ميغابايت');
+  });
+});
+
+describe('remainingHoursMinutes', () => {
+  const now = Date.parse('2026-08-18T12:00:00.000Z');
+
+  it('splits remaining time into whole hours and minutes', () => {
+    expect(
+      remainingHoursMinutes('2026-08-18T21:17:40.000Z', now),
+    ).toEqual({ days: 0, hours: 9, minutes: 17, totalMs: 33_460_000 });
+  });
+
+  it('splits remaining time of a day or more into whole days', () => {
+    expect(
+      remainingHoursMinutes('2026-08-22T12:00:00.000Z', now),
+    ).toEqual({
+      days: 4,
+      hours: 0,
+      minutes: 0,
+      totalMs: 4 * 86_400_000,
+    });
+  });
+
+  it('returns zeros when the instant is past', () => {
+    expect(
+      remainingHoursMinutes('2026-08-18T11:00:00.000Z', now),
+    ).toEqual({ days: 0, hours: 0, minutes: 0, totalMs: 0 });
+  });
+
+  it('returns null for missing or invalid timestamps', () => {
+    expect(remainingHoursMinutes(null, now)).toBeNull();
+    expect(remainingHoursMinutes('not-a-date', now)).toBeNull();
   });
 });

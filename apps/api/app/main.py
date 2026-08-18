@@ -4,7 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from pathlib import Path
 
 from app.api import documents, health, query
 from app.api.v1.openai_compat import (
@@ -15,7 +16,7 @@ from app.api.v1.openai_compat import (
 from app.api.v1.router import router as public_v1_router
 from app.common.middleware import RequestContextMiddleware
 from app.core.config import get_settings
-from app.core.errors import HTTP_STATUS_BY_CATEGORY, AppError
+from app.core.errors import HTTP_STATUS_BY_CATEGORY, AppError, ErrorCategory
 from app.core.logging import setup_logging
 from app.conversations.router import router as conversations_router
 from app.chat_attachments.router import router as chat_attachments_router
@@ -45,6 +46,9 @@ from app.connectors.providers.microsoft_onedrive import (
     register_microsoft_onedrive_connector,
 )
 from app.connectors.providers.openwa import register_openwa_connector
+from app.widgets.cors_middleware import PublicWidgetCorsMiddleware
+from app.widgets.public_router import router as public_widgets_router
+from app.widgets.workspace_router import router as chat_widget_router
 
 setup_logging()
 settings = get_settings()
@@ -73,6 +77,8 @@ if _regex:
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 app.add_middleware(RequestContextMiddleware)
+# Outermost: answer widget preflight before SPA-only CORS rejects customer Origins.
+app.add_middleware(PublicWidgetCorsMiddleware)
 
 app.include_router(health.router)
 app.include_router(auth_router)
@@ -95,8 +101,26 @@ app.include_router(api_keys_router)
 app.include_router(apps_catalog_router)
 app.include_router(apps_connections_router)
 app.include_router(connectors_router)
+app.include_router(chat_widget_router)
+app.include_router(public_widgets_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
+
+_WIDGET_JS = Path(__file__).resolve().parent / "widgets" / "static" / "geem-widget.js"
+
+
+@app.get("/geem-widget.js", include_in_schema=False)
+def geem_widget_script() -> FileResponse:
+    if not _WIDGET_JS.is_file():
+        raise AppError(
+            ErrorCategory.NOT_FOUND,
+            "Widget script is not built yet.",
+        )
+    return FileResponse(
+        _WIDGET_JS,
+        media_type="application/javascript; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 @app.exception_handler(AppError)
