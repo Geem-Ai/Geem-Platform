@@ -40,13 +40,36 @@ const icons: Record<string, string> = {
         ))
       }
     </ul>
+
+    <article class="system-callout">
+      <span class="system-callout__icon" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect x="3.5" y="4.5" width="7" height="7" rx="2"></rect>
+          <rect x="21.5" y="4.5" width="7" height="7" rx="2"></rect>
+          <rect x="12.5" y="20.5" width="7" height="7" rx="2"></rect>
+          <circle cx="16" cy="14.5" r="3"></circle>
+          <path d="m10.5 10.5 3.3 2.5M21.5 10.5 18.2 13M16 17.5v3"></path>
+        </svg>
+      </span>
+
+      <div class="system-callout__copy">
+        <p>{copy.integrations.systemCard.eyebrow}</p>
+        <h3>{copy.integrations.systemCard.title}</h3>
+        <p>{copy.integrations.systemCard.description}</p>
+      </div>
+
+      <ul class="system-callout__tags" aria-label={copy.integrations.systemCard.eyebrow}>
+        {copy.integrations.systemCard.tags.map((tag) => <li>{tag}</li>)}
+      </ul>
+    </article>
   </div>
 </Section>
 
 <style>
   .integration-panel {
     display: grid;
-    gap: clamp(2rem, 5vw, 4rem);
+    column-gap: clamp(2rem, 5vw, 4rem);
+    row-gap: clamp(1.5rem, 3vw, 2.25rem);
     align-items: center;
     padding: clamp(1.5rem, 4vw, 3rem);
     border: 1px solid var(--geem-border);
@@ -111,9 +134,101 @@ const icons: Record<string, string> = {
     line-height: 1.35;
   }
 
+  .system-callout {
+    position: relative;
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 1rem;
+    align-items: center;
+    overflow: hidden;
+    padding: clamp(1.25rem, 3vw, 1.75rem);
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 25%, transparent);
+    border-radius: 1.4rem;
+    background:
+      radial-gradient(circle at 92% 0%, color-mix(in oklab, var(--geem-sky) 20%, transparent), transparent 42%),
+      linear-gradient(135deg, var(--geem-navy-950), var(--geem-navy-800));
+    color: white;
+    box-shadow: 0 20px 45px color-mix(in oklab, var(--geem-navy-950) 18%, transparent);
+  }
+
+  .system-callout__icon {
+    display: grid;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    place-items: center;
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 45%, transparent);
+    border-radius: 1rem;
+    background: color-mix(in oklab, white 7%, transparent);
+    color: var(--geem-sand);
+  }
+
+  .system-callout__icon svg {
+    inline-size: 2rem;
+    block-size: 2rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
+  .system-callout__copy {
+    min-width: 0;
+  }
+
+  .system-callout__copy > p:first-child {
+    color: var(--geem-sand);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .system-callout__copy h3 {
+    margin-block-start: 0.3rem;
+    font-size: clamp(1.2rem, 2.5vw, 1.55rem);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .system-callout__copy > p:last-child {
+    max-inline-size: 46rem;
+    margin-block-start: 0.55rem;
+    color: color-mix(in oklab, white 76%, transparent);
+    font-size: 0.92rem;
+    line-height: 1.75;
+  }
+
+  .system-callout__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .system-callout__tags li {
+    padding: 0.42rem 0.7rem;
+    border: 1px solid color-mix(in oklab, white 15%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, white 6%, transparent);
+    color: color-mix(in oklab, white 82%, transparent);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
   @media (min-width: 900px) {
     .integration-panel {
       grid-template-columns: minmax(0, 1fr) minmax(24rem, 0.9fr);
+    }
+
+    .system-callout {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 1.25rem;
+    }
+
+    .system-callout__tags {
+      max-inline-size: 13rem;
+      justify-content: flex-end;
     }
   }
 
