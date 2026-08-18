@@ -71,6 +71,7 @@ Expired / missing subscription, disabled widget, or unbound Expert → fail clos
 Optional `data-api-base` overrides the API origin (defaults to the script host).
 Appearance changes apply after save without editing the script tag.
 Launcher uses `/geem-animated.svg` (same waving Geem mascot as Workspace Chat).
+Assistant replies render **GitHub-flavored Markdown** (headings, lists, links, code, tables) with HTML sanitization; visitor messages stay plain text.
 
 ## 6. Build the script
 

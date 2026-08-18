@@ -1,3 +1,6 @@
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
 type Bootstrap = {
   widget_id: string;
   title: string;
@@ -72,6 +75,19 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
+function renderMarkdown(content: string): string {
+  const raw = marked.parse(content, { async: false }) as string;
+  return DOMPurify.sanitize(raw, {
+    USE_PROFILES: { html: true },
+    ADD_ATTR: ['target', 'rel'],
+  });
+}
+
 function css(): string {
   return `
 .geem-widget-root{all:initial;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -86,17 +102,39 @@ function css(): string {
 .geem-header h1{margin:0;font-size:15px;font-weight:700;line-height:1.2}
 .geem-header p{margin:2px 0 0;font-size:12px;opacity:.85}
 .geem-messages{flex:1;overflow:auto;padding:14px;background:#f6f7f9;display:flex;flex-direction:column;gap:10px}
-.geem-bubble{max-width:85%;padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
-.geem-bubble.bot{align-self:flex-start;background:#fff;border:1px solid #e6e8ec;color:#374151}
-.geem-bubble.user{align-self:flex-end;color:#fff}
-.geem-bubble.thinking{color:#6b7280}
+.geem-bubble{max-width:90%;padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.55;word-break:break-word}
+.geem-bubble.bot{align-self:flex-start;background:#fff;border:1px solid #e6e8ec;color:#374151;white-space:normal}
+.geem-bubble.user{align-self:flex-end;color:#fff;white-space:pre-wrap}
+.geem-bubble.thinking{color:#6b7280;white-space:pre-wrap}
+.geem-md{margin:0}
+.geem-md>*:first-child{margin-top:0!important}
+.geem-md>*:last-child{margin-bottom:0!important}
+.geem-md p{margin:0.55em 0;line-height:1.55}
+.geem-md h1,.geem-md h2,.geem-md h3,.geem-md h4{margin:0.75em 0 0.4em;font-weight:700;line-height:1.3;color:#111}
+.geem-md h1{font-size:1.2em}
+.geem-md h2{font-size:1.1em}
+.geem-md h3{font-size:1.05em}
+.geem-md ul,.geem-md ol{margin:0.55em 0;padding-inline-start:1.35em}
+.geem-md li{margin:0.3em 0}
+.geem-md li>p{margin:0.2em 0}
+.geem-md a{color:#0e2f44;text-decoration:underline;word-break:break-word}
+.geem-md strong{font-weight:700}
+.geem-md em{font-style:italic}
+.geem-md code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.85em;background:#f3f4f6;padding:0.1em 0.35em;border-radius:4px}
+.geem-md pre{margin:0.65em 0;padding:10px 12px;overflow-x:auto;background:#111827;color:#f9fafb;border-radius:8px;font-size:12px;line-height:1.45}
+.geem-md pre code{background:transparent;padding:0;color:inherit;font-size:inherit}
+.geem-md blockquote{margin:0.65em 0;padding:0.25em 0 0.25em 0.85em;border-inline-start:3px solid #d1d5db;color:#6b7280}
+.geem-md hr{margin:0.85em 0;border:none;border-top:1px solid #e5e7eb}
+.geem-md table{display:block;width:100%;margin:0.65em 0;overflow-x:auto;border-collapse:collapse;font-size:13px}
+.geem-md th,.geem-md td{border:1px solid #e5e7eb;padding:6px 8px;text-align:start}
+.geem-md th{background:#f9fafb;font-weight:600}
 .geem-thinking-cursor{display:inline-block;width:1px;height:0.9em;margin-inline-start:2px;vertical-align:middle;background:currentColor;animation:geem-pulse 1s ease-in-out infinite}
 @keyframes geem-pulse{0%,100%{opacity:1}50%{opacity:.25}}
-.geem-composer{display:flex;gap:8px;padding:10px 10px 8px;border-top:1px solid #e6e8ec;background:#fff}
-.geem-composer input{flex:1;border:1px solid #d7dbe3;border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
-.geem-composer button{border:none;border-radius:10px;padding:0 14px;cursor:pointer;font-weight:600;color:#fff}
+.geem-composer{display:flex;align-items:center;gap:8px;padding:10px 10px 0;border-top:1px solid #e6e8ec;background:#fff}
+.geem-composer input{flex:1;height:40px;border:1px solid #d7dbe3;border-radius:10px;padding:0 12px;font-size:14px;line-height:40px;outline:none;margin:0}
+.geem-composer button{flex-shrink:0;height:40px;border:none;border-radius:10px;padding:0 14px;cursor:pointer;font-size:14px;font-weight:600;line-height:40px;color:#fff;margin:0}
 .geem-composer button:disabled{opacity:.6;cursor:not-allowed}
-.geem-footer{padding:0 10px 10px;background:#fff;text-align:center;font-size:11px;line-height:1.4;color:#9ca3af}
+.geem-footer{display:block;margin:0;padding:6px 10px;background:#fff;text-align:center;font-size:11px;line-height:1;color:#9ca3af}
 .geem-footer a{color:#0e2f44;font-weight:600;text-decoration:none}
 .geem-footer a:hover{text-decoration:underline}
 .geem-close{margin-inline-start:auto;background:transparent;border:none;color:inherit;cursor:pointer;font-size:18px;opacity:.85}
@@ -303,8 +341,19 @@ async function boot() {
   function addBubble(textContent: string, kind: 'bot' | 'user') {
     const el = document.createElement('div');
     el.className = `geem-bubble ${kind}`;
-    if (kind === 'user') el.style.background = primary;
-    el.textContent = textContent;
+    if (kind === 'user') {
+      el.style.background = primary;
+      el.textContent = textContent;
+    } else {
+      const md = document.createElement('div');
+      md.className = 'geem-md';
+      md.innerHTML = renderMarkdown(textContent);
+      md.querySelectorAll('a[href]').forEach((anchor) => {
+        anchor.setAttribute('target', '_blank');
+        anchor.setAttribute('rel', 'noopener noreferrer');
+      });
+      el.appendChild(md);
+    }
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
     return el;
