@@ -70,6 +70,7 @@ Expired / missing subscription, disabled widget, or unbound Expert → fail clos
 
 Optional `data-api-base` overrides the API origin (defaults to the script host).
 Appearance changes apply after save without editing the script tag.
+Launcher uses `/geem-animated.svg` (same waving Geem mascot as Workspace Chat).
 
 ## 6. Build the script
 
