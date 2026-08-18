@@ -7,13 +7,13 @@ export const en: SiteCopy = {
       'Turn your organization’s knowledge into AI Experts your team can use in chat, WhatsApp, your website, and your systems.',
     aboutTitle: 'About Geem and DALSEEN',
     aboutDescription:
-      'Geem is an AI platform for organizations, built by Dal Seen Information Technology Company in Madinah.',
+      'Meet Geem, the AI product of DALSEEN—a Saudi technology company that began in Jeddah and is now based in Madinah.',
     contactTitle: 'Contact Geem',
     contactDescription: 'Talk with the Geem team about Experts, knowledge, and channels for your organization.',
     privacyTitle: 'Privacy Policy',
-    privacyDescription: 'How Dal Seen protects your data when you use Geem.',
+    privacyDescription: 'What Geem processes, why it is needed, how organizations manage workspaces, and how you can exercise your rights.',
     termsTitle: 'Terms of Use',
-    termsDescription: 'General terms for using the Geem platform.',
+    termsDescription: 'Terms for using Geem workspaces, Experts, integrations, and the responsibilities of organizations and users.',
     pdplTitle: 'Personal Data Protection Notice',
     pdplDescription: 'Personal data protection notice for Geem users.',
     securityTitle: 'Security and your organization’s privacy',
@@ -354,13 +354,71 @@ export const en: SiteCopy = {
     madeIn: 'Made in Madinah',
   },
   about: {
-    title: 'About Geem and DALSEEN',
-    lead: 'Geem is an AI platform for organizations, built by Dal Seen Information Technology Company in Madinah.',
-    paragraphs: [
-      'Geem helps organizations turn private knowledge into AI Experts that teams can use in chat, WhatsApp, the website, and internal systems — with clear permissions and a private workspace.',
-      'DALSEEN is a Saudi product company. We keep a clear Saudi identity, including “Made in Madinah,” without inventing certifications or unsupported numbers.',
-      'This site introduces Geem. Commercial details are handled through contact or inside the workspace, based on your subscription and the apps you enable.',
+    hero: {
+      eyebrow: 'About Geem',
+      title: 'From Madinah, we build AI around how organizations really work.',
+      description:
+        'Geem is the AI product of Dal Seen Information Technology Company—a Saudi technology company that began in Jeddah and is now based in Madinah.',
+      primaryCta: 'See how Geem works',
+      secondaryCta: 'Talk with the team',
+      companyLabel: 'Saudi technology company',
+      productLabel: 'AI Experts for organizations',
+    },
+    facts: [
+      { value: 'DALSEEN', label: 'The Saudi company building Geem' },
+      { value: 'Jeddah', label: 'Where the company journey began' },
+      { value: 'Madinah', label: 'Where we build and grow today' },
     ],
+    story: {
+      eyebrow: 'Our story',
+      title: 'We started with a practical need and grew alongside Saudi organizations.',
+      description:
+        'DALSEEN began as a small team building digital solutions around real operating needs. As its work expanded across the Kingdom, it continued developing products that make technology clearer and more useful in the working day.',
+      milestones: [
+        {
+          place: 'Jeddah',
+          title: 'Starting with real work',
+          description: 'The journey began during the pandemic by building digital solutions for practical operating needs.',
+        },
+        {
+          place: 'Across Saudi Arabia',
+          title: 'Growing with organizations',
+          description: 'Experience expanded across Saudi markets, and the products evolved with what the team learned from customers.',
+        },
+        {
+          place: 'Madinah',
+          title: 'A home for long-term building',
+          description: 'DALSEEN made Madinah its home base and continues to develop Geem and its technology products from there.',
+        },
+      ],
+    },
+    principles: {
+      eyebrow: 'How we build',
+      title: 'Three principles connect DALSEEN and Geem.',
+      description: 'We measure technology by how well it helps teams do real work—not by the number of features or technical terms.',
+      items: [
+        { title: 'Start with real work', description: 'Design around workflows that teams actually use.' },
+        { title: 'Make complexity useful', description: 'Turn technology into practical, understandable tools for the working day.' },
+        { title: 'Build for trust and growth', description: 'Develop products organizations can depend on and grow with.' },
+      ],
+    },
+    geem: {
+      eyebrow: 'Carrying the approach forward',
+      title: 'Geem turns operating experience into intelligence your team can use.',
+      description:
+        'Geem is not a generic chatbot. Your organization creates Experts grounded in approved knowledge, then makes them available to teams and customers through the right channels and systems.',
+      points: [
+        'Experts grounded in organizational knowledge and workspace permissions',
+        'An Arabic-first experience with support for other languages',
+        'Available in chat, WhatsApp, websites, and API integrations',
+      ],
+    },
+    cta: {
+      title: 'Let’s build an Expert around how your organization works.',
+      description: 'Tell us which knowledge you want to activate and which teams and systems need access to it.',
+      primaryCta: 'Talk with the Geem team',
+      secondaryCta: 'Explore the product',
+    },
   },
   contact: {
     title: 'Contact the Geem team',
@@ -374,7 +432,237 @@ export const en: SiteCopy = {
   legal: {
     lastUpdatedLabel: 'Last updated',
     lastUpdated: '18 August 2026',
-    notice:
-      'Adapted from the previously published geem.ai notice to match the current Geem platform. Final legal review is recommended before treating this as the production document of record.',
+    operatorLabel: 'Operator',
+    contactLabel: 'Data contact',
+    contentsLabel: 'Document contents',
+    relatedLabel: 'Related documents',
+    pages: {
+      privacy: {
+        hero: {
+          eyebrow: 'Privacy at Geem',
+          title: 'A privacy policy written in plain language.',
+          description: 'This policy explains what we process to operate Geem, your organization’s role in managing its workspace, and the choices available to you.',
+        },
+        highlights: [
+          { title: 'A workspace your organization manages', description: 'Your organization chooses members, roles, approved knowledge, and integrations.' },
+          { title: 'Only what is needed', description: 'We do not sell personal data or private organizational knowledge.' },
+          { title: 'Rights you can exercise', description: 'You can contact us about access, correction, or destruction requests where the law applies.' },
+        ],
+        scopeNotice: 'This policy applies to Geem websites, accounts, workspaces, and sales and support services. Your organization’s agreement or the Personal Data Protection Notice may provide additional terms.',
+        sections: [
+          {
+            id: 'scope',
+            title: 'Operator and scope',
+            paragraphs: [
+              'Dal Seen Information Technology Company operates Geem. This policy applies when you visit Geem websites, create an account, access a workspace, contact sales or support, or otherwise use Geem services.',
+              'Dal Seen generally acts as controller for account records, website enquiries, and security logs. For private workspace content, the customer organization generally acts as controller and Dal Seen processes the data under the applicable agreement.',
+            ],
+          },
+          {
+            id: 'data',
+            title: 'Data we may process',
+            paragraphs: ['The data depends on how you use Geem and the features your organization enables. It may include:'],
+            bullets: [
+              'Identity, contact, account, membership, and permission data.',
+              'Documents, content, and knowledge your organization authorizes Geem to use.',
+              'Billing, support, and commercial communication records where applicable.',
+              'Technical and security data needed to operate and protect the service.',
+            ],
+          },
+          {
+            id: 'purposes',
+            title: 'Why we use data',
+            paragraphs: [
+              'We use data to create and secure accounts, provide workspaces, Experts, and channels, retrieve authorized knowledge, support customers, issue invoices where applicable, prevent misuse, and meet legal obligations.',
+              'The applicable legal basis depends on the relationship and purpose and may include performing a contract, meeting a legal obligation, legitimate interests where permitted, or consent when required.',
+            ],
+          },
+          {
+            id: 'sources',
+            title: 'How we collect data',
+            paragraphs: ['We receive data from three main sources:'],
+            bullets: [
+              'Directly from you when you register, communicate with us, or use the service.',
+              'From your organization when it invites you to a workspace or manages your role and permissions.',
+              'From devices, services, and integrations your organization enables, including technical logs needed for operation and security.',
+            ],
+          },
+          {
+            id: 'ai-processing',
+            title: 'Hosting and AI processing',
+            paragraphs: [
+              'Core workspace data is stored in Saudi Arabia. Some AI features and external integrations may require the minimum necessary data to be processed by contracted service providers, as described by the applicable agreement and privacy terms.',
+              'Your organization controls the knowledge sources and integrations it connects and should not add data it is not authorized to use.',
+            ],
+          },
+          {
+            id: 'cookies',
+            title: 'Cookies',
+            paragraphs: [
+              'Geem uses essential cookies and similar local technologies for sessions, security, and locale. This website does not load marketing trackers unless we later disclose an approved provider and the purpose for using it.',
+            ],
+          },
+          {
+            id: 'disclosure',
+            title: 'Disclosure and service providers',
+            paragraphs: [
+              'We do not sell personal data or private organizational knowledge. Minimum necessary data may be disclosed to contracted service providers, the organization administering your workspace, or competent authorities when legally required.',
+            ],
+          },
+          {
+            id: 'retention',
+            title: 'Retention and protection',
+            paragraphs: [
+              'We retain data for as long as needed to provide the service and meet legal and contractual requirements. We use logical workspace isolation, server-enforced permissions, and controls that protect integration secrets and access keys.',
+            ],
+          },
+          {
+            id: 'rights',
+            title: 'Your rights and how to contact us',
+            paragraphs: [
+              'You may request access, correction, destruction, or withdrawal of consent where applicable, subject to the Saudi Personal Data Protection Law, its regulations, and identity verification.',
+              'Send your request to info@dalseen.sa with a clear description and the relevant workspace, if any.',
+            ],
+          },
+        ],
+        relatedLinks: [
+          { label: 'Security at Geem', href: 'security' },
+          { label: 'Personal Data Protection Notice', href: 'pdpl' },
+          { label: 'Terms of Use', href: 'terms' },
+        ],
+        cta: {
+          title: 'Have a question about your data?',
+          description: 'Contact us for more information about privacy, data flows, or exercising your rights.',
+          label: 'Contact Dal Seen',
+        },
+      },
+      terms: {
+        hero: {
+          eyebrow: 'Using Geem',
+          title: 'Clear terms for using the platform.',
+          description: 'These terms explain the responsibilities of Dal Seen, customer organizations, and users when creating a workspace or using Geem Experts and channels.',
+        },
+        highlights: [
+          { title: 'Lawful use', description: 'Use Geem, its keys, and its integrations only for authorized and lawful purposes.' },
+          { title: 'Human review', description: 'Review important outputs before relying on them in a decision or action.' },
+          { title: 'Your data remains yours', description: 'Customers retain their rights in the data and content they submit.' },
+        ],
+        scopeNotice: 'These general terms apply unless an enterprise agreement or order form provides specific terms. Where they conflict, the specific document controls within its scope.',
+        sections: [
+          {
+            id: 'acceptance',
+            title: 'Acceptance and scope',
+            paragraphs: [
+              'These terms govern access to and use of Geem. Registration, a workspace invitation, or an enterprise agreement may present additional terms for the requested service.',
+              'If you use Geem for an organization, you must have the authority needed to accept the applicable terms and commitments.',
+            ],
+          },
+          {
+            id: 'accounts',
+            title: 'Accounts and workspaces',
+            paragraphs: [
+              'Workspaces are administered by the customer organization. The organization controls members, roles, authorized knowledge, and integrations within the service scope.',
+              'You are responsible for accurate account information, protecting your sign-in methods, and notifying us of any known unauthorized use.',
+            ],
+          },
+          {
+            id: 'acceptable-use',
+            title: 'Acceptable and prohibited use',
+            paragraphs: ['Use Geem only for lawful purposes and within the permissions granted to you. In particular, you must not:'],
+            bullets: [
+              'Bypass security controls or attempt to access another workspace or data without authorization.',
+              'Misuse API keys or share sign-in credentials insecurely.',
+              'Submit unlawful content or content you are not authorized to use or process.',
+              'Use the service to harm others, disrupt the platform, or test it without written approval.',
+            ],
+          },
+          {
+            id: 'ai-outputs',
+            title: 'AI outputs',
+            paragraphs: [
+              'Geem generates probabilistic outputs that may be incomplete or incorrect. Review important outputs and apply appropriate human oversight, particularly for financial, legal, employment, or other high-impact decisions.',
+              'Geem outputs do not by themselves make a legally binding decision about an individual and do not replace specialized professional advice.',
+            ],
+          },
+          {
+            id: 'content',
+            title: 'Customer content and intellectual property',
+            paragraphs: [
+              'Geem’s platform, marks, software, and documentation remain owned by Dal Seen or its licensors. Customers retain rights in the data and content they submit.',
+              'The customer gives Dal Seen only the permissions needed to process that content to provide and protect the service under the applicable agreement and Privacy Policy.',
+            ],
+          },
+          {
+            id: 'integrations',
+            title: 'Integrations and third-party services',
+            paragraphs: [
+              'Customers may connect Geem to external services such as cloud storage, WhatsApp, or internal systems. Those services are governed by their providers’ terms, and the customer is responsible for selecting them and granting appropriate permissions.',
+            ],
+          },
+          {
+            id: 'commercial',
+            title: 'Subscriptions and service limits',
+            paragraphs: [
+              'Fees, limits, quotas, subscription periods, and any additional commitments are defined by the applicable plan, order form, or enterprise agreement. Experimental or free features may change or end after reasonable notice.',
+            ],
+          },
+          {
+            id: 'suspension',
+            title: 'Suspension and termination',
+            paragraphs: [
+              'Access may be suspended or limited where there is a security risk, prohibited use, overdue payment, or a need to protect the platform or its users. Termination and data-handling provisions follow the applicable agreement.',
+            ],
+          },
+          {
+            id: 'law',
+            title: 'Governing law and language',
+            paragraphs: [
+              'These terms are governed by the laws of Saudi Arabia. The Arabic version of the public terms controls if the language versions differ, unless a signed enterprise agreement states otherwise.',
+            ],
+          },
+        ],
+        relatedLinks: [
+          { label: 'Privacy Policy', href: 'privacy' },
+          { label: 'Personal Data Protection Notice', href: 'pdpl' },
+          { label: 'Security at Geem', href: 'security' },
+        ],
+        cta: {
+          title: 'Does your organization need specific terms?',
+          description: 'Contact us to discuss usage scope, integrations, or enterprise contracting requirements.',
+          label: 'Discuss your requirements',
+        },
+      },
+      pdpl: {
+        hero: {
+          eyebrow: 'Personal data protection',
+          title: 'Your rights under Saudi law.',
+          description: 'This notice supplements the Privacy Policy and explains roles, rights, and how to submit a personal data request.',
+        },
+        highlights: [
+          { title: 'Right to be informed', description: 'Understand the purpose, basis, and parties that may receive your data.' },
+          { title: 'Access and correction', description: 'Request a readable copy and correction of inaccurate data where applicable.' },
+          { title: 'Request destruction', description: 'Request destruction when the conditions under the law are met.' },
+        ],
+        scopeNotice: 'This notice supplements the Privacy Policy and should be read with it and the agreement governing your organization’s workspace.',
+        sections: [
+          { id: 'framework', title: 'Legal framework', paragraphs: ['This notice is informed by the Saudi Personal Data Protection Law, its Implementing Regulations, and the regulation governing transfers of personal data outside the Kingdom.'] },
+          { id: 'controller', title: 'Controller', paragraphs: ['Dal Seen generally acts as controller for account, direct communication, and security data. For customer workspace data, the organization generally acts as controller and Dal Seen processes the data under the applicable agreement.'] },
+          { id: 'rights', title: 'Rights', paragraphs: ['Subject to the law and identity verification, you may request to be informed, access data, obtain a readable copy, correct it, request destruction, and withdraw consent where consent is the basis of processing.'] },
+          { id: 'requests', title: 'Exercising your rights', paragraphs: ['Email info@dalseen.sa with the subject “Personal Data Request”. We aim to respond within the period permitted by applicable laws and regulations after verifying identity and the scope of the request.'] },
+          { id: 'complaints', title: 'Complaints', paragraphs: ['If you are dissatisfied with the handling of your request, you may complain to the Saudi Data and AI Authority through the National Data Governance Platform using its available procedures.'] },
+          { id: 'ai', title: 'AI-assisted processing', paragraphs: ['Geem uses AI-assisted processing to retrieve authorized knowledge, generate text, and operate the service. Outputs do not by themselves make a legally binding decision about an individual.'] },
+        ],
+        relatedLinks: [
+          { label: 'Privacy Policy', href: 'privacy' },
+          { label: 'Security at Geem', href: 'security' },
+          { label: 'Terms of Use', href: 'terms' },
+        ],
+        cta: {
+          title: 'Want to exercise one of your rights?',
+          description: 'Send a clear personal data request and we will help direct it to the appropriate party.',
+          label: 'Contact us about your data',
+        },
+      },
+    },
   },
 };

@@ -1,0 +1,604 @@
+---
+import type { AboutPageCopy } from '../../content/site/types';
+import type { Locale } from '../../lib/i18n';
+import { localizedPath } from '../../lib/site';
+import Button from '../ui/Button.astro';
+
+type Props = {
+  locale: Locale;
+  copy: AboutPageCopy;
+};
+
+const { locale, copy } = Astro.props;
+const homeHref = localizedPath(locale);
+const contactHref = localizedPath(locale, 'contact');
+const dalseenName = locale === 'ar' ? 'دال سين' : 'DALSEEN';
+const geemName = locale === 'ar' ? 'جيم' : 'Geem';
+---
+
+<section class="about-hero">
+  <div class="container-shell about-hero__grid">
+    <div class="about-hero__copy">
+      <p class="about-eyebrow">{copy.hero.eyebrow}</p>
+      <h1>{copy.hero.title}</h1>
+      <p class="about-hero__lead">{copy.hero.description}</p>
+      <div class="about-hero__actions">
+        <Button href={`${homeHref}#experts`} variant="primary">{copy.hero.primaryCta}</Button>
+        <Button href={contactHref} variant="secondary">{copy.hero.secondaryCta}</Button>
+      </div>
+    </div>
+
+    <figure class="about-lineage" aria-label={copy.hero.description}>
+      <div class="about-lineage__node about-lineage__node--company">
+        <span>{copy.hero.companyLabel}</span>
+        <strong>{dalseenName}</strong>
+        <small>{locale === 'ar' ? 'بدأت في جدة · مقرها المدينة المنورة' : 'Began in Jeddah · Based in Madinah'}</small>
+      </div>
+      <div class="about-lineage__bridge" aria-hidden="true">
+        <span>{locale === 'ar' ? 'تبني' : 'builds'}</span>
+      </div>
+      <div class="about-lineage__node about-lineage__node--product">
+        <span>{copy.hero.productLabel}</span>
+        <strong>{geemName}</strong>
+        <small>{locale === 'ar' ? 'معرفة · خبراء · تكاملات' : 'Knowledge · Experts · integrations'}</small>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<div class="container-shell about-facts-shell">
+  <ul class="about-facts" aria-label={copy.hero.eyebrow}>
+    {copy.facts.map((fact) => <li><strong>{fact.value}</strong><span>{fact.label}</span></li>)}
+  </ul>
+</div>
+
+<section class="section-shell about-story">
+  <div class="container-shell about-story__grid">
+    <header class="about-section-intro">
+      <p class="eyebrow">{copy.story.eyebrow}</p>
+      <h2>{copy.story.title}</h2>
+      <p>{copy.story.description}</p>
+    </header>
+
+    <ol class="about-timeline">
+      {
+        copy.story.milestones.map((milestone, index) => (
+          <li>
+            <div class="about-timeline__marker">
+              <span>{String(index + 1).padStart(2, '0')}</span>
+            </div>
+            <div>
+              <p>{milestone.place}</p>
+              <h3>{milestone.title}</h3>
+              <span>{milestone.description}</span>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<section class="section-shell about-principles">
+  <div class="container-shell">
+    <header class="about-principles__intro">
+      <p class="eyebrow">{copy.principles.eyebrow}</p>
+      <h2>{copy.principles.title}</h2>
+      <p>{copy.principles.description}</p>
+    </header>
+    <ol class="about-principles__list">
+      {
+        copy.principles.items.map((item, index) => (
+          <li>
+            <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <h3>{item.title}</h3>
+            <p>{item.description}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<section class="section-shell about-geem">
+  <div class="container-shell about-geem__panel">
+    <div class="about-geem__copy">
+      <p>{copy.geem.eyebrow}</p>
+      <h2>{copy.geem.title}</h2>
+      <span>{copy.geem.description}</span>
+    </div>
+    <ul>
+      {copy.geem.points.map((point) => <li><span aria-hidden="true">✓</span><strong>{point}</strong></li>)}
+    </ul>
+  </div>
+</section>
+
+<section class="about-cta">
+  <div class="container-shell about-cta__grid">
+    <div>
+      <p class="about-eyebrow">{locale === 'ar' ? 'خطوتك التالية' : 'Your next step'}</p>
+      <h2>{copy.cta.title}</h2>
+      <p>{copy.cta.description}</p>
+    </div>
+    <div class="about-cta__actions">
+      <Button href={contactHref} variant="primary">{copy.cta.primaryCta}</Button>
+      <Button href={`${homeHref}#product`} variant="secondary">{copy.cta.secondaryCta}</Button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .about-hero {
+    position: relative;
+    overflow: hidden;
+    padding-block: clamp(4rem, 8vw, 7rem) clamp(7rem, 11vw, 9rem);
+    background:
+      radial-gradient(circle at 78% 18%, color-mix(in oklab, var(--geem-blue) 34%, transparent), transparent 34%),
+      radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--geem-sand) 11%, transparent), transparent 36%),
+      linear-gradient(155deg, var(--geem-navy-950), var(--geem-navy-900));
+    color: white;
+  }
+
+  .about-hero::before {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(color-mix(in oklab, white 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, white 3%, transparent) 1px, transparent 1px);
+    background-size: 72px 72px;
+    content: '';
+    mask-image: linear-gradient(to bottom, black, transparent 86%);
+  }
+
+  .about-hero__grid {
+    position: relative;
+    display: grid;
+    gap: clamp(3rem, 7vw, 6rem);
+    align-items: center;
+  }
+
+  .about-hero__copy,
+  .about-lineage {
+    min-width: 0;
+  }
+
+  .about-eyebrow {
+    color: var(--geem-sand);
+    font-size: 0.88rem;
+    font-weight: 600;
+    letter-spacing: 0.035em;
+  }
+
+  .about-hero h1 {
+    max-inline-size: 13ch;
+    margin-block-start: 1.2rem;
+    font-size: clamp(2.65rem, 5.8vw, 5rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  :global(html[dir='rtl']) .about-hero h1 {
+    max-inline-size: 15ch;
+    letter-spacing: 0;
+    line-height: 1.28;
+  }
+
+  .about-hero__lead {
+    max-inline-size: 40rem;
+    margin-block-start: 1.5rem;
+    color: color-mix(in oklab, white 74%, transparent);
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    line-height: 1.8;
+  }
+
+  .about-hero__actions,
+  .about-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-block-start: 2rem;
+  }
+
+  .about-lineage {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    border: 1px solid color-mix(in oklab, white 14%, transparent);
+    border-radius: 2rem;
+    background: color-mix(in oklab, white 5%, transparent);
+    box-shadow: 0 30px 80px color-mix(in oklab, black 24%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .about-lineage__node {
+    position: relative;
+    display: grid;
+    min-block-size: 12rem;
+    align-content: center;
+    padding: 1.5rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, white 12%, transparent);
+    border-radius: 1.35rem;
+  }
+
+  .about-lineage__node::after {
+    position: absolute;
+    inline-size: 8rem;
+    block-size: 8rem;
+    border-radius: 50%;
+    content: '';
+    inset-block-end: -4rem;
+    inset-inline-end: -3rem;
+  }
+
+  .about-lineage__node--company {
+    background: linear-gradient(145deg, color-mix(in oklab, var(--geem-navy-800) 65%, transparent), color-mix(in oklab, white 3%, transparent));
+  }
+
+  .about-lineage__node--company::after {
+    background: color-mix(in oklab, var(--geem-sky) 13%, transparent);
+  }
+
+  .about-lineage__node--product {
+    border-color: color-mix(in oklab, var(--geem-sand) 40%, transparent);
+    background: linear-gradient(145deg, color-mix(in oklab, var(--geem-blue) 38%, transparent), color-mix(in oklab, var(--geem-sand) 7%, transparent));
+  }
+
+  .about-lineage__node--product::after {
+    background: color-mix(in oklab, var(--geem-sand) 16%, transparent);
+  }
+
+  .about-lineage__node > span,
+  .about-lineage__node > small {
+    position: relative;
+    z-index: 1;
+    color: color-mix(in oklab, white 65%, transparent);
+  }
+
+  .about-lineage__node > span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .about-lineage__node > strong {
+    position: relative;
+    z-index: 1;
+    margin-block: 0.35rem;
+    color: white;
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 600;
+  }
+
+  .about-lineage__node > small {
+    font-size: 0.78rem;
+  }
+
+  .about-lineage__bridge {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--geem-sand);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .about-lineage__bridge::before,
+  .about-lineage__bridge::after {
+    flex: 1;
+    block-size: 1px;
+    background: color-mix(in oklab, var(--geem-sand) 36%, transparent);
+    content: '';
+  }
+
+  .about-facts-shell {
+    position: relative;
+    z-index: 3;
+    margin-block-start: -3.5rem;
+  }
+
+  .about-facts {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.5rem;
+    background: white;
+    box-shadow: 0 22px 60px color-mix(in oklab, var(--geem-navy-950) 10%, transparent);
+    list-style: none;
+  }
+
+  .about-facts li {
+    display: grid;
+    gap: 0.2rem;
+    padding: 1.35rem 1.5rem;
+  }
+
+  .about-facts li + li {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  .about-facts strong {
+    color: var(--geem-navy-900);
+    font-size: 1.05rem;
+  }
+
+  .about-facts span {
+    color: var(--geem-muted);
+    font-size: 0.82rem;
+  }
+
+  .about-story__grid {
+    display: grid;
+    gap: clamp(2.5rem, 7vw, 6rem);
+  }
+
+  .about-section-intro h2,
+  .about-principles__intro h2,
+  .about-geem h2,
+  .about-cta h2 {
+    max-inline-size: 18ch;
+    margin-block-start: 0.8rem;
+    font-size: clamp(2.2rem, 4.4vw, 3.8rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+
+  .about-section-intro > p:last-child,
+  .about-principles__intro > p:last-child {
+    max-inline-size: 42rem;
+    margin-block-start: 1.25rem;
+    color: var(--geem-muted);
+    line-height: 1.8;
+  }
+
+  .about-timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .about-timeline li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.25rem;
+    padding-block: 1.6rem;
+    border-block-end: 1px solid var(--geem-border);
+  }
+
+  .about-timeline li:first-child {
+    padding-block-start: 0;
+  }
+
+  .about-timeline__marker {
+    position: relative;
+    display: grid;
+    inline-size: 2.6rem;
+    block-size: 2.6rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--geem-navy-900);
+    color: var(--geem-sand);
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .about-timeline li > div:last-child > p {
+    color: var(--geem-blue);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .about-timeline h3 {
+    margin-block-start: 0.2rem;
+    color: var(--geem-navy-900);
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  .about-timeline li > div:last-child > span {
+    display: block;
+    margin-block-start: 0.35rem;
+    color: var(--geem-muted);
+    line-height: 1.75;
+  }
+
+  .about-principles {
+    background: white;
+  }
+
+  .about-principles__intro {
+    max-inline-size: 48rem;
+  }
+
+  .about-principles__list {
+    display: grid;
+    margin: 3rem 0 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.75rem;
+    background: var(--geem-surface);
+    list-style: none;
+  }
+
+  .about-principles__list li {
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+  }
+
+  .about-principles__list li + li {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  .about-principles__list span {
+    color: var(--geem-blue);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .about-principles__list h3 {
+    margin-block-start: 1rem;
+    color: var(--geem-navy-900);
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .about-principles__list p {
+    margin-block-start: 0.65rem;
+    color: var(--geem-muted);
+    line-height: 1.75;
+  }
+
+  .about-geem {
+    background: var(--geem-surface);
+  }
+
+  .about-geem__panel {
+    display: grid;
+    gap: 2.5rem;
+    padding: clamp(1.75rem, 5vw, 4rem);
+    overflow: hidden;
+    border-radius: 2rem;
+    background:
+      radial-gradient(circle at 85% 15%, color-mix(in oklab, var(--geem-blue) 35%, transparent), transparent 34%),
+      linear-gradient(145deg, var(--geem-navy-950), var(--geem-navy-900));
+    color: white;
+  }
+
+  .about-geem__copy > p {
+    color: var(--geem-sand);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .about-geem__copy > span {
+    display: block;
+    max-inline-size: 42rem;
+    margin-block-start: 1.25rem;
+    color: color-mix(in oklab, white 72%, transparent);
+    line-height: 1.8;
+  }
+
+  .about-geem ul {
+    margin: 0;
+    padding: 0;
+    border-block-start: 1px solid color-mix(in oklab, white 13%, transparent);
+    list-style: none;
+  }
+
+  .about-geem li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.85rem;
+    padding-block: 1rem;
+    border-block-end: 1px solid color-mix(in oklab, white 13%, transparent);
+  }
+
+  .about-geem li span {
+    color: var(--geem-sand);
+  }
+
+  .about-geem li strong {
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  .about-cta {
+    padding-block: clamp(3.5rem, 7vw, 6rem);
+    background: var(--geem-sand);
+  }
+
+  .about-cta__grid {
+    display: grid;
+    gap: 2rem;
+    align-items: end;
+  }
+
+  .about-cta .about-eyebrow {
+    color: var(--geem-blue);
+  }
+
+  .about-cta p:last-child {
+    max-inline-size: 42rem;
+    margin-block-start: 1rem;
+    color: color-mix(in oklab, var(--geem-navy-900) 74%, transparent);
+  }
+
+  .about-cta__actions {
+    margin: 0;
+  }
+
+  .about-cta :global(.btn-primary) {
+    background: var(--geem-navy-950);
+    color: white;
+  }
+
+  .about-cta :global(.btn-secondary) {
+    border-color: color-mix(in oklab, var(--geem-navy-900) 26%, transparent);
+    background: color-mix(in oklab, white 20%, transparent);
+    color: var(--geem-navy-950);
+  }
+
+  @media (min-width: 48rem) {
+    .about-hero__grid {
+      grid-template-columns: minmax(0, 1.05fr) minmax(21rem, 0.95fr);
+    }
+
+    .about-facts,
+    .about-principles__list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .about-facts li + li,
+    .about-principles__list li + li {
+      border-block-start: 0;
+      border-inline-start: 1px solid var(--geem-border);
+    }
+
+    .about-geem__panel,
+    .about-cta__grid {
+      grid-template-columns: minmax(0, 1.15fr) minmax(19rem, 0.85fr);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .about-story__grid {
+      grid-template-columns: minmax(0, 0.9fr) minmax(25rem, 1.1fr);
+    }
+
+    .about-section-intro {
+      position: sticky;
+      top: 7rem;
+      align-self: start;
+    }
+
+    .about-cta__actions {
+      justify-content: flex-end;
+    }
+  }
+
+  @media (max-width: 36rem) {
+    .about-hero {
+      padding-block-start: 3.5rem;
+    }
+
+    .about-hero__actions,
+    .about-cta__actions {
+      display: grid;
+    }
+
+    .about-hero__actions :global(.btn),
+    .about-cta__actions :global(.btn) {
+      inline-size: 100%;
+    }
+
+    .about-lineage__node {
+      min-block-size: 9.5rem;
+    }
+  }
+</style>
