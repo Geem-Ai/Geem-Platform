@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { roleLabel } from '@/features/authz/role-summary';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import {
@@ -179,7 +180,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
               <span className="truncate">
                 {ws.name}
                 <span className="ms-1 text-xs text-muted-foreground">
-                  ({t(`roles.${ws.role}`)})
+                  ({roleLabel(ws.role, t)})
                 </span>
               </span>
               {currentWorkspace?.id === ws.id && (

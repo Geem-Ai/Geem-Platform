@@ -35,3 +35,21 @@ export function roleSystemKey(
 ): string | null {
   return asRoleSummary(role)?.system_key ?? null;
 }
+
+type TranslateFn = (
+  key: string,
+  options?: { defaultValue?: string },
+) => string;
+
+/** Localized label for a role summary (system key → i18n, else name). */
+export function roleLabel(
+  role: RoleSummary | string | null | undefined,
+  t: TranslateFn,
+): string {
+  const summary = asRoleSummary(role);
+  if (!summary) return '';
+  const systemKey = summary.system_key;
+  return systemKey
+    ? t(`roles.${systemKey}`, { defaultValue: summary.name })
+    : summary.name;
+}

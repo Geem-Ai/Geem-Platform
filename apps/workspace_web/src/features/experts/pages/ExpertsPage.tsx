@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Plus, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/features/authz/usePermissions';
+import { errorMessageKey, isKnownApiErrorCode } from '@/services/api/errors';
 import type { Expert } from '@/services/api/types';
 import { canCreateExpert } from '../lib/capabilities';
 import { localizeExpertDisplay } from '../lib/localize';
@@ -51,6 +53,26 @@ export function ExpertsPage() {
   const canCreate = canCreateExpert(can);
 
   const expertsQuery = useExperts();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get('oauth');
+    if (!oauth) return;
+    if (oauth === 'success') {
+      toast.success(t('apps.connections.oauthSuccess'));
+    } else if (oauth === 'error') {
+      const raw = params.get('error') || 'unknown';
+      const code = isKnownApiErrorCode(raw) ? raw : 'unknown';
+      toast.error(t(errorMessageKey(code)));
+    }
+    params.delete('oauth');
+    params.delete('error');
+    params.delete('connector');
+    params.delete('connection_id');
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+    window.history.replaceState({}, '', next);
+  }, [t]);
+
   const allExperts = useMemo(() => expertsQuery.data ?? [], [expertsQuery.data]);
 
   const [tab, setTab] = useState<ExpertsTab>('workspace');

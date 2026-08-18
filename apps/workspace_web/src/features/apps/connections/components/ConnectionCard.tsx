@@ -1,17 +1,8 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import type { AppConnection } from '@/services/api/apps';
-import { ApiError, errorMessageKey, friendlyDisplayError } from '@/services/api/errors';
-import { useDisconnectConnection } from '../hooks/useConnectionQueries';
+import { friendlyDisplayError } from '@/services/api/errors';
+import { OauthAccountActions } from './OauthAccountActions';
 import { ConnectionHealthBadge } from './ConnectionHealthBadge';
 import { ConnectionStatusBadge } from './ConnectionStatusBadge';
 
@@ -47,8 +38,6 @@ export function ConnectionCard({
   reconnectPending?: boolean;
 }) {
   const { t, i18n } = useTranslation();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const disconnect = useDisconnectConnection();
   const title =
     connection.display_name ||
     connection.external_account_name ||
@@ -118,61 +107,9 @@ export function ConnectionCard({
               {t('apps.connections.reconnect')}
             </Button>
           ) : null}
-          {connection.capabilities.can_disconnect ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setConfirmOpen(true)}
-              data-testid="connection-disconnect"
-            >
-              {t('apps.connections.disconnect')}
-            </Button>
-          ) : null}
+          <OauthAccountActions connection={connection} />
         </div>
       ) : null}
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('apps.connections.disconnectTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('apps.connections.disconnectHint')}
-            </DialogDescription>
-          </DialogHeader>
-          {disconnect.isError ? (
-            <p className="text-sm text-destructive">
-              {t(
-                errorMessageKey(
-                  disconnect.error instanceof ApiError
-                    ? disconnect.error.code
-                    : 'unknown',
-                ),
-              )}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={disconnect.isPending}
-              data-testid="connection-disconnect-confirm"
-              onClick={() =>
-                disconnect.mutate(
-                  {
-                    slug: connection.app_slug,
-                    connectionId: connection.id,
-                  },
-                  { onSuccess: () => setConfirmOpen(false) },
-                )
-              }
-            >
-              {t('apps.connections.disconnect')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

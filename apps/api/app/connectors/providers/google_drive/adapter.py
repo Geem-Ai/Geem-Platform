@@ -34,6 +34,7 @@ from app.connectors.providers.google_drive.formats import require_supported_mime
 from app.connectors.providers.google_drive.ingest import GoogleDriveIngestBridge
 from app.connectors.providers.google_drive.resolve import resolve_google_drive_selections
 from app.connectors.providers.google_drive.scopes import (
+    GOOGLE_OAUTH_PROMPT,
     requires_reauthorization,
     scopes_for_mode,
 )
@@ -119,8 +120,9 @@ class GoogleDriveConnector:
         scopes = scopes_for_mode(settings.google_drive_scope_mode)
         # Always request consent so Google returns a refresh_token. After disconnect
         # secrets are cleared; select_account alone often omits refresh_token.
+        # Include select_account so the user can link a different Google email.
         _ = reconnect
-        effective_prompt = prompt or "consent"
+        effective_prompt = prompt or GOOGLE_OAUTH_PROMPT
         url = build_authorization_url(
             client_id=settings.google_drive_client_id.strip(),
             redirect_uri=redirect_uri,

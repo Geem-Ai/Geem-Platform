@@ -20,7 +20,11 @@ from app.connectors.providers.microsoft_onedrive.picker_auth import (
     is_personal_onedrive_host,
     resolve_picker_base_url,
 )
+from app.connectors.providers.microsoft_onedrive.client import (
+    build_authorization_url,
+)
 from app.connectors.providers.microsoft_onedrive.scopes import (
+    ONEDRIVE_OAUTH_PROMPT,
     PERSONAL_PICKER_BASE_URL,
     PERSONAL_PICKER_SCOPE,
     auth_tenant_for_account_kind,
@@ -186,3 +190,15 @@ def test_refresh_token_preservation() -> None:
     )
     assert merged["refresh_token"] == "keep-me"
     assert merged["access_token"] == "new"
+
+
+def test_oauth_prompt_includes_account_picker() -> None:
+    assert ONEDRIVE_OAUTH_PROMPT == "select_account"
+    url = build_authorization_url(
+        client_id="cid",
+        redirect_uri="http://localhost/cb",
+        state="s",
+        scopes=("Files.Read",),
+        tenant="common",
+    )
+    assert "select_account" in url

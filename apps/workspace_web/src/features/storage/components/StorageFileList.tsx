@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Download, Loader2, Trash2 } from 'lucide-react';
+import { Download, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -176,8 +176,15 @@ export function StorageFileList({
                           className="h-6 max-w-[12rem] px-2 text-xs"
                           asChild
                         >
-                          <Link to={`/experts/${expert.id}`} className="truncate">
-                            {expert.name}
+                          <Link
+                            to={`/experts/${expert.id}`}
+                            className="inline-flex min-w-0 items-center gap-1"
+                          >
+                            <Sparkles
+                              className="size-3 shrink-0 text-muted-foreground"
+                              aria-hidden
+                            />
+                            <span className="truncate">{expert.name}</span>
                           </Link>
                         </Button>
                       ))
@@ -220,15 +227,16 @@ export function StorageFileList({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
+                        type="button"
+                        variant="ghost"
                         size="sm"
-                        className="flex-1 sm:flex-none text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10 hover:border-destructive/45"
+                        mode="icon"
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={() => onDelete(item)}
                         data-testid={`storage-delete-${item.id}`}
                         aria-label={t('common.delete')}
                       >
                         <Trash2 className="size-3.5" aria-hidden />
-                        <span>{t('common.delete')}</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">{t('storage.deleteActionHint')}</TooltipContent>

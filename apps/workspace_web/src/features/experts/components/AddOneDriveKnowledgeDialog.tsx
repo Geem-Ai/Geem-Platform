@@ -12,7 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useAppConnections } from '@/features/apps/connections/hooks/useConnectionQueries';
+import { OauthAccountActions } from '@/features/apps/connections/components/OauthAccountActions';
+import {
+  useAppConnections,
+  useStartConnection,
+} from '@/features/apps/connections/hooks/useConnectionQueries';
 import { useApp } from '@/features/apps/hooks/useAppsQueries';
 import {
   openOneDrivePicker,
@@ -50,6 +54,7 @@ export function AddOneDriveKnowledgeDialog({
   const workspaceId = currentWorkspace?.id ?? '';
   const appQuery = useApp(ONEDRIVE_SLUG, open);
   const connectionsQuery = useAppConnections(ONEDRIVE_SLUG, open);
+  const startMut = useStartConnection();
   const [connectionId, setConnectionId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -64,6 +69,28 @@ export function AddOneDriveKnowledgeDialog({
   const selectedId =
     connectionId ||
     (activeConnections.length === 1 ? activeConnections[0].id : '');
+  const selectedConnection =
+    activeConnections.find((c) => c.id === selectedId) ?? activeConnections[0];
+  const reconnectable = connectionsQuery.data?.items.find(
+    (c) => c.capabilities.can_reconnect,
+  );
+
+  function handleConnectAccount() {
+    startMut.mutate(
+      {
+        slug: ONEDRIVE_SLUG,
+        connectionId: reconnectable?.id,
+        returnPath: `/experts/${expertId}`,
+      },
+      {
+        onSuccess: (data) => {
+          if (data.authorization_url) {
+            window.location.assign(data.authorization_url);
+          }
+        },
+      },
+    );
+  }
 
   async function submitSelection(
     connId: string,
@@ -168,11 +195,32 @@ export function AddOneDriveKnowledgeDialog({
         {installed && activeConnections.length === 0 && (
           <div className="space-y-3 text-sm">
             <p>{t('experts.oneDrive.connectFirst')}</p>
-            <Button asChild variant="secondary">
-              <Link to="/apps/microsoft-onedrive">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={startMut.isPending}
+                onClick={handleConnectAccount}
+                data-testid="onedrive-connect-account"
+              >
                 {t('experts.oneDrive.connect')}
-              </Link>
-            </Button>
+              </Button>
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/apps/microsoft-onedrive">
+                  {t('experts.oneDrive.goToAppStore')}
+                </Link>
+              </Button>
+            </div>
+            {startMut.isError ? (
+              <p className="text-sm text-destructive">
+                {t(
+                  errorMessageKey(
+                    startMut.error instanceof ApiError
+                      ? startMut.error.code
+                      : 'unknown',
+                  ),
+                )}
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -208,6 +256,16 @@ export function AddOneDriveKnowledgeDialog({
                 })}
               </p>
             )}
+            {selectedConnection ? (
+              <div className="flex flex-wrap gap-2">
+                <OauthAccountActions
+                  connection={selectedConnection}
+                  returnPath={`/experts/${expertId}`}
+                  compact
+                  inline
+                />
+              </div>
+            ) : null}
             {errorKey && (
               <p className="text-sm text-destructive">{t(errorKey)}</p>
             )}

@@ -589,7 +589,7 @@ def build_authorization_url(
     scopes: list[str],
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
-    prompt: str = "consent",
+    prompt: str = "consent select_account",
     include_granted_scopes: bool = True,
 ) -> str:
     params: dict[str, str] = {
