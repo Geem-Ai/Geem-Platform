@@ -15,6 +15,9 @@ type Props = {
 
 const { locale, copy } = Astro.props;
 const { signupUrl } = getSiteConfig();
+const questionMark = locale === 'ar' ? '؟' : '?';
+const specialtyPhrases = copy.hero.specialties.map((specialty) => `${specialty}${questionMark}`);
+const firstSpecialty = specialtyPhrases[0] ?? '';
 ---
 
 <section class="relative min-h-[min(92vh,56rem)] overflow-hidden text-white" id="product">
@@ -36,7 +39,7 @@ const { signupUrl } = getSiteConfig();
   </div>
 
   <div class="relative container-shell flex min-h-[min(92vh,56rem)] flex-col justify-center py-24">
-    <div class="max-w-3xl">
+    <div class="max-w-3xl" data-typewriter-container>
       <div class="hero-enter hero-enter-1 mb-6 flex items-center gap-3">
         <Image
           src={avatar}
@@ -47,11 +50,44 @@ const { signupUrl } = getSiteConfig();
           loading="eager"
           fetchpriority="high"
         />
-        <p class="eyebrow !text-geem-sand m-0">{copy.hero.eyebrow}</p>
+        <p class="eyebrow !text-geem-sand m-0 min-w-0">{copy.hero.eyebrow}</p>
+        <button
+          class="hero-typewriter-toggle"
+          type="button"
+          data-typewriter-toggle
+          data-pause-label={copy.a11y.pauseTypewriter}
+          data-resume-label={copy.a11y.resumeTypewriter}
+          aria-label={copy.a11y.pauseTypewriter}
+        >
+          <svg data-typewriter-pause viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M5 3.25v9.5M11 3.25v9.5"></path>
+          </svg>
+          <svg class="is-hidden" data-typewriter-play viewBox="0 0 16 16" aria-hidden="true">
+            <path d="m5.25 3.25 7 4.75-7 4.75Z"></path>
+          </svg>
+        </button>
       </div>
 
-      <h1 class="hero-enter hero-enter-2 text-balance text-4xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
-        {copy.hero.title}
+      <h1 class="hero-typewriter-heading hero-enter hero-enter-2 min-w-0 text-balance text-4xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
+        <span class="visually-hidden">{copy.hero.specialtyPrompt} {firstSpecialty}</span>
+        <span class="hero-typewriter-heading-visual" aria-hidden="true">
+          <span>{copy.hero.specialtyPrompt}</span>
+          <span
+            class="hero-typewriter"
+            data-typewriter
+            data-phrases={JSON.stringify(specialtyPhrases)}
+          >
+            {
+              specialtyPhrases.map((specialty) => (
+                <span class="hero-typewriter-measure">{specialty}</span>
+              ))
+            }
+            <span class="hero-typewriter-output">
+              <span data-typewriter-text>{firstSpecialty}</span>
+              <span class="hero-typewriter-caret" aria-hidden="true"></span>
+            </span>
+          </span>
+        </span>
       </h1>
 
       <p class="hero-enter hero-enter-3 mt-5 max-w-2xl text-lg text-white/85 md:text-xl">

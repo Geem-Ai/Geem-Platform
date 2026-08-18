@@ -27,6 +27,8 @@ export const ar: SiteCopy = {
     primaryNavigation: 'التنقل الرئيسي',
     mobileNavigation: 'التنقل عبر الجوال',
     languageSwitch: 'English',
+    pauseTypewriter: 'إيقاف العبارات المتحركة مؤقتاً',
+    resumeTypewriter: 'متابعة العبارات المتحركة',
   },
   brand: {
     product: 'جيم',
@@ -44,8 +46,16 @@ export const ar: SiteCopy = {
     login: 'دخول مساحة العمل',
   },
   hero: {
-    eyebrow: 'منصة ذكاء اصطناعي لمنشأتك',
-    title: 'امنح فريقك إجابات تستند إلى معرفة منشأتك.',
+    eyebrow: 'منصة ذكاء اصطناعي مخصّصة للسوق السعودي',
+    specialtyPrompt: 'تحتاج إلى خبير في',
+    specialties: [
+      'الموارد البشرية',
+      'الشؤون المالية',
+      'التسويق',
+      'المبيعات',
+      'العمليات',
+      'خدمة العملاء',
+    ],
     description:
       'أنشئ خبير جيم لكل مهمة، واربطه بالمستندات المعتمدة، ثم أتحه لفريقك عبر مساحة العمل أو موقعك أو واتساب أو أنظمتك.',
     primaryCta: 'ابدأ مع جيم',
