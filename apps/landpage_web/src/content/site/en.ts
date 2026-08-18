@@ -18,7 +18,7 @@ export const en: SiteCopy = {
     pdplDescription: 'Personal data protection notice for Geem users.',
     securityTitle: 'Security and your organization’s privacy',
     securityDescription:
-      'How Geem keeps your workspace, private knowledge, and team access within clear boundaries.',
+      'Learn how Geem isolates workspaces, enforces server-side permissions, and protects integration secrets and access keys.',
   },
   a11y: {
     skipToContent: 'Skip to content',
@@ -212,6 +212,112 @@ export const en: SiteCopy = {
       },
     ],
     linkLabel: 'Read more about security',
+    page: {
+      hero: {
+        eyebrow: 'Security & privacy at Geem',
+        title: 'Clear boundaries for your organization’s knowledge.',
+        description:
+          'Geem is built with logical workspace isolation, server-enforced permissions, and protection for integration secrets and access keys.',
+        primaryCta: 'Discuss your requirements',
+        secondaryCta: 'Explore the controls',
+      },
+      boundary: {
+        label: 'Workspace boundary',
+        title: 'Your organization’s space',
+        caption:
+          'Each request passes through workspace context and user permissions before it reaches the Expert and authorized knowledge.',
+        items: [
+          { id: 'knowledge', label: 'Sources you approve' },
+          { id: 'permissions', label: 'Role-based permissions' },
+          { id: 'credentials', label: 'Revocable keys' },
+          { id: 'residency', label: 'Core data in Saudi Arabia' },
+        ],
+      },
+      facts: [
+        { value: 'In Saudi Arabia', label: 'Core workspace data storage' },
+        { value: 'Logically isolated', label: 'Each organization’s knowledge' },
+        { value: 'Server enforced', label: 'Roles and permissions' },
+      ],
+      controls: {
+        eyebrow: 'Core safeguards',
+        title: 'Protection starts before an answer is returned.',
+        description:
+          'Controls work in connected layers, from resolving the workspace and member to scoping the Expert and the sources it may use.',
+        items: [
+          {
+            id: 'workspace',
+            title: 'Workspace isolation',
+            description:
+              'Queries, files, and knowledge indexes are separated by workspace, and retrieval is scoped to the authorized Expert.',
+          },
+          {
+            id: 'roles',
+            title: 'Server-enforced permissions',
+            description:
+              'Roles define what members can use or manage; protection does not depend on hiding interface controls.',
+          },
+          {
+            id: 'integrations',
+            title: 'Protected integration data',
+            description:
+              'App connection secrets are encrypted before storage and credentials are excluded from API responses.',
+          },
+          {
+            id: 'access',
+            title: 'Controllable sessions and keys',
+            description:
+              'Passwords are stored as secure hashes, sessions can be rotated or revoked, and API keys are workspace-bound and scoped.',
+          },
+        ],
+      },
+      requestFlow: {
+        eyebrow: 'Request path',
+        title: 'Four gates before knowledge is reached',
+        description:
+          'Protection does not rely on the visible interface; the platform rechecks context and authorization for every protected request.',
+        steps: [
+          'Resolve the workspace',
+          'Verify membership and permission',
+          'Scope the Expert and sources',
+          'Return the answer and sources',
+        ],
+      },
+      governance: {
+        eyebrow: 'Shared responsibility',
+        title: 'Geem provides the controls. Your organization decides who can reach what.',
+        description:
+          'Access and knowledge remain deliberate choices for your organization, while Geem enforces the technical boundaries inside the platform.',
+        geemTitle: 'What Geem protects',
+        geemItems: [
+          'Workspace data separation',
+          'Permissions enforced in the platform',
+          'Encrypted application connection secrets',
+          'Scoped and revocable API keys',
+        ],
+        organizationTitle: 'What your organization controls',
+        organizationItems: [
+          'Members and their assigned roles',
+          'Approved documents and sources',
+          'Enabled applications and channels',
+          'Human review before consequential decisions',
+        ],
+      },
+      transparency: {
+        eyebrow: 'Clarity before badges',
+        title: 'Clear controls, accurately described.',
+        description:
+          'Core workspace data is stored in Saudi Arabia. Some AI features and external integrations may require the minimum necessary data to be processed by service providers, as described in the agreement and Privacy Policy.',
+        note:
+          'Before contracting, your team can request a data-flow overview and the agreed processing scope. We do not display certifications or compliance levels that have not been verified.',
+      },
+      cta: {
+        title: 'Does your team have specific security requirements?',
+        description: 'Talk with us to review the controls, data flow, and your organization’s needs before you start.',
+        primaryCta: 'Contact the Geem team',
+        privacyCta: 'Privacy Policy',
+        pdplCta: 'Data Protection Notice',
+      },
+    },
   },
   finalCta: {
     title: 'Ready to build Geem Experts for your organization?',

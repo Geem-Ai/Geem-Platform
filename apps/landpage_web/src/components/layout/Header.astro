@@ -25,6 +25,10 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
   if (item.href === 'contact') return contactHref(locale);
   return homeHash(locale, item.href === 'product' ? 'product' : item.href);
 }
+
+function isCurrentNav(item: SiteCopy['nav']['items'][number]) {
+  return item.href === 'security' && pathname.replace(/\/$/, '') === localizedPath(locale, 'security');
+}
 ---
 
 <header class="site-header bg-geem-navy-950/85 text-white backdrop-blur-md" data-site-header>
@@ -37,7 +41,14 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
     <nav class="hidden lg:flex items-center gap-6" aria-label={copy.a11y.primaryNavigation}>
       {
         copy.nav.items.map((item) => (
-          <a class="text-sm text-white/80 hover:text-white no-underline" href={navHref(item)}>
+          <a
+            class:list={[
+              'text-sm hover:text-white no-underline',
+              isCurrentNav(item) ? 'font-medium text-white' : 'text-white/80',
+            ]}
+            href={navHref(item)}
+            aria-current={isCurrentNav(item) ? 'page' : undefined}
+          >
             {item.label}
           </a>
         ))
@@ -76,7 +87,14 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
     <nav class="flex flex-col gap-3" aria-label={copy.a11y.mobileNavigation}>
       {
         copy.nav.items.map((item) => (
-          <a class="rounded-lg px-3 py-2 text-white/90 no-underline hover:bg-white/10" href={navHref(item)}>
+          <a
+            class:list={[
+              'rounded-lg px-3 py-2 text-white/90 no-underline hover:bg-white/10',
+              isCurrentNav(item) && 'bg-white/10 font-medium',
+            ]}
+            href={navHref(item)}
+            aria-current={isCurrentNav(item) ? 'page' : undefined}
+          >
             {item.label}
           </a>
         ))

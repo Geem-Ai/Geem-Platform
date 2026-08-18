@@ -1,0 +1,680 @@
+---
+import type { Locale } from '../../lib/i18n';
+import type { SecurityPageCopy } from '../../content/site/types';
+import { localizedPath } from '../../lib/site';
+import Button from '../ui/Button.astro';
+import SecurityBoundary from '../diagrams/SecurityBoundary.astro';
+
+type Props = {
+  locale: Locale;
+  copy: SecurityPageCopy;
+};
+
+const { locale, copy } = Astro.props;
+const contactHref = localizedPath(locale, 'contact');
+const privacyHref = localizedPath(locale, 'privacy');
+const pdplHref = localizedPath(locale, 'pdpl');
+---
+
+<section class="security-page-hero">
+  <div class="container-shell security-page-hero__grid">
+    <div class="security-page-hero__copy">
+      <p class="security-page-hero__eyebrow">
+        <span aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="M10 2.5 16 4.7v4.6c0 3.8-2.4 6.8-6 8.2-3.6-1.4-6-4.4-6-8.2V4.7L10 2.5Z"></path>
+            <path d="m7.2 10 1.8 1.8 3.8-4"></path>
+          </svg>
+        </span>
+        {copy.hero.eyebrow}
+      </p>
+      <h1>{copy.hero.title}</h1>
+      <p class="security-page-hero__lead">{copy.hero.description}</p>
+      <div class="security-page-hero__actions">
+        <Button href={contactHref} variant="primary">{copy.hero.primaryCta}</Button>
+        <Button href="#security-controls" variant="secondary">{copy.hero.secondaryCta}</Button>
+      </div>
+    </div>
+
+    <SecurityBoundary copy={copy.boundary} />
+  </div>
+</section>
+
+<div class="container-shell security-facts-shell">
+  <ul class="security-facts" aria-label={copy.hero.eyebrow}>
+    {
+      copy.facts.map((fact) => (
+        <li>
+          <strong>{fact.value}</strong>
+          <span>{fact.label}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div>
+
+<section class="section-shell security-controls" id="security-controls">
+  <div class="container-shell security-controls__grid">
+    <header class="security-section-intro">
+      <p class="eyebrow">{copy.controls.eyebrow}</p>
+      <h2>{copy.controls.title}</h2>
+      <p>{copy.controls.description}</p>
+    </header>
+
+    <div class="security-controls__panel">
+      <ol class="security-control-list">
+        {
+          copy.controls.items.map((item, index) => (
+            <li>
+              <span class="security-control-list__number" aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <div>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+              </div>
+              <span class="security-control-list__status" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none">
+                  <path d="m5 10 3 3 7-7"></path>
+                </svg>
+              </span>
+            </li>
+          ))
+        }
+      </ol>
+
+      <aside class="security-request-flow" aria-labelledby="security-request-flow-title">
+        <p>{copy.requestFlow.eyebrow}</p>
+        <h3 id="security-request-flow-title">{copy.requestFlow.title}</h3>
+        <p>{copy.requestFlow.description}</p>
+        <ol>
+          {
+            copy.requestFlow.steps.map((step, index) => (
+              <li>
+                <span aria-hidden="true">{index + 1}</span>
+                <strong>{step}</strong>
+              </li>
+            ))
+          }
+        </ol>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="section-shell security-governance">
+  <div class="container-shell">
+    <header class="security-governance__intro">
+      <p class="eyebrow">{copy.governance.eyebrow}</p>
+      <h2>{copy.governance.title}</h2>
+      <p>{copy.governance.description}</p>
+    </header>
+
+    <div class="security-governance__panel">
+      <section aria-labelledby="security-geem-controls">
+        <span class="security-governance__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3 20 6v6.2c0 4.8-3.2 8.6-8 10.1-4.8-1.5-8-5.3-8-10.1V6l8-3Z"></path>
+            <path d="m8.5 12 2.2 2.2 4.8-5"></path>
+          </svg>
+        </span>
+        <h3 id="security-geem-controls">{copy.governance.geemTitle}</h3>
+        <ul>
+          {copy.governance.geemItems.map((item) => <li>{item}</li>)}
+        </ul>
+      </section>
+
+      <section aria-labelledby="security-organization-controls">
+        <span class="security-governance__mark security-governance__mark--organization" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="8" r="3"></circle>
+            <path d="M3.5 19c.7-3.8 2.5-5.7 5.5-5.7 1.6 0 2.8.5 3.7 1.5M16 11v8M12 15h8"></path>
+          </svg>
+        </span>
+        <h3 id="security-organization-controls">{copy.governance.organizationTitle}</h3>
+        <ul>
+          {copy.governance.organizationItems.map((item) => <li>{item}</li>)}
+        </ul>
+      </section>
+    </div>
+  </div>
+</section>
+
+<section class="security-transparency">
+  <div class="container-shell security-transparency__grid">
+    <div class="security-transparency__copy">
+      <p>{copy.transparency.eyebrow}</p>
+      <h2>{copy.transparency.title}</h2>
+      <p>{copy.transparency.description}</p>
+      <small>{copy.transparency.note}</small>
+    </div>
+
+    <aside class="security-review" aria-labelledby="security-review-title">
+      <h3 id="security-review-title">{copy.cta.title}</h3>
+      <p>{copy.cta.description}</p>
+      <div class="security-review__actions">
+        <Button href={contactHref} variant="primary">{copy.cta.primaryCta}</Button>
+        <div>
+          <a href={privacyHref}>{copy.cta.privacyCta}</a>
+          <a href={pdplHref}>{copy.cta.pdplCta}</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<style>
+  .security-page-hero {
+    position: relative;
+    overflow: hidden;
+    padding-block: clamp(4rem, 8vw, 7rem) clamp(7rem, 11vw, 10rem);
+    background:
+      radial-gradient(circle at 80% 18%, color-mix(in oklab, var(--geem-blue) 30%, transparent), transparent 34%),
+      radial-gradient(circle at 10% 0%, color-mix(in oklab, var(--geem-sand) 10%, transparent), transparent 38%),
+      linear-gradient(155deg, var(--geem-navy-950), var(--geem-navy-900));
+    color: white;
+  }
+
+  .security-page-hero::before {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(color-mix(in oklab, white 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, white 3%, transparent) 1px, transparent 1px);
+    background-size: 72px 72px;
+    content: '';
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+
+  .security-page-hero__grid {
+    position: relative;
+    display: grid;
+    gap: clamp(2.5rem, 6vw, 5rem);
+    align-items: center;
+  }
+
+  .security-page-hero__copy {
+    min-width: 0;
+  }
+
+  .security-page-hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--geem-sand);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .security-page-hero__eyebrow > span {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    place-items: center;
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 30%, transparent);
+    border-radius: 0.65rem;
+    background: color-mix(in oklab, var(--geem-sand) 8%, transparent);
+  }
+
+  .security-page-hero__eyebrow svg {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
+  .security-page-hero h1 {
+    max-inline-size: 12ch;
+    margin-block-start: 1.5rem;
+    font-size: clamp(2.7rem, 6vw, 5.25rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  .security-page-hero__lead {
+    max-inline-size: 38rem;
+    margin-block-start: 1.5rem;
+    color: color-mix(in oklab, white 76%, transparent);
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    line-height: 1.8;
+  }
+
+  .security-page-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block-start: 2rem;
+  }
+
+  .security-facts-shell {
+    position: relative;
+    z-index: 4;
+    margin-block-start: -3.25rem;
+  }
+
+  .security-facts {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.5rem;
+    background: white;
+    box-shadow: 0 24px 60px color-mix(in oklab, var(--geem-navy-950) 12%, transparent);
+    list-style: none;
+  }
+
+  .security-facts li {
+    display: grid;
+    gap: 0.2rem;
+    padding: 1.35rem clamp(1.25rem, 3vw, 2rem);
+  }
+
+  .security-facts li + li {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  .security-facts strong {
+    color: var(--geem-navy-900);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .security-facts span {
+    color: var(--geem-muted);
+    font-size: 0.78rem;
+  }
+
+  .security-controls {
+    scroll-margin-top: 5rem;
+  }
+
+  .security-controls__grid {
+    display: grid;
+    gap: clamp(2.5rem, 6vw, 5rem);
+  }
+
+  .security-section-intro h2,
+  .security-governance__intro h2 {
+    max-inline-size: 17ch;
+    margin-block-start: 0.9rem;
+    color: var(--geem-navy-950);
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.18;
+    text-wrap: balance;
+  }
+
+  .security-section-intro > p:last-child,
+  .security-governance__intro > p:last-child {
+    max-inline-size: 42rem;
+    margin-block-start: 1rem;
+    color: var(--geem-muted);
+    line-height: 1.8;
+  }
+
+  .security-controls__panel {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: clamp(1.4rem, 3vw, 2rem);
+    background: white;
+    box-shadow: 0 20px 60px color-mix(in oklab, var(--geem-navy-950) 7%, transparent);
+  }
+
+  .security-control-list {
+    margin: 0;
+    padding: 0 clamp(1.25rem, 3vw, 2rem);
+    list-style: none;
+  }
+
+  .security-control-list > li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+    padding-block: clamp(1.35rem, 3vw, 1.8rem);
+  }
+
+  .security-control-list > li + li {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  .security-control-list__number {
+    color: var(--geem-blue);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.06em;
+  }
+
+  .security-control-list h3 {
+    color: var(--geem-navy-900);
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  .security-control-list p {
+    max-inline-size: 42rem;
+    margin-block-start: 0.45rem;
+    color: var(--geem-muted);
+    font-size: 0.88rem;
+    line-height: 1.75;
+  }
+
+  .security-control-list__status {
+    display: grid;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--geem-sky) 14%, white);
+    color: var(--geem-blue);
+  }
+
+  .security-control-list__status svg {
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .security-request-flow {
+    margin: 0.75rem;
+    padding: clamp(1.35rem, 3vw, 2rem);
+    border-radius: 1.35rem;
+    background:
+      radial-gradient(circle at 90% 0%, color-mix(in oklab, var(--geem-blue) 32%, transparent), transparent 42%),
+      var(--geem-navy-950);
+    color: white;
+  }
+
+  .security-request-flow > p:first-child {
+    color: var(--geem-sand);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .security-request-flow h3 {
+    margin-block-start: 0.45rem;
+    font-size: clamp(1.25rem, 3vw, 1.65rem);
+    font-weight: 600;
+  }
+
+  .security-request-flow > p:nth-of-type(2) {
+    max-inline-size: 44rem;
+    margin-block-start: 0.55rem;
+    color: color-mix(in oklab, white 68%, transparent);
+    font-size: 0.84rem;
+    line-height: 1.7;
+  }
+
+  .security-request-flow ol {
+    display: grid;
+    gap: 0.65rem;
+    margin: 1.35rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .security-request-flow li {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+
+  .security-request-flow li > span {
+    display: grid;
+    inline-size: 1.7rem;
+    block-size: 1.7rem;
+    flex: none;
+    place-items: center;
+    border: 1px solid color-mix(in oklab, var(--geem-sky) 35%, transparent);
+    border-radius: 50%;
+    color: var(--geem-sky);
+    font-size: 0.7rem;
+  }
+
+  .security-request-flow li > strong {
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+
+  .security-governance {
+    border-block: 1px solid var(--geem-border);
+    background: white;
+  }
+
+  .security-governance__intro {
+    max-inline-size: 52rem;
+  }
+
+  .security-governance__panel {
+    display: grid;
+    margin-block-start: clamp(2rem, 5vw, 3.5rem);
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: clamp(1.4rem, 3vw, 2rem);
+    background: var(--geem-surface);
+  }
+
+  .security-governance__panel > section {
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  .security-governance__panel > section + section {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  .security-governance__mark {
+    display: grid;
+    inline-size: 3rem;
+    block-size: 3rem;
+    place-items: center;
+    border-radius: 1rem;
+    background: var(--geem-navy-900);
+    color: var(--geem-sand);
+  }
+
+  .security-governance__mark--organization {
+    background: color-mix(in oklab, var(--geem-sky) 18%, white);
+    color: var(--geem-blue);
+  }
+
+  .security-governance__mark svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+
+  .security-governance__panel h3 {
+    margin-block-start: 1.1rem;
+    color: var(--geem-navy-900);
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+
+  .security-governance__panel ul {
+    display: grid;
+    gap: 0.8rem;
+    margin: 1.2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .security-governance__panel li {
+    position: relative;
+    padding-inline-start: 1.45rem;
+    color: var(--geem-muted);
+    font-size: 0.88rem;
+    line-height: 1.65;
+  }
+
+  .security-governance__panel li::before {
+    position: absolute;
+    inset-block-start: 0.7em;
+    inset-inline-start: 0;
+    inline-size: 0.45rem;
+    block-size: 0.45rem;
+    border-radius: 50%;
+    background: var(--geem-sky);
+    content: '';
+  }
+
+  .security-transparency {
+    padding-block: clamp(3.5rem, 7vw, 6rem);
+    background:
+      radial-gradient(circle at 10% 0%, color-mix(in oklab, white 32%, transparent), transparent 32%),
+      var(--geem-sand);
+    color: var(--geem-navy-950);
+  }
+
+  .security-transparency__grid {
+    display: grid;
+    gap: clamp(2rem, 5vw, 4rem);
+    align-items: center;
+  }
+
+  .security-transparency__copy > p:first-child {
+    color: var(--geem-navy-800);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .security-transparency__copy h2 {
+    max-inline-size: 18ch;
+    margin-block-start: 0.65rem;
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+
+  .security-transparency__copy > p:nth-of-type(2) {
+    max-inline-size: 44rem;
+    margin-block-start: 1rem;
+    color: color-mix(in oklab, var(--geem-navy-950) 72%, var(--geem-muted));
+    line-height: 1.8;
+  }
+
+  .security-transparency__copy small {
+    display: block;
+    max-inline-size: 44rem;
+    margin-block-start: 1rem;
+    padding-inline-start: 1rem;
+    border-inline-start: 2px solid color-mix(in oklab, var(--geem-navy-900) 35%, transparent);
+    color: color-mix(in oklab, var(--geem-navy-950) 65%, var(--geem-muted));
+    font-size: 0.78rem;
+    line-height: 1.7;
+  }
+
+  .security-review {
+    padding: clamp(1.4rem, 4vw, 2rem);
+    border-radius: 1.5rem;
+    background: var(--geem-navy-950);
+    color: white;
+    box-shadow: 0 24px 60px color-mix(in oklab, var(--geem-navy-950) 18%, transparent);
+  }
+
+  .security-review h3 {
+    font-size: clamp(1.3rem, 3vw, 1.7rem);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .security-review > p {
+    margin-block-start: 0.7rem;
+    color: color-mix(in oklab, white 68%, transparent);
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+
+  .security-review__actions {
+    margin-block-start: 1.35rem;
+  }
+
+  .security-review__actions > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    margin-block-start: 1rem;
+  }
+
+  .security-review__actions a:not(.btn) {
+    color: color-mix(in oklab, white 72%, transparent);
+    font-size: 0.78rem;
+    text-underline-offset: 0.25em;
+  }
+
+  @media (min-width: 760px) {
+    .security-facts {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .security-facts li + li {
+      border-block-start: 0;
+      border-inline-start: 1px solid var(--geem-border);
+    }
+
+    .security-governance__panel {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .security-governance__panel > section + section {
+      border-block-start: 0;
+      border-inline-start: 1px solid var(--geem-border);
+    }
+  }
+
+  @media (min-width: 980px) {
+    .security-page-hero__grid {
+      grid-template-columns: minmax(0, 0.9fr) minmax(30rem, 1.1fr);
+    }
+
+    .security-controls__grid {
+      grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+    }
+
+    .security-section-intro {
+      position: sticky;
+      top: 7rem;
+      align-self: start;
+    }
+
+    .security-transparency__grid {
+      grid-template-columns: minmax(0, 1.25fr) minmax(22rem, 0.75fr);
+    }
+  }
+
+  @media (max-width: 500px) {
+    .security-page-hero__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .security-page-hero__actions :global(.btn) {
+      inline-size: 100%;
+    }
+
+    .security-control-list > li {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .security-control-list__status {
+      display: none;
+    }
+  }
+</style>

@@ -1,0 +1,7 @@
+{"message":"connected.","label":"vite","level":"info"}
+{"message":"Generated 0ms","label":"types","level":"info"}
+{"message":"connected.","label":"vite","level":"info"}
+listen EPERM: operation not permitted 0.0.0.0:4322
+  Stack trace:
+    at Server.setupListenHandle [as _listen2] (node:net:1918:21)
+    at node:net:2206:7

@@ -4,6 +4,64 @@ export type NavItem = {
   href: 'product' | 'experts' | 'integrations' | 'api' | 'security' | 'contact';
 };
 
+export type SecurityPageCopy = {
+  hero: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    primaryCta: string;
+    secondaryCta: string;
+  };
+  boundary: {
+    label: string;
+    title: string;
+    caption: string;
+    items: {
+      id: 'knowledge' | 'permissions' | 'credentials' | 'residency';
+      label: string;
+    }[];
+  };
+  facts: { value: string; label: string }[];
+  controls: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    items: {
+      id: 'workspace' | 'roles' | 'integrations' | 'access';
+      title: string;
+      description: string;
+    }[];
+  };
+  requestFlow: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    steps: string[];
+  };
+  governance: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    geemTitle: string;
+    geemItems: string[];
+    organizationTitle: string;
+    organizationItems: string[];
+  };
+  transparency: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    note: string;
+  };
+  cta: {
+    title: string;
+    description: string;
+    primaryCta: string;
+    privacyCta: string;
+    pdplCta: string;
+  };
+};
+
 export type SiteCopy = {
   meta: {
     homeTitle: string;
@@ -109,6 +167,7 @@ export type SiteCopy = {
     description: string;
     points: { title: string; description: string }[];
     linkLabel: string;
+    page: SecurityPageCopy;
   };
   finalCta: {
     title: string;

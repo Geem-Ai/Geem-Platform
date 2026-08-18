@@ -2,6 +2,7 @@
 import MarketingLayout from '../../layouts/MarketingLayout.astro';
 import { getSiteCopy } from '../../content/site';
 import { isLocale, localeStaticPaths } from '../../lib/i18n';
+import SecurityPage from '../../components/sections/SecurityPage.astro';
 
 export function getStaticPaths() {
   return localeStaticPaths();
@@ -11,61 +12,6 @@ const raw = Astro.params.locale;
 if (!isLocale(raw)) return Astro.redirect('/ar', 302);
 const locale = raw;
 const copy = getSiteCopy(locale);
-
-const points =
-  locale === 'ar'
-    ? [
-        {
-          title: 'مساحة عمل خاصة لكل منشأة',
-          body: 'بيانات منشأتك ومعرفتها تبقى داخل مساحتها. معرفة منشأة أخرى لا تُخلط مع معرفتك.',
-        },
-        {
-          title: 'معرفة تعتمد على ما تسمح به',
-          body: 'الخبراء يستندون إلى المستندات والمصادر التي تربطها أنت. لا يعتمدون على مكتبة عامة مشتركة بين العملاء.',
-        },
-        {
-          title: 'حماية بيانات الربط',
-          body: 'بيانات ربط التطبيقات مثل Google Drive وOneDrive تُحفظ بشكل آمن، ويُقيَّد الوصول إليها.',
-        },
-        {
-          title: 'وصول مضبوط للأنظمة',
-          body: 'عند ربط جيم بأنظمتكم، يتم ذلك بمفاتيح وصول خاصة بمساحة العمل.',
-        },
-        {
-          title: 'صلاحيات حقيقية — لا مجرد إخفاء قوائم',
-          body: 'إخفاء زر في الشاشة لا يكفي. جيم يطبّق الصلاحيات داخل المنصة لحماية بيانات منشأتك.',
-        },
-        {
-          title: 'ما لا ندّعيه هنا',
-          body: 'لا يعرض هذا الموقع شهادات أمنية غير مثبتة. نركز على ما تفعله المنصة فعليًا لحماية مساحتك.',
-        },
-      ]
-    : [
-        {
-          title: 'A private workspace for each organization',
-          body: 'Your organization’s data and knowledge stay in its workspace. Another organization’s knowledge is not mixed with yours.',
-        },
-        {
-          title: 'Knowledge you approve',
-          body: 'Experts rely on the documents and sources you connect. They do not use a shared public library across customers.',
-        },
-        {
-          title: 'Protected app connections',
-          body: 'Connection details for apps like Google Drive and OneDrive are stored securely, with controlled access.',
-        },
-        {
-          title: 'Controlled access for your systems',
-          body: 'When Geem connects to your systems, it uses access keys that belong to your workspace.',
-        },
-        {
-          title: 'Real permissions — not just hidden menus',
-          body: 'Hiding a button is not enough. Geem enforces permissions inside the platform to protect your organization’s data.',
-        },
-        {
-          title: 'What we do not claim here',
-          body: 'This site does not list unsupported security certifications. We focus on what the platform actually does to protect your workspace.',
-        },
-      ];
 ---
 
 <MarketingLayout
@@ -75,22 +21,5 @@ const points =
   description={copy.meta.securityDescription}
   path="security"
 >
-  <section class="section-shell section-light">
-    <div class="container-shell max-w-4xl">
-      <div data-reveal>
-        <h1 class="text-4xl font-semibold tracking-tight">{copy.meta.securityTitle}</h1>
-        <p class="mt-4 text-lg text-geem-muted">{copy.security.description}</p>
-      </div>
-      <div class="mt-10 grid gap-4 md:grid-cols-2" data-reveal-stagger>
-        {
-          points.map((point) => (
-            <article class="geem-card p-6">
-              <h2 class="text-lg font-semibold">{point.title}</h2>
-              <p class="mt-3 text-sm text-geem-muted">{point.body}</p>
-            </article>
-          ))
-        }
-      </div>
-    </div>
-  </section>
+  <SecurityPage locale={locale} copy={copy.security.page} />
 </MarketingLayout>
