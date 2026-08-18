@@ -231,6 +231,7 @@ export function MembersPage() {
                             ? (revokeMutation.variables ?? null)
                             : null
                       }
+                      onInvite={() => setInviteOpen(true)}
                       onResend={handleResend}
                       onRevoke={setRevokeTarget}
                     />
