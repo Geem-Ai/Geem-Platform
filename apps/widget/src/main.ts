@@ -393,10 +393,27 @@ async function boot() {
 
   let open = false;
   let busy = false;
-  const sessionId =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `s-${Date.now()}`;
+  const sessionStorageKey = `geem-widget-session:${widgetId}`;
+  // Server mints HMAC-signed session_id; never invent a bare UUID client-side.
+  let sessionId = '';
+  try {
+    sessionId = window.sessionStorage.getItem(sessionStorageKey) || '';
+  } catch {
+    sessionId = '';
+  }
+
+  function persistSession(next: string) {
+    sessionId = next;
+    try {
+      if (next) {
+        window.sessionStorage.setItem(sessionStorageKey, next);
+      } else {
+        window.sessionStorage.removeItem(sessionStorageKey);
+      }
+    } catch {
+      /* private mode / blocked storage — in-memory only */
+    }
+  }
 
   function setOpen(next: boolean) {
     open = next;
@@ -410,6 +427,17 @@ async function boot() {
   launcher.addEventListener('click', () => setOpen(!open));
   closeBtn.addEventListener('click', () => setOpen(false));
 
+  async function postMessage(textContent: string, sid: string): Promise<Response> {
+    const body: { message: string; session_id?: string } = { message: textContent };
+    if (sid) body.session_id = sid;
+    return fetch(`${base}/api/public/widgets/${widgetId}/messages`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
   composer.addEventListener('submit', async (event) => {
     event.preventDefault();
     const textContent = input.value.trim();
@@ -421,15 +449,34 @@ async function boot() {
     input.disabled = true;
     const thinking = startThinking(messages, thinkingStatuses);
     try {
-      const res = await fetch(`${base}/api/public/widgets/${widgetId}/messages`, {
-        method: 'POST',
-        credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textContent, session_id: sessionId }),
-      });
+      let res = await postMessage(textContent, sessionId);
+      // Stale bare UUID / bad HMAC from an older tab → drop and start a fresh server session.
+      if (res.status === 422 && sessionId) {
+        let invalidSession = false;
+        try {
+          const errBody = (await res.clone().json()) as {
+            message?: string;
+            code?: string;
+          };
+          invalidSession =
+            errBody.message === 'Invalid session_id.' ||
+            (errBody.code === 'validation' &&
+              typeof errBody.message === 'string' &&
+              errBody.message.toLowerCase().includes('session_id'));
+        } catch {
+          invalidSession = false;
+        }
+        if (invalidSession) {
+          persistSession('');
+          res = await postMessage(textContent, '');
+        }
+      }
       thinking.stop();
       if (!res.ok) throw new Error(`message ${res.status}`);
       const data = (await res.json()) as MessageOut;
+      if (data.session_id && data.session_id !== sessionId) {
+        persistSession(data.session_id);
+      }
       addBubble(data.answer || (rtl ? 'تعذّر الرد.' : 'No reply.'), 'bot');
     } catch (err) {
       thinking.stop();

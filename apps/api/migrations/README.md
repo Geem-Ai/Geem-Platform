@@ -34,6 +34,7 @@
 - Phase 10A: `0023_workspace_invitations.py` — `workspace_invitations` (HMAC-hashed tokens, pending unique `(workspace_id, email)`). Invite role is `role_id` after 10C. Email via `EmailProvider` (`console` local/test only; optional SMTP). See [`docs/invitations.md`](../../docs/invitations.md).
 - Phase 10C: `0024_workspace_rbac.py` — `permissions`, `workspace_roles`, `workspace_role_permissions`; memberships/invitations `role_id`; seed catalog + default Owner/Administrator/Member; drop legacy string `role` after backfill. See [`docs/rbac.md`](../../docs/rbac.md).
 - Invoices: `0025_purchase_invoices.py` — `purchases.invoice_number` (unique) + `invoice_snapshot` JSONB; sequence `purchase_invoice_number_seq`. ZATCA simplified tax invoice PDF is generated on download (`GET /api/billing/purchases/{id}/invoice`) from the frozen snapshot.
+- Phase 9H: `0026_chat_widget.py` — `widget_instances`; `0027_widget_conversation_bindings.py` — visitor `session_id` → conversation for multi-turn widget chat (also extends `ck_conversations_source_user` for greenfield); `0028_widget_conversation_source_check.py` — repair `ck_conversations_source_user` to allow `source=widget` with null `user_id` when 0027 ran before that check change.
 
 ### Document tenancy (Phase 2C final)
 

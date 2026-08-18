@@ -216,6 +216,20 @@ def purge_expired_chat_attachments(self, limit: int = 200) -> dict:
         db.close()
 
 
+@celery_app.task(name="purge_expired_widget_messages", bind=True, max_retries=1)
+def purge_expired_widget_messages(self, limit: int = 500) -> dict:
+    """Periodic sweep — hard-delete Chat Widget messages older than TTL."""
+    from app.widgets.retention import WidgetRetentionService
+
+    db = SessionLocal()
+    try:
+        result = WidgetRetentionService(db).purge_expired(limit=limit)
+        result["task_id"] = getattr(self.request, "id", None)
+        return result
+    finally:
+        db.close()
+
+
 @celery_app.task(name="purge_chat_attachment_if_expired", bind=True, max_retries=2)
 def purge_chat_attachment_if_expired(self, attachment_id: str) -> dict:
     """ETA task scheduled at upload time (TTL countdown)."""

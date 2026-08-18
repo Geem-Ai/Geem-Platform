@@ -206,6 +206,57 @@ class TestChatWidgetConfigAndPublic:
         assert msg.status_code == 200, msg.text
         assert msg.json()["answer"] == "مرحبا"
         assert "citations" not in msg.json()
+        assert msg.json().get("session_id")
+        assert "." in msg.json()["session_id"]  # HMAC-signed token
+
+        # Second turn with the same session_id must pass prior history into RAG.
+        session_id = msg.json()["session_id"]
+        with patch(
+            "app.widgets.service.ChatTurnExecutor.execute",
+            return_value={
+                "answer": "follow-up",
+                "citations": [],
+                "billed_tokens": 1,
+            },
+        ) as execute_mock, patch(
+            "app.widgets.service.ChatTurnExecutor.authorize_expert",
+            return_value=None,
+        ), patch(
+            "app.widgets.service.MeteredWorkspaceGeneration.reserve",
+            return_value=None,
+        ), patch(
+            "app.widgets.service.MeteredWorkspaceGeneration.settle",
+            return_value=None,
+        ), patch(
+            "app.widgets.service.MeteredWorkspaceGeneration.release",
+            return_value=None,
+        ):
+            msg2 = client.post(
+                f"/api/public/widgets/{widget_id}/messages",
+                headers={"Origin": "https://anywhere.test"},
+                json={"message": "and then?", "session_id": session_id},
+            )
+        assert msg2.status_code == 200, msg2.text
+        assert msg2.json()["answer"] == "follow-up"
+        assert msg2.json()["session_id"] == session_id
+        assert execute_mock.call_count == 1
+        history = execute_mock.call_args.kwargs.get("history") or []
+        assert any(
+            turn.get("role") == "user" and turn.get("content") == "hello"
+            for turn in history
+        )
+        assert any(
+            turn.get("role") == "assistant" and turn.get("content") == "مرحبا"
+            for turn in history
+        )
+
+        # Unsigned / forged session_id is rejected.
+        forged = client.post(
+            f"/api/public/widgets/{widget_id}/messages",
+            headers={"Origin": "https://anywhere.test"},
+            json={"message": "nope", "session_id": str(uuid.uuid4())},
+        )
+        assert forged.status_code == 422, forged.text
 
         # Re-lock origins: denied Origin must not receive ACAO.
         locked = client.put(
@@ -291,3 +342,74 @@ class TestChatWidgetConfigAndPublic:
 
         app = db.scalar(select(CatalogApp).where(CatalogApp.slug == "chat-widget"))
         assert app is not None
+
+    def test_daily_session_message_quota(self, client, owner_ws, db, monkeypatch):
+        from app.core.config import get_settings
+
+        monkeypatch.setenv("WIDGET_SESSION_MAX_MESSAGES_PER_DAY", "1")
+        get_settings.cache_clear()
+        try:
+            user, ws = owner_ws
+            headers = _ws_headers(user, ws)
+            _subscribe_and_install(client, headers, db)
+            expert = client.post(
+                "/api/experts",
+                headers=headers,
+                json={"name": "Quota Expert"},
+            )
+            assert expert.status_code == 201, expert.text
+            expert_id = expert.json()["id"]
+            row = db.get(Expert, uuid.UUID(expert_id))
+            assert row is not None
+            row.status = ExpertStatus.READY.value
+            db.commit()
+
+            widget = client.get("/api/apps/chat-widget/widget", headers=headers).json()
+            widget_id = widget["id"]
+            client.put(
+                "/api/apps/chat-widget/widget",
+                headers=headers,
+                json={"expert_id": expert_id, "allowed_origins": []},
+            )
+
+            patches = (
+                patch(
+                    "app.widgets.service.ChatTurnExecutor.execute",
+                    return_value={"answer": "ok", "citations": [], "billed_tokens": 1},
+                ),
+                patch(
+                    "app.widgets.service.ChatTurnExecutor.authorize_expert",
+                    return_value=None,
+                ),
+                patch(
+                    "app.widgets.service.MeteredWorkspaceGeneration.reserve",
+                    return_value=None,
+                ),
+                patch(
+                    "app.widgets.service.MeteredWorkspaceGeneration.settle",
+                    return_value=None,
+                ),
+                patch(
+                    "app.widgets.service.MeteredWorkspaceGeneration.release",
+                    return_value=None,
+                ),
+            )
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                first = client.post(
+                    f"/api/public/widgets/{widget_id}/messages",
+                    headers={"Origin": "https://quota.test"},
+                    json={"message": "one"},
+                )
+            assert first.status_code == 200, first.text
+            session_id = first.json()["session_id"]
+
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                second = client.post(
+                    f"/api/public/widgets/{widget_id}/messages",
+                    headers={"Origin": "https://quota.test"},
+                    json={"message": "two", "session_id": session_id},
+                )
+            assert second.status_code == 429, second.text
+        finally:
+            monkeypatch.delenv("WIDGET_SESSION_MAX_MESSAGES_PER_DAY", raising=False)
+            get_settings.cache_clear()

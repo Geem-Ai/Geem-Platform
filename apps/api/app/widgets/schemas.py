@@ -93,6 +93,7 @@ class WidgetBootstrapOut(BaseModel):
 
 class WidgetMessageIn(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
+    # Opaque HMAC token (``uuid.sig``) issued by the API; max fits signed form.
     session_id: str | None = Field(None, max_length=128)
 
 

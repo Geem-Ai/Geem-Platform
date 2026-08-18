@@ -15,7 +15,8 @@ expert.workspace_id``.
 
 Workspace Chat conversations are private to ``user_id`` within the consumer
 Workspace. Channel conversations use ``source=channel`` with ``user_id`` null and
-must not appear in personal Chat history listings.
+must not appear in personal Chat history listings. Widget conversations use
+``source=widget`` with ``user_id`` null (keyed by visitor ``session_id``).
 """
 
 from __future__ import annotations
@@ -60,6 +61,7 @@ class ConversationSource(str, enum.Enum):
     WORKSPACE = "workspace"
     CHANNEL = "channel"
     API = "api"
+    WIDGET = "widget"
 
 
 MAX_CONVERSATION_TITLE_LENGTH = 200

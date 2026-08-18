@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService
@@ -19,13 +21,27 @@ from app.apps_catalog.policy import require_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
 from app.apps_catalog.service import AppInstallationService
 from app.conversations.invocation import ChatInvocationContext
+from app.conversations.locks import ConversationGenerationLock
+from app.conversations.models import (
+    Conversation,
+    ConversationSource,
+    Message,
+    MessageRole,
+    MessageStatus,
+)
+from app.conversations.repository import ConversationRepository
 from app.conversations.turn import ChatTurnExecutor
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.models import Expert, ExpertStatus
 from app.experts.service import ExpertService
 from app.usage.metered import MeteredWorkspaceGeneration
-from app.widgets.models import WidgetInstance, WidgetInstanceStatus
+from app.widgets.retention import WidgetRetentionService
+from app.widgets.models import (
+    WidgetConversationBinding,
+    WidgetInstance,
+    WidgetInstanceStatus,
+)
 from app.widgets.origins import normalize_origins_list, origin_allowed, request_origin
 from app.widgets.schemas import (
     WidgetBootstrapOut,
@@ -33,6 +49,11 @@ from app.widgets.schemas import (
     WidgetInstanceOut,
     WidgetMessageOut,
     WidgetUpdateIn,
+)
+from app.widgets.session_tokens import (
+    mint_session_token,
+    parse_bare_session_uuid,
+    parse_session_token,
 )
 from app.workspaces.models import Workspace, WorkspaceMembership
 
@@ -52,6 +73,9 @@ class WidgetService:
         self.catalog = AppCatalogRepository(db)
         self.installations = AppInstallationService(db, self.settings)
         self.experts = ExpertService(db)
+        self.conversations = ConversationRepository(db)
+        self.lock = ConversationGenerationLock(settings=self.settings)
+        self.retention = WidgetRetentionService(db, settings=self.settings)
 
     def get_or_create_for_workspace(
         self,
@@ -175,55 +199,337 @@ class WidgetService:
             raise AppError(ErrorCategory.NOT_FOUND, "Widget not found.")
         self._require_ready_expert(workspace, row.expert_id)
 
-        turn_id = str(uuid.uuid4())
-        executor = ChatTurnExecutor(self.db, settings=self.settings)
-        question = executor.validate_message(message)
-        executor.authorize_expert(
-            workspace=workspace,
-            expert_id=row.expert_id,
-            actor_id=None,
+        session_uuid, session_token = self._resolve_session_token(
+            session_id, widget=row, expert_id=row.expert_id
         )
-        invocation = ChatInvocationContext.widget(
-            workspace_id=workspace.id,
-            widget_id=row.id,
-            expert_id=row.expert_id,
-            request_id=turn_id,
-        )
-        meter = MeteredWorkspaceGeneration(
-            self.db,
-            workspace_id=workspace.id,
-            user_id=None,
-            expert_id=row.expert_id,
-            conversation_id=None,
-            message_id=None,
-            api_key_id=None,
-            request_id=turn_id,
-            settings=self.settings,
-        )
+        # Serialize first-message create + concurrent turns for this visitor session.
+        session_lock_id = uuid.uuid5(row.id, f"{session_uuid}:{row.expert_id}")
+        if not self.lock.acquire(session_lock_id):
+            raise AppError(
+                ErrorCategory.CONVERSATION_BUSY,
+                "This chat is busy processing another message.",
+                retryable=True,
+            )
+
         try:
-            meter.reserve()
-        except Exception:
-            meter.release()
-            raise
-        try:
-            result = executor.execute(
+            conversation, _binding = self._resolve_or_create_conversation(
+                workspace=workspace,
+                widget=row,
+                expert_id=row.expert_id,
+                session_id=session_uuid,
+            )
+            self._enforce_daily_session_quota(
+                widget_id=row.id,
+                session_id=session_uuid,
+            )
+
+            turn_id = str(uuid.uuid4())
+            executor = ChatTurnExecutor(self.db, settings=self.settings)
+            question = executor.validate_message(message)
+            executor.authorize_expert(
                 workspace=workspace,
                 expert_id=row.expert_id,
-                question=question,
-                invocation=invocation,
-                meter=meter,
+                actor_id=None,
             )
-        except Exception:
-            meter.release()
-            raise
 
+            # Drop messages older than TTL before persisting this turn / loading history.
+            self.retention.purge_expired_for_conversation(conversation.id)
+
+            now = datetime.now(timezone.utc)
+            user_message = Message(
+                conversation_id=conversation.id,
+                role=MessageRole.USER.value,
+                content=question,
+                citations=[],
+                attachments=[],
+                status=MessageStatus.COMPLETED.value,
+                created_at=now,
+                updated_at=now,
+            )
+            assistant_message = Message(
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT.value,
+                content="",
+                citations=[],
+                attachments=[],
+                status=MessageStatus.PENDING.value,
+                created_at=now,
+                updated_at=now,
+            )
+            self.conversations.create_message(user_message)
+            self.conversations.create_message(assistant_message)
+            conversation.updated_at = now
+            self.db.flush()
+
+            history = self._history_payload(
+                conversation.id, before_message_id=user_message.id
+            )
+            invocation = ChatInvocationContext.widget(
+                workspace_id=workspace.id,
+                widget_id=row.id,
+                expert_id=row.expert_id,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                request_id=turn_id,
+            )
+            meter = MeteredWorkspaceGeneration(
+                self.db,
+                workspace_id=workspace.id,
+                user_id=None,
+                expert_id=row.expert_id,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                api_key_id=None,
+                request_id=turn_id,
+                settings=self.settings,
+            )
+            try:
+                meter.reserve()
+            except Exception:
+                meter.release()
+                raise
+            try:
+                result = executor.execute(
+                    workspace=workspace,
+                    expert_id=row.expert_id,
+                    question=question,
+                    invocation=invocation,
+                    meter=meter,
+                    history=history,
+                )
+            except Exception:
+                meter.release()
+                assistant_message.status = MessageStatus.FAILED.value
+                assistant_message.updated_at = datetime.now(timezone.utc)
+                conversation.updated_at = assistant_message.updated_at
+                self.db.commit()
+                raise
+
+            answer = str(result.get("answer") or "")
+            # Public widget never returns citations to the visitor.
+            assistant_message.content = answer
+            assistant_message.citations = []
+            assistant_message.status = MessageStatus.COMPLETED.value
+            assistant_message.updated_at = datetime.now(timezone.utc)
+            conversation.updated_at = assistant_message.updated_at
+            self.db.commit()
+
+            return (
+                WidgetMessageOut(answer=answer, session_id=session_token),
+                cors_origin,
+            )
+        finally:
+            self.lock.release(session_lock_id)
+
+    def _resolve_session_token(
+        self,
+        session_id: str | None,
+        *,
+        widget: WidgetInstance,
+        expert_id: uuid.UUID,
+    ) -> tuple[str, str]:
+        """Return ``(session_uuid, signed_token)`` for DB + client storage."""
+        secret = self.settings.jwt_secret
+        raw = (session_id or "").strip()
+        if len(raw) > 128:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "session_id must be at most 128 characters.",
+            )
+        if not raw:
+            sid = str(uuid.uuid4())
+            return sid, mint_session_token(sid, secret=secret)
+
+        parsed = parse_session_token(raw, secret=secret)
+        if parsed is not None:
+            return parsed, mint_session_token(parsed, secret=secret)
+
+        # Grandfather bare UUIDs that already have a binding (pre-HMAC clients).
+        bare = parse_bare_session_uuid(raw)
+        if bare is not None and self._session_binding_exists(
+            widget_id=widget.id, session_id=bare, expert_id=expert_id
+        ):
+            return bare, mint_session_token(bare, secret=secret)
+
+        raise AppError(ErrorCategory.VALIDATION, "Invalid session_id.")
+
+    def _session_binding_exists(
+        self,
+        *,
+        widget_id: uuid.UUID,
+        session_id: str,
+        expert_id: uuid.UUID,
+    ) -> bool:
         return (
-            WidgetMessageOut(
-                answer=str(result.get("answer") or ""),
-                session_id=session_id,
-            ),
-            cors_origin,
+            self.db.scalar(
+                select(WidgetConversationBinding.id).where(
+                    WidgetConversationBinding.widget_instance_id == widget_id,
+                    WidgetConversationBinding.session_id == session_id,
+                    WidgetConversationBinding.expert_id == expert_id,
+                )
+            )
+            is not None
         )
+
+    def _enforce_daily_session_quota(
+        self,
+        *,
+        widget_id: uuid.UUID,
+        session_id: str,
+    ) -> None:
+        limit = max(0, int(self.settings.widget_session_max_messages_per_day))
+        if limit == 0:
+            return
+        used = self._count_session_user_messages_today(
+            widget_id=widget_id, session_id=session_id
+        )
+        if used >= limit:
+            raise AppError(
+                ErrorCategory.RATE_LIMIT_EXCEEDED,
+                "This chat session has reached its daily message limit.",
+                details={"limit": limit, "used": used},
+            )
+
+    def _count_session_user_messages_today(
+        self,
+        *,
+        widget_id: uuid.UUID,
+        session_id: str,
+    ) -> int:
+        start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        count = self.db.scalar(
+            select(func.count(Message.id))
+            .select_from(Message)
+            .join(
+                WidgetConversationBinding,
+                WidgetConversationBinding.conversation_id == Message.conversation_id,
+            )
+            .where(
+                WidgetConversationBinding.widget_instance_id == widget_id,
+                WidgetConversationBinding.session_id == session_id,
+                Message.role == MessageRole.USER.value,
+                Message.created_at >= start,
+            )
+        )
+        return int(count or 0)
+
+    def _resolve_or_create_conversation(
+        self,
+        *,
+        workspace: Workspace,
+        widget: WidgetInstance,
+        expert_id: uuid.UUID,
+        session_id: str,
+    ) -> tuple[Conversation, WidgetConversationBinding]:
+        existing = self._get_session_binding(
+            workspace_id=workspace.id,
+            widget_id=widget.id,
+            session_id=session_id,
+            expert_id=expert_id,
+            for_update=True,
+        )
+        if existing is not None:
+            conversation = self.db.get(Conversation, existing.conversation_id)
+            if conversation is None:
+                raise AppError(
+                    ErrorCategory.CONVERSATION_NOT_FOUND,
+                    "Widget conversation binding is missing its conversation.",
+                )
+            return conversation, existing
+
+        try:
+            with self.db.begin_nested():
+                conversation = Conversation(
+                    workspace_id=workspace.id,
+                    expert_id=expert_id,
+                    user_id=None,
+                    source=ConversationSource.WIDGET.value,
+                    title=None,
+                )
+                self.conversations.create(conversation)
+                binding = WidgetConversationBinding(
+                    workspace_id=workspace.id,
+                    widget_instance_id=widget.id,
+                    conversation_id=conversation.id,
+                    session_id=session_id,
+                    expert_id=expert_id,
+                )
+                self.db.add(binding)
+                self.db.flush()
+        except IntegrityError:
+            # Concurrent first message lost the unique race — reload winner.
+            existing = self._get_session_binding(
+                workspace_id=workspace.id,
+                widget_id=widget.id,
+                session_id=session_id,
+                expert_id=expert_id,
+                for_update=True,
+            )
+            if existing is None:
+                raise AppError(
+                    ErrorCategory.CONVERSATION_BUSY,
+                    "This chat is busy processing another message.",
+                    retryable=True,
+                )
+            conversation = self.db.get(Conversation, existing.conversation_id)
+            if conversation is None:
+                raise AppError(
+                    ErrorCategory.CONVERSATION_NOT_FOUND,
+                    "Widget conversation binding is missing its conversation.",
+                )
+            return conversation, existing
+        return conversation, binding
+
+    def _get_session_binding(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        widget_id: uuid.UUID,
+        session_id: str,
+        expert_id: uuid.UUID,
+        for_update: bool = False,
+    ) -> WidgetConversationBinding | None:
+        stmt = select(WidgetConversationBinding).where(
+            WidgetConversationBinding.workspace_id == workspace_id,
+            WidgetConversationBinding.widget_instance_id == widget_id,
+            WidgetConversationBinding.session_id == session_id,
+            WidgetConversationBinding.expert_id == expert_id,
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        return self.db.scalar(stmt)
+
+    def _history_payload(
+        self,
+        conversation_id: uuid.UUID,
+        *,
+        before_message_id: uuid.UUID,
+    ) -> list[dict[str, str]]:
+        limit = max(0, int(self.settings.widget_chat_history_max_messages))
+        if limit == 0:
+            return []
+        rows = self.conversations.list_history_for_rag(
+            conversation_id,
+            before_message_id=before_message_id,
+            limit=limit,
+        )
+        cutoff = self.retention.cutoff
+        return [
+            {"role": m.role, "content": m.content or ""}
+            for m in rows
+            if (m.content or "").strip() and self._message_within_ttl(m.created_at, cutoff)
+        ]
+
+    @staticmethod
+    def _message_within_ttl(created_at: datetime | None, cutoff: datetime) -> bool:
+        if created_at is None:
+            return False
+        when = created_at if created_at.tzinfo is not None else created_at.replace(
+            tzinfo=timezone.utc
+        )
+        return when >= cutoff
 
     def cors_origin_for_options(
         self,

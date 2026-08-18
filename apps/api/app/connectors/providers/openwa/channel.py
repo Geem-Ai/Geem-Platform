@@ -218,6 +218,20 @@ class OpenWAChannelProcessor:
             )
             meter.reserve()
 
+            history_limit = max(0, int(self.settings.chat_history_max_messages))
+            history: list[dict[str, str]] = []
+            if history_limit > 0:
+                rows = self.conversations.list_history_for_rag(
+                    conversation.id,
+                    before_message_id=user_message.id,
+                    limit=history_limit,
+                )
+                history = [
+                    {"role": m.role, "content": m.content or ""}
+                    for m in rows
+                    if (m.content or "").strip()
+                ]
+
             invocation = ChatInvocationContext.channel(
                 workspace_id=workspace.id,
                 connection_id=row.id,
@@ -234,6 +248,7 @@ class OpenWAChannelProcessor:
                     question=body,
                     invocation=invocation,
                     meter=meter,
+                    history=history,
                 )
             except AppError as exc:
                 meter.release()

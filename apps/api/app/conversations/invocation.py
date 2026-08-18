@@ -136,6 +136,8 @@ class ChatInvocationContext:
         workspace_id: uuid.UUID,
         widget_id: uuid.UUID,
         expert_id: uuid.UUID | None = None,
+        conversation_id: uuid.UUID | None = None,
+        message_id: uuid.UUID | None = None,
         request_id: str | None = None,
     ) -> ChatInvocationContext:
         return cls(
@@ -144,8 +146,8 @@ class ChatInvocationContext:
             user_id=None,
             api_key_id=None,
             expert_id=expert_id,
-            conversation_id=None,
-            message_id=None,
+            conversation_id=conversation_id,
+            message_id=message_id,
             request_id=request_id,
             widget_id=widget_id,
         )
