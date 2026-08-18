@@ -6,8 +6,7 @@ import { contactHref, getSiteConfig, localizedPath } from '../../lib/site';
 import { otherLocale } from '../../lib/i18n';
 import { switchLocalePath } from '../../lib/routes';
 import Button from '../ui/Button.astro';
-import avatar from '../../assets/brand/geem-avatar.webp';
-import { Image } from 'astro:assets';
+import logo from '../../assets/brand/geem-logo-square-white.svg?raw';
 
 type Props = {
   locale: Locale;
@@ -34,7 +33,7 @@ function isCurrentNav(item: SiteCopy['nav']['items'][number]) {
 <header class="site-header bg-geem-navy-950/85 text-white backdrop-blur-md" data-site-header>
   <div class="container-shell flex items-center justify-between gap-4">
     <a href={localizedPath(locale)} class="flex items-center gap-3 no-underline text-white">
-      <Image src={avatar} alt="" width={40} height={40} class="size-10 rounded-full" />
+      <span class="navbar-logo" aria-hidden="true" set:html={logo}></span>
       <span class="font-semibold tracking-tight text-lg">{copy.brand.product}</span>
     </a>
 
@@ -107,3 +106,18 @@ function isCurrentNav(item: SiteCopy['nav']['items'][number]) {
     </nav>
   </dialog>
 </header>
+
+<style>
+  .navbar-logo {
+    display: inline-flex;
+    flex: 0 0 auto;
+    inline-size: 2.15rem;
+    block-size: 2.25rem;
+  }
+
+  .navbar-logo :global(svg) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+</style>
