@@ -5,17 +5,41 @@ type Props = { copy: SiteCopy };
 const { copy } = Astro.props;
 ---
 
-<section class="border-y border-geem-border bg-white" aria-label="Platform pillars">
-  <div class="container-shell py-8">
-    <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" data-reveal-stagger>
+<section class="border-y border-geem-border bg-white">
+  <div class="container-shell py-5 md:py-6">
+    <ul class="proof-row grid md:grid-cols-3" data-reveal-stagger>
       {
         copy.valueStrip.items.map((item) => (
-          <li class="rounded-2xl border border-geem-border bg-geem-surface/70 p-4">
-            <h2 class="text-sm font-semibold text-geem-navy-900">{item.title}</h2>
-            <p class="mt-2 text-sm text-geem-muted">{item.description}</p>
+          <li class="proof-item flex items-start gap-3 py-4 md:px-6 md:py-1">
+            <span class="mt-1.5 size-2 shrink-0 rounded-full bg-geem-blue" aria-hidden="true" />
+            <div>
+              <h2 class="text-sm font-semibold text-geem-navy-900">{item.title}</h2>
+              <p class="mt-1 text-sm leading-relaxed text-geem-muted">{item.description}</p>
+            </div>
           </li>
         ))
       }
     </ul>
   </div>
 </section>
+
+<style>
+  .proof-item + .proof-item {
+    border-block-start: 1px solid var(--geem-border);
+  }
+
+  @media (min-width: 768px) {
+    .proof-item + .proof-item {
+      border-block-start: 0;
+      border-inline-start: 1px solid var(--geem-border);
+    }
+
+    .proof-item:first-child {
+      padding-inline-start: 0;
+    }
+
+    .proof-item:last-child {
+      padding-inline-end: 0;
+    }
+  }
+</style>

@@ -134,11 +134,9 @@ const nodes = nodeOrder
                     <b>200 OK</b>
                   </div>
                   <code>
-                    <span><em>POST</em> /v1/chat/completions</span>
-                    <span>{'{'}</span>
-                    <span>&nbsp;&nbsp;&quot;expert_id&quot;: &quot;geem-expert&quot;,</span>
-                    <span>&nbsp;&nbsp;&quot;stream&quot;: true</span>
-                    <span>{'}'}</span>
+                    <span><em>POST</em> /api/v1/chat/completions</span>
+                    <span><em>HEADER</em> X-Geem-Expert-Id: &lt;EXPERT_ID&gt;</span>
+                    <span><em>BODY</em> messages · stream</span>
                   </code>
                 </div>
               )}

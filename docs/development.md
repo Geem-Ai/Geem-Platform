@@ -105,7 +105,7 @@ Then open **http://app.geem.dm:5174**, not `http://api.geem.dm:5174` (that host 
 
 Vite already allows Host headers for `.geem.dm` and `.geem.ai`. With `APP_ENV=local`, the API also allows CORS for `http(s)://{sub.}geem.dm[:port]` in addition to the exact `CORS_ORIGINS` list.
 
-### C. Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai`)
+### C. Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai` / `landpage-uat.geem.ai`)
 
 Expose the local Compose stack on HTTPS without opening ports. This is a **dev/UAT** path (Vite `--reload`), not production. Prefer Cloudflare Access in front of the hostnames.
 
@@ -120,24 +120,27 @@ cloudflared tunnel create geem-uat
 cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
 cloudflared tunnel route dns geem-uat app-uat.geem.ai
 cloudflared tunnel route dns geem-uat api-uat.geem.ai
+cloudflared tunnel route dns geem-uat landpage-uat.geem.ai
 ```
 
 | Public hostname | Origin (Docker DNS) |
 |-----------------|---------------------|
 | `app-uat.geem.ai` | `http://workspace_web:5174` |
 | `api-uat.geem.ai` | `http://api:8000` |
+| `landpage-uat.geem.ai` | `http://landpage_web:4321` |
 
-`.env` `CORS_ORIGINS` must include `https://app-uat.geem.ai`. Start the overlay (recreates `workspace_web` so Vite picks up `VITE_API_URL=https://api-uat.geem.ai`):
+`.env` `CORS_ORIGINS` must include `https://app-uat.geem.ai`. Start the overlay (recreates `workspace_web` so Vite picks up `VITE_API_URL=https://api-uat.geem.ai`, and `landpage_web` so Astro picks up `PUBLIC_SITE_URL=https://landpage-uat.geem.ai`):
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web cloudflared
+docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
 ```
 
 | Public | Local (still works) |
 |--------|---------------------|
 | https://app-uat.geem.ai | http://app.geem.dm:5174 |
 | https://api-uat.geem.ai | http://api.geem.dm:8000 |
+| https://landpage-uat.geem.ai | http://localhost:4321 |
 
 The overlay sets `APP_URL` / `WORKSPACE_WEB_URL` to the UAT hosts (ClickPay return + SPA handoff) and `TRUST_PROXY_HEADERS=true` (cloudflared overwrites `X-Forwarded-For`). OpenAPI: https://api-uat.geem.ai/docs
 
@@ -326,5 +329,5 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | Embedding dimension errors | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models |
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
 | Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
-| Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:5174` and `http://api:8000` |
+| Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:5174`, `http://api:8000`, and `http://landpage_web:4321` |
 | Tunnel CORS / login refresh fails | `CORS_ORIGINS` includes `https://app-uat.geem.ai`; browser calls `https://api-uat.geem.ai` (recreate `workspace_web` after enabling the overlay) |

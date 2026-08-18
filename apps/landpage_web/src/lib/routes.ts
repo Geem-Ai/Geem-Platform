@@ -5,12 +5,10 @@ import { localizedPath } from './site';
 export const homeAnchors = {
   product: 'product',
   experts: 'experts',
-  knowledge: 'knowledge',
   integrations: 'integrations',
   channels: 'channels',
   api: 'api',
   security: 'security-overview',
-  apps: 'apps',
 } as const;
 
 export function homeHash(locale: Locale, anchor: keyof typeof homeAnchors): string {

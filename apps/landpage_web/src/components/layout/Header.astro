@@ -34,7 +34,7 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
       <span class="font-semibold tracking-tight text-lg">{copy.brand.product}</span>
     </a>
 
-    <nav class="hidden lg:flex items-center gap-6" aria-label="Primary">
+    <nav class="hidden lg:flex items-center gap-6" aria-label={copy.a11y.primaryNavigation}>
       {
         copy.nav.items.map((item) => (
           <a class="text-sm text-white/80 hover:text-white no-underline" href={navHref(item)}>
@@ -56,11 +56,15 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
       type="button"
       class="lg:hidden inline-flex items-center justify-center rounded-full border border-white/25 px-3 py-2 text-sm"
       data-menu-button
+      data-close-label={copy.a11y.closeMenu}
       aria-expanded="false"
       aria-controls="mobile-menu"
       aria-label={copy.a11y.openMenu}
     >
-      Menu
+      <svg class="size-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"></path>
+      </svg>
+      <span class="visually-hidden">{copy.a11y.openMenu}</span>
     </button>
   </div>
 
@@ -69,7 +73,7 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
     data-mobile-menu
     class="m-0 ms-auto me-4 mt-16 w-[min(20rem,calc(100%-2rem))] rounded-2xl border border-white/15 bg-geem-navy-950 p-4 text-white backdrop:bg-black/40"
   >
-    <nav class="flex flex-col gap-3" aria-label="Mobile">
+    <nav class="flex flex-col gap-3" aria-label={copy.a11y.mobileNavigation}>
       {
         copy.nav.items.map((item) => (
           <a class="rounded-lg px-3 py-2 text-white/90 no-underline hover:bg-white/10" href={navHref(item)}>

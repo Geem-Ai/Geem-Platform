@@ -51,6 +51,8 @@ Public build-time variables (see `.env.example`):
 
 Local Compose service: `landpage_web` on port **4321** (dev server).
 
+UAT Cloudflare Tunnel: **https://landpage-uat.geem.ai** (see [docs/development.md](../../docs/development.md) § C).
+
 Production static image:
 
 ```bash

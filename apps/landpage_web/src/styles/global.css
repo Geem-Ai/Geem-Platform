@@ -274,7 +274,6 @@ body {
 .hero-enter-2 { animation-delay: 260ms; }
 .hero-enter-3 { animation-delay: 400ms; }
 .hero-enter-4 { animation-delay: 540ms; }
-.hero-enter-5 { animation-delay: 680ms; }
 
 [data-reveal] {
   opacity: 0;
@@ -309,67 +308,6 @@ body {
   transform: none;
 }
 
-.expert-pulse {
-  animation: soft-pulse 4.5s ease-in-out infinite;
-}
-
-.knowledge-float-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 0.75rem;
-  min-height: 5.5rem;
-  padding: 0.5rem 0.25rem 0.75rem;
-}
-
-.knowledge-float-icon {
-  list-style: none;
-}
-
-.knowledge-float-badge {
-  display: grid;
-  place-items: center;
-  width: 3.75rem;
-  height: 3.75rem;
-  border-radius: 1.15rem;
-  border: 1px solid var(--geem-border);
-  background: color-mix(in oklab, white 88%, var(--geem-sand));
-  box-shadow:
-    0 10px 24px color-mix(in oklab, var(--geem-navy-950) 10%, transparent),
-    0 1px 0 color-mix(in oklab, white 70%, transparent);
-}
-
-.knowledge-float-icon--1,
-.knowledge-float-icon--2,
-.knowledge-float-icon--3,
-.knowledge-float-icon--4 {
-  animation: knowledge-float 4.8s ease-in-out infinite;
-}
-
-.knowledge-float-icon--1 {
-  --float-from: 0px;
-  --float-to: -10px;
-  animation-delay: 0s;
-}
-
-.knowledge-float-icon--2 {
-  --float-from: -6px;
-  --float-to: -16px;
-  animation-delay: 0.55s;
-}
-
-.knowledge-float-icon--3 {
-  --float-from: 2px;
-  --float-to: -8px;
-  animation-delay: 1.1s;
-}
-
-.knowledge-float-icon--4 {
-  --float-from: -8px;
-  --float-to: -18px;
-  animation-delay: 1.65s;
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -380,17 +318,6 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.preview-tilt {
-  transform-style: preserve-3d;
-  transition: transform var(--geem-duration) var(--geem-ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .preview-tilt:hover {
-    transform: perspective(900px) rotateX(1.5deg) rotateY(-1.5deg) translateY(-4px);
-  }
 }
 
 .code-panel {
@@ -412,42 +339,12 @@ body {
   }
 }
 
-@keyframes soft-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--geem-sand) 0%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 10px color-mix(in oklab, var(--geem-sand) 12%, transparent);
-  }
-}
-
-@keyframes knowledge-float {
-  0%, 100% {
-    transform: translateY(var(--float-from, 0px));
-  }
-  50% {
-    transform: translateY(var(--float-to, -10px));
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 
   .hero-media img,
-  .hero-enter,
-  .expert-pulse,
-  .knowledge-float-icon--1,
-  .knowledge-float-icon--2,
-  .knowledge-float-icon--3,
-  .knowledge-float-icon--4 {
+  .hero-enter {
     animation: none !important;
-  }
-
-  .knowledge-float-icon--1,
-  .knowledge-float-icon--2,
-  .knowledge-float-icon--3,
-  .knowledge-float-icon--4 {
-    transform: none !important;
   }
 
   .hero-media img {
@@ -464,13 +361,11 @@ body {
 
   .geem-card,
   .btn,
-  .preview-tilt,
   .site-header {
     transition: none !important;
   }
 
-  .geem-card:hover,
-  .preview-tilt:hover {
+  .geem-card:hover {
     transform: none !important;
   }
 }

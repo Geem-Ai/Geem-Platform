@@ -3,10 +3,17 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 
+const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://geem.ai').replace(/\/$/, '');
+const tunnelHost = process.env.PUBLIC_TUNNEL_HOST?.trim();
+const allowedHosts = ['.geem.dm', '.geem.ai', 'localhost'];
+
 export default defineConfig({
-  site: 'https://geem.ai',
+  site: siteUrl,
   trailingSlash: 'never',
   output: 'static',
+  server: {
+    allowedHosts,
+  },
   i18n: {
     defaultLocale: 'ar',
     locales: ['ar', 'en'],
@@ -28,5 +35,17 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    server: {
+      allowedHosts,
+      ...(tunnelHost
+        ? {
+            hmr: {
+              host: tunnelHost,
+              protocol: 'wss',
+              clientPort: 443,
+            },
+          }
+        : {}),
+    },
   },
 });

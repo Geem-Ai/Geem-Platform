@@ -14,7 +14,7 @@ type Props = {
 };
 
 const { locale, copy } = Astro.props;
-const { signupUrl, loginUrl } = getSiteConfig();
+const { signupUrl } = getSiteConfig();
 ---
 
 <section class="relative min-h-[min(92vh,56rem)] overflow-hidden text-white" id="product">
@@ -58,13 +58,8 @@ const { signupUrl, loginUrl } = getSiteConfig();
         {copy.hero.description}
       </p>
 
-      <ul class="hero-enter hero-enter-4 mt-6 space-y-2 text-white/80">
-        {copy.hero.bullets.map((item) => <li class="flex gap-2"><span aria-hidden="true">•</span><span>{item}</span></li>)}
-      </ul>
-
-      <div class="hero-enter hero-enter-5 mt-8 flex flex-wrap items-center gap-3">
+      <div class="hero-enter hero-enter-4 mt-8 flex flex-wrap items-center gap-3">
         <Button href={signupUrl} variant="primary">{copy.hero.primaryCta}</Button>
-        <Button href={loginUrl} variant="secondary">{copy.hero.secondaryCta}</Button>
         <Button href={homeHash(locale, 'experts')} variant="ghost">{copy.hero.tertiaryCta}</Button>
       </div>
     </div>

@@ -24,6 +24,8 @@ export const en: SiteCopy = {
     skipToContent: 'Skip to content',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
+    primaryNavigation: 'Primary navigation',
+    mobileNavigation: 'Mobile navigation',
     languageSwitch: 'العربية',
   },
   brand: {
@@ -37,58 +39,43 @@ export const en: SiteCopy = {
       { id: 'integrations', label: 'Integrations', href: 'integrations' },
       { id: 'api', label: 'Developers', href: 'api' },
       { id: 'security', label: 'Security', href: 'security' },
-      { id: 'contact', label: 'Contact', href: 'contact' },
     ],
     primaryCta: 'Start with Geem',
     login: 'Workspace Login',
   },
   hero: {
     eyebrow: 'AI for your organization',
-    title: 'Turn your organization’s knowledge into AI Experts that work with your team',
+    title: 'Give your team answers grounded in your organization’s knowledge.',
     description:
-      'Create Geem Experts for the work your departments do, connect them to your documents and knowledge, then use them in chat, WhatsApp, your website, and your systems — from one place.',
-    bullets: [
-      'Specialized Experts that follow your policies and procedures',
-      'Answers based on your documents, with clear sources',
-      'Team permissions so people only see what they need',
-    ],
+      'Create a Geem Expert for each function, connect the documents it should use, and make it available in your workspace, on your website, through WhatsApp, or in internal systems.',
     primaryCta: 'Start with Geem',
-    secondaryCta: 'Workspace Login',
-    tertiaryCta: 'Explore the platform',
+    tertiaryCta: 'See how it works',
     imageAlt: 'Riyadh and Madinah skyline at night — Geem hero image',
   },
   valueStrip: {
     items: [
       {
-        title: 'Experts for your org',
-        description: 'HR, finance, operations, and more — grounded in your knowledge.',
+        title: 'Built for Saudi organizations first',
+        description: 'An Arabic-first platform, built in Madinah around the needs of organizations in Saudi Arabia.',
       },
       {
-        title: 'Private knowledge',
-        description: 'Upload documents or connect Google Drive and OneDrive securely.',
+        title: 'Core data stored in Saudi Arabia',
+        description: 'Core workspace data is stored on infrastructure located in Saudi Arabia.',
       },
       {
-        title: 'Arabic + English',
-        description: 'Arabic-first experience with full English support.',
-      },
-      {
-        title: 'Organization privacy',
-        description: 'Your knowledge stays in your workspace — not a shared public library.',
-      },
-      {
-        title: 'Where your team works',
-        description: 'Chat in Geem, WhatsApp, your website, or your own systems.',
+        title: 'First-class Arabic support',
+        description: 'Geem is designed for a complete Arabic experience, with seamless use of other supported languages.',
       },
     ],
   },
   experts: {
     number: '01',
     eyebrow: 'Everything starts with an Expert',
-    title: 'An Expert for every task. Knowledge for every context.',
+    title: 'Build an Expert for every job your team needs.',
     description:
-      'A Geem Expert brings together your guidance, your documents, and your organization context — so your team can rely on it wherever they work.',
+      'Define its role, connect the knowledge it may use, and give your team answers with sources they can review.',
     flowExpertLabel: 'Geem Expert',
-    formula: ['Your guidance', 'Your documents', 'Reliable answers', 'Your context'],
+    formula: ['Its role', 'Approved knowledge', 'Answers with sources', 'Workspace context'],
     cards: [
       {
         title: 'HR Expert',
@@ -102,64 +89,49 @@ export const en: SiteCopy = {
         title: 'Operations Expert',
         description: 'Guides staff using your playbooks and day-to-day procedures.',
       },
-      {
-        title: 'Knowledge Expert',
-        description: 'Makes your knowledge base easy to ask — with clear sources in the reply.',
-      },
     ],
     diagramCaption: 'Organization knowledge → Expert → Chat / Systems / WhatsApp / Website',
-    note: 'These are examples to illustrate the idea — your organization creates the Experts it needs.',
+    note: 'Examples only — your organization defines the Experts it needs.',
   },
   knowledge: {
-    number: '02',
-    eyebrow: 'Your organization’s knowledge',
-    title: 'Answers grounded in the knowledge your organization trusts.',
-    description:
-      'Connect Experts to the sources you trust: upload PDFs and text documents, or connect Google Drive and Microsoft OneDrive. Answers can include sources you can check.',
+    eyebrow: 'Approved knowledge',
     sources: ['PDF', 'Text documents', 'Google Drive', 'Microsoft OneDrive'],
-    outcomes: [
-      'Knowledge tied to each Expert',
-      'Answers from your documents',
-      'Clear sources in replies',
-      'Private workspace',
-    ],
   },
   integrations: {
-    number: '03',
-    eyebrow: 'Integrations',
-    title: 'Connects to the tools your organization already uses.',
+    number: '02',
+    eyebrow: 'Apps & integrations',
+    title: 'Connect the sources and channels your team already uses.',
     description:
-      'Link Geem to the knowledge and messaging tools your team already relies on — from the Geem App Store.',
-    cta: 'Explore channels and apps',
+      'Bring approved files from Drive or OneDrive into Geem, then make an Expert available through WhatsApp or your website.',
     items: [
       {
         id: 'google-drive',
         title: 'Google Drive',
-        description: 'Connect approved Drive files to your Experts.',
+        description: 'Knowledge source',
       },
       {
         id: 'microsoft-onedrive',
         title: 'Microsoft OneDrive',
-        description: 'Connect OneDrive files to your workspace knowledge.',
+        description: 'Knowledge source',
       },
       {
         id: 'whatsapp',
         title: 'WhatsApp',
-        description: 'Let a Geem Expert reply to customers or teams on WhatsApp.',
+        description: 'Conversation channel',
       },
       {
         id: 'chat-widget',
         title: 'Website chat',
-        description: 'Add Geem chat to your organization’s website.',
+        description: 'Website channel',
       },
     ],
   },
   channels: {
-    number: '04',
+    number: '03',
     eyebrow: 'Channels',
-    title: 'One Expert. Many places to use it.',
+    title: 'One Expert, available where work happens.',
     description:
-      'Set up an Expert once — then your team and customers can reach it in chat, WhatsApp, your website, or your systems.',
+      'Configure an Expert once, then make it available to your team and customers in Geem Chat, WhatsApp, your website, or internal systems.',
     nodes: [
       {
         id: 'chat',
@@ -171,13 +143,13 @@ export const en: SiteCopy = {
         id: 'api',
         label: 'API & systems',
         context: 'For your systems',
-        description: 'Call the Expert from your apps through a Chat Completions-compatible API.',
+        description: 'Bring Expert answers into your internal tools.',
       },
       {
         id: 'whatsapp',
         label: 'WhatsApp',
         context: 'For customers and teams',
-        description: 'Bind a WhatsApp channel to the Expert you choose for conversations.',
+        description: 'Make the selected Expert available in WhatsApp conversations.',
       },
       {
         id: 'widget',
@@ -188,89 +160,41 @@ export const en: SiteCopy = {
     ],
   },
   api: {
-    number: '05',
+    number: '04',
     eyebrow: 'For developers & technical teams',
-    title: 'Connect Geem Experts to your systems.',
+    title: 'Bring the same Expert into your internal tools.',
     description:
-      'Your technical team can call Geem Experts from internal apps using a familiar chat-style interface — with secure keys, Expert selection, and usage visibility inside Geem.',
+      'Use a familiar Chat Completions request format, choose the Expert by header, and manage keys and usage from the workspace.',
     points: [
-      'Secure access keys for your workspace',
-      'Works with common developer tooling patterns',
-      'Choose the right Expert for each request',
-      'Track usage inside Geem',
+      'Familiar Chat Completions format',
+      'Scoped, revocable workspace keys',
+      'Expert selection and usage visibility',
     ],
     sampleLabel: 'Example for your technical team',
     copyLabel: 'Copy',
     copiedLabel: 'Copied',
   },
   security: {
-    number: '06',
+    number: '05',
     eyebrow: 'Trust & privacy',
-    title: 'Your organization’s knowledge stays within its boundaries.',
+    title: 'Clear boundaries for your organization’s knowledge.',
     description:
-      'Geem is built around private workspaces, approved knowledge, and controlled access — without unsupported certification claims on this site.',
+      'Access is separated by workspace and enforced by the backend. Your organization controls members, roles, sources, integrations, and API keys.',
     points: [
       {
-        title: 'Private workspace',
-        description: 'Each organization’s data and knowledge stay in its own workspace.',
+        title: 'Workspace separation',
+        description: 'Knowledge access and retrieval are scoped to the workspace and Expert.',
       },
       {
-        title: 'Only approved knowledge',
-        description: 'Your Experts rely on what you allow — not a shared public library.',
+        title: 'Role-based access',
+        description: 'Workspace roles control what members can manage and use.',
       },
       {
-        title: 'Protected connections',
-        description: 'Connection details for Drive, OneDrive, and other apps are stored securely.',
-      },
-      {
-        title: 'Controlled system access',
-        description: 'Links to your systems use access keys belonging to your workspace.',
+        title: 'Protected credentials',
+        description: 'Integration credentials are encrypted, while API keys are scoped and revocable.',
       },
     ],
     linkLabel: 'Read more about security',
-  },
-  apps: {
-    number: '07',
-    eyebrow: 'App Store',
-    title: 'Extend Geem for what your organization needs.',
-    description:
-      'Add apps that connect Geem to your knowledge and customer channels. This page focuses on capabilities, not pricing.',
-    items: [
-      {
-        id: 'google-drive',
-        title: 'Google Drive',
-        description: 'Knowledge from approved Drive files.',
-      },
-      {
-        id: 'microsoft-onedrive',
-        title: 'Microsoft OneDrive',
-        description: 'Knowledge from OneDrive files.',
-      },
-      {
-        id: 'whatsapp',
-        title: 'WhatsApp',
-        description: 'Reach people on WhatsApp with a Geem Expert.',
-      },
-      {
-        id: 'chat-widget',
-        title: 'Website chat',
-        description: 'Chat on your website for customers or visitors.',
-      },
-    ],
-  },
-  previews: {
-    number: '08',
-    eyebrow: 'The experience',
-    title: 'A clear workspace for your team.',
-    description:
-      'Snapshots of Geem: choosing an Expert, chatting, knowledge, apps, and team access.',
-    items: [
-      { title: 'Choose an Expert', caption: 'Start with the Expert that fits the task.' },
-      { title: 'Conversation', caption: 'Ask and get answers from your organization’s knowledge.' },
-      { title: 'Knowledge', caption: 'Upload documents or connect Drive and OneDrive.' },
-      { title: 'Apps', caption: 'Add integrations from the Geem App Store.' },
-      { title: 'Team access', caption: 'Decide who can see and do what in the workspace.' },
-    ],
   },
   finalCta: {
     title: 'Ready to build Geem Experts for your organization?',
