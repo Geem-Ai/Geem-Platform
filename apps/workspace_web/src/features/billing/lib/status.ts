@@ -38,6 +38,31 @@ export function purchaseKindLabelKey(kind: string): string {
   return 'billing.kind.other';
 }
 
+/** Human label for billing history rows — prefer App name + action when available. */
+export function formatPurchaseHistoryTitle(
+  item: {
+    kind: string;
+    item_name?: string | null;
+    app_name?: string | null;
+  },
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const appName = item.app_name?.trim();
+  if (appName && item.kind === 'app_one_time') {
+    return t('billing.kind.appOneTimeNamed', { app: appName });
+  }
+  if (appName && item.kind === 'app_subscription') {
+    return t('billing.kind.appSubscriptionNamed', { app: appName });
+  }
+  if (appName && item.kind === 'app_subscription_renewal') {
+    return t('billing.kind.appRenewalNamed', { app: appName });
+  }
+  if (item.item_name?.trim()) {
+    return item.item_name.trim();
+  }
+  return t(purchaseKindLabelKey(item.kind));
+}
+
 export function isPaidStatus(status: string): boolean {
   return status === 'paid';
 }

@@ -6,6 +6,7 @@ import {
   formatAppEntitlement,
   localizeAppPlan,
   localizeAppPlanName,
+  resolveAppAccessBadge,
 } from './billing-label';
 
 function app(partial: Partial<CatalogApp>): CatalogApp {

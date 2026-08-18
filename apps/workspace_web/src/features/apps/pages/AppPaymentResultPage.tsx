@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { formatMoney } from '@/features/billing/lib/money';
 import { consumePaymentReturn } from '@/app/router/guards';
 import { usePurchase, useInvalidateBilling } from '@/features/billing/hooks/useBillingQueries';
 import { isFailedStatus, isPaidStatus } from '@/features/billing/lib/status';
@@ -132,7 +133,7 @@ export function AppPaymentResultPage() {
               <p className="text-sm text-muted-foreground">{purchase.item_name}</p>
             ) : null}
             <p className="text-sm tabular-nums">
-              {purchase.currency} {purchase.amount}
+              {formatMoney(purchase.amount, purchase.currency)}
             </p>
             {purchase.paid_at && isPaidStatus(purchase.status) ? (
               <p className="text-sm text-muted-foreground">
@@ -140,15 +141,24 @@ export function AppPaymentResultPage() {
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <Link to={manageHref}>
-                  {purchase.kind === 'app_one_time'
-                    ? t('apps.payment.openApp')
-                    : t('apps.payment.manageApp')}
-                </Link>
-              </Button>
+              {isFailedStatus(purchase.status) && appSlug ? (
+                <Button asChild>
+                  <Link to={`/apps/${appSlug}`}>{t('apps.payment.tryAgainOnApp')}</Link>
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link to={manageHref}>
+                    {purchase.kind === 'app_one_time'
+                      ? t('apps.payment.openApp')
+                      : t('apps.payment.manageApp')}
+                  </Link>
+                </Button>
+              )}
               <Button asChild variant="outline">
                 <Link to="/apps">{t('apps.backToStore')}</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/apps/installed">{t('apps.installedApps')}</Link>
               </Button>
             </div>
           </CardContent>

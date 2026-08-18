@@ -2,6 +2,54 @@ import type { TFunction } from 'i18next';
 import type { AppPlan, CatalogApp } from '@/services/api/apps';
 import { formatMoney } from '@/features/billing/lib/money';
 
+export type AppAccessBadge = {
+  labelKey: string;
+  variant: 'success' | 'warning' | 'secondary' | 'destructive' | 'info';
+};
+
+/**
+ * Catalog/access badge driven by AppAccessService snapshot — not installation alone.
+ */
+export function resolveAppAccessBadge(
+  app: Pick<
+    CatalogApp,
+    'status' | 'billing_type' | 'installation_status' | 'access'
+  >,
+): AppAccessBadge {
+  if (app.status === 'coming_soon') {
+    return { labelKey: 'apps.billing.comingSoon', variant: 'warning' };
+  }
+
+  const access = app.access;
+  if (access?.status === 'expired') {
+    return { labelKey: 'apps.billing.expired', variant: 'destructive' };
+  }
+  if (access?.status === 'unavailable' || app.status === 'disabled') {
+    return { labelKey: 'apps.billing.unavailable', variant: 'secondary' };
+  }
+  if (app.installation_status === 'active') {
+    return { labelKey: 'apps.installed', variant: 'success' };
+  }
+  if (access?.status === 'entitled_not_installed') {
+    if (app.billing_type === 'one_time') {
+      return { labelKey: 'apps.billing.purchased', variant: 'info' };
+    }
+    if (app.billing_type === 'subscription') {
+      return { labelKey: 'apps.billing.subscribed', variant: 'info' };
+    }
+  }
+  if (app.billing_type === 'free') {
+    return { labelKey: 'apps.billing.free', variant: 'secondary' };
+  }
+  if (app.billing_type === 'one_time') {
+    return { labelKey: 'apps.billing.oneTime', variant: 'secondary' };
+  }
+  if (app.billing_type === 'subscription') {
+    return { labelKey: 'apps.billing.subscription', variant: 'secondary' };
+  }
+  return { labelKey: 'apps.billing.unavailable', variant: 'secondary' };
+}
+
 /** Billing label from backend plan/app data — never hardcode product prices. */
 export function formatAppBillingLabel(
   app: Pick<CatalogApp, 'billing_type' | 'status' | 'plans'>,

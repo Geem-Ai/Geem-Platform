@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { CatalogApp } from '@/services/api/apps';
 import { localizeAppPlanName } from '../lib/billing-label';
+import { AppInstallButton } from './AppInstallButton';
 import { AppPurchaseButton } from './AppPurchaseButton';
 
 function formatPeriodEnd(value: string | null | undefined, locale: string): string {
@@ -10,6 +11,15 @@ function formatPeriodEnd(value: string | null | undefined, locale: string): stri
   } catch {
     return value;
   }
+}
+
+function formatPeriodRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  locale: string,
+): string | null {
+  if (!start || !end) return null;
+  return `${formatPeriodEnd(start, locale)} → ${formatPeriodEnd(end, locale)}`;
 }
 
 export function AppSubscriptionStatus({
@@ -23,6 +33,11 @@ export function AppSubscriptionStatus({
   const access = app.access;
   if (!access || app.billing_type !== 'subscription') return null;
   const planName = localizeAppPlanName(access.plan_code, access.plan_name, t);
+  const periodRange = formatPeriodRange(
+    access.current_period_start,
+    access.current_period_end,
+    i18n.language,
+  );
 
   if (access.status === 'expired') {
     return (
@@ -48,10 +63,32 @@ export function AppSubscriptionStatus({
     );
   }
 
-  if (
-    access.status === 'active' ||
-    access.status === 'entitled_not_installed'
-  ) {
+  if (access.status === 'entitled_not_installed') {
+    return (
+      <div
+        className="rounded-xl border border-border bg-muted/30 px-4 py-3 space-y-2"
+        data-testid="app-subscription-entitled-not-installed"
+      >
+        <p className="text-sm font-semibold">{t('apps.billing.subscribed')}</p>
+        <p className="text-sm text-muted-foreground">
+          {t('apps.billing.entitledNotInstalled')}
+        </p>
+        {planName ? (
+          <p className="text-sm text-muted-foreground">
+            {t('apps.billing.currentPlan')}: {planName}
+          </p>
+        ) : null}
+        {periodRange ? (
+          <p className="text-sm text-muted-foreground">
+            {t('apps.billing.currentPeriod', { range: periodRange })}
+          </p>
+        ) : null}
+        <AppInstallButton app={app} canManage={canManage} />
+      </div>
+    );
+  }
+
+  if (access.status === 'active') {
     return (
       <div
         className="rounded-xl border border-border bg-muted/30 px-4 py-3 space-y-2"
@@ -61,7 +98,11 @@ export function AppSubscriptionStatus({
         {planName ? (
           <p className="text-sm text-muted-foreground">{planName}</p>
         ) : null}
-        {access.current_period_end ? (
+        {periodRange ? (
+          <p className="text-sm text-muted-foreground">
+            {t('apps.billing.currentPeriod', { range: periodRange })}
+          </p>
+        ) : access.current_period_end ? (
           <p className="text-sm text-muted-foreground">
             {t('apps.billing.activeUntil', {
               date: formatPeriodEnd(access.current_period_end, i18n.language),

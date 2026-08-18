@@ -128,7 +128,14 @@ class ConnectorConnectionService:
         )
         # If not installed, return empty list (still 200 for browse).
         if installation is None or installation.status != AppInstallationStatus.ACTIVE.value:
-            return AppConnectionListOut(items=[], total=0, limit=limit, offset=offset)
+            return AppConnectionListOut(
+                items=[],
+                total=0,
+                limit=limit,
+                offset=offset,
+                used=0,
+                connection_limit=None,
+            )
 
         items = [
             to_connection_out(
@@ -141,7 +148,25 @@ class ConnectorConnectionService:
             )
             for row in rows
         ]
-        return AppConnectionListOut(items=items, total=total, limit=limit, offset=offset)
+        used = self.repo.count_limit_connections(
+            workspace.id, app_installation_id=installation.id
+        )
+        raw_limit = AppEntitlementService(self.db).get(
+            workspace.id, app_slug=app.slug, key="connections"
+        )
+        connection_limit: int | None
+        try:
+            connection_limit = int(raw_limit) if raw_limit is not None else None
+        except (TypeError, ValueError):
+            connection_limit = None
+        return AppConnectionListOut(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+            used=used,
+            connection_limit=connection_limit,
+        )
 
     def get_connection(
         self,

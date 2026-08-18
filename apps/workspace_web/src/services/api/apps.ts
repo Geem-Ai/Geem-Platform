@@ -52,6 +52,31 @@ export type AppAccess = {
   can_uninstall: boolean;
 };
 
+export type ConnectionStatus =
+  | 'pending'
+  | 'connecting'
+  | 'active'
+  | 'degraded'
+  | 'error'
+  | 'disconnected'
+  | 'revoked';
+
+export type ConnectionHealth = 'unknown' | 'healthy' | 'degraded' | 'failed';
+
+export type ConnectionUsage = {
+  used: number;
+  limit: number | null;
+};
+
+export type ConnectionSummary = {
+  id: string;
+  display_name: string | null;
+  status: ConnectionStatus | string;
+  health: ConnectionHealth | string;
+  external_account_name: string | null;
+  connector_key: string;
+};
+
 export type CatalogApp = {
   id: string;
   slug: string;
@@ -75,6 +100,8 @@ export type CatalogApp = {
   has_active_connection: boolean;
   /** Summary status of the workspace's primary connection for this app, if any. */
   connection_status?: ConnectionStatus | string | null;
+  connection_usage?: ConnectionUsage | null;
+  connections?: ConnectionSummary[];
 };
 
 export type ConnectorCapability = {
@@ -88,17 +115,6 @@ export type ConnectorCapability = {
   supports_health_check: boolean;
   unavailable_reason?: string | null;
 };
-
-export type ConnectionStatus =
-  | 'pending'
-  | 'connecting'
-  | 'active'
-  | 'degraded'
-  | 'error'
-  | 'disconnected'
-  | 'revoked';
-
-export type ConnectionHealth = 'unknown' | 'healthy' | 'degraded' | 'failed';
 
 export type ConnectionCapabilities = {
   can_disconnect: boolean;
@@ -180,6 +196,8 @@ export type AppConnectionList = {
   total: number;
   limit: number;
   offset: number;
+  used?: number | null;
+  connection_limit?: number | null;
 };
 
 export type SyncTrigger =

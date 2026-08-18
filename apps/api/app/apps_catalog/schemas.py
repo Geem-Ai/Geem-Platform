@@ -80,6 +80,24 @@ class AppAccessOut(BaseModel):
     can_uninstall: bool = False
 
 
+class ConnectionUsageOut(BaseModel):
+    """Safe connection entitlement usage for Apps management UX."""
+
+    used: int = 0
+    limit: int | None = None
+
+
+class ConnectionSummaryOut(BaseModel):
+    """Safe per-connection summary — never includes credentials or sync state."""
+
+    id: uuid.UUID
+    display_name: str | None = None
+    status: str
+    health: str
+    external_account_name: str | None = None
+    connector_key: str
+
+
 class CatalogAppOut(BaseModel):
     id: uuid.UUID
     slug: str
@@ -102,6 +120,8 @@ class CatalogAppOut(BaseModel):
     connector: ConnectorCapabilityOut | None = None
     has_active_connection: bool = False
     connection_status: str | None = None
+    connection_usage: ConnectionUsageOut | None = None
+    connections: list[ConnectionSummaryOut] = Field(default_factory=list)
 
 
 class CatalogAppListOut(BaseModel):
@@ -203,6 +223,8 @@ def to_catalog_app_out(
     access: AppAccessSnapshot | None = None,
     has_active_connection: bool = False,
     connection_status: str | None = None,
+    connection_usage: ConnectionUsageOut | None = None,
+    connections: list[ConnectionSummaryOut] | None = None,
 ) -> CatalogAppOut:
     active = (
         installation is not None
@@ -296,6 +318,8 @@ def to_catalog_app_out(
         connector=connector_out,
         has_active_connection=bool(has_active_connection),
         connection_status=connection_status,
+        connection_usage=connection_usage,
+        connections=list(connections or []),
     )
 
 
@@ -306,6 +330,8 @@ def to_installation_out(
     access: AppAccessSnapshot | None = None,
     has_active_connection: bool = False,
     connection_status: str | None = None,
+    connection_usage: ConnectionUsageOut | None = None,
+    connections: list[ConnectionSummaryOut] | None = None,
 ) -> AppInstallationOut:
     app_out = to_catalog_app_out(
         row.app,
@@ -314,6 +340,8 @@ def to_installation_out(
         access=access,
         has_active_connection=has_active_connection,
         connection_status=connection_status,
+        connection_usage=connection_usage,
+        connections=connections,
     )
     return AppInstallationOut(
         id=row.id,

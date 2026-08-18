@@ -80,6 +80,8 @@ class AppConnectionListOut(BaseModel):
     total: int
     limit: int
     offset: int
+    used: int | None = None
+    connection_limit: int | None = None
 
 
 class StartConnectionRequest(BaseModel):
@@ -253,6 +255,7 @@ def assert_no_secrets(payload: dict[str, Any]) -> None:
     """Test/guard helper — raise if secret fields leak into a dict."""
     banned = {
         "credentials_encrypted",
+        "config_encrypted",
         "sync_state_encrypted",
         "webhook_routing_token_encrypted",
         "webhook_routing_token_hash",
@@ -261,7 +264,19 @@ def assert_no_secrets(payload: dict[str, Any]) -> None:
         "refresh_token",
         "code_verifier",
         "api_key",
+        "client_secret",
+        "webhook_secret",
+        "session_id",
+        "x_api_key",
+        "X-API-Key",
     }
     found = banned.intersection(payload.keys())
     if found:
         raise AssertionError(f"Secret fields leaked: {sorted(found)}")
+    for value in payload.values():
+        if isinstance(value, dict):
+            assert_no_secrets(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    assert_no_secrets(item)
