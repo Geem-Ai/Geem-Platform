@@ -13,6 +13,11 @@ _ROLE_AR = {"admin": "مشرف", "member": "عضو"}
 BRAND = "#0e2f44"
 BRAND_ACCENT = "#367d9e"
 
+# Public brand mark (source of truth for Geem avatar updates).
+GEEM_LOGO_URL = "https://geem.ai/assets/geem-avatar.webp"
+GEEM_WEBSITE_URL = "https://geem.ai"
+GEEM_SUPPORT_URL = "https://geem.ai/support"
+
 
 @dataclass(frozen=True, slots=True)
 class InvitationEmailContent:
@@ -105,7 +110,9 @@ def _text_body(
         f"تنتهي الدعوة: {expires}\n"
         f"{sign_in_ar}\n"
         f"اقبل الدعوة:\n{accept_url}\n\n"
-        "إذا لم تكن تتوقع هذه الرسالة يمكنك تجاهلها. لا تشارك هذا الرابط.\n"
+        "إذا لم تكن تتوقع هذه الرسالة يمكنك تجاهلها. لا تشارك هذا الرابط.\n\n"
+        f"Website: {GEEM_WEBSITE_URL}\n"
+        f"Support: {GEEM_SUPPORT_URL}\n"
     )
 
 
@@ -163,8 +170,17 @@ def _html_body(
         <td align="center">
           <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e7eb;">
             <tr>
-              <td style="background:{BRAND};padding:20px 28px;font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.04em;">
-                Geem
+              <td style="background:{BRAND};padding:18px 28px;font-family:Arial,Helvetica,sans-serif;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;padding-right:12px;">
+                      <img src="{GEEM_LOGO_URL}" width="40" height="40" alt="Geem" style="display:block;border:0;border-radius:8px;outline:none;" />
+                    </td>
+                    <td style="vertical-align:middle;color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.04em;">
+                      Geem
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
             <tr>
@@ -251,6 +267,10 @@ def _html_body(
                 If you weren't expecting this email, you can ignore it. Do not share this link.
                 <br />
                 إذا لم تكن تتوقع هذه الرسالة يمكنك تجاهلها. لا تشارك هذا الرابط.
+                <br /><br />
+                <a href="{GEEM_WEBSITE_URL}" style="color:{BRAND_ACCENT};text-decoration:none;">Website</a>
+                &nbsp;&middot;&nbsp;
+                <a href="{GEEM_SUPPORT_URL}" style="color:{BRAND_ACCENT};text-decoration:none;">Support</a>
               </td>
             </tr>
           </table>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   extractHostWorkspaceSlug,
   suggestSlugFromName,
@@ -13,6 +13,7 @@ import {
   canManageWorkspace,
   canPromoteToOwner,
 } from '@/features/workspaces/lib/roles';
+import { pickInitialWorkspace } from '@/features/workspaces/lib/pick-workspace';
 import { queryKeys, workspaceQueryKey } from '@/services/api/query-keys';
 import { errorMessageKey } from '@/services/api/errors';
 import en from '@/locales/en.json';
@@ -69,6 +70,39 @@ describe('role helpers', () => {
     expect(canDeleteStorageFiles('owner')).toBe(true);
     expect(canDeleteStorageFiles('admin')).toBe(true);
     expect(canDeleteStorageFiles('member')).toBe(false);
+  });
+});
+
+describe('pickInitialWorkspace', () => {
+  const acme = {
+    id: 'ws-a',
+    name: 'Acme',
+    slug: 'acme',
+    status: 'active',
+    role: 'owner',
+  };
+  const globex = {
+    id: 'ws-b',
+    name: 'Globex',
+    slug: 'globex',
+    status: 'active',
+    role: 'member',
+  };
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('prefers saved preference over /me current workspace', () => {
+    localStorage.setItem('geem-workspace-pref:u1', 'ws-b');
+    expect(pickInitialWorkspace([acme, globex], 'u1', null, acme)?.id).toBe('ws-b');
+  });
+
+  it('still prefers the host slug over preference', () => {
+    localStorage.setItem('geem-workspace-pref:u1', 'ws-b');
+    expect(pickInitialWorkspace([acme, globex], 'u1', 'acme', globex)?.id).toBe(
+      'ws-a',
+    );
   });
 });
 

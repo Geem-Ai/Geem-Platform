@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { continueAfterAuth } from '@/app/router/guards';
+import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { AuthAlert } from '@/features/auth/components/AuthAlert';
 import {
@@ -18,13 +20,15 @@ export function RegisterPage() {
   const { t } = useTranslation();
   const { status, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (status === 'authenticated') {
-    return <Navigate to="/" replace />;
+    return <Navigate to={continueAfterAuth(from)} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -33,7 +37,12 @@ export function RegisterPage() {
     setErrorKey(null);
     try {
       const me = await register(email.trim(), password);
-      navigate(me.workspaces.length === 0 ? '/onboarding' : '/', { replace: true });
+      const dest = continueAfterAuth(from);
+      if (isInvitationAcceptPath(dest) || me.workspaces.length > 0) {
+        navigate(dest, { replace: true });
+      } else {
+        navigate('/onboarding', { replace: true, state: { from } });
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorKey(errorMessageKey(err.code));
@@ -86,7 +95,11 @@ export function RegisterPage() {
         </Button>
         <p className="text-center text-sm text-muted-foreground">
           {t('auth.hasAccount')}{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            state={from ? { from } : undefined}
+            className="font-medium text-primary hover:underline"
+          >
             {t('auth.loginLink')}
           </Link>
         </p>

@@ -1,14 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/features/auth/AuthProvider';
-import {
-  canChangeMemberRoles,
-  canManageMembers,
-  canPromoteToOwner,
-} from '@/features/workspaces/lib/roles';
-import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -17,135 +11,239 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { listMembers, removeMember, updateMemberRole } from '@/services/api';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { ConfirmMemberRemoveDialog } from '@/features/members/components/ConfirmMemberRemoveDialog';
+import { ConfirmRevokeInvitationDialog } from '@/features/members/components/ConfirmRevokeInvitationDialog';
+import { InviteMemberDialog } from '@/features/members/components/InviteMemberDialog';
+import { MembersTable } from '@/features/members/components/MembersTable';
+import { PendingInvitations } from '@/features/members/components/PendingInvitations';
+import { RoleMatrix } from '@/features/members/components/RoleMatrix';
+import {
+  useMembersList,
+  usePendingInvitations,
+  useRemoveMember,
+  useResendInvitation,
+  useRevokeInvitation,
+  useUpdateMemberRole,
+} from '@/features/members/hooks/useMembersQueries';
+import {
+  canManageMembers,
+  canPromoteToOwner,
+} from '@/features/workspaces/lib/roles';
+import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
-import { queryKeys } from '@/services/api/query-keys';
+import type { WorkspaceInvitationSummary } from '@/services/api/invitations';
+import type { Member } from '@/services/api/types';
+
+function ListSkeleton({ testId }: { testId: string }) {
+  return (
+    <div className="space-y-3 p-5" data-testid={testId}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="h-12 rounded bg-muted animate-pulse" />
+      ))}
+    </div>
+  );
+}
 
 export function MembersPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { currentWorkspace, currentMembership } = useWorkspace();
-  const queryClient = useQueryClient();
-  const workspaceId = currentWorkspace?.id ?? '';
   const role = currentMembership?.role ?? currentWorkspace?.role;
-
-  const membersQuery = useQuery({
-    queryKey: queryKeys.members(workspaceId),
-    queryFn: () => listMembers(workspaceId),
-    enabled: Boolean(workspaceId),
-  });
-
-  const roleMutation = useMutation({
-    mutationFn: ({ userId, nextRole }: { userId: string; nextRole: 'owner' | 'admin' | 'member' }) =>
-      updateMemberRole(workspaceId, userId, nextRole),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
-      toast.success(t('members.roleUpdated'));
-    },
-    onError: (err: unknown) => {
-      if (err instanceof ApiError) {
-        toast.error(t(errorMessageKey(err.code)));
-      } else {
-        toast.error(t('errors.generic'));
-      }
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (userId: string) => removeMember(workspaceId, userId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
-      toast.success(t('members.removed'));
-    },
-    onError: (err: unknown) => {
-      if (err instanceof ApiError) {
-        toast.error(t(errorMessageKey(err.code)));
-      } else {
-        toast.error(t('errors.generic'));
-      }
-    },
-  });
-
   const canManage = canManageMembers(role);
 
+  const membersQuery = useMembersList();
+  const invitationsQuery = usePendingInvitations({ enabled: canManage });
+  const roleMutation = useUpdateMemberRole();
+  const removeMutation = useRemoveMember();
+  const resendMutation = useResendInvitation();
+  const revokeMutation = useRevokeInvitation();
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<WorkspaceInvitationSummary | null>(
+    null,
+  );
+
+  function handleRoleChange(userId: string, nextRole: 'owner' | 'admin' | 'member') {
+    if (nextRole === 'owner' && !canPromoteToOwner(role)) {
+      toast.error(t('errors.insufficientRole'));
+      return;
+    }
+    roleMutation.mutate(
+      { userId, nextRole },
+      {
+        onSuccess: () => toast.success(t('members.roleUpdated')),
+        onError: (err: unknown) => {
+          if (err instanceof ApiError) toast.error(t(errorMessageKey(err.code)));
+          else toast.error(t('errors.generic'));
+        },
+      },
+    );
+  }
+
+  function handleRemoveConfirm() {
+    if (!removeTarget) return;
+    removeMutation.mutate(removeTarget.user_id, {
+      onSuccess: () => {
+        toast.success(t('members.removed'));
+        setRemoveTarget(null);
+      },
+      onError: (err: unknown) => {
+        if (err instanceof ApiError) toast.error(t(errorMessageKey(err.code)));
+        else toast.error(t('errors.generic'));
+      },
+    });
+  }
+
+  function handleResend(invitation: WorkspaceInvitationSummary) {
+    resendMutation.mutate(invitation.id, {
+      onSuccess: () => toast.success(t('members.resent', { email: invitation.email })),
+      onError: (err: unknown) => {
+        if (err instanceof ApiError) toast.error(t(errorMessageKey(err.code)));
+        else toast.error(t('errors.generic'));
+      },
+    });
+  }
+
+  function handleRevokeConfirm() {
+    if (!revokeTarget) return;
+    revokeMutation.mutate(revokeTarget.id, {
+      onSuccess: () => {
+        toast.success(t('members.revoked', { email: revokeTarget.email }));
+        setRevokeTarget(null);
+      },
+      onError: (err: unknown) => {
+        if (err instanceof ApiError) toast.error(t(errorMessageKey(err.code)));
+        else toast.error(t('errors.generic'));
+      },
+    });
+  }
+
+  const members = membersQuery.data ?? [];
+  const invitations = invitationsQuery.data?.items ?? [];
+
   return (
-    <div className="p-6 md:p-8 w-full max-w-3xl space-y-6 ms-auto me-auto">
+    <div
+      className="p-4 sm:p-6 md:p-8 w-full max-w-6xl space-y-8 ms-auto me-auto"
+      data-testid="members-page"
+    >
       <DocumentTitle title={t('members.title')} />
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{t('members.title')}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{t('members.description')}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            {t('members.eyebrow')}
+          </p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">
+            {t('members.title')}
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
+            {t('members.description')}
+          </p>
+        </div>
+        {canManage ? (
+          <Button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            data-testid="invite-member-button"
+          >
+            <UserPlus className="size-3.5" />
+            {t('members.invite')}
+          </Button>
+        ) : null}
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>{t('members.listTitle')}</CardTitle>
-          <CardDescription>{t('members.noInviteHint')}</CardDescription>
+          <CardDescription>
+            {t(
+              members.length === 1 ? 'members.memberCountOne' : 'members.memberCount',
+              { count: members.length },
+            )}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {membersQuery.isLoading && (
-            <p className="text-sm text-muted-foreground">{t('shell.loading')}</p>
-          )}
-          {membersQuery.isError && (
-            <p className="text-sm text-destructive">{t('errors.generic')}</p>
-          )}
-          {membersQuery.data?.map((member) => {
-            const isSelf = member.user_id === user?.id;
-            return (
-              <div
-                key={member.id}
-                className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between border-b border-border last:border-0 pb-3 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {member.email ?? member.user_id}
-                    {isSelf ? ` (${t('members.you')})` : ''}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t(`roles.${member.role}`)}
-                  </p>
-                </div>
-                {canManage && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {canChangeMemberRoles(role) && (
-                      <select
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                        value={member.role}
-                        disabled={roleMutation.isPending}
-                        onChange={(e) => {
-                          const nextRole = e.target.value as 'owner' | 'admin' | 'member';
-                          if (nextRole === 'owner' && !canPromoteToOwner(role)) {
-                            toast.error(t('errors.insufficientRole'));
-                            return;
-                          }
-                          roleMutation.mutate({ userId: member.user_id, nextRole });
-                        }}
-                      >
-                        <option value="member">{t('roles.member')}</option>
-                        <option value="admin">{t('roles.admin')}</option>
-                        {canPromoteToOwner(role) && (
-                          <option value="owner">{t('roles.owner')}</option>
-                        )}
-                      </select>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={removeMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(t('members.confirmRemove'))) {
-                          removeMutation.mutate(member.user_id);
-                        }
-                      }}
-                    >
-                      {t('members.remove')}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <CardContent className="px-0 pb-0">
+          {membersQuery.isLoading ? <ListSkeleton testId="members-loading" /> : null}
+          {membersQuery.isError ? (
+            <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
+          ) : null}
+          {!membersQuery.isLoading && !membersQuery.isError ? (
+            <MembersTable
+              members={members}
+              currentUserId={user?.id}
+              actorRole={role}
+              canManage={canManage}
+              busy={roleMutation.isPending || removeMutation.isPending}
+              onChangeRole={handleRoleChange}
+              onRemove={setRemoveTarget}
+            />
+          ) : null}
         </CardContent>
       </Card>
+
+      {canManage ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('members.pendingTitle')}</CardTitle>
+            <CardDescription>{t('members.pendingDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 pb-0">
+            {invitationsQuery.isLoading ? (
+              <ListSkeleton testId="invitations-loading" />
+            ) : null}
+            {invitationsQuery.isError ? (
+              <p className="text-sm text-destructive px-5 py-6">{t('errors.generic')}</p>
+            ) : null}
+            {!invitationsQuery.isLoading && !invitationsQuery.isError ? (
+              <PendingInvitations
+                invitations={invitations}
+                busyId={
+                  resendMutation.isPending
+                    ? (resendMutation.variables ?? null)
+                    : revokeMutation.isPending
+                      ? (revokeMutation.variables ?? null)
+                      : null
+                }
+                onResend={handleResend}
+                onRevoke={setRevokeTarget}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('members.matrixTitle')}</CardTitle>
+          <CardDescription>{t('members.matrixDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 pb-0">
+          <RoleMatrix />
+        </CardContent>
+      </Card>
+
+      <InviteMemberDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onSent={(email) => toast.success(t('members.sent', { email }))}
+      />
+      <ConfirmMemberRemoveDialog
+        member={removeTarget}
+        pending={removeMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        onConfirm={handleRemoveConfirm}
+      />
+      <ConfirmRevokeInvitationDialog
+        invitation={revokeTarget}
+        pending={revokeMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        onConfirm={handleRevokeConfirm}
+      />
     </div>
   );
 }

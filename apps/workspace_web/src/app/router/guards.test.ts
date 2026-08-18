@@ -44,6 +44,12 @@ describe('continueAfterAuth', () => {
     expect(continueAfterAuth('/onboarding')).toBe('/');
   });
 
+  it('returns the invitation accept path including the query', () => {
+    expect(continueAfterAuth('/invitations/accept?token=abc')).toBe(
+      '/invitations/accept?token=abc',
+    );
+  });
+
   it('restores a stashed ClickPay return when from is missing', () => {
     rememberPaymentReturn({
       pathname: '/billing/payment/success',

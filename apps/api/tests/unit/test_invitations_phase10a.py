@@ -265,3 +265,8 @@ def test_invitation_email_template_is_bilingual_and_escapes_html() -> None:
     assert "قبول الدعوة" in content.html_body
     assert 'href="https://app.example.test/invitations/accept?token=abc+token"' in content.html_body
     assert "owner@example.com" in content.html_body
+    assert 'src="https://geem.ai/assets/geem-avatar.webp"' in content.html_body
+    assert 'href="https://geem.ai"' in content.html_body
+    assert 'href="https://geem.ai/support"' in content.html_body
+    assert "Website: https://geem.ai" in content.text_body
+    assert "Support: https://geem.ai/support" in content.text_body

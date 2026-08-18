@@ -15,5 +15,6 @@ export * from './usage';
 export * from './billing';
 export * from './api-keys';
 export * from './apps';
+export * from './invitations';
 export { streamSse } from './sse';
 export { apiRequest };
