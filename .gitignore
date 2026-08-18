@@ -22,3 +22,5 @@ apps/web/dist/
 samples/
 
 .env.bak
+apps/api/celerybeat-schedule
+apps/api/celerybeat-schedule
