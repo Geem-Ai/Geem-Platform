@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Building2, Check, ChevronDown, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { roleLabel } from '@/features/authz/role-summary';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
               <span className="truncate">
                 {ws.name}
                 <span className="ms-1 text-xs text-muted-foreground">
-                  ({t(`roles.${ws.role}`)})
+                  ({roleLabel(ws.role, t)})
                 </span>
               </span>
               {currentWorkspace?.id === ws.id && <Check className="size-3.5 shrink-0" />}

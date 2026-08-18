@@ -35,6 +35,7 @@ from app.connectors.providers.microsoft_onedrive.resolve import (
     resolve_microsoft_onedrive_selections,
 )
 from app.connectors.providers.microsoft_onedrive.scopes import (
+    ONEDRIVE_OAUTH_PROMPT,
     auth_tenant_for_account_kind,
     oauth_scopes_for_tenant,
 )
@@ -132,7 +133,7 @@ class MicrosoftOneDriveConnector:
             tenant=tenant,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            prompt=prompt or "consent",
+            prompt=prompt or ONEDRIVE_OAUTH_PROMPT,
         )
         return OAuthAuthorizationRequest(
             authorization_url=url,

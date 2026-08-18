@@ -385,6 +385,42 @@ describe('Phase 9C connection UI', () => {
     expect(await screen.findByTestId('connection-connect')).toBeInTheDocument();
   });
 
+  it('shows disconnect and switch account for owners', async () => {
+    useAppConnections.mockReturnValue({
+      data: {
+        items: [connection()],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const app = catalogApp({
+      connector: {
+        key: 'google_drive',
+        kind: 'knowledge_source',
+        available: true,
+        auth_mode: 'oauth2',
+        can_connect: true,
+        supports_sync: true,
+        supports_webhooks: false,
+        supports_health_check: true,
+      },
+      has_active_connection: true,
+    });
+    render(
+      <I18nextProvider i18n={i18n}>
+        <QueryClientProvider client={new QueryClient()}>
+          <AppConnectionsPanel app={app} canManage />
+        </QueryClientProvider>
+      </I18nextProvider>,
+    );
+    expect(await screen.findByTestId('connection-disconnect')).toBeInTheDocument();
+    expect(screen.getByTestId('connection-switch-account')).toBeInTheDocument();
+  });
+
   it('hides disconnect for members', async () => {
     workspaceState.role = 'member';
     useAppConnections.mockReturnValue({

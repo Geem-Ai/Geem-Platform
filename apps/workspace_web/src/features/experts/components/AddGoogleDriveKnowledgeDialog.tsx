@@ -12,7 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useAppConnections } from '@/features/apps/connections/hooks/useConnectionQueries';
+import { OauthAccountActions } from '@/features/apps/connections/components/OauthAccountActions';
+import {
+  useAppConnections,
+  useStartConnection,
+} from '@/features/apps/connections/hooks/useConnectionQueries';
 import { useApp } from '@/features/apps/hooks/useAppsQueries';
 import {
   openGooglePicker,
@@ -52,6 +56,7 @@ export function AddGoogleDriveKnowledgeDialog({
   const workspaceId = currentWorkspace?.id ?? '';
   const appQuery = useApp(GOOGLE_DRIVE_SLUG, open);
   const connectionsQuery = useAppConnections(GOOGLE_DRIVE_SLUG, open);
+  const startMut = useStartConnection();
   const [connectionId, setConnectionId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -67,6 +72,28 @@ export function AddGoogleDriveKnowledgeDialog({
   const selectedId =
     connectionId ||
     (activeConnections.length === 1 ? activeConnections[0].id : '');
+  const selectedConnection =
+    activeConnections.find((c) => c.id === selectedId) ?? activeConnections[0];
+  const reconnectable = connectionsQuery.data?.items.find(
+    (c) => c.capabilities.can_reconnect,
+  );
+
+  function handleConnectAccount() {
+    startMut.mutate(
+      {
+        slug: GOOGLE_DRIVE_SLUG,
+        connectionId: reconnectable?.id,
+        returnPath: `/experts/${expertId}`,
+      },
+      {
+        onSuccess: (data) => {
+          if (data.authorization_url) {
+            window.location.assign(data.authorization_url);
+          }
+        },
+      },
+    );
+  }
 
   async function submitSelection(
     connId: string,
@@ -173,9 +200,32 @@ export function AddGoogleDriveKnowledgeDialog({
             <p className="text-sm text-muted-foreground">
               {t('experts.googleDrive.connectFirst')}
             </p>
-            <Button asChild size="sm">
-              <Link to="/apps/google-drive">{t('experts.googleDrive.connect')}</Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={startMut.isPending}
+                onClick={handleConnectAccount}
+                data-testid="google-drive-connect-account"
+              >
+                {t('experts.googleDrive.connect')}
+              </Button>
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/apps/google-drive">
+                  {t('experts.googleDrive.goToAppStore')}
+                </Link>
+              </Button>
+            </div>
+            {startMut.isError ? (
+              <p className="text-sm text-destructive">
+                {t(
+                  errorMessageKey(
+                    startMut.error instanceof ApiError
+                      ? startMut.error.code
+                      : 'unknown',
+                  ),
+                )}
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-3">
@@ -217,6 +267,16 @@ export function AddGoogleDriveKnowledgeDialog({
                 })}
               </p>
             )}
+            {selectedConnection ? (
+              <div className="flex flex-wrap gap-2">
+                <OauthAccountActions
+                  connection={selectedConnection}
+                  returnPath={`/experts/${expertId}`}
+                  compact
+                  inline
+                />
+              </div>
+            ) : null}
             {errorKey ? (
               <p className="text-sm text-destructive">{t(errorKey)}</p>
             ) : null}

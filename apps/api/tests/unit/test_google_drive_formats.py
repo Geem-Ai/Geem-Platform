@@ -14,6 +14,7 @@ from app.connectors.providers.google_drive.formats import (
 from app.connectors.providers.google_drive.scopes import (
     DRIVE_FILE_SCOPE,
     DRIVE_READONLY_SCOPE,
+    GOOGLE_OAUTH_PROMPT,
     requires_reauthorization,
     scopes_for_mode,
 )
@@ -54,3 +55,8 @@ def test_scopes_for_mode() -> None:
     assert requires_reauthorization([], "selected_files")
     assert not requires_reauthorization(selected, "selected_files")
     assert requires_reauthorization(selected, "readonly")
+
+
+def test_oauth_prompt_includes_account_picker() -> None:
+    assert "consent" in GOOGLE_OAUTH_PROMPT
+    assert "select_account" in GOOGLE_OAUTH_PROMPT

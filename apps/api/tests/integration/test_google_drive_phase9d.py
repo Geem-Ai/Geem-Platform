@@ -520,6 +520,7 @@ def test_disconnect_reconnect_readd_revives_source(
     )
     assert reconnect.status_code == 201, reconnect.text
     assert "prompt=consent" in reconnect.json()["authorization_url"]
+    assert "select_account" in reconnect.json()["authorization_url"]
 
     auth = GoogleDriveConnector().build_authorization_request(
         state="s",
@@ -527,6 +528,7 @@ def test_disconnect_reconnect_readd_revives_source(
         reconnect=True,
     )
     assert "prompt=consent" in auth.authorization_url
+    assert "select_account" in auth.authorization_url
 
     # Simulate OAuth complete again.
     svc = ConnectorConnectionService(db)

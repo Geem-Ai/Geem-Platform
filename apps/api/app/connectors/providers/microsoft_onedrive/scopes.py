@@ -30,6 +30,10 @@ ACCOUNT_KIND_WORK_SCHOOL = "work_school"
 
 PERSONAL_PICKER_BASE_URL = "https://onedrive.live.com/picker"
 
+# Account picker so reconnect/disconnect can link a different Microsoft email.
+# Consent is requested automatically for an account that has not granted scopes.
+ONEDRIVE_OAUTH_PROMPT = "select_account"
+
 
 def tenant_allows_personal_accounts(tenant: str | None) -> bool:
     """True when Entra tenant mode can issue MSA tokens (dual-account deploys)."""

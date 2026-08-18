@@ -669,7 +669,7 @@ def build_authorization_url(
     tenant: str,
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
-    prompt: str | None = "consent",
+    prompt: str | None = "select_account",
 ) -> str:
     params: dict[str, str] = {
         "client_id": client_id,

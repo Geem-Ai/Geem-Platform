@@ -14,6 +14,9 @@ DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 SCOPE_MODE_SELECTED_FILES = "selected_files"
 SCOPE_MODE_READONLY = "readonly"
 
+# consent → refresh_token; select_account → user can pick a different Google email.
+GOOGLE_OAUTH_PROMPT = "consent select_account"
+
 
 def scopes_for_mode(mode: str | None) -> list[str]:
     normalized = (mode or SCOPE_MODE_SELECTED_FILES).strip().lower()
