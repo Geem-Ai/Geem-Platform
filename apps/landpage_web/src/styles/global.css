@@ -382,15 +382,6 @@ body {
   border: 0;
 }
 
-.diagram-line {
-  stroke-dasharray: 280;
-  stroke-dashoffset: 280;
-}
-
-.is-drawn .diagram-line {
-  animation: draw-line 1.1s var(--geem-ease-out) forwards;
-}
-
 .preview-tilt {
   transform-style: preserve-3d;
   transition: transform var(--geem-duration) var(--geem-ease-out);
@@ -439,10 +430,6 @@ body {
   }
 }
 
-@keyframes draw-line {
-  to { stroke-dashoffset: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 
@@ -452,8 +439,7 @@ body {
   .knowledge-float-icon--1,
   .knowledge-float-icon--2,
   .knowledge-float-icon--3,
-  .knowledge-float-icon--4,
-  .is-drawn .diagram-line {
+  .knowledge-float-icon--4 {
     animation: none !important;
   }
 
