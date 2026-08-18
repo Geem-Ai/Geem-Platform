@@ -69,12 +69,14 @@ class ChatTurnExecutor:
         question: str,
         invocation: ChatInvocationContext,
         meter: MeteredWorkspaceGeneration,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         usage_ctx = meter.context()
         result = self.expert_query.query_for_workspace(
             workspace=workspace,
             expert_id=expert_id,
             question=question,
+            history=history,
             usage_context=usage_ctx,
             actor_id=invocation.api_key_id,
         )

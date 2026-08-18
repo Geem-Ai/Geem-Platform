@@ -247,6 +247,10 @@ class Settings(BaseSettings):
     # Chat composer attachments (ephemeral — not Expert knowledge Documents)
     chat_attachment_max_mb: int = 20
     chat_attachment_ttl_hours: int = 12
+    # Chat Widget visitor threads (Phase 9H)
+    widget_chat_history_max_messages: int = 15
+    widget_message_ttl_hours: int = 1
+    widget_session_max_messages_per_day: int = 50
     # Chat voice STT upload cap (OpenRouter allows up to 25 MiB; keep lower for mic clips)
     chat_transcribe_max_mb: int = 10
 
@@ -292,6 +296,11 @@ class Settings(BaseSettings):
     @property
     def chat_attachment_ttl_seconds(self) -> int:
         hours = max(1, int(self.chat_attachment_ttl_hours))
+        return hours * 3600
+
+    @property
+    def widget_message_ttl_seconds(self) -> int:
+        hours = max(1, int(self.widget_message_ttl_hours))
         return hours * 3600
 
     @property

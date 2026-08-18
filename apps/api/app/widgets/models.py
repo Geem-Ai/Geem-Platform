@@ -83,3 +83,51 @@ class WidgetInstance(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class WidgetConversationBinding(Base):
+    """Maps a visitor session_id on a widget to a Geem conversation."""
+
+    __tablename__ = "widget_conversation_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "widget_instance_id",
+            "session_id",
+            "expert_id",
+            name="uq_widget_conv_widget_session_expert",
+        ),
+        UniqueConstraint("conversation_id", name="uq_widget_conv_conversation"),
+        Index(
+            "ix_widget_conv_workspace_widget",
+            "workspace_id",
+            "widget_instance_id",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    widget_instance_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("widget_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    session_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    expert_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("experts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

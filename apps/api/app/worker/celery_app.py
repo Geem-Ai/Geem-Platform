@@ -40,6 +40,12 @@ celery_app.conf.update(
             "schedule": 900.0,  # every 15 minutes
             "kwargs": {"limit": 200},
         },
+        # Chat Widget visitor messages TTL (default 1h); catch abandoned sessions.
+        "purge-expired-widget-messages": {
+            "task": "purge_expired_widget_messages",
+            "schedule": 900.0,  # every 15 minutes
+            "kwargs": {"limit": 500},
+        },
         # Google Drive changes.watch channels expire ~daily; renew when within 24h.
         "renew-google-drive-watches": {
             "task": "renew_google_drive_watches",
