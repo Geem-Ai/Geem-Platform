@@ -161,10 +161,30 @@ export const ar: SiteCopy = {
     description:
       'تجهّز الخبير مرة واحدة — ثم يصل فريقك وعملاؤك إليه من الدردشة أو واتساب أو موقعك أو أنظمتكم.',
     nodes: [
-      { id: 'chat', label: 'دردشة جيم' },
-      { id: 'api', label: 'أنظمتك' },
-      { id: 'whatsapp', label: 'واتساب' },
-      { id: 'widget', label: 'موقعك' },
+      {
+        id: 'chat',
+        label: 'دردشة جيم',
+        context: 'لفريقك',
+        description: 'اسأل الخبير داخل مساحة العمل وارجع إلى مصادر الإجابة.',
+      },
+      {
+        id: 'api',
+        label: 'الواجهة البرمجية',
+        context: 'لأنظمتك',
+        description: 'استدعِ الخبير من تطبيقاتك عبر واجهة متوافقة مع Chat Completions.',
+      },
+      {
+        id: 'whatsapp',
+        label: 'واتساب',
+        context: 'لفريقك وعملائك',
+        description: 'اربط قناة واتساب بخبير تختاره ليجيب في المحادثات.',
+      },
+      {
+        id: 'widget',
+        label: 'محادثة الموقع',
+        context: 'لزوار موقعك',
+        description: 'أضف ودجت محادثة بهوية منشأتك مرتبطاً بخبير واحد.',
+      },
     ],
   },
   api: {

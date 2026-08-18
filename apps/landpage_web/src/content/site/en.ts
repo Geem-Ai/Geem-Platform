@@ -161,10 +161,30 @@ export const en: SiteCopy = {
     description:
       'Set up an Expert once — then your team and customers can reach it in chat, WhatsApp, your website, or your systems.',
     nodes: [
-      { id: 'chat', label: 'Geem Chat' },
-      { id: 'api', label: 'Your systems' },
-      { id: 'whatsapp', label: 'WhatsApp' },
-      { id: 'widget', label: 'Your website' },
+      {
+        id: 'chat',
+        label: 'Geem Chat',
+        context: 'For your team',
+        description: 'Ask the Expert in your workspace and trace answers to their sources.',
+      },
+      {
+        id: 'api',
+        label: 'API & systems',
+        context: 'For your systems',
+        description: 'Call the Expert from your apps through a Chat Completions-compatible API.',
+      },
+      {
+        id: 'whatsapp',
+        label: 'WhatsApp',
+        context: 'For customers and teams',
+        description: 'Bind a WhatsApp channel to the Expert you choose for conversations.',
+      },
+      {
+        id: 'widget',
+        label: 'Website chat',
+        context: 'For website visitors',
+        description: 'Embed a branded chat widget connected to one Expert.',
+      },
     ],
   },
   api: {

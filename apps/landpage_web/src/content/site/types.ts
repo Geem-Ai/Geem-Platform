@@ -81,7 +81,12 @@ export type SiteCopy = {
     eyebrow: string;
     title: string;
     description: string;
-    nodes: { id: string; label: string }[];
+    nodes: {
+      id: 'chat' | 'api' | 'whatsapp' | 'widget';
+      label: string;
+      context: string;
+      description: string;
+    }[];
   };
   api: {
     number: string;
