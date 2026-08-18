@@ -89,11 +89,18 @@ def test_assert_secure_settings_rejects_insecure_api_key_pepper() -> None:
         jwt_secret="a" * 40,
         cors_origins="https://app.geem.ai",
         api_key_hash_pepper="b" * 40,
+        email_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_from_email="noreply@geem.ai",
+        smtp_password="super-secret-smtp",
     )
     assert_secure_settings(ok)
     dumped = ok.model_dump()
     assert "api_key_hash_pepper" not in dumped
     assert "api_key_hash_pepper" not in repr(ok)
+    assert "smtp_password" not in dumped
+    assert "super-secret-smtp" not in repr(ok)
+    assert "invitation_token_hash_pepper" not in dumped
 
 
 def test_assert_secure_settings_rejects_star_cors_in_production() -> None:
@@ -105,3 +112,67 @@ def test_assert_secure_settings_rejects_star_cors_in_production() -> None:
     )
     with pytest.raises(RuntimeError, match="CORS_ORIGINS"):
         assert_secure_settings(settings)
+
+
+def test_assert_secure_settings_rejects_console_email_in_production() -> None:
+    with pytest.raises(RuntimeError, match="EMAIL_PROVIDER"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="b" * 40,
+                email_provider="console",
+            )
+        )
+    with pytest.raises(RuntimeError, match="SMTP_HOST"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="b" * 40,
+                email_provider="smtp",
+                smtp_host="",
+                smtp_from_email="",
+            )
+        )
+
+
+def test_assert_secure_settings_rejects_smtp_without_tls() -> None:
+    with pytest.raises(RuntimeError, match="SMTP_USE_TLS"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="b" * 40,
+                email_provider="smtp",
+                smtp_host="smtp.example.com",
+                smtp_from_email="noreply@geem.ai",
+                smtp_password="super-secret-smtp",
+                smtp_use_tls=False,
+            )
+        )
+
+
+def test_assert_secure_settings_rejects_smtp_without_cert_verify() -> None:
+    with pytest.raises(RuntimeError, match="SMTP_TLS_VERIFY"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="b" * 40,
+                email_provider="smtp",
+                smtp_host="smtp.example.com",
+                smtp_from_email="noreply@geem.ai",
+                smtp_password="super-secret-smtp",
+                smtp_use_tls=True,
+                smtp_tls_verify=False,
+            )
+        )

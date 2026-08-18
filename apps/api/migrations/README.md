@@ -31,6 +31,7 @@
 - Fix: `0020_storage_event_reasons.py` — expand `ck_storage_usage_events_reason` for Phase 5C audit reasons (`reserve` / `release` / `restore`).
 - Chat attach multimodal: `0021_message_attachments.py` — `messages.attachments` JSONB snapshot for composer files sent to the model (no Expert ingest).
 - Phase 9F: `0022_openwa_channel.py` — `channel_bindings`, `channel_conversation_bindings`, `conversations.source`, and nullable `conversations.user_id` for WhatsApp/OpenWA channel conversations. Runtime registration remains application code (`register_openwa_connector`).
+- Phase 10A: `0023_workspace_invitations.py` — `workspace_invitations` (HMAC-hashed tokens, pending unique `(workspace_id, email)`, invite roles `admin|member`). Email via `EmailProvider` (`console` local/test only; optional SMTP). See [`docs/invitations.md`](../../docs/invitations.md).
 
 ### Document tenancy (Phase 2C final)
 
@@ -55,7 +56,8 @@
 | Route class | Behavior |
 |-------------|----------|
 | `/api/auth/login`, `/register`, `/refresh` | Public |
-| `/api/auth/*` (authenticated) + `/api/workspaces/*` | Always authenticated |
+| `/api/auth/*` (authenticated) + `/api/workspaces/*` | Always authenticated (invitation **management** requires `MANAGE_MEMBERS`) |
+| `/api/invitations/accept` | Session authenticated; not workspace-scoped (used to join) |
 | `/api/documents/*`, `/api/query*`, `/api/jobs/*`, `/api/experts/*`, `/api/conversations/*`, `/api/subscription`, `/api/entitlements`, `/api/usage/*`, `/api/api-usage/*`, `/api/billing/*` (except return), `/api/api-keys/*` | Authenticated Workspace required |
 | `/api/v1/chat/completions` | Workspace API key (`Authorization: Bearer geem_sk_…`, scope `chat:write`) + `X-Geem-Expert-Id` (alias `X-Expert-Id`). Session cookies are ignored. Rate-limited. |
 | `/api/v1/models`, `/api/v1/models/{id}` | Same API key/scope. Expert header is **not** required. Ready Experts only; no instructions/`rag_config`. Not counted against RPM. |

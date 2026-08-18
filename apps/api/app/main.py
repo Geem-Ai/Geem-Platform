@@ -29,6 +29,10 @@ from app.entitlements.router import router as entitlements_router
 from app.usage.api_activity_router import router as api_usage_router
 from app.usage.router import router as usage_router
 from app.workspaces.router import router as workspaces_router
+from app.workspaces.invitation_router import (
+    invitations_router,
+    workspace_invitations_router,
+)
 from app.api_keys.router import router as api_keys_router
 from app.apps_catalog.router import router as apps_catalog_router
 from app.connectors.router import (
@@ -72,6 +76,8 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(workspaces_router)
+app.include_router(workspace_invitations_router)
+app.include_router(invitations_router)
 app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(experts_router)

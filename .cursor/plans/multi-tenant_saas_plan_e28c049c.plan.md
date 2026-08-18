@@ -30,11 +30,11 @@ todos:
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
     status: completed
   - id: phase-9
-    content: "Phase 9: 9A–9F PASS (WhatsApp/OpenWA channel + published SAR plans line/desk/ops). Remaining 9G (Apps management + E2E). Do not start Phase 10 until requested."
-    status: in_progress
+    content: "Phase 9: COMPLETE — 9A–9G PASS (App Store catalog, commerce, Drive, OneDrive, WhatsApp/OpenWA, Apps management + E2E gate). Do not start Phase 10 until requested."
+    status: completed
   - id: phase-10
-    content: "Phase 10: Members UX — email invites, pending invites, role matrix UI, Metronic polish on /members (sidebar already present). Before Hardening."
-    status: pending
+    content: "Phase 10: 10A PASS (workspace invitations backend). 10B Members UI remaining. Do not start Phase 11 until requested."
+    status: in_progress
   - id: phase-11
     content: "Phase 11: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
     status: pending
@@ -1189,7 +1189,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 9 — App Store foundations + Apps UI
 
-**Status:** in_progress — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** + **9F PASS** (OpenWA/WhatsApp channel; catalog published with SAR plans `line`/`desk`/`ops`). Do not start 9G or Phase 10 until requested.
+**Status:** completed — **9A PASS** + **9B PASS** + **9C PASS** + **9D PASS** + **9E PASS** + **9E.1 PASS** + **9F PASS** + **9G PASS** (Apps management polish + Phase 9 E2E gate). Phase 9 COMPLETE. Do not start Phase 10 until requested.
 
 **Canonical model:** §17 App Store foundations (billing types, plans, licenses, install vs connect, out of scope).
 
@@ -1203,7 +1203,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9E — Microsoft OneDrive      ✅ PASS
 9E.1 — OneDrive dual accounts ✅ PASS
 9F — OpenWA / WhatsApp       ✅ PASS (channel + published SAR plans line/desk/ops)
-9G — App Management + E2E Gate
+9G — App Management + E2E Gate ✅ PASS
 ```
 
 #### Locked decisions (Phase 9)
@@ -1249,17 +1249,17 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9F Acceptance:** `openwa` (seeded `whatsapp` slug) adapter registered; catalog **published** with approved SAR `app_plans` (`line`/`desk`/`ops`); install requires active App subscription; connection counts toward `connections`; Expert binding via `channel_bindings`; inbound webhook HMAC + idempotency → ChatTurnExecutor → send-text; disconnect/revoke fails closed; Drive/OneDrive regression green; no auto-recurring charges; docs in `docs/apps/whatsapp-openwa.md`.
 
-**9G Goal:** App Management polish + Phase 9 E2E gate — Installed apps management (status, plan/period, renew CTA, connections health), catalog edge cases (expired, entitled-not-installed, coming-soon), billing history labels for App purchase kinds, EN/AR + RTL, isolation tests across workspaces, smoke E2E for free install→connect→Expert source and (when WhatsApp published) paid subscribe→install→connect.
+**9G Goal:** App Management polish + Phase 9 E2E gate — Installed apps management (status, plan/period, renew CTA, connections health), catalog edge cases (expired, entitled-not-installed, coming-soon), billing history labels for App purchase kinds, EN/AR + RTL, isolation tests across workspaces, smoke E2E for free install→connect→Expert source and paid WhatsApp subscribe→install→connect.
 
-**9G Acceptance:** No catalog/commerce/connector regressions; owner/admin vs member matrix verified; encrypted secrets absent from all App DTOs; Phase 9 acceptance checklist signed off before Phase 10.
+**9G Acceptance:** No catalog/commerce/connector regressions; owner/admin vs member matrix verified; encrypted secrets absent from all App DTOs; Phase 9 acceptance checklist signed off (`docs/apps/phase-9-acceptance.md`).
 
-**Next:** Phase 9G when explicitly requested — not Phase 10 yet.
+**Next:** Phase 10 when explicitly requested — not started.
 
 ---
 
 ### Phase 10 — Members UX (invites + role matrix + polish)
 
-**Status:** pending — do not start until Phase 9 is complete and this phase is explicitly requested. Runs **before** Hardening (Phase 11).
+**Status:** in progress — **10A PASS** (workspace invitations backend). 10B Members UI not started. Runs **before** Hardening (Phase 11).
 
 **Baseline already shipped (Phase 1):** sidebar **Members** item → `/members`; list / change role / remove for existing members; `WorkspacePolicy` role matrix; copy still says invites unavailable.
 
@@ -1283,7 +1283,9 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 #### 10A — Invitations backend
 
-**DB / services:** `workspace_invitations`; extend `WorkspaceService` (or focused `InvitationService`); hash invite tokens like API keys / refresh tokens.
+**Status:** completed — **10A PASS**. `workspace_invitations` + HMAC invite tokens + `EmailProvider` (console local/test only, optional SMTP) + create/list/resend/revoke/accept APIs. Phase 10B UI is not started.
+
+**DB / services:** `workspace_invitations`; focused `InvitationService`; hash invite tokens like API keys (HMAC-SHA256).
 
 **APIs (session auth, workspace-scoped except accept):**
 - `POST /api/workspaces/{id}/invitations` — create + send

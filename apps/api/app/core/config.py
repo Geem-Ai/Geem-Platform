@@ -182,6 +182,24 @@ class Settings(BaseSettings):
     # Empty: local/test fall back to http://localhost:5174; non-local disables HTML redirect.
     workspace_web_url: str = ""
 
+    # Phase 10A — workspace email invitations.
+    workspace_invite_ttl_hours: int = 72
+    # console = local/test only (may print accept URLs with raw tokens).
+    # smtp = production-capable. Non-local must not use console.
+    email_provider: str = "console"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = Field(default="", repr=False, exclude=True)
+    smtp_from_email: str = ""
+    smtp_from_name: str = "Geem"
+    smtp_use_tls: bool = True  # required true outside local/test
+    # false skips SMTP server cert verification (self-signed hosts). Local/test only.
+    smtp_tls_verify: bool = True
+    smtp_timeout_seconds: float = 10.0
+    # Empty → reuse API-key HMAC pepper (local derives from JWT_SECRET).
+    invitation_token_hash_pepper: str = Field(default="", repr=False, exclude=True)
+
     # Phase 9D — Google Drive knowledge connector (OAuth). Empty → unavailable.
     google_drive_client_id: str = ""
     google_drive_client_secret: str = Field(default="", repr=False, exclude=True)
@@ -328,6 +346,18 @@ class Settings(BaseSettings):
         )
 
     @property
+    def effective_invitation_token_hash_pepper(self) -> str:
+        raw = (self.invitation_token_hash_pepper or "").strip()
+        if raw:
+            return raw
+        return self.effective_api_key_hash_pepper
+
+    @property
+    def effective_workspace_invite_ttl_hours(self) -> int:
+        hours = int(self.workspace_invite_ttl_hours)
+        return hours if hours > 0 else 72
+
+    @property
     def google_drive_configured(self) -> bool:
         return bool(
             (self.google_drive_client_id or "").strip()
@@ -415,6 +445,33 @@ def assert_secure_settings(settings: Settings) -> None:
             "API_KEY_HASH_PEPPER is missing, insecure, or reused from JWT_SECRET. "
             "Set a dedicated random secret (≥32 chars) before starting Geem "
             "in non-local environments."
+        )
+    provider = (settings.email_provider or "").strip().lower()
+    if provider in {"", "console"}:
+        raise RuntimeError(
+            "EMAIL_PROVIDER=console is not allowed outside local/test. "
+            "Set EMAIL_PROVIDER=smtp and SMTP_* settings before starting Geem "
+            "in non-local environments. The console adapter may print invitation "
+            "URLs that contain raw tokens."
+        )
+    if provider != "smtp":
+        raise RuntimeError(
+            f"Unknown EMAIL_PROVIDER={provider!r}. Use 'smtp' in non-local environments."
+        )
+    if not (settings.smtp_host or "").strip() or not (settings.smtp_from_email or "").strip():
+        raise RuntimeError(
+            "SMTP_HOST and SMTP_FROM_EMAIL are required when EMAIL_PROVIDER=smtp."
+        )
+    if not settings.smtp_use_tls:
+        raise RuntimeError(
+            "SMTP_USE_TLS must be true in non-local environments so invitation "
+            "tokens and SMTP credentials are not sent in the clear."
+        )
+    if not settings.smtp_tls_verify:
+        raise RuntimeError(
+            "SMTP_TLS_VERIFY must be true in non-local environments so invitation "
+            "tokens are not exposed to a TLS man-in-the-middle. Install a CA-trusted "
+            "certificate on the SMTP host instead of disabling verification."
         )
 
 

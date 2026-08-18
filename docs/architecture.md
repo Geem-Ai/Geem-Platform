@@ -8,7 +8,7 @@
 
 ## Provider boundaries
 
-Domain code depends on protocols in `app/core/protocols.py`. Concrete adapters live under `app/openrouter/` and `app/storage/`.
+Domain code depends on protocols in `app/core/protocols.py` and `app/notifications/` (email). Concrete adapters live under `app/openrouter/`, `app/storage/`, and `app/notifications/`.
 
 ## Versions
 

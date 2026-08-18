@@ -50,6 +50,7 @@ class JsonFormatter(logging.Formatter):
             "kind",
             "gateway_config_id",
             "action",
+            "invitation_id",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
