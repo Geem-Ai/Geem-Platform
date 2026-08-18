@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.billing.invoices.pdf import render_simplified_tax_invoice
+from app.billing.invoices.pdf import ASSETS_DIR, render_simplified_tax_invoice
 from app.billing.invoices.seller import seller_profile
 from app.billing.invoices.tax import split_vat
 from app.billing.invoices.zatca import zatca_qr_base64
@@ -93,8 +93,8 @@ def test_render_simplified_invoice_pdf_contains_required_fields() -> None:
             "description": "Starter pack — AI credit pack",
             "description_ar": "Starter pack — حزمة أرصدة ذكاء اصطناعي",
             "seller": {
-                "name": "Geem",
-                "name_ar": "جيم",
+                "name": "DAL SEEN Information Technology Co., Ltd.",
+                "name_ar": "شركة دال سين لتقنية المعلومات",
                 "vat_number": "399999999900003",
                 "cr_number": "1234567890",
                 "address": "Kingdom of Saudi Arabia",
@@ -120,6 +120,14 @@ def test_render_simplified_invoice_pdf_contains_required_fields() -> None:
     assert "399999999900003" in text
     assert "25.00" in text
     assert "3.26" in text
+    assert "Description" in text
+    assert "Qty" in text
+    assert "Taxable" in text
+    assert "Total incl. VAT" in text
+    assert "DAL SEEN Information Technology Co., Ltd." in text
+    assert "SAR" not in text
+    assert (ASSETS_DIR / "geem-logo.png").is_file()
+    assert (ASSETS_DIR / "saudi-riyal.svg").is_file()
 
 
 def io_bytes(data: bytes):
