@@ -97,6 +97,35 @@ export function formatRelativeTime(iso: string, locale: string): string {
   return rtf.format(Math.round(deltaSec / (86400 * 30)), 'month');
 }
 
+export const DAY_MS = 86_400_000;
+
+export type RemainingHoursMinutes = {
+  days: number;
+  hours: number;
+  minutes: number;
+  totalMs: number;
+};
+
+/** Whole days / hours / minutes until `iso`. Values are 0 when the instant is past. */
+export function remainingHoursMinutes(
+  iso: string | null,
+  now = Date.now(),
+): RemainingHoursMinutes | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const totalMs = Math.max(0, date.getTime() - now);
+  const totalMinutes = Math.floor(totalMs / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  return {
+    days,
+    hours,
+    minutes: totalMinutes % 60,
+    totalMs,
+  };
+}
+
 export function quotaLevelBadgeVariant(
   level: QuotaWarningLevel,
 ): 'secondary' | 'warning' | 'destructive' {

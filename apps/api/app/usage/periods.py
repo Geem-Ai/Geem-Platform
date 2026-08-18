@@ -3,8 +3,8 @@
 Internal clock is always timezone-aware UTC. Naive datetimes are rejected.
 There is no Workspace timezone abstraction yet.
 
-Weekly periods follow ISO weeks: Monday 00:00:00 UTC inclusive through the
-following Monday exclusive.
+Weekly periods follow the KSA calendar week: Saturday 00:00:00 UTC inclusive
+through the following Saturday exclusive (Friday is the last included day).
 """
 
 from __future__ import annotations
@@ -66,10 +66,15 @@ def _daily(moment: datetime) -> PeriodWindow:
     return PeriodWindow(PeriodType.DAILY, start, start + timedelta(days=1))
 
 
+# Python weekday(): Monday=0 … Saturday=5, Sunday=6.
+_KSA_WEEK_START_WEEKDAY = 5
+
+
 def _weekly(moment: datetime) -> PeriodWindow:
-    """ISO week: Monday 00:00 UTC → next Monday 00:00 UTC."""
+    """KSA week: Saturday 00:00 UTC → next Saturday 00:00 UTC."""
     day_start = datetime(moment.year, moment.month, moment.day, tzinfo=timezone.utc)
-    start = day_start - timedelta(days=day_start.weekday())
+    days_since_saturday = (day_start.weekday() - _KSA_WEEK_START_WEEKDAY) % 7
+    start = day_start - timedelta(days=days_since_saturday)
     return PeriodWindow(PeriodType.WEEKLY, start, start + timedelta(days=7))
 
 

@@ -80,8 +80,9 @@ Status tracking for Geem App Store slices **9A–9G**. Mark **PASS** only when b
 
 - **9A–9F regression:** `pytest` Phase 9 integration suites — PASS (110 tests in combined run)
 - **9G management suite:** `test_apps_management_phase9g.py` — PASS (11 tests)
-- **workspace_web Apps Vitest:** PASS (66 tests)
+- **9H Chat Widget:** `test_chat_widget_origins.py` + `test_chat_widget.py` — PASS
+- **workspace_web Apps Vitest:** PASS (66 tests + chat-widget helper)
 - **Playwright Apps smoke:** `npm run test:e2e` — PASS (4 tests)
 - **workspace_web typecheck/build:** PASS
 
-**Phase 9 overall:** COMPLETE
+**Phase 9 overall:** COMPLETE (including 9H Chat Widget addendum)

@@ -14,6 +14,7 @@ from app.usage.attribution import GenerationUsageContext
 SOURCE_WORKSPACE = "workspace"
 SOURCE_API = "api"
 SOURCE_CHANNEL = "channel"
+SOURCE_WIDGET = "widget"
 
 
 @dataclass(slots=True, frozen=True)
@@ -23,6 +24,7 @@ class ChatInvocationContext:
     Workspace UI: user_id set, api_key_id None, source=workspace.
     Public API: api_key_id set, user_id None, source=api.
     Channel (WhatsApp): both None, source=channel, connection_id set.
+    Widget: both None, source=widget, widget_id set.
     """
 
     workspace_id: uuid.UUID
@@ -34,6 +36,7 @@ class ChatInvocationContext:
     message_id: uuid.UUID | None = None
     request_id: str | None = None
     connection_id: uuid.UUID | None = None
+    widget_id: uuid.UUID | None = None
 
     def __post_init__(self) -> None:
         if self.source == SOURCE_API:
@@ -51,6 +54,13 @@ class ChatInvocationContext:
                 )
             if self.connection_id is None:
                 raise ValueError("Channel Chat invocations require connection_id.")
+        elif self.source == SOURCE_WIDGET:
+            if self.user_id is not None or self.api_key_id is not None:
+                raise ValueError(
+                    "Widget Chat invocations must not set user_id or api_key_id."
+                )
+            if self.widget_id is None:
+                raise ValueError("Widget Chat invocations require widget_id.")
         else:
             raise ValueError(f"Unknown Chat invocation source: {self.source}")
 
@@ -117,6 +127,27 @@ class ChatInvocationContext:
             message_id=message_id,
             request_id=request_id,
             connection_id=connection_id,
+        )
+
+    @classmethod
+    def widget(
+        cls,
+        *,
+        workspace_id: uuid.UUID,
+        widget_id: uuid.UUID,
+        expert_id: uuid.UUID | None = None,
+        request_id: str | None = None,
+    ) -> ChatInvocationContext:
+        return cls(
+            workspace_id=workspace_id,
+            source=SOURCE_WIDGET,
+            user_id=None,
+            api_key_id=None,
+            expert_id=expert_id,
+            conversation_id=None,
+            message_id=None,
+            request_id=request_id,
+            widget_id=widget_id,
         )
 
     def to_usage_context(self) -> GenerationUsageContext:

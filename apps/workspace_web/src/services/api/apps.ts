@@ -593,3 +593,61 @@ export async function listConnectionSyncRuns(
     `/api/apps/${encodeURIComponent(slug)}/connections/${encodeURIComponent(connectionId)}/sync-runs${s ? `?${s}` : ''}`,
   );
 }
+
+export type ChatWidgetInstance = {
+  id: string;
+  status: string;
+  expert_id: string | null;
+  expert: { id: string; name: string; status: string } | null;
+  title: string;
+  subtitle: string | null;
+  greeting: string | null;
+  logo_url: string | null;
+  locale: string;
+  position: string;
+  primary_color: string;
+  text_color: string;
+  allowed_origins: string[];
+  embed_script_url: string;
+  embed_html: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatWidgetUpdate = {
+  expert_id?: string | null;
+  title?: string;
+  subtitle?: string | null;
+  greeting?: string | null;
+  logo_url?: string | null;
+  locale?: string;
+  position?: string;
+  primary_color?: string;
+  text_color?: string;
+  allowed_origins?: string[];
+};
+
+export function isChatWidgetApp(
+  app: Pick<CatalogApp, 'slug'> | null | undefined,
+): boolean {
+  return app?.slug === 'chat-widget';
+}
+
+export async function getChatWidget(): Promise<ChatWidgetInstance> {
+  return apiRequest<ChatWidgetInstance>('/api/apps/chat-widget/widget');
+}
+
+export async function updateChatWidget(
+  body: ChatWidgetUpdate,
+): Promise<ChatWidgetInstance> {
+  return apiRequest<ChatWidgetInstance>('/api/apps/chat-widget/widget', {
+    method: 'PUT',
+    json: body,
+  });
+}
+
+export async function disconnectChatWidget(): Promise<void> {
+  await apiRequest<void>('/api/apps/chat-widget/widget/disconnect', {
+    method: 'POST',
+  });
+}

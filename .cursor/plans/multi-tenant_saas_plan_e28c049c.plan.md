@@ -32,6 +32,9 @@ todos:
   - id: phase-9
     content: "Phase 9: COMPLETE — 9A–9G PASS (App Store catalog, commerce, Drive, OneDrive, WhatsApp/OpenWA, Apps management + E2E gate). Do not start Phase 10 until requested."
     status: completed
+  - id: phase-9h
+    content: "Phase 9H: Chat Widget app — monthly subscription, Expert grounding, appearance, allowed_origins, embed script + public APIs"
+    status: completed
   - id: phase-10
     content: "Phase 10: COMPLETE — 10A PASS + 10B PASS + 10C PASS (dynamic workspace RBAC + permission-aware UI). Do not start Phase 11 until requested."
     status: completed
@@ -1029,7 +1032,7 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 **Phase 5A delivered (backend foundation only):**
 - `plans`, `plan_entitlements`, `subscriptions` (one active per Workspace), `credit_accounts`, append-only `credit_ledger_entries` (`request_id` idempotency), `usage_period_counters`, `storage_usage_events`
 - Canonical entitlement keys (`ai_tokens_daily|weekly|monthly`, `experts_limit`, `storage_bytes`) — no `if plan.name == "pro"` branching
-- `EntitlementService` / `QuotaService` lookup; UTC daily/weekly(ISO)/monthly period utilities
+- `EntitlementService` / `QuotaService` lookup; UTC daily/weekly(Saturday–Friday KSA week)/monthly period utilities
 - Manual subscription assignment; bootstrap/dev plan (`bootstrap_dev`) for existing tenant Workspaces (configurable, not Geem commercial pricing)
 - Authenticated Workspace APIs: `GET /api/subscription`, `GET /api/entitlements`, `GET /api/usage/summary`
 - No Stripe/Moyasar/Tap, checkout, invoices, webhooks, or token reserve/settle
@@ -1204,6 +1207,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 9E.1 — OneDrive dual accounts ✅ PASS
 9F — OpenWA / WhatsApp       ✅ PASS (channel + published SAR plans line/desk/ops)
 9G — App Management + E2E Gate ✅ PASS
+9H — Chat Widget             ✅ PASS (embed + monthly standard plan 199 SAR)
 ```
 
 #### Locked decisions (Phase 9)
@@ -1219,7 +1223,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 | Roles | Browse: any member; install/checkout/renew/connect/disconnect: owner/admin |
 | Secrets | Encrypted at rest; never in API responses |
 | UI routes | `/apps`, `/apps/:slug`, `/apps/installed` (+ payment-result reuse from Billing) |
-| Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/published** (`line`/`desk`/`ops` SAR) |
+| Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/published** (`line`/`desk`/`ops` SAR); Chat Widget **subscription/published** (`standard` 199 SAR) |
 
 **9A Goal:** global catalog (`app_categories`, `apps`, `app_plans`, `app_plan_entitlements`), workspace `app_installations`, encrypted config boundary, free install/uninstall, Workspace App Store UI (`/apps`, `/apps/:slug`, `/apps/installed`), role-aware controls, EN/AR.
 
@@ -1253,7 +1257,11 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9G Acceptance:** No catalog/commerce/connector regressions; owner/admin vs member matrix verified; encrypted secrets absent from all App DTOs; Phase 9 acceptance checklist signed off (`docs/apps/phase-9-acceptance.md`).
 
-**Next:** Phase 10 when explicitly requested — not started.
+**9H Goal:** Chat Widget as a published App Store subscription product — catalog seed (`chat-widget`, plan `standard` 199 SAR, entitlement `widgets:1`), `widget_instances` (appearance + one Expert + optional `allowed_origins`), Workspace config UI + embed snippet, public bootstrap/messages APIs + `geem-widget.js` (from `apps/widget`), gated by `AppAccessService`. Non-connector app (`connector_key` null).
+
+**9H Acceptance:** Subscribe → install → configure Expert/appearance/origins → public bootstrap respects allowlist; expired subscription fails closed; docs in `docs/apps/chat-widget.md`. **PASS.**
+
+**Next:** Phase 11 when explicitly requested — not started. (Phase 10 already complete.)
 
 ---
 

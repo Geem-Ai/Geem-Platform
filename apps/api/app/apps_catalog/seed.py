@@ -146,6 +146,19 @@ WHATSAPP_PLANS: tuple[PlanSpec, ...] = (
     ),
 )
 
+CHAT_WIDGET_PLANS: tuple[PlanSpec, ...] = (
+    PlanSpec(
+        code="standard",
+        name="Chat Widget Standard",
+        description="One embeddable chat widget grounded on a Geem Expert.",
+        billing_interval=AppPlanBillingInterval.MONTHLY.value,
+        price_amount="199.00",
+        is_default=True,
+        sort_order=10,
+        entitlements={"widgets": 1},
+    ),
+)
+
 APP_SPECS: tuple[AppSpec, ...] = (
     AppSpec(
         slug="google-drive",
@@ -204,6 +217,26 @@ APP_SPECS: tuple[AppSpec, ...] = (
         connector_key="openwa",
         connector_kind="channel",
         plans=WHATSAPP_PLANS,
+    ),
+    AppSpec(
+        slug="chat-widget",
+        name="Chat Widget",
+        short_description="Embed a Geem Expert chat widget on your website.",
+        description=(
+            "Subscribe monthly, install Chat Widget, bind one Expert for private RAG grounding, "
+            "customize appearance, and paste a script tag on your site. "
+            "Optional allowed origins restrict which domains can load the widget. "
+            "Visitor chats use your workspace AI quota — no API key in the embed script."
+        ),
+        category_slug="communication",
+        billing_type=AppBillingType.SUBSCRIPTION.value,
+        status=AppStatus.PUBLISHED.value,
+        is_featured=False,
+        sort_order=40,
+        icon_url="/brand/apps/chat-widget.svg",
+        connector_key=None,
+        connector_kind=None,
+        plans=CHAT_WIDGET_PLANS,
     ),
 )
 

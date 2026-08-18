@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { ChatMessage } from '@/features/chat/components/ChatMessage';
 import { ExpertFormSheet } from '@/features/experts/components/ExpertFormSheet';
@@ -10,6 +10,7 @@ import { UploadKnowledgeDialog } from '@/features/experts/components/UploadKnowl
 import { errorMessageKey } from '@/services/api/errors';
 import type { Meter, UsageSummary } from '@/services/api/usage';
 import { QuotaAlert } from './QuotaAlert';
+import { QuotaMeter } from './QuotaMeter';
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -113,6 +114,10 @@ describe('quota UX surfaces', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('maps quota error codes to localized keys', () => {
     expect(errorMessageKey('quota_exceeded')).toBe('errors.quotaExceeded');
     expect(errorMessageKey('insufficient_credits')).toBe('errors.insufficientCredits');
@@ -172,5 +177,85 @@ describe('quota UX surfaces', () => {
     wrap(<QuotaAlert level="approaching" />);
     expect(screen.getByTestId('quota-alert')).toHaveAttribute('data-level', 'approaching');
     expect(screen.getByTestId('quota-alert')).toHaveTextContent('Approaching limit');
+  });
+
+  it('shows daily reset as hours and minutes remaining', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-18T12:00:00.000Z'));
+    wrap(
+      <QuotaMeter
+        title="Daily tokens"
+        meter={meter({
+          used: 11092,
+          limit: 1_000_000,
+          remaining: 988_908,
+          period_end: '2026-08-18T21:17:00.000Z',
+        })}
+        testId="usage-ai-daily"
+        resetDisplay="countdown"
+      />,
+    );
+    expect(screen.getByTestId('usage-ai-daily-period')).toHaveTextContent(
+      'Resets in 9 hours and 17 minutes',
+    );
+    vi.useRealTimers();
+  });
+
+  it('shows hours-only and minutes-only daily reset copy', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-18T12:00:00.000Z'));
+    const { unmount } = wrap(
+      <QuotaMeter
+        title="Daily tokens"
+        meter={meter({ period_end: '2026-08-18T20:00:00.000Z' })}
+        testId="usage-ai-daily"
+        resetDisplay="countdown"
+      />,
+    );
+    expect(screen.getByTestId('usage-ai-daily-period')).toHaveTextContent(
+      'Resets in 8 hours',
+    );
+    unmount();
+    wrap(
+      <QuotaMeter
+        title="Daily tokens"
+        meter={meter({ period_end: '2026-08-18T12:45:00.000Z' })}
+        testId="usage-ai-daily"
+        resetDisplay="countdown"
+      />,
+    );
+    expect(screen.getByTestId('usage-ai-daily-period')).toHaveTextContent(
+      'Resets in 45 minutes',
+    );
+    vi.useRealTimers();
+  });
+
+  it('shows weekly reset in days, then hours and minutes in the last 24 hours', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-18T12:00:00.000Z'));
+    const { unmount } = wrap(
+      <QuotaMeter
+        title="Weekly tokens"
+        meter={meter({ period_end: '2026-08-22T00:00:00.000Z' })}
+        testId="usage-ai-weekly"
+        resetDisplay="countdown"
+      />,
+    );
+    expect(screen.getByTestId('usage-ai-weekly-period')).toHaveTextContent(
+      'Resets in 3 days',
+    );
+    unmount();
+    wrap(
+      <QuotaMeter
+        title="Weekly tokens"
+        meter={meter({ period_end: '2026-08-19T03:17:00.000Z' })}
+        testId="usage-ai-weekly"
+        resetDisplay="countdown"
+      />,
+    );
+    expect(screen.getByTestId('usage-ai-weekly-period')).toHaveTextContent(
+      'Resets in 15 hours and 17 minutes',
+    );
+    vi.useRealTimers();
   });
 });

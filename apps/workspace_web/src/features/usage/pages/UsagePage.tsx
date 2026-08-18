@@ -290,6 +290,7 @@ export function UsagePage() {
                 format="tokens"
                 layout="row"
                 icon={CalendarDays}
+                resetDisplay="countdown"
               />
               <Separator />
               <QuotaMeter
@@ -299,6 +300,7 @@ export function UsagePage() {
                 format="tokens"
                 layout="row"
                 icon={CalendarDays}
+                resetDisplay="countdown"
               />
               <Separator />
               <QuotaMeter

@@ -27,6 +27,10 @@ import { AppPlanCard } from './AppPlanCard';
 import { AppSubscriptionStatus } from './AppSubscriptionStatus';
 import { AppConnectionsPanel } from '../connections/components/AppConnectionsPanel';
 import { AppSyncHistoryPanel } from '../connections/components/AppSyncHistoryPanel';
+import { ChatWidgetConfigDialog } from '../chat-widget/ChatWidgetConfigDialog';
+import { isChatWidgetApp } from '@/services/api/apps';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 const SHEET_PANEL = floatingSheetPanel(
   'sm:w-[min(100%-2.5rem,36rem)]',
@@ -102,6 +106,8 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
   const useConnectorTabs = Boolean(app?.connector && (showSyncTab || showPlans));
   const installed = app?.installation_status === 'active';
   const defaultTab = !installed && showPlans ? 'plans' : 'connections';
+  const chatWidget = isChatWidgetApp(app);
+  const [widgetOpen, setWidgetOpen] = useState(false);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -191,7 +197,28 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </p>
                   </div>
 
-                  {installed && !app.connector ? (
+                  {installed && chatWidget ? (
+                    <div className="space-y-3" data-testid="chat-widget-panel">
+                      <p className="text-sm text-muted-foreground">
+                        {t('apps.chatWidget.groundingHint')}
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => setWidgetOpen(true)}
+                        data-testid="chat-widget-configure"
+                      >
+                        {t('apps.chatWidget.configure')}
+                      </Button>
+                      <ChatWidgetConfigDialog
+                        open={widgetOpen}
+                        onOpenChange={setWidgetOpen}
+                        app={app}
+                        canManage={canManage}
+                      />
+                    </div>
+                  ) : null}
+
+                  {installed && !app.connector && !chatWidget ? (
                     <div
                       role="note"
                       className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
