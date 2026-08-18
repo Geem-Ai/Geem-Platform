@@ -22,7 +22,11 @@ describe('ExpertApiIdField', () => {
     expect(screen.getByTestId('expert-api-id')).toHaveTextContent(
       '11111111-2222-3333-4444-555555555555',
     );
-    expect(screen.getByText(/X-Geem-Expert-Id/)).toBeInTheDocument();
+    expect(screen.getByTestId('expert-api-id-info')).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('API ID'),
+    );
+    expect(screen.queryByText(/X-Geem-Expert-Id/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('copy-expert-api-id'));
     const { copyText } = await import('@/lib/clipboard');
     await waitFor(() => {

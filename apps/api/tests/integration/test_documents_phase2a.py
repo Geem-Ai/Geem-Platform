@@ -129,6 +129,32 @@ def test_cross_tenant_document_isolation(client, register_user, mock_storage_and
     )
     assert denied_get_b.status_code == 404
 
+    # Rename (display title)
+    renamed = client.patch(
+        f"/api/documents/{doc_a}",
+        headers=_ws_headers(user_a["access_token"], ws_a),
+        json={"title": "Contract handbook"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["title"] == "Contract handbook"
+    assert renamed.json()["original_filename"] == "a.pdf"
+    assert (
+        client.patch(
+            f"/api/documents/{doc_b}",
+            headers=_ws_headers(user_a["access_token"], ws_a),
+            json={"title": "Hijack"},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.patch(
+            f"/api/documents/{doc_a}",
+            headers=_ws_headers(user_b["access_token"], ws_b),
+            json={"title": "Hijack"},
+        ).status_code
+        == 404
+    )
+
     # Download
     assert (
         client.get(
@@ -288,6 +314,7 @@ def test_unauthenticated_document_routes_denied(
     assert client.get(f"/api/documents/{doc_id}").status_code == 401
     assert client.get(f"/api/documents/{doc_id}/file").status_code == 401
     assert client.post(f"/api/documents/{doc_id}/reprocess", json={"mode": "full"}).status_code == 401
+    assert client.patch(f"/api/documents/{doc_id}", json={"title": "Nope"}).status_code == 401
     assert client.delete(f"/api/documents/{doc_id}").status_code == 401
     assert _upload(client, {}, _unique_pdf(b"LEG"), "legacy.pdf").status_code == 401
 
@@ -351,6 +378,32 @@ def test_workspace_upload_sets_byte_size_and_workspace_id(
     assert row is not None
     assert row.workspace_id == uuid.UUID(ws["id"])
     assert row.byte_size == len(pdf)
+
+
+def test_rename_document_rejects_blank_title(
+    client, register_user, mock_storage_and_ingest
+) -> None:
+    user = register_user(email="rename@example.com")
+    ws = _create_workspace(client, user["access_token"], "Rename", "rename-ws")
+    headers = _ws_headers(user["access_token"], ws)
+    up = _upload(client, headers, _unique_pdf(b"RN"), "policy.pdf")
+    assert up.status_code == 200, up.text
+    doc_id = up.json()["id"]
+
+    blank = client.patch(f"/api/documents/{doc_id}", headers=headers, json={"title": "   "})
+    assert blank.status_code == 422
+
+    ok = client.patch(
+        f"/api/documents/{doc_id}",
+        headers=headers,
+        json={"title": "  سياسة المطعم  "},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["title"] == "سياسة المطعم"
+    detail = client.get(f"/api/documents/{doc_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["title"] == "سياسة المطعم"
+    assert detail.json()["original_filename"] == "policy.pdf"
 
 
 def test_soft_delete_releases_hash_for_reupload(

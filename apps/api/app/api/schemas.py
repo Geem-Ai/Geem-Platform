@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DocumentCreateResponse(BaseModel):
@@ -56,6 +56,22 @@ class DocumentDetail(DocumentSummary):
     job_id: str | None = None
     failed_page_details: list[FailedPageInfo] = Field(default_factory=list)
     debug_pages: list[dict] | None = None
+
+
+class DocumentUpdateRequest(BaseModel):
+    """Rename a Workspace document (display title)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., min_length=1, max_length=512)
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("Title is required.")
+        return cleaned
 
 
 class ReprocessRequest(BaseModel):

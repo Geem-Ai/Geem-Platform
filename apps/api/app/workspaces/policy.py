@@ -18,6 +18,7 @@ class WorkspaceAction(StrEnum):
     LIST_DOCUMENTS = "list_documents"
     READ_DOCUMENT = "read_document"
     UPLOAD_DOCUMENT = "upload_document"
+    UPDATE_DOCUMENT = "update_document"
     DELETE_DOCUMENT = "delete_document"
     REPROCESS_DOCUMENT = "reprocess_document"
     # API keys (Phase 7A) — owner/admin only
@@ -31,6 +32,7 @@ _DOCUMENT_ACTIONS = frozenset(
         WorkspaceAction.LIST_DOCUMENTS,
         WorkspaceAction.READ_DOCUMENT,
         WorkspaceAction.UPLOAD_DOCUMENT,
+        WorkspaceAction.UPDATE_DOCUMENT,
         WorkspaceAction.DELETE_DOCUMENT,
         WorkspaceAction.REPROCESS_DOCUMENT,
     }

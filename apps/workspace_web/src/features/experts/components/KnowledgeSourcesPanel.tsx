@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { AddGoogleDriveKnowledgeDialog } from './AddGoogleDriveKnowledgeDialog';
 import { AddOneDriveKnowledgeDialog } from './AddOneDriveKnowledgeDialog';
 import { KnowledgeIngestionProgress } from './KnowledgeIngestionProgress';
 import { RemoveKnowledgeDialog } from './RemoveKnowledgeDialog';
+import { RenameKnowledgeDialog } from './RenameKnowledgeDialog';
 import { UploadKnowledgeDialog } from './UploadKnowledgeDialog';
 
 interface KnowledgeSourcesPanelProps {
@@ -38,6 +40,7 @@ export function KnowledgeSourcesPanel({
   const [driveOpen, setDriveOpen] = useState(false);
   const [oneDriveOpen, setOneDriveOpen] = useState(false);
   const [removeItem, setRemoveItem] = useState<ExpertKnowledgeItem | null>(null);
+  const [renameItem, setRenameItem] = useState<ExpertKnowledgeItem | null>(null);
 
   const unlinkMutation = useUnlinkExpertDocument(expertId);
   const reprocessMutation = useReprocessDocument(expertId);
@@ -45,7 +48,7 @@ export function KnowledgeSourcesPanel({
   function handleRemove(item: ExpertKnowledgeItem) {
     unlinkMutation.mutate(item, {
       onSuccess: () => {
-        toast.success(t('experts.remove'));
+        toast.success(t('experts.removed'));
         setRemoveItem(null);
       },
       onError: (err: unknown) => {
@@ -80,7 +83,18 @@ export function KnowledgeSourcesPanel({
         <h3 className="text-sm font-semibold">{t('experts.knowledge')}</h3>
         {canManage && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDriveOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDriveOpen(true)}
+              data-testid="add-google-drive-knowledge"
+            >
+              <img
+                src="/brand/apps/google-drive.svg"
+                alt=""
+                className="size-3.5"
+                aria-hidden
+              />
               {t('experts.googleDrive.add')}
             </Button>
             <Button
@@ -89,6 +103,12 @@ export function KnowledgeSourcesPanel({
               onClick={() => setOneDriveOpen(true)}
               data-testid="add-onedrive-knowledge"
             >
+              <img
+                src="/brand/apps/microsoft-onedrive.svg"
+                alt=""
+                className="size-3.5"
+                aria-hidden
+              />
               {t('experts.oneDrive.add')}
             </Button>
             <Button size="sm" onClick={() => setUploadOpen(true)}>
@@ -178,17 +198,46 @@ export function KnowledgeSourcesPanel({
                         {t('experts.reprocess')}
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setRemoveItem(item)}
-                      disabled={
-                        unlinkMutation.isPending ||
-                        (processing && Boolean(item.document_id))
-                      }
-                    >
-                      {t('experts.remove')}
-                    </Button>
+                    {item.document_id ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            mode="icon"
+                            className="text-muted-foreground hover:text-foreground hover:bg-accent"
+                            onClick={() => setRenameItem(item)}
+                            aria-label={t('experts.rename')}
+                            data-testid={`rename-knowledge-${item.id}`}
+                          >
+                            <Pencil className="size-3.5" aria-hidden />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{t('experts.rename')}</TooltipContent>
+                      </Tooltip>
+                    ) : null}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          mode="icon"
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setRemoveItem(item)}
+                          disabled={
+                            unlinkMutation.isPending ||
+                            (processing && Boolean(item.document_id))
+                          }
+                          aria-label={t('experts.remove')}
+                          data-testid={`remove-knowledge-${item.id}`}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{t('experts.remove')}</TooltipContent>
+                    </Tooltip>
                   </div>
                 )}
               </div>
@@ -223,6 +272,14 @@ export function KnowledgeSourcesPanel({
             }}
             onConfirm={handleRemove}
             isPending={unlinkMutation.isPending}
+          />
+          <RenameKnowledgeDialog
+            expertId={expertId}
+            item={renameItem}
+            open={Boolean(renameItem)}
+            onOpenChange={(o) => {
+              if (!o) setRenameItem(null);
+            }}
           />
         </>
       )}

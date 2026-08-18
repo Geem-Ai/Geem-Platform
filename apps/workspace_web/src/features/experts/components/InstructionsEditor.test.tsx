@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { type FormEvent } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
@@ -95,5 +96,32 @@ describe('InstructionsEditor AI assist', () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith('You are a precise employment counsel.');
     });
+  });
+
+  it('does not submit a parent form when generating (portal event bubble)', async () => {
+    generateExpertInstructions.mockResolvedValue({
+      system_instructions: 'Generated instructions.',
+    });
+    const onChange = vi.fn();
+    const onParentSubmit = vi.fn((e: FormEvent) => e.preventDefault());
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <form onSubmit={onParentSubmit}>
+          <InstructionsEditor value="" onChange={onChange} />
+        </form>
+      </I18nextProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('generate-instructions-button'));
+    fireEvent.change(screen.getByTestId('gen-instructions-brief'), {
+      target: { value: 'Write a helpful assistant prompt' },
+    });
+    fireEvent.click(screen.getByTestId('gen-instructions-submit'));
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith('Generated instructions.');
+    });
+    expect(onParentSubmit).not.toHaveBeenCalled();
   });
 });

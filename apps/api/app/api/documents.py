@@ -13,6 +13,7 @@ from app.api.schemas import (
     DocumentExpertRef,
     DocumentListOut,
     DocumentSummary,
+    DocumentUpdateRequest,
     FailedPageInfo,
     JobResponse,
     ReprocessRequest,
@@ -169,6 +170,19 @@ def get_document(
         failed_page_details=failed,
         debug_pages=debug_pages,
     )
+
+
+@router.patch("/{document_id}", response_model=DocumentSummary)
+def rename_document(
+    document_id: uuid.UUID,
+    body: DocumentUpdateRequest,
+    access: DocumentAccess = Depends(get_document_access),
+    db: Session = Depends(get_db),
+) -> DocumentSummary:
+    svc = DocumentService(db)
+    access.require_action(WorkspaceAction.UPDATE_DOCUMENT)
+    doc = svc.rename_for_workspace(access.workspace, document_id, body.title)
+    return _summary(svc, doc)
 
 
 @router.get("/{document_id}/file")

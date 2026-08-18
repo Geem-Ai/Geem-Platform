@@ -379,6 +379,41 @@ describe('WhatsApp Phase 9F UI', () => {
     10000,
   );
 
+  it('shows a single status and keeps disconnect behind confirm', async () => {
+    const disconnectMutate = vi.fn();
+    useDisconnectConnection.mockReturnValue({
+      mutate: disconnectMutate,
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    useAppConnections.mockReturnValue({
+      data: {
+        items: [connection({ status: 'disconnected', provider_status: null })],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    renderWithProviders(<AppConnectionsPanel app={catalogApp()} canManage />);
+
+    expect(await screen.findByTestId('whatsapp-status-disconnected')).toBeInTheDocument();
+    expect(screen.getByTestId('whatsapp-connection-phone')).toHaveTextContent('+966500000000');
+    expect(screen.getByTestId('whatsapp-status-hint')).toHaveTextContent(
+      en.apps.whatsapp.connection.statusHint.disconnected,
+    );
+    expect(screen.queryByText(/Provider status/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('whatsapp-save-settings')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('whatsapp-disconnect'));
+    expect(disconnectMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('whatsapp-disconnect-confirm')).toBeInTheDocument();
+  });
+
   it('shows member read-only state', async () => {
     workspaceState.role = 'member';
     useAppConnections.mockReturnValue({
@@ -422,8 +457,10 @@ describe('WhatsApp Phase 9F UI', () => {
   it('EN and AR WhatsApp keys exist', () => {
     expect(en.apps.whatsapp.connect.qrTitle).toBeTruthy();
     expect(en.apps.whatsapp.status.connected).toBeTruthy();
+    expect(en.apps.whatsapp.connection.statusHint.disconnected).toBeTruthy();
     expect(ar.apps.whatsapp.connect.qrTitle).toBeTruthy();
     expect(ar.apps.whatsapp.status.connected).toBeTruthy();
+    expect(ar.apps.whatsapp.connection.statusHint.disconnected).toBeTruthy();
   });
 
   it('dialog can advance into QR and pairing steps', async () => {
