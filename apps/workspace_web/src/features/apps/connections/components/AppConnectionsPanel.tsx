@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { SyncHistory } from './SyncHistory';
 import { WhatsAppConnectDialog } from '@/features/apps/whatsapp/components/WhatsAppConnectDialog';
 import { WhatsAppConnectionCard } from '@/features/apps/whatsapp/components/WhatsAppConnectionCard';
 import { getAppConnectionLimit, isWhatsAppApp } from '@/features/apps/whatsapp/lib';
+import { localizeCatalogApp } from '@/features/apps/lib/billing-label';
 
 function oauthReturnPath(slug: string): string {
   return `/apps/${slug}`;
@@ -35,6 +36,7 @@ export function AppConnectionsPanel({
   showTitle?: boolean;
 }) {
   const { t } = useTranslation();
+  const localized = localizeCatalogApp(app, t);
   const connector = app.connector;
   const installed = app.installation_status === 'active';
   const whatsappApp = isWhatsAppApp(app);
@@ -50,9 +52,17 @@ export function AppConnectionsPanel({
     import('@/services/api/apps').WhatsAppConnection | null
   >(null);
 
-  const connectionLimit = useMemo(() => getAppConnectionLimit(app), [app]);
-  const connectionCount = connectionsQuery.data?.items.length ?? 0;
-  const limitReached = connectionLimit !== null && connectionCount >= connectionLimit;
+  const connectionLimit =
+    connectionsQuery.data?.connection_limit ??
+    getAppConnectionLimit(app);
+  const connectionCount =
+    connectionsQuery.data?.used ??
+    connectionsQuery.data?.items.length ??
+    0;
+  const limitReached =
+    connectionLimit !== null &&
+    connectionLimit !== undefined &&
+    connectionCount >= connectionLimit;
   const hideSyncHistory = connector?.kind === 'channel' || whatsappApp;
 
   useEffect(() => {
@@ -142,7 +152,20 @@ export function AppConnectionsPanel({
       {showHeader ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {showTitle && !isEmpty ? (
-            <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+            <div className="space-y-0.5">
+              <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+              {connectionLimit != null ? (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="connection-usage"
+                >
+                  {t('apps.connections.usage', {
+                    used: connectionCount,
+                    limit: connectionLimit,
+                  })}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {showWhatsAppAddNumber ? (
             <Button
@@ -227,7 +250,7 @@ export function AppConnectionsPanel({
           {connectionsQuery.data.items.length === 0 ? (
             <ConnectionsEmptyState
               appSlug={app.slug}
-              appName={app.name}
+              appName={localized.name}
               iconUrl={app.icon_url}
               title={t('apps.whatsapp.connection.emptyTitle')}
               hint={t('apps.whatsapp.connection.emptyHint')}
@@ -270,7 +293,7 @@ export function AppConnectionsPanel({
       connectionsQuery.data.items.length === 0 ? (
         <ConnectionsEmptyState
           appSlug={app.slug}
-          appName={app.name}
+          appName={localized.name}
           iconUrl={app.icon_url}
           title={t('apps.connections.emptyTitle')}
           hint={t('apps.connections.emptyHint')}

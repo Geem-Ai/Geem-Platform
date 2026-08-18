@@ -14,21 +14,28 @@ import type { CatalogApp, ConnectionStatus } from '@/services/api/apps';
 import {
   formatAppBillingLabel,
   localizeCatalogApp,
+  resolveAppAccessBadge,
 } from '../lib/billing-label';
 import { AppIcon } from './AppIcon';
 
 export function AppBillingBadge({ app }: { app: CatalogApp }) {
   const { t } = useTranslation();
-  const label = formatAppBillingLabel(app, t);
-  const variant =
-    app.status === 'coming_soon'
-      ? 'warning'
-      : app.installation_status === 'active'
-        ? 'success'
-        : 'secondary';
+  const accessBadge = resolveAppAccessBadge(app);
+  const priceLabel = formatAppBillingLabel(app, t);
+  const showPriceHint =
+    accessBadge.labelKey === 'apps.billing.oneTime' ||
+    accessBadge.labelKey === 'apps.billing.subscription';
+
   return (
-    <Badge variant={variant} appearance="light" size="sm" className="shrink-0">
-      {app.installation_status === 'active' ? t('apps.installed') : label}
+    <Badge
+      variant={accessBadge.variant}
+      appearance="light"
+      size="sm"
+      className="shrink-0"
+      data-testid={`app-badge-${app.slug}`}
+      data-access-status={app.access?.status ?? app.status}
+    >
+      {showPriceHint ? priceLabel : t(accessBadge.labelKey)}
     </Badge>
   );
 }

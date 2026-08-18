@@ -505,6 +505,8 @@ class OpenWAChannelService:
             total=base.total,
             limit=base.limit,
             offset=base.offset,
+            used=base.used,
+            connection_limit=base.connection_limit,
         )
 
     def get_connection(

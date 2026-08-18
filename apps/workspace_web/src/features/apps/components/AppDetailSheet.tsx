@@ -166,6 +166,15 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                       <p className="text-sm text-muted-foreground">
                         {formatAppBillingLabel(app, t)}
                       </p>
+                      {access?.status === 'entitled_not_installed' &&
+                      app.billing_type === 'one_time' ? (
+                        <p
+                          className="text-sm text-muted-foreground"
+                          data-testid="app-one-time-entitled-not-installed"
+                        >
+                          {t('apps.billing.entitledNotInstalled')}
+                        </p>
+                      ) : null}
                       {access?.commercially_entitled &&
                       app.billing_type === 'one_time' ? (
                         <p className="text-sm text-muted-foreground">

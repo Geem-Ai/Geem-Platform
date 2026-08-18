@@ -659,10 +659,13 @@
     "kind": {
       "subscription": "اشتراك",
       "creditPack": "حزمة أرصدة",
-      "appOneTime": "شراء تطبيق لمرة واحدة",
-      "appSubscription": "اشتراك تطبيق",
-      "appRenewal": "تجديد تطبيق",
-      "other": "شراء"
+      "appOneTime": "شراء لمرة واحدة",
+      "appSubscription": "اشتراك جديد",
+      "appRenewal": "تجديد الاشتراك",
+      "other": "شراء",
+      "appOneTimeNamed": "{{app}} — شراء لمرة واحدة",
+      "appSubscriptionNamed": "{{app}} — اشتراك جديد",
+      "appRenewalNamed": "{{app}} — تجديد الاشتراك"
     },
     "status": {
       "pending": "قيد الانتظار",
@@ -944,7 +947,7 @@
       "emptyTitle": "لا توجد اتصالات بعد",
       "emptyHint": "اربط حساباً لبدء استخدام هذا التطبيق في جيم.",
       "connect": "اتصال",
-      "oauthSuccess": "تم الاتصال بـ Google Drive",
+      "oauthSuccess": "تم الاتصال بنجاح",
       "untitled": "موصل",
       "health": {
         "unknown": "غير معروف",
@@ -994,7 +997,9 @@
         "partial": "جزئية",
         "failed": "فشلت",
         "cancelled": "أُلغيت"
-      }
+      },
+      "usage": "{{used}} من {{limit}} اتصالات",
+      "usageUnlimited": "{{used}} اتصالات"
     },
     "filters": {
       "label": "الفئات",
@@ -1022,16 +1027,33 @@
       "expiredOn": "انتهى في {{date}}",
       "subscriptionExpired": "انتهى الاشتراك",
       "renew": "تجديد",
-      "manualRenewal": "التجديد يدوي — لا يوجد خصم تلقائي."
+      "manualRenewal": "التجديد يدوي — لا يوجد خصم تلقائي.",
+      "subscribed": "مشترك",
+      "expired": "منتهٍ",
+      "entitledNotInstalled": "تم الشراء — غير مثبّت بعد. ثبّت التطبيق لبدء الاستخدام.",
+      "planLabel": "الخطة: {{plan}}",
+      "currentPeriod": "الفترة الحالية {{range}}"
     },
     "planCatalog": {
       "free": {
         "name": "مجاني",
-        "description": "مشمول دون تكلفة. إعداد موصّل المزود يأتي في مرحلة لاحقة."
+        "description": "مضمّن دون تكلفة. اربط حساب المزود بعد التثبيت."
+      },
+      "line": {
+        "name": "واتساب لاين",
+        "description": "اتصال واتساب واحد لخط عمل واحد."
+      },
+      "desk": {
+        "name": "واتساب ديسك",
+        "description": "حتى ثلاثة اتصالات واتساب لمكتب الدعم."
+      },
+      "ops": {
+        "name": "واتساب أوبس",
+        "description": "حتى عشرة اتصالات واتساب لفرق العمليات."
       }
     },
     "entitlements": {
-      "connections": "{{count}} الموصلات",
+      "connections": "{{count}} اتصالات",
       "sessions": "{{count}} جلسات",
       "other": "{{key}}: {{value}}"
     },
@@ -1052,7 +1074,8 @@
       "missingHint": "عد إلى المتجر وراجع سجل الفوترة عند الحاجة.",
       "errorHint": "تعذّر تحميل هذا الشراء. حاول مجدداً.",
       "openApp": "فتح التطبيق",
-      "manageApp": "إدارة التطبيق"
+      "manageApp": "إدارة التطبيق",
+      "tryAgainOnApp": "أعد المحاولة من صفحة هذا التطبيق"
     },
     "status": {
       "installed": "مثبت",
@@ -1074,7 +1097,7 @@
       "google-drive": {
         "name": "Google Drive",
         "shortDescription": "اربط محتوى Google Drive المحدد بخبراء Geem.",
-        "description": "ثبّت Google Drive لتجهيز مساحة العمل لربط مجلدات وملفات Drive بخبراء Geem. التفويض والمزامنة يأتيان في مرحلة لاحقة — التثبيت وحده لا يربط حساب Google."
+        "description": "ثبّت Google Drive، اربط حساب Google، ثم أرفق ملفات Drive المحددة بالخبراء. تقرأ Geem الملفات التي تختارها — ولا تعدّل Drive لديك."
       },
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
@@ -1084,7 +1107,7 @@
       "whatsapp": {
         "name": "WhatsApp",
         "shortDescription": "اربط محادثات واتساب بخبير Geem.",
-        "description": "اربط محادثات واتساب بخبير Geem. خطط الاشتراك والأسعار تُحدَّد في مرحلة لاحقة. هذا الإدراج للاكتشاف فقط ولا يمكن تثبيته بعد."
+        "description": "اشترك في خطة واتساب، ثبّت التطبيق، ثم اربط رقم واتساب واحد أو أكثر. اربط كل اتصال بخبير للرد على الرسائل الواردة."
       }
     },
     "toasts": {

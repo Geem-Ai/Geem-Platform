@@ -24,6 +24,8 @@ from app.apps_catalog.schemas import (
     AppInstallationOut,
     CatalogAppListOut,
     CatalogAppOut,
+    ConnectionSummaryOut,
+    ConnectionUsageOut,
     to_catalog_app_out,
     to_category_out,
     to_installation_out,
@@ -80,6 +82,80 @@ def _connection_status_by_installation(
     return chosen
 
 
+def _connection_summaries_by_installation(
+    db: Session,
+    workspace_id: uuid.UUID,
+    installation_ids: list[uuid.UUID],
+    *,
+    per_installation_limit: int = 10,
+) -> dict[uuid.UUID, list[ConnectionSummaryOut]]:
+    """Safe connection summaries for installed-apps management (no secrets)."""
+    if not installation_ids:
+        return {}
+    from sqlalchemy import select
+
+    from app.connectors.models import AppConnection
+    from app.connectors.types import ConnectionHealth
+
+    rows = list(
+        db.execute(
+            select(AppConnection)
+            .where(
+                AppConnection.workspace_id == workspace_id,
+                AppConnection.app_installation_id.in_(installation_ids),
+            )
+            .order_by(AppConnection.created_at.desc())
+        ).scalars()
+    )
+    grouped: dict[uuid.UUID, list[ConnectionSummaryOut]] = {}
+    for row in rows:
+        install_id = row.app_installation_id
+        if install_id is None:
+            continue
+        bucket = grouped.setdefault(install_id, [])
+        if len(bucket) >= per_installation_limit:
+            continue
+        bucket.append(
+            ConnectionSummaryOut(
+                id=row.id,
+                display_name=row.display_name,
+                status=row.status,
+                health=row.health or ConnectionHealth.UNKNOWN.value,
+                external_account_name=row.external_account_name,
+                connector_key=row.connector_key,
+            )
+        )
+    return grouped
+
+
+def _connection_usage_for_installation(
+    db: Session,
+    workspace_id: uuid.UUID,
+    *,
+    app_slug: str,
+    installation_id: uuid.UUID | None,
+    commercially_entitled: bool,
+) -> ConnectionUsageOut | None:
+    """Return used/limit when the workspace is commercially entitled for the app."""
+    if not commercially_entitled or installation_id is None:
+        return None
+    from app.apps_catalog.entitlements import AppEntitlementService
+    from app.connectors.repository import ConnectorRepository
+
+    used = ConnectorRepository(db).count_limit_connections(
+        workspace_id, app_installation_id=installation_id
+    )
+    raw_limit = AppEntitlementService(db).get(
+        workspace_id, app_slug=app_slug, key="connections"
+    )
+    limit: int | None
+    try:
+        limit = int(raw_limit) if raw_limit is not None else None
+    except (TypeError, ValueError):
+        limit = None
+    return ConnectionUsageOut(used=used, limit=limit)
+
+
 def _active_connection_installation_ids(
     db: Session, workspace_id: uuid.UUID, installation_ids: list[uuid.UUID]
 ) -> set[uuid.UUID]:
@@ -129,10 +205,14 @@ class AppCatalogService:
         install_map = self.repo.map_installations_by_app_id(workspace.id, app_ids)
         license_map = self.repo.map_licenses_by_app_id(workspace.id, app_ids)
         sub_map = self.repo.map_subscriptions_by_app_id(workspace.id, app_ids)
+        install_ids = [i.id for i in install_map.values() if i is not None]
         connection_statuses = _connection_status_by_installation(
             self.db,
             workspace.id,
-            [i.id for i in install_map.values() if i is not None],
+            install_ids,
+        )
+        connection_summaries = _connection_summaries_by_installation(
+            self.db, workspace.id, install_ids
         )
 
         outs: list[CatalogAppOut] = []
@@ -156,6 +236,18 @@ class AppCatalogService:
             conn_status = (
                 connection_statuses.get(inst.id) if inst is not None else None
             )
+            usage = _connection_usage_for_installation(
+                self.db,
+                workspace.id,
+                app_slug=app.slug,
+                installation_id=inst.id if active and inst is not None else None,
+                commercially_entitled=access.commercially_entitled,
+            )
+            summaries = (
+                connection_summaries.get(inst.id, [])
+                if active and inst is not None
+                else []
+            )
             outs.append(
                 to_catalog_app_out(
                     app,
@@ -168,6 +260,8 @@ class AppCatalogService:
                         and conn_status in CONNECTION_USABLE_STATUSES
                     ),
                     connection_status=conn_status,
+                    connection_usage=usage,
+                    connections=summaries,
                 )
             )
 
@@ -200,10 +294,23 @@ class AppCatalogService:
             workspace.id, app=app, can_manage=manage, installation=inst
         )
         conn_status = None
+        usage = None
+        summaries: list[ConnectionSummaryOut] = []
         if inst is not None:
             conn_status = _connection_status_by_installation(
                 self.db, workspace.id, [inst.id]
             ).get(inst.id)
+            if active:
+                usage = _connection_usage_for_installation(
+                    self.db,
+                    workspace.id,
+                    app_slug=app.slug,
+                    installation_id=inst.id,
+                    commercially_entitled=access.commercially_entitled,
+                )
+                summaries = _connection_summaries_by_installation(
+                    self.db, workspace.id, [inst.id]
+                ).get(inst.id, [])
         return to_catalog_app_out(
             app,
             installation=inst if active else None,
@@ -214,6 +321,8 @@ class AppCatalogService:
                 conn_status is not None and conn_status in CONNECTION_USABLE_STATUSES
             ),
             connection_status=conn_status,
+            connection_usage=usage,
+            connections=summaries,
         )
 
     @staticmethod
@@ -251,6 +360,9 @@ class AppInstallationService:
         connection_statuses = _connection_status_by_installation(
             self.db, workspace.id, [r.id for r in rows]
         )
+        connection_summaries = _connection_summaries_by_installation(
+            self.db, workspace.id, [r.id for r in rows]
+        )
         items: list[AppInstallationOut] = []
         for row in rows:
             access = self.access.resolve(
@@ -260,6 +372,13 @@ class AppInstallationService:
                 installation=row,
             )
             conn_status = connection_statuses.get(row.id)
+            usage = _connection_usage_for_installation(
+                self.db,
+                workspace.id,
+                app_slug=row.app.slug,
+                installation_id=row.id,
+                commercially_entitled=access.commercially_entitled,
+            )
             items.append(
                 to_installation_out(
                     row,
@@ -270,6 +389,8 @@ class AppInstallationService:
                         and conn_status in CONNECTION_USABLE_STATUSES
                     ),
                     connection_status=conn_status,
+                    connection_usage=usage,
+                    connections=connection_summaries.get(row.id, []),
                 )
             )
         return AppInstallationListOut(
@@ -300,6 +421,16 @@ class AppInstallationService:
         conn_status = _connection_status_by_installation(
             self.db, workspace.id, [row.id]
         ).get(row.id)
+        usage = _connection_usage_for_installation(
+            self.db,
+            workspace.id,
+            app_slug=row.app.slug,
+            installation_id=row.id,
+            commercially_entitled=access.commercially_entitled,
+        )
+        summaries = _connection_summaries_by_installation(
+            self.db, workspace.id, [row.id]
+        ).get(row.id, [])
         return to_installation_out(
             row,
             can_manage=manage,
@@ -308,6 +439,8 @@ class AppInstallationService:
                 conn_status is not None and conn_status in CONNECTION_USABLE_STATUSES
             ),
             connection_status=conn_status,
+            connection_usage=usage,
+            connections=summaries,
         )
 
     def install_app(

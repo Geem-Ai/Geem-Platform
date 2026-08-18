@@ -45,6 +45,11 @@ export function InstalledAppsPage() {
           <p className="text-sm text-muted-foreground max-w-2xl">
             {t('apps.installedDescription')}
           </p>
+          {!canManage ? (
+            <p className="text-sm text-muted-foreground" data-testid="installed-member-hint">
+              {t('apps.memberHint')}
+            </p>
+          ) : null}
         </div>
         <Button
           type="button"
@@ -63,8 +68,16 @@ export function InstalledAppsPage() {
 
       {error ? (
         <Card className="shadow-xs border-destructive/30">
-          <CardContent className="p-6">
+          <CardContent className="p-6 space-y-3">
             <p className="text-sm text-destructive">{error}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void query.refetch()}
+            >
+              {t('apps.retry')}
+            </Button>
           </CardContent>
         </Card>
       ) : null}

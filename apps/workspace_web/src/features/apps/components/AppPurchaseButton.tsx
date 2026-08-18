@@ -20,6 +20,12 @@ export function AppPurchaseButton({
   const renew = useAppRenewal();
   const access = app.access;
   const pending = checkout.isPending || renew.isPending;
+  const wantsRenew = Boolean(access?.can_renew);
+  const wantsPurchase = Boolean(access?.can_purchase && plan);
+
+  if (!wantsRenew && !wantsPurchase) {
+    return null;
+  }
 
   if (!canManage) {
     return (
@@ -48,10 +54,11 @@ export function AppPurchaseButton({
     }
   }
 
-  if (access?.can_renew) {
+  if (wantsRenew) {
     return (
       <Button
         type="button"
+        size="sm"
         disabled={pending}
         data-testid="app-renew"
         onClick={() => void onRenew()}
@@ -64,7 +71,7 @@ export function AppPurchaseButton({
     );
   }
 
-  if (access?.can_purchase && plan) {
+  if (wantsPurchase && plan) {
     const label =
       app.billing_type === 'subscription'
         ? t('apps.billing.choosePlan')

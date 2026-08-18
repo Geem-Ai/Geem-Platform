@@ -25,7 +25,7 @@ import {
   type PurchaseStatusFilter,
 } from '../lib/history';
 import { formatMoney } from '../lib/money';
-import { purchaseKindLabelKey } from '../lib/status';
+import { purchaseKindLabelKey, formatPurchaseHistoryTitle } from '../lib/status';
 
 function parsePage(raw: string | null): number {
   const n = Number(raw);
@@ -178,7 +178,7 @@ export function BillingHistoryPage() {
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium truncate">
-                        {item.item_name || t(purchaseKindLabelKey(item.kind))}
+                        {formatPurchaseHistoryTitle(item, t)}
                       </p>
                       <PurchaseStatusBadge status={item.status} />
                     </div>

@@ -659,9 +659,12 @@
     "kind": {
       "subscription": "Subscription",
       "creditPack": "Credit pack",
-      "appOneTime": "One-time App purchase",
-      "appSubscription": "App subscription",
-      "appRenewal": "App renewal",
+      "appOneTime": "One-time purchase",
+      "appSubscription": "New subscription",
+      "appRenewal": "Subscription renewal",
+      "appOneTimeNamed": "{{app}} — One-time purchase",
+      "appSubscriptionNamed": "{{app}} — New subscription",
+      "appRenewalNamed": "{{app}} — Subscription renewal",
       "other": "Purchase"
     },
     "status": {
@@ -944,8 +947,10 @@
       "emptyTitle": "No connections yet",
       "emptyHint": "Connect an account to start using this app in Geem.",
       "connect": "Connect",
-      "oauthSuccess": "Connected to Google Drive",
+      "oauthSuccess": "Connected successfully",
       "untitled": "Connection",
+      "usage": "{{used}} of {{limit}} connections",
+      "usageUnlimited": "{{used}} connections",
       "health": {
         "unknown": "Unknown",
         "healthy": "Healthy",
@@ -1015,9 +1020,14 @@
       "choosePlan": "Choose",
       "selectPlan": "Select a plan",
       "purchased": "Purchased",
+      "subscribed": "Subscribed",
+      "expired": "Expired",
+      "entitledNotInstalled": "Purchased — not installed yet. Install to start using this app.",
       "lifetimeAccess": "Lifetime access",
       "currentPlan": "Current plan",
       "previousPlan": "Previous plan",
+      "planLabel": "Plan: {{plan}}",
+      "currentPeriod": "Current period {{range}}",
       "activeUntil": "Active until {{date}}",
       "expiredOn": "Expired {{date}}",
       "subscriptionExpired": "Subscription expired",
@@ -1027,7 +1037,19 @@
     "planCatalog": {
       "free": {
         "name": "Free",
-        "description": "Included at no cost. Provider connection setup comes in a later phase."
+        "description": "Included at no cost. Connect a provider account after install."
+      },
+      "line": {
+        "name": "WhatsApp Line",
+        "description": "One WhatsApp connection for a single line of business."
+      },
+      "desk": {
+        "name": "WhatsApp Desk",
+        "description": "Up to three WhatsApp connections for a support desk."
+      },
+      "ops": {
+        "name": "WhatsApp Ops",
+        "description": "Up to ten WhatsApp connections for operations teams."
       }
     },
     "entitlements": {
@@ -1047,6 +1069,7 @@
       "subscriptionSuccessFallback": "{{name}} is now active in your workspace.",
       "renewalSuccessFallback": "{{name}} subscription has been extended.",
       "failedHint": "No charge was confirmed. You can try again from the App Store.",
+      "tryAgainOnApp": "Try again on this app",
       "pendingHint": "Geem is confirming this payment. You can refresh this page shortly.",
       "missingTitle": "Missing purchase reference",
       "missingHint": "Return to the App Store and check billing history if needed.",
@@ -1074,7 +1097,7 @@
       "google-drive": {
         "name": "Google Drive",
         "shortDescription": "Connect selected Google Drive content to Geem Experts.",
-        "description": "Install Google Drive to prepare this workspace for connecting Drive folders and files to Geem Experts. OAuth and sync arrive in a later phase — installation alone does not connect your Google account."
+        "description": "Install Google Drive, connect your Google account, then attach selected Drive files to Experts. Geem reads the files you choose — it does not modify your Drive."
       },
       "microsoft-onedrive": {
         "name": "Microsoft OneDrive",
@@ -1084,7 +1107,7 @@
       "whatsapp": {
         "name": "WhatsApp",
         "shortDescription": "Connect WhatsApp conversations to a Geem Expert.",
-        "description": "Connect WhatsApp conversations to a Geem Expert. Subscription plans and pricing are finalized in a later phase. This listing is available for discovery only and cannot be installed yet."
+        "description": "Subscribe to a WhatsApp plan, install the app, then connect one or more WhatsApp numbers. Bind each connection to an Expert to answer inbound messages."
       }
     },
     "toasts": {

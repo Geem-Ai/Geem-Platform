@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { AppPlan, CatalogApp } from '@/services/api/apps';
+import { formatMoney } from '@/features/billing/lib/money';
 import {
   formatAppEntitlement,
   localizeAppPlan,
@@ -21,17 +22,21 @@ export function AppPlanCard({
 }) {
   const { t } = useTranslation();
   const localized = localizeAppPlan(plan, t);
+  const isCurrent =
+    selected ||
+    (app.access?.plan_id != null && app.access.plan_id === plan.id) ||
+    (app.access?.plan_code != null && app.access.plan_code === plan.code);
   const price =
     Number(plan.price_amount) <= 0
       ? t('apps.billing.free')
-      : `${plan.currency} ${plan.price_amount}${
+      : `${formatMoney(plan.price_amount, plan.currency)}${
           plan.billing_interval === 'monthly' ? ` ${t('apps.billing.perMonth')}` : ''
         }`;
 
   return (
     <div
       className={`rounded-xl border p-4 space-y-3 ${
-        selected ? 'border-primary bg-primary/5' : 'border-border'
+        isCurrent ? 'border-primary bg-primary/5' : 'border-border'
       }`}
       data-testid={`app-plan-${plan.code}`}
     >
@@ -40,6 +45,11 @@ export function AppPlanCard({
         {plan.is_default ? (
           <Badge variant="secondary" appearance="light" size="sm">
             {t('apps.defaultPlan')}
+          </Badge>
+        ) : null}
+        {isCurrent && app.access?.commercially_entitled ? (
+          <Badge variant="success" appearance="light" size="sm">
+            {t('apps.billing.currentPlan')}
           </Badge>
         ) : null}
       </div>
