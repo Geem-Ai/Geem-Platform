@@ -1,10 +1,12 @@
 ---
 import MarketingLayout from '../../layouts/MarketingLayout.astro';
 import type { Locale } from '../../lib/i18n';
-import type { SiteCopy } from '../../content/site/types';
+import type { LegalPageKey, SiteCopy } from '../../content/site/types';
 import { company } from '../../lib/company';
+import { localizedPath } from '../../lib/site';
+import Button from '../ui/Button.astro';
 
-export type LegalKind = 'privacy' | 'terms' | 'pdpl';
+export type LegalKind = LegalPageKey;
 
 type Props = {
   locale: Locale;
@@ -15,109 +17,400 @@ type Props = {
 const { locale, copy, kind } = Astro.props;
 
 const metaMap = {
-  privacy: {
-    title: copy.meta.privacyTitle,
-    description: copy.meta.privacyDescription,
-  },
-  terms: {
-    title: copy.meta.termsTitle,
-    description: copy.meta.termsDescription,
-  },
-  pdpl: {
-    title: copy.meta.pdplTitle,
-    description: copy.meta.pdplDescription,
-  },
+  privacy: { title: copy.meta.privacyTitle, description: copy.meta.privacyDescription },
+  terms: { title: copy.meta.termsTitle, description: copy.meta.termsDescription },
+  pdpl: { title: copy.meta.pdplTitle, description: copy.meta.pdplDescription },
 } as const;
 
 const meta = metaMap[kind];
+const page = copy.legal.pages[kind];
 const operator = locale === 'ar' ? company.legalNameAr : company.legalNameEn;
 const address = locale === 'ar' ? company.addressAr : company.addressEn;
-
-const sections =
-  kind === 'privacy'
-    ? locale === 'ar'
-      ? [
-          { h: '1. الجهة المشغلة والنطاق', p: `تشغّل ${operator} منصة جيم. تسري هذه السياسة عند زيارة مواقع جيم، أو إنشاء حساب، أو دخول مساحة عمل، أو التواصل مع المبيعات أو الدعم، أو استخدام خدمات جيم.` },
-          { h: '2. أدوار جهة التحكم وجهة المعالجة', p: 'تكون دال سين عادة جهة التحكم في بيانات الحسابات واستفسارات الموقع وسجلات الأمن. أما المحتوى الخاص داخل مساحة عمل منشأة، فتكون المنشأة عادة جهة التحكم وتعالج دال سين البيانات كجهة معالجة وفق الاتفاقية ذات الصلة.' },
-          { h: '3. فئات البيانات', p: 'قد نعالج بيانات الهوية والتواصل، وبيانات الحساب والعضوية والصلاحيات، ومحتوى مساحة العمل المصرّح به، وبيانات الفوترة والدعم، والبيانات التقنية والأمنية اللازمة لتشغيل الخدمة وحمايتها.' },
-          { h: '4. الأغراض', p: 'نستخدم البيانات لإنشاء الحسابات وحمايتها، وتقديم مساحات العمل والخبراء والقنوات، واسترجاع المعرفة المصرّح بها، وتقديم الدعم، وإصدار الفواتير عند الاقتضاء، ومنع إساءة الاستخدام، والوفاء بالالتزامات النظامية.' },
-          { h: '5. ملفات الارتباط', p: 'يستخدم جيم ملفات ارتباط وتقنيات محلية ضرورية للجلسات والأمن واللغة. لا نضيف أدوات تتبع تسويقية في هذا الموقع ما لم يُعلن عن مزوّد معتمد لاحقًا.' },
-          { h: '6. الإفصاح', p: 'لا نبيع البيانات الشخصية أو معرفة المنشآت الخاصة. قد يُفصح عن الحد الأدنى اللازم لمقدمي الخدمات المتعاقد معهم، أو للمنشأة التي تدير مساحة عملك، أو للجهات المختصة عندما يكون الإفصاح مطلوبًا نظامًا.' },
-          { h: '7. حقوقك', p: `يمكنك طلب الوصول أو التصحيح أو الإتلاف أو العدول عن الموافقة حيث ينطبق ذلك عبر ${company.emails.info}، مع مراعاة نظام حماية البيانات الشخصية ولوائحه.` },
-        ]
-      : [
-          { h: '1. Operator and scope', p: `${operator} operates Geem. This policy applies when you visit Geem sites, create an account, access a workspace, contact sales or support, or otherwise use Geem services.` },
-          { h: '2. Controller and processor roles', p: 'Dal Seen generally acts as controller for account records, website enquiries, and security logs. For private workspace content, the customer organization generally acts as controller and Dal Seen acts as processor under the applicable agreement.' },
-          { h: '3. Categories of data', p: 'We may process identity and contact data, account membership and permission data, authorized workspace content, billing and support records, and technical/security data needed to operate and protect the service.' },
-          { h: '4. Purposes', p: 'We use data to create and secure accounts, provide workspaces, Experts, and channels, retrieve authorized knowledge, support customers, issue invoices where applicable, prevent misuse, and meet legal obligations.' },
-          { h: '5. Cookies', p: 'Geem uses essential cookies and similar local technologies for sessions, security, and locale. This marketing site does not load marketing trackers unless an approved provider is added later.' },
-          { h: '6. Disclosure', p: 'We do not sell personal data or private organizational knowledge. Minimum necessary data may be disclosed to contracted service providers, the organization administering your workspace, or competent authorities when legally required.' },
-          { h: '7. Your rights', p: `You may request access, correction, destruction, or withdrawal of consent where applicable by contacting ${company.emails.info}, subject to the Saudi Personal Data Protection Law and its regulations.` },
-        ]
-    : kind === 'terms'
-      ? locale === 'ar'
-        ? [
-            { h: '1. القبول', p: 'باستخدام جيم أو إنشاء حساب أو قبول دعوة مساحة عمل، فإنك توافق على هذه الشروط وتقر بالاطلاع على سياسة الخصوصية وإشعار PDPL.' },
-            { h: '2. مساحات العمل', p: 'تُدار مساحات العمل بواسطة المنشأة. تتحكم المنشأة في الأعضاء والأدوار والمعرفة المصرّح بها والتكاملات ضمن حدود الخدمة.' },
-            { h: '3. الاستخدام المسموح', p: 'لا يجوز استخدام جيم إلا لأغراض مشروعة. يحظر تجاوز الضوابط الأمنية، أو إساءة استخدام المفاتيح وواجهات البرمجة، أو تقديم محتوى غير مشروع.' },
-            { h: '4. مخرجات الذكاء الاصطناعي', p: 'ينتج جيم مخرجات احتمالية قد تكون ناقصة أو غير صحيحة. يجب مراجعة المخرجات المهمة وتطبيق إشراف بشري مناسب.' },
-            { h: '5. الملكية الفكرية', p: 'تبقى منصة جيم وعلاماتها وبرمجياتها وتوثيقها مملوكة لدال سين أو لمرخّصيها. يحتفظ العميل بحقوقه في البيانات التي يقدمها.' },
-            { h: '6. القانون الحاكم', p: 'تخضع هذه الشروط لأنظمة المملكة العربية السعودية. يُعتد بالنص العربي عند اختلاف النسختين ما لم تنص اتفاقية منشأة موقعة على خلاف ذلك.' },
-          ]
-        : [
-            { h: '1. Acceptance', p: 'By using Geem, creating an account, or accepting a workspace invitation, you agree to these terms and acknowledge the Privacy Policy and PDPL Notice.' },
-            { h: '2. Workspaces', p: 'Workspaces are administered by the organization. The organization controls members, roles, authorized knowledge, and integrations within the service scope.' },
-            { h: '3. Acceptable use', p: 'Use Geem only for lawful purposes. Do not bypass security controls, misuse API keys, or submit unlawful content.' },
-            { h: '4. AI outputs', p: 'Geem generates probabilistic outputs that may be incomplete or incorrect. Review important outputs and apply human oversight.' },
-            { h: '5. Intellectual property', p: 'Geem’s platform, marks, software, and documentation remain owned by Dal Seen or its licensors. Customers retain rights in data they submit.' },
-            { h: '6. Governing law', p: 'These terms are governed by the laws of Saudi Arabia. The Arabic version controls if the public language versions differ, unless a signed enterprise agreement states otherwise.' },
-          ]
-      : locale === 'ar'
-        ? [
-            { h: '1. الإطار النظامي', p: 'يكمل هذا الإشعار سياسة الخصوصية ويستند إلى نظام حماية البيانات الشخصية ولوائحه التنفيذية ولائحة النقل.' },
-            { h: '2. جهة التحكم', p: `تكون دال سين عادة جهة التحكم في بيانات الحسابات والتواصل المباشر والأمن. لبيانات مساحة عمل منشأة، تكون المنشأة عادة جهة التحكم. تواصل: ${company.emails.info}.` },
-            { h: '3. الحقوق', p: 'مع مراعاة النظام والتحقق من الهوية، يحق لك العلم والوصول والحصول على نسخة مقروءة والتصحيح وطلب الإتلاف والعدول عن الموافقة عندما تكون أساس المعالجة.' },
-            { h: '4. ممارسة الحقوق', p: `أرسل الطلب إلى ${company.emails.info} بعنوان «طلب بيانات شخصية». نستهدف الرد خلال 30 يومًا وفق ما تسمح به اللائحة.` },
-            { h: '5. الشكاوى', p: 'إذا لم ترضَ عن المعالجة، يمكنك تقديم شكوى إلى الهيئة السعودية للبيانات والذكاء الاصطناعي عبر منصة حوكمة البيانات الوطنية.' },
-            { h: '6. المعالجة المدعومة بالذكاء الاصطناعي', p: 'يستخدم جيم معالجة مدعومة بالذكاء الاصطناعي لاسترجاع المعرفة المصرّح بها وتوليد النصوص وتشغيل الخدمة. لا تتخذ المخرجات بذاتها قرارًا ملزمًا نظامًا عن فرد.' },
-          ]
-        : [
-            { h: '1. Legal framework', p: 'This notice supplements the Privacy Policy and is informed by the Saudi Personal Data Protection Law, its Implementing Regulations, and the Transfer Regulation.' },
-            { h: '2. Controller', p: `Dal Seen generally acts as controller for account, direct communication, and security data. For workspace content, the customer organization generally acts as controller. Contact: ${company.emails.info}.` },
-            { h: '3. Rights', p: 'Subject to the Law and identity verification, you may request to be informed, access data, obtain a readable copy, correct it, request destruction, and withdraw consent where consent is the basis.' },
-            { h: '4. Exercising rights', p: `Email ${company.emails.info} with the subject “Personal Data Request”. We aim to respond within 30 days as permitted by the regulations.` },
-            { h: '5. Complaints', p: 'If you are dissatisfied, you may complain to the Saudi Data and AI Authority through the National Data Governance Platform.' },
-            { h: '6. AI-assisted processing', p: 'Geem uses AI-assisted processing to retrieve authorized knowledge, generate text, and operate the service. Outputs do not by themselves make a legally binding decision about an individual.' },
-          ];
+const contactHref = localizedPath(locale, 'contact');
 ---
 
-<MarketingLayout
-  locale={locale}
-  copy={copy}
-  title={meta.title}
-  description={meta.description}
-  path={kind}
->
-  <section class="section-shell section-light">
-    <article class="container-shell prose-legal" data-reveal>
-      <h1 class="text-4xl font-semibold tracking-tight">{meta.title}</h1>
-      <p class="mt-3 text-sm text-geem-muted">
-        {copy.legal.lastUpdatedLabel}: {copy.legal.lastUpdated}
-      </p>
-      <p class="mt-2 text-sm text-geem-muted">
-        {operator} · {company.phoneDisplay} · {address}
-      </p>
-      <p class="mt-4 rounded-xl border border-geem-border bg-white p-4 text-sm text-geem-muted">
-        {copy.legal.notice}
-      </p>
-      {
-        sections.map((section) => (
-          <section class="mt-8">
-            <h2>{section.h}</h2>
-            <p>{section.p}</p>
-          </section>
-        ))
-      }
-    </article>
+<MarketingLayout locale={locale} copy={copy} title={meta.title} description={meta.description} path={kind}>
+  <section class="legal-hero">
+    <div class="container-shell legal-hero__grid">
+      <div class="legal-hero__copy">
+        <p class="legal-eyebrow">{page.hero.eyebrow}</p>
+        <h1>{page.hero.title}</h1>
+        <p>{page.hero.description}</p>
+      </div>
+
+      <dl class="legal-meta">
+        <div>
+          <dt>{copy.legal.lastUpdatedLabel}</dt>
+          <dd><time datetime="2026-08-18">{copy.legal.lastUpdated}</time></dd>
+        </div>
+        <div>
+          <dt>{copy.legal.operatorLabel}</dt>
+          <dd>{operator}</dd>
+        </div>
+        <div>
+          <dt>{copy.legal.contactLabel}</dt>
+          <dd><a href={`mailto:${company.emails.info}`}><bdi dir="ltr">{company.emails.info}</bdi></a></dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <div class="container-shell legal-highlights-shell">
+    <ul class="legal-highlights" aria-label={page.hero.eyebrow}>
+      {page.highlights.map((item) => <li><strong>{item.title}</strong><span>{item.description}</span></li>)}
+    </ul>
+  </div>
+
+  <section class="legal-body">
+    <div class="container-shell legal-layout">
+      <aside class="legal-sidebar">
+        <nav aria-label={copy.legal.contentsLabel}>
+          <p>{copy.legal.contentsLabel}</p>
+          <ol>
+            {
+              page.sections.map((section, index) => (
+                <li>
+                  <a href={`#${section.id}`}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    {section.title}
+                  </a>
+                </li>
+              ))
+            }
+          </ol>
+        </nav>
+
+        <div class="legal-related">
+          <p>{copy.legal.relatedLabel}</p>
+          <ul>
+            {page.relatedLinks.map((link) => <li><a href={localizedPath(locale, link.href)}>{link.label}</a></li>)}
+          </ul>
+        </div>
+      </aside>
+
+      <article class="legal-document">
+        <p class="legal-scope">{page.scopeNotice}</p>
+        {
+          page.sections.map((section, index) => (
+            <section id={section.id}>
+              <header>
+                <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                <h2>{section.title}</h2>
+              </header>
+              <div class="legal-section-copy">
+                {section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
+                {section.bullets && <ul>{section.bullets.map((bullet) => <li>{bullet}</li>)}</ul>}
+              </div>
+            </section>
+          ))
+        }
+      </article>
+    </div>
+  </section>
+
+  <section class="legal-cta">
+    <div class="container-shell legal-cta__grid">
+      <div>
+        <p class="legal-eyebrow">{copy.legal.contactLabel}</p>
+        <h2>{page.cta.title}</h2>
+        <p>{page.cta.description}</p>
+      </div>
+      <div class="legal-cta__actions">
+        <Button href={contactHref} variant="primary">{page.cta.label}</Button>
+        <a href={`mailto:${company.emails.info}`}><bdi dir="ltr">{company.emails.info}</bdi></a>
+      </div>
+    </div>
+    <p class="container-shell legal-operator-line">{operator} · <bdi dir="ltr">{company.phoneDisplay}</bdi> · {address}</p>
   </section>
 </MarketingLayout>
+
+<style>
+  .legal-hero {
+    position: relative;
+    overflow: hidden;
+    padding-block: clamp(3.75rem, 7vw, 6rem) clamp(6rem, 9vw, 8rem);
+    background:
+      radial-gradient(circle at 82% 5%, color-mix(in oklab, var(--geem-blue) 30%, transparent), transparent 34%),
+      radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--geem-sand) 10%, transparent), transparent 38%),
+      linear-gradient(155deg, var(--geem-navy-950), var(--geem-navy-900));
+    color: white;
+  }
+
+  .legal-hero::before {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(color-mix(in oklab, white 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, white 3%, transparent) 1px, transparent 1px);
+    background-size: 72px 72px;
+    content: '';
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+  }
+
+  .legal-hero__grid {
+    position: relative;
+    display: grid;
+    gap: clamp(2.5rem, 7vw, 6rem);
+    align-items: end;
+  }
+
+  .legal-hero__copy { min-width: 0; }
+
+  .legal-eyebrow {
+    color: var(--geem-sand);
+    font-size: 0.86rem;
+    font-weight: 600;
+    letter-spacing: 0.035em;
+  }
+
+  .legal-hero h1 {
+    max-inline-size: 14ch;
+    margin-block-start: 1rem;
+    font-size: clamp(2.65rem, 5.5vw, 4.8rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  :global(html[dir='rtl']) .legal-hero h1 {
+    max-inline-size: 16ch;
+    letter-spacing: 0;
+    line-height: 1.25;
+  }
+
+  .legal-hero__copy > p:last-child {
+    max-inline-size: 44rem;
+    margin-block-start: 1.35rem;
+    color: color-mix(in oklab, white 74%, transparent);
+    font-size: clamp(1.05rem, 2vw, 1.2rem);
+    line-height: 1.8;
+  }
+
+  .legal-meta {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, white 14%, transparent);
+    border-radius: 1.5rem;
+    background: color-mix(in oklab, white 6%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .legal-meta > div {
+    display: grid;
+    gap: 0.3rem;
+    padding: 1rem 1.15rem;
+  }
+
+  .legal-meta > div + div { border-block-start: 1px solid color-mix(in oklab, white 12%, transparent); }
+  .legal-meta dt { color: color-mix(in oklab, white 50%, transparent); font-size: 0.72rem; }
+  .legal-meta dd { margin: 0; color: white; font-size: 0.88rem; font-weight: 500; line-height: 1.5; }
+  .legal-meta a { color: inherit; text-underline-offset: 0.2em; }
+
+  .legal-highlights-shell { position: relative; z-index: 3; margin-block-start: -3.25rem; }
+
+  .legal-highlights {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.5rem;
+    background: white;
+    box-shadow: 0 22px 60px color-mix(in oklab, var(--geem-navy-950) 10%, transparent);
+    list-style: none;
+  }
+
+  .legal-highlights li { display: grid; gap: 0.35rem; padding: 1.3rem 1.4rem; }
+  .legal-highlights li + li { border-block-start: 1px solid var(--geem-border); }
+  .legal-highlights strong { color: var(--geem-navy-900); font-size: 0.95rem; }
+  .legal-highlights span { color: var(--geem-muted); font-size: 0.78rem; line-height: 1.65; }
+
+  .legal-body { padding-block: clamp(4rem, 8vw, 7rem); background: var(--geem-surface); }
+  .legal-layout { display: grid; gap: 2rem; align-items: start; }
+  .legal-sidebar { display: grid; gap: 1rem; min-width: 0; }
+
+  .legal-sidebar nav,
+  .legal-related {
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.25rem;
+    background: white;
+  }
+
+  .legal-sidebar nav > p,
+  .legal-related > p {
+    margin: 0;
+    padding: 1rem 1.1rem;
+    border-block-end: 1px solid var(--geem-border);
+    color: var(--geem-navy-900);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .legal-sidebar ol,
+  .legal-sidebar ul { margin: 0; padding: 0; list-style: none; }
+
+  .legal-sidebar a {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.65rem;
+    padding: 0.7rem 1.1rem;
+    color: var(--geem-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    text-decoration: none;
+  }
+
+  .legal-sidebar a:hover,
+  .legal-sidebar a:focus-visible { background: color-mix(in oklab, var(--geem-sky) 7%, white); color: var(--geem-navy-900); }
+  .legal-sidebar a span { color: var(--geem-blue); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .legal-related a { grid-template-columns: 1fr auto; }
+  .legal-related a::after { color: var(--geem-blue); content: '↗'; }
+  :global(html[dir='rtl']) .legal-related a::after { transform: scaleX(-1); }
+
+  .legal-document {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.75rem;
+    background: white;
+    box-shadow: 0 22px 70px color-mix(in oklab, var(--geem-navy-950) 6%, transparent);
+  }
+
+  .legal-scope {
+    margin: 0;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border-block-end: 1px solid var(--geem-border);
+    background: color-mix(in oklab, var(--geem-sand) 28%, white);
+    color: var(--geem-navy-900);
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.75;
+  }
+
+  .legal-document > section {
+    display: grid;
+    gap: 1.1rem;
+    padding: clamp(1.5rem, 4vw, 2.4rem);
+    scroll-margin-block-start: 6.5rem;
+  }
+
+  .legal-document > section + section { border-block-start: 1px solid var(--geem-border); }
+  .legal-document header { display: grid; grid-template-columns: auto 1fr; gap: 0.85rem; align-items: start; }
+
+  .legal-document header > span {
+    display: grid;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    place-items: center;
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--geem-sky) 12%, white);
+    color: var(--geem-blue);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .legal-document h2 {
+    color: var(--geem-navy-900);
+    font-size: clamp(1.25rem, 2.5vw, 1.55rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.4;
+  }
+
+  :global(html[dir='rtl']) .legal-document h2 { letter-spacing: 0; line-height: 1.55; }
+  .legal-section-copy { max-inline-size: 70ch; }
+  .legal-section-copy p { margin: 0; color: var(--geem-muted); line-height: 1.9; }
+  .legal-section-copy p + p { margin-block-start: 0.9rem; }
+  .legal-section-copy ul { display: grid; gap: 0.65rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+
+  .legal-section-copy li {
+    position: relative;
+    padding-inline-start: 1.25rem;
+    color: var(--geem-muted);
+    line-height: 1.75;
+  }
+
+  .legal-section-copy li::before {
+    position: absolute;
+    inline-size: 0.4rem;
+    block-size: 0.4rem;
+    border-radius: 50%;
+    background: var(--geem-sky);
+    content: '';
+    inset-block-start: 0.72rem;
+    inset-inline-start: 0;
+  }
+
+  .legal-cta { padding-block: clamp(3rem, 6vw, 5rem); background: var(--geem-sand); }
+  .legal-cta__grid { display: grid; gap: 2rem; align-items: end; }
+  .legal-cta .legal-eyebrow { color: var(--geem-blue); }
+
+  .legal-cta h2 {
+    max-inline-size: 20ch;
+    margin-block-start: 0.7rem;
+    color: var(--geem-navy-950);
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  :global(html[dir='rtl']) .legal-cta h2 { letter-spacing: 0; line-height: 1.3; }
+  .legal-cta__grid > div:first-child > p:last-child { max-inline-size: 42rem; margin-block-start: 0.9rem; color: color-mix(in oklab, var(--geem-navy-900) 74%, transparent); }
+  .legal-cta__actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+  .legal-cta__actions :global(.btn-primary) { background: var(--geem-navy-950); color: white; }
+  .legal-cta__actions > a { color: var(--geem-navy-900); font-weight: 600; text-underline-offset: 0.22em; }
+
+  .legal-operator-line {
+    margin-block-start: 2.25rem;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid color-mix(in oklab, var(--geem-navy-900) 18%, transparent);
+    color: color-mix(in oklab, var(--geem-navy-900) 68%, transparent);
+    font-size: 0.75rem;
+  }
+
+  @media (min-width: 48rem) {
+    .legal-hero__grid { grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.45fr); }
+    .legal-highlights { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .legal-highlights li + li { border-block-start: 0; border-inline-start: 1px solid var(--geem-border); }
+    .legal-cta__grid { grid-template-columns: minmax(0, 1fr) auto; }
+    .legal-cta__actions { justify-content: flex-end; }
+  }
+
+  @media (min-width: 64rem) {
+    .legal-layout { grid-template-columns: minmax(14rem, 0.32fr) minmax(0, 1fr); gap: 2.25rem; }
+    .legal-sidebar { position: sticky; top: 6.5rem; max-block-size: calc(100vh - 8rem); overflow: auto; }
+    .legal-document > section { grid-template-columns: minmax(13rem, 0.42fr) minmax(0, 1fr); gap: 2rem; }
+  }
+
+  @media (max-width: 36rem) {
+    .legal-hero { padding-block-start: 3.5rem; }
+    .legal-sidebar nav ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .legal-sidebar nav li:nth-child(odd):last-child { grid-column: 1 / -1; }
+    .legal-sidebar a { block-size: 100%; border-block-end: 1px solid var(--geem-border); }
+    .legal-cta__actions { display: grid; }
+    .legal-cta__actions :global(.btn) { inline-size: 100%; }
+  }
+
+  @media print {
+    :global(.site-header),
+    :global(.site-footer),
+    .legal-sidebar,
+    .legal-highlights-shell,
+    .legal-cta { display: none !important; }
+    .legal-hero { padding-block: 1rem; background: white; color: black; }
+    .legal-hero::before { display: none; }
+    .legal-hero__grid,
+    .legal-layout { display: block; }
+    .legal-hero__copy > p,
+    .legal-meta dt,
+    .legal-meta dd { color: black !important; }
+    .legal-meta,
+    .legal-document { border: 0; box-shadow: none; }
+    .legal-body { padding-block: 1rem; background: white; }
+    .legal-document > section { break-inside: avoid; }
+  }
+</style>

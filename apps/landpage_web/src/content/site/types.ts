@@ -62,6 +62,67 @@ export type SecurityPageCopy = {
   };
 };
 
+export type AboutPageCopy = {
+  hero: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    primaryCta: string;
+    secondaryCta: string;
+    companyLabel: string;
+    productLabel: string;
+  };
+  facts: { value: string; label: string }[];
+  story: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    milestones: { place: string; title: string; description: string }[];
+  };
+  principles: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    items: { title: string; description: string }[];
+  };
+  geem: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    points: string[];
+  };
+  cta: {
+    title: string;
+    description: string;
+    primaryCta: string;
+    secondaryCta: string;
+  };
+};
+
+export type LegalPageKey = 'privacy' | 'terms' | 'pdpl';
+
+export type LegalPageCopy = {
+  hero: {
+    eyebrow: string;
+    title: string;
+    description: string;
+  };
+  highlights: { title: string; description: string }[];
+  scopeNotice: string;
+  sections: {
+    id: string;
+    title: string;
+    paragraphs: string[];
+    bullets?: string[];
+  }[];
+  relatedLinks: { label: string; href: 'security' | LegalPageKey }[];
+  cta: {
+    title: string;
+    description: string;
+    label: string;
+  };
+};
+
 export type SiteCopy = {
   meta: {
     homeTitle: string;
@@ -187,11 +248,7 @@ export type SiteCopy = {
     rights: string;
     madeIn: string;
   };
-  about: {
-    title: string;
-    lead: string;
-    paragraphs: string[];
-  };
+  about: AboutPageCopy;
   contact: {
     title: string;
     lead: string;
@@ -204,6 +261,10 @@ export type SiteCopy = {
   legal: {
     lastUpdatedLabel: string;
     lastUpdated: string;
-    notice: string;
+    operatorLabel: string;
+    contactLabel: string;
+    contentsLabel: string;
+    relatedLabel: string;
+    pages: Record<LegalPageKey, LegalPageCopy>;
   };
 };
