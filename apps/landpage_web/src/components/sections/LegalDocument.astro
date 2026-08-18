@@ -117,7 +117,7 @@ const contactHref = localizedPath(locale, 'contact');
       </div>
       <div class="legal-cta__actions">
         <Button href={contactHref} variant="primary">{page.cta.label}</Button>
-        <a href={`mailto:${company.emails.info}`}><bdi dir="ltr">{company.emails.info}</bdi></a>
+        <a class="legal-cta__email" href={`mailto:${company.emails.info}`}><bdi dir="ltr">{company.emails.info}</bdi></a>
       </div>
     </div>
     <p class="container-shell legal-operator-line">{operator} · <bdi dir="ltr">{company.phoneDisplay}</bdi> · {address}</p>
@@ -361,8 +361,8 @@ const contactHref = localizedPath(locale, 'contact');
   :global(html[dir='rtl']) .legal-cta h2 { letter-spacing: 0; line-height: 1.3; }
   .legal-cta__grid > div:first-child > p:last-child { max-inline-size: 42rem; margin-block-start: 0.9rem; color: color-mix(in oklab, var(--geem-navy-900) 74%, transparent); }
   .legal-cta__actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-  .legal-cta__actions :global(.btn-primary) { background: var(--geem-navy-950); color: white; }
-  .legal-cta__actions > a { color: var(--geem-navy-900); font-weight: 600; text-underline-offset: 0.22em; }
+  .legal-cta__actions :global(.btn.btn-primary) { background: var(--geem-navy-950); color: #fff; }
+  .legal-cta__email { color: var(--geem-navy-900); font-weight: 600; text-underline-offset: 0.22em; }
 
   .legal-operator-line {
     margin-block-start: 2.25rem;

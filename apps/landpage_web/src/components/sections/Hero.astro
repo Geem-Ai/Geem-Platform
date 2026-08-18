@@ -1,9 +1,9 @@
 ---
 import type { SiteCopy } from '../../content/site/types';
 import type { Locale } from '../../lib/i18n';
-import { Picture, Image } from 'astro:assets';
+import { Picture } from 'astro:assets';
 import hero from '../../assets/landing/riyadh-madinah-hero.webp';
-import avatar from '../../assets/brand/geem-avatar.webp';
+import brandLogo from '../../assets/brand/geem-logo-horizontal-white.svg?raw';
 import Button from '../ui/Button.astro';
 import { getSiteConfig } from '../../lib/site';
 import { homeHash } from '../../lib/routes';
@@ -40,16 +40,8 @@ const firstSpecialty = specialtyPhrases[0] ?? '';
 
   <div class="relative container-shell flex min-h-[min(92vh,56rem)] flex-col justify-center py-24">
     <div class="max-w-3xl" data-typewriter-container>
-      <div class="hero-enter hero-enter-1 mb-6 flex items-center gap-3">
-        <Image
-          src={avatar}
-          alt=""
-          width={56}
-          height={56}
-          class="size-14 rounded-full shadow-lg shadow-black/30"
-          loading="eager"
-          fetchpriority="high"
-        />
+      <div class="hero-enter hero-enter-1 mb-6 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span class="hero-brand-logo" aria-hidden="true" set:html={brandLogo}></span>
         <p class="eyebrow !text-geem-sand m-0 min-w-0">{copy.hero.eyebrow}</p>
         <button
           class="hero-typewriter-toggle"
@@ -101,3 +93,18 @@ const firstSpecialty = specialtyPhrases[0] ?? '';
     </div>
   </div>
 </section>
+
+<style>
+  .hero-brand-logo {
+    display: inline-flex;
+    flex: 0 0 auto;
+    inline-size: clamp(4.75rem, 8vw, 6.25rem);
+    aspect-ratio: 300 / 71.94;
+  }
+
+  .hero-brand-logo :global(svg) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+</style>
