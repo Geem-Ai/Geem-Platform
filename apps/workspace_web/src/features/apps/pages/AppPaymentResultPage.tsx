@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { formatMoney } from '@/features/billing/lib/money';
+import { MoneyAmount } from '@/features/billing/components/MoneyAmount';
 import { consumePaymentReturn } from '@/app/router/guards';
 import { usePurchase, useInvalidateBilling } from '@/features/billing/hooks/useBillingQueries';
 import { isFailedStatus, isPaidStatus } from '@/features/billing/lib/status';
@@ -132,8 +132,8 @@ export function AppPaymentResultPage() {
             {purchase.item_name ? (
               <p className="text-sm text-muted-foreground">{purchase.item_name}</p>
             ) : null}
-            <p className="text-sm tabular-nums">
-              {formatMoney(purchase.amount, purchase.currency)}
+            <p className="text-sm">
+              <MoneyAmount amount={purchase.amount} currency={purchase.currency} />
             </p>
             {purchase.paid_at && isPaidStatus(purchase.status) ? (
               <p className="text-sm text-muted-foreground">

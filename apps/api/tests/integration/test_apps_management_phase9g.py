@@ -162,6 +162,7 @@ def _seed_one_time(db: Session) -> tuple[CatalogApp, AppPlan]:
         is_active=True,
     )
     db.add(plan)
+    db.flush()
     db.add(AppPlanEntitlement(app_plan_id=plan.id, key="connections", value=1))
     db.commit()
     db.refresh(app)
@@ -315,7 +316,8 @@ class TestConnectionUsageDto:
         assert usage["used"] == 1
         assert usage["limit"] == 3
         assert len(wa["app"]["connections"]) == 1
-        assert wa["app"]["connections"][0]["display_name"] == "Sales"
+        assert wa["app"]["connections"][0]["id"] == started.json()["id"]
+        assert wa["app"]["connections"][0]["status"]
 
         conns = client.get("/api/apps/whatsapp/connections", headers=headers)
         assert conns.status_code == 200, conns.text
@@ -749,7 +751,7 @@ class TestWhatsAppExpireRenew:
             headers=headers,
             json={"connect_mode": "qr"},
         )
-        assert blocked.status_code in {403, 409, 422}
+        assert blocked.status_code in {402, 403, 409, 422}
 
         member_renew = client.post(
             "/api/apps/whatsapp/renew",

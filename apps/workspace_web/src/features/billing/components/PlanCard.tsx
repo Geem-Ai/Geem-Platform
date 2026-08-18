@@ -12,7 +12,7 @@ import {
   isEntitlementI18nValue,
   sortEntitlements,
 } from '../lib/entitlements';
-import { formatMoney } from '../lib/money';
+import { MoneyAmount } from './MoneyAmount';
 
 export function PlanCard({
   plan,
@@ -64,8 +64,8 @@ export function PlanCard({
             </p>
           ) : null}
           <div>
-            <p className="text-2xl font-semibold tabular-nums tracking-tight">
-              {formatMoney(plan.price_amount, plan.currency)}
+            <p className="text-2xl font-semibold tracking-tight">
+              <MoneyAmount amount={plan.price_amount} currency={plan.currency} />
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {t('billing.billedIn', { currency: plan.currency })}

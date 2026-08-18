@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { AppPlan, CatalogApp } from '@/services/api/apps';
-import { formatMoney } from '@/features/billing/lib/money';
+import { MoneyAmount } from '@/features/billing/components/MoneyAmount';
 import {
   formatAppEntitlement,
   localizeAppPlan,
@@ -26,12 +26,7 @@ export function AppPlanCard({
     selected ||
     (app.access?.plan_id != null && app.access.plan_id === plan.id) ||
     (app.access?.plan_code != null && app.access.plan_code === plan.code);
-  const price =
-    Number(plan.price_amount) <= 0
-      ? t('apps.billing.free')
-      : `${formatMoney(plan.price_amount, plan.currency)}${
-          plan.billing_interval === 'monthly' ? ` ${t('apps.billing.perMonth')}` : ''
-        }`;
+  const isFree = Number(plan.price_amount) <= 0;
 
   return (
     <div
@@ -56,7 +51,18 @@ export function AppPlanCard({
       {localized.description ? (
         <p className="text-sm text-muted-foreground">{localized.description}</p>
       ) : null}
-      <p className="text-sm font-medium tabular-nums">{price}</p>
+      <p className="text-sm font-medium">
+        {isFree ? (
+          t('apps.billing.free')
+        ) : (
+          <span className="inline-flex items-center gap-1 flex-wrap">
+            <MoneyAmount amount={plan.price_amount} currency={plan.currency} />
+            {plan.billing_interval === 'monthly' ? (
+              <span>{t('apps.billing.perMonth')}</span>
+            ) : null}
+          </span>
+        )}
+      </p>
       {app.billing_type === 'subscription' ? (
         <p className="text-xs text-muted-foreground">{t('apps.billing.manualRenewal')}</p>
       ) : null}

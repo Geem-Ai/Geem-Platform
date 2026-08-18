@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -7,9 +8,9 @@ import type { AppInstallation } from '@/services/api/apps';
 import {
   localizeCatalogApp,
   localizeAppPlanName,
-  formatAppBillingLabel,
   resolveAppAccessBadge,
 } from '../lib/billing-label';
+import { AppBillingLabel } from './AppBillingLabel';
 import { AppIcon } from './AppIcon';
 import { AppInstallButton } from './AppInstallButton';
 import { AppPurchaseButton } from './AppPurchaseButton';
@@ -65,7 +66,7 @@ export function InstalledAppCard({
     i18n.language,
   );
 
-  let commercialLabel = formatAppBillingLabel(app, t);
+  let commercialLabel: ReactNode = <AppBillingLabel app={app} />;
   if (app.billing_type === 'one_time' && access?.commercially_entitled) {
     commercialLabel = t('apps.billing.purchased');
   } else if (app.billing_type === 'subscription' && access?.plan_name) {

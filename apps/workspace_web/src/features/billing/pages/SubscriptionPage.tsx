@@ -17,6 +17,7 @@ import { BillingPageHeader } from '../components/BillingPageHeader';
 import { PaymentOutcomeDialog } from '../components/PaymentOutcomeDialog';
 import { CheckoutConfirmDialog } from '../components/CheckoutConfirmDialog';
 import { CurrentSubscriptionCard } from '../components/CurrentSubscriptionCard';
+import { MoneyAmount } from '../components/MoneyAmount';
 import { PlanCard } from '../components/PlanCard';
 import { useBillingPlans, useSubscriptionCheckout } from '../hooks/useBillingQueries';
 import {
@@ -25,7 +26,6 @@ import {
   isEntitlementI18nValue,
   sortEntitlements,
 } from '../lib/entitlements';
-import { formatMoney } from '../lib/money';
 import { sortPlansForDisplay } from '../lib/plans';
 
 function PageSkeleton() {
@@ -178,7 +178,12 @@ export function SubscriptionPage() {
                 { label: t('billing.plan'), value: selected.name },
                 {
                   label: t('billing.price'),
-                  value: formatMoney(selected.price_amount, selected.currency),
+                  value: (
+                    <MoneyAmount
+                      amount={selected.price_amount}
+                      currency={selected.currency}
+                    />
+                  ),
                 },
               ]
             : []

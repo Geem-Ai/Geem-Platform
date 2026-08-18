@@ -223,9 +223,22 @@ const starterApps = [
     slug: 'whatsapp',
     name: 'WhatsApp',
     billing_type: 'subscription',
-    status: 'coming_soon',
+    status: 'published',
     can_install: false,
-    access_requirement: 'unavailable',
+    access_requirement: 'subscription',
+    access: {
+      status: 'not_entitled',
+      plan_id: null,
+      plan_code: null,
+      plan_name: null,
+      current_period_start: null,
+      current_period_end: null,
+      commercially_entitled: false,
+      can_purchase: true,
+      can_renew: false,
+      can_install: false,
+      can_uninstall: false,
+    },
     category: {
       slug: 'communication',
       name_key: 'apps.categories.communication',
@@ -233,7 +246,29 @@ const starterApps = [
       icon: null,
       sort_order: 20,
     },
-    plans: [],
+    plans: [
+      {
+        id: 'plan-line',
+        code: 'line',
+        name: 'WhatsApp Line',
+        description: 'One connection',
+        billing_interval: 'monthly',
+        price_amount: '79.00',
+        currency: 'SAR',
+        is_default: true,
+        entitlements: { connections: 1 },
+      },
+    ],
+    connector: {
+      key: 'openwa',
+      kind: 'channel',
+      available: true,
+      auth_mode: 'custom',
+      can_connect: true,
+      supports_sync: false,
+      supports_webhooks: true,
+      supports_health_check: true,
+    },
   }),
 ];
 
@@ -331,23 +366,39 @@ describe('Apps feature', () => {
     expect(screen.getByTestId('app-install')).toBeInTheDocument();
   });
 
-  it('shows coming soon on WhatsApp detail and blocks install', async () => {
+  it('shows coming soon on unavailable detail and blocks install', async () => {
     useApp.mockReturnValue(
       querySuccess(
         catalogApp({
-          slug: 'whatsapp',
-          name: 'WhatsApp',
+          slug: 'soon-tool',
+          name: 'Soon Tool',
           billing_type: 'subscription',
           status: 'coming_soon',
           can_install: false,
           access_requirement: 'unavailable',
+          access: {
+            status: 'unavailable',
+            plan_id: null,
+            plan_code: null,
+            plan_name: null,
+            current_period_start: null,
+            current_period_end: null,
+            commercially_entitled: false,
+            can_purchase: false,
+            can_renew: false,
+            can_install: false,
+            can_uninstall: false,
+          },
           plans: [],
+          connector: null,
         }),
       ),
     );
-    renderAt('/apps/whatsapp');
-    expect(await screen.findByTestId('app-detail-sheet')).toBeInTheDocument();
-    expect(await screen.findByTestId('app-coming-soon')).toBeDisabled();
+    renderAt('/apps/soon-tool');
+    const sheet = await screen.findByTestId('app-detail-sheet');
+    expect(sheet).toBeInTheDocument();
+    const comingSoon = await screen.findAllByTestId('app-coming-soon');
+    expect(comingSoon[0]).toBeDisabled();
     expect(screen.queryByTestId('app-install')).not.toBeInTheDocument();
   });
 
@@ -462,7 +513,7 @@ describe('Apps feature', () => {
     renderAt('/apps/paid-demo');
     expect(await screen.findByTestId('app-detail-sheet')).toBeInTheDocument();
     expect(screen.getByTestId('app-plan-buy')).toBeInTheDocument();
-    expect(screen.getAllByText(/SAR 299\.00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('SAR 299.00').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('app-buy-buy').length).toBeGreaterThan(0);
     expect(screen.queryByText(/auto renew/i)).not.toBeInTheDocument();
   });

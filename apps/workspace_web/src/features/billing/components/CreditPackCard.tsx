@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { CreditPack } from '@/services/api/billing';
 import { formatCount } from '@/features/usage/lib/quota';
-import { formatMoney } from '../lib/money';
+import { MoneyAmount } from './MoneyAmount';
 
 export function CreditPackCard({
   pack,
@@ -33,8 +33,8 @@ export function CreditPackCard({
               count: formatCount(pack.credits, i18n.language),
             })}
           </p>
-          <p className="text-xl font-semibold tabular-nums tracking-tight">
-            {formatMoney(pack.price_amount, pack.currency)}
+          <p className="text-xl font-semibold tracking-tight">
+            <MoneyAmount amount={pack.price_amount} currency={pack.currency} />
           </p>
         </div>
         <Button

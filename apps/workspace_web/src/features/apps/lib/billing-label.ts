@@ -50,17 +50,21 @@ export function resolveAppAccessBadge(
   return { labelKey: 'apps.billing.unavailable', variant: 'secondary' };
 }
 
-/** Billing label from backend plan/app data — never hardcode product prices. */
-export function formatAppBillingLabel(
+export type AppBillingLabelModel =
+  | { kind: 'i18n'; key: string }
+  | { kind: 'one_time_price'; amount: string; currency: string }
+  | { kind: 'from_monthly'; amount: string; currency: string };
+
+/** Resolve billing label from backend plan/app data — never hardcode product prices. */
+export function resolveAppBillingLabel(
   app: Pick<CatalogApp, 'billing_type' | 'status' | 'plans'>,
-  t: TFunction,
-): string {
+): AppBillingLabelModel {
   if (app.status === 'coming_soon') {
-    return t('apps.billing.comingSoon');
+    return { kind: 'i18n', key: 'apps.billing.comingSoon' };
   }
 
   if (app.billing_type === 'free') {
-    return t('apps.billing.free');
+    return { kind: 'i18n', key: 'apps.billing.free' };
   }
 
   const plans = (app.plans ?? []).filter((p) => p.is_default || true);
@@ -69,25 +73,51 @@ export function formatAppBillingLabel(
   if (app.billing_type === 'one_time') {
     const plan = pickDefaultPlan(priced) ?? pickDefaultPlan(plans);
     if (!plan || Number(plan.price_amount) <= 0) {
-      return t('apps.billing.oneTime');
+      return { kind: 'i18n', key: 'apps.billing.oneTime' };
     }
-    return t('apps.billing.oneTimePrice', {
-      amount: formatMoney(plan.price_amount, plan.currency),
-    });
+    return {
+      kind: 'one_time_price',
+      amount: plan.price_amount,
+      currency: plan.currency,
+    };
   }
 
   if (app.billing_type === 'subscription') {
     const monthly = priced.filter((p) => p.billing_interval === 'monthly');
     const plan = pickLowest(monthly) ?? pickDefaultPlan(plans);
     if (!plan || Number(plan.price_amount) <= 0) {
-      return t('apps.billing.subscription');
+      return { kind: 'i18n', key: 'apps.billing.subscription' };
     }
-    return t('apps.billing.fromMonthly', {
-      amount: formatMoney(plan.price_amount, plan.currency),
-    });
+    return {
+      kind: 'from_monthly',
+      amount: plan.price_amount,
+      currency: plan.currency,
+    };
   }
 
-  return t('apps.billing.unavailable');
+  return { kind: 'i18n', key: 'apps.billing.unavailable' };
+}
+
+/**
+ * Plain-text billing label (tests / non-React). Prefer {@link AppBillingLabel} in UI
+ * so SAR amounts render with the official symbol.
+ */
+export function formatAppBillingLabel(
+  app: Pick<CatalogApp, 'billing_type' | 'status' | 'plans'>,
+  t: TFunction,
+): string {
+  const model = resolveAppBillingLabel(app);
+  if (model.kind === 'i18n') {
+    return t(model.key);
+  }
+  if (model.kind === 'one_time_price') {
+    return t('apps.billing.oneTimePrice', {
+      amount: formatMoney(model.amount, model.currency),
+    });
+  }
+  return t('apps.billing.fromMonthly', {
+    amount: formatMoney(model.amount, model.currency),
+  });
 }
 
 function pickDefaultPlan(plans: AppPlan[]): AppPlan | undefined {

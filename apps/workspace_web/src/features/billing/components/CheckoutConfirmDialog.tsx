@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { ApiError, errorMessageKey } from '@/services/api/errors';
 
 export type CheckoutConfirmRow = {
   label: string;
-  value: string;
+  value: ReactNode;
 };
 
 export function CheckoutConfirmDialog({

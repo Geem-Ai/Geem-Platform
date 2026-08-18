@@ -97,7 +97,7 @@ describe('BillingHistoryPage', () => {
     });
     expect(screen.getByText('Starter pack')).toBeInTheDocument();
     expect(screen.getByTestId('billing-history-row')).toHaveTextContent('Paid');
-    expect(screen.getByText('SAR 25.00')).toBeInTheDocument();
+    expect(screen.getByLabelText('SAR 25.00')).toBeInTheDocument();
     expect(screen.queryByText('tran_ref')).not.toBeInTheDocument();
     expect(screen.queryByText('server_key')).not.toBeInTheDocument();
   });
