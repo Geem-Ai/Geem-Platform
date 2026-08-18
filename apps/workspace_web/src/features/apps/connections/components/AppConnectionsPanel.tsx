@@ -12,6 +12,7 @@ import {
   useStartConnection,
 } from '../hooks/useConnectionQueries';
 import { ConnectionCard } from './ConnectionCard';
+import { ConnectionsEmptyState } from './ConnectionsEmptyState';
 import { SyncHistory } from './SyncHistory';
 import { WhatsAppConnectDialog } from '@/features/apps/whatsapp/components/WhatsAppConnectDialog';
 import { WhatsAppConnectionCard } from '@/features/apps/whatsapp/components/WhatsAppConnectionCard';
@@ -98,6 +99,9 @@ export function AppConnectionsPanel({
     ? (connectionsQuery.data?.items.length ?? 0)
     : 0;
   const showWhatsAppAddNumber = whatsappApp && whatsappConnectionCount > 0 && canStart;
+  const isEmpty =
+    Boolean(connectionsQuery.data) && connectionsQuery.data!.items.length === 0;
+  const showHeader = (showTitle && !isEmpty) || showWhatsAppAddNumber;
 
   function openWhatsAppConnect() {
     setResumeConnection(null);
@@ -123,11 +127,21 @@ export function AppConnectionsPanel({
     );
   }
 
+  const emptyLimitFooter =
+    limitReached ? (
+      <p
+        className="text-sm text-muted-foreground"
+        data-testid="whatsapp-limit-reached"
+      >
+        {t('apps.connections.limitReached')}
+      </p>
+    ) : null;
+
   return (
     <section className="space-y-3" data-testid="app-connections-panel">
-      {showTitle || showWhatsAppAddNumber ? (
+      {showHeader ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {showTitle ? (
+          {showTitle && !isEmpty ? (
             <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
           ) : null}
           {showWhatsAppAddNumber ? (
@@ -211,29 +225,18 @@ export function AppConnectionsPanel({
       {whatsappApp && connectionsQuery.data ? (
         <>
           {connectionsQuery.data.items.length === 0 ? (
-            <div className="space-y-2" data-testid="connections-empty">
-              <p className="text-sm text-muted-foreground">
-                {t('apps.connections.empty')}
-              </p>
-              {canStart ? (
-                <Button
-                  size="sm"
-                  disabled={limitReached}
-                  data-testid="connection-connect"
-                  onClick={openWhatsAppConnect}
-                >
-                  {t('apps.connections.connect')}
-                </Button>
-              ) : null}
-              {limitReached ? (
-                <p
-                  className="text-sm text-muted-foreground"
-                  data-testid="whatsapp-limit-reached"
-                >
-                  {t('apps.connections.limitReached')}
-                </p>
-              ) : null}
-            </div>
+            <ConnectionsEmptyState
+              appSlug={app.slug}
+              appName={app.name}
+              iconUrl={app.icon_url}
+              title={t('apps.whatsapp.connection.emptyTitle')}
+              hint={t('apps.whatsapp.connection.emptyHint')}
+              canConnect={canStart}
+              connectDisabled={limitReached}
+              connectLabel={t('apps.connections.connect')}
+              onConnect={openWhatsAppConnect}
+              footer={emptyLimitFooter}
+            />
           ) : null}
 
           {connectionsQuery.data.items.map((connection) => (
@@ -265,21 +268,17 @@ export function AppConnectionsPanel({
       connector.available &&
       connectionsQuery.data &&
       connectionsQuery.data.items.length === 0 ? (
-        <div className="space-y-2" data-testid="connections-empty">
-          <p className="text-sm text-muted-foreground">
-            {t('apps.connections.empty')}
-          </p>
-          {canStart ? (
-            <Button
-              size="sm"
-              disabled={startMut.isPending}
-              data-testid="connection-connect"
-              onClick={() => startOAuth()}
-            >
-              {t('apps.connections.connect')}
-            </Button>
-          ) : null}
-        </div>
+        <ConnectionsEmptyState
+          appSlug={app.slug}
+          appName={app.name}
+          iconUrl={app.icon_url}
+          title={t('apps.connections.emptyTitle')}
+          hint={t('apps.connections.emptyHint')}
+          canConnect={canStart}
+          connectPending={startMut.isPending}
+          connectLabel={t('apps.connections.connect')}
+          onConnect={() => startOAuth()}
+        />
       ) : null}
 
       {!whatsappApp &&

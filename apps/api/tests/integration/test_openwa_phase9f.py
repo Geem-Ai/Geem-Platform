@@ -572,6 +572,98 @@ def test_openwa_expert_binding_and_disconnect_fail_closed(
         ErrorCategory.CONNECTOR_WEBHOOK_UNAUTHORIZED,
     }
 
+    FakeOpenWAClient.reset()
+    deleted = client.delete(
+        f"/api/apps/whatsapp/connections/{conn_id}/permanent",
+        headers=_ws_headers(owner, ws),
+    )
+    assert deleted.status_code == 204, deleted.text
+    db.expire_all()
+    assert db.get(AppConnection, uuid.UUID(conn_id)) is None
+
+    listed = client.get(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 0
+
+
+def test_openwa_permanent_delete_rejects_active_connection(
+    client, register_user, db
+) -> None:
+    _seed(db)
+    app, plan = _publish_whatsapp_for_test(db)
+    owner = register_user(email="openwa-delete-active@example.com")
+    ws = _create_workspace(client, owner, "openwa-del-active")
+    _grant_whatsapp_access(
+        db,
+        workspace_id=uuid.UUID(ws["id"]),
+        app=app,
+        plan=plan,
+        actor_id=uuid.UUID(owner["user"]["id"]),
+    )
+
+    started = client.post(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+        json={"connect_mode": "qr"},
+    )
+    assert started.status_code == 201, started.text
+    conn_id = started.json()["id"]
+
+    rejected = client.delete(
+        f"/api/apps/whatsapp/connections/{conn_id}/permanent",
+        headers=_ws_headers(owner, ws),
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["error"] == ErrorCategory.CONNECTOR_INVALID_TRANSITION.value
+    assert _connection_row(db, conn_id) is not None
+
+
+def test_openwa_permanent_delete_removes_openwa_session(
+    client, register_user, db
+) -> None:
+    """Disconnected row with leftover session_id must delete OpenWA then Geem."""
+    _seed(db)
+    app, plan = _publish_whatsapp_for_test(db)
+    owner = register_user(email="openwa-delete-session@example.com")
+    ws = _create_workspace(client, owner, "openwa-del-sess")
+    _grant_whatsapp_access(
+        db,
+        workspace_id=uuid.UUID(ws["id"]),
+        app=app,
+        plan=plan,
+        actor_id=uuid.UUID(owner["user"]["id"]),
+    )
+
+    started = client.post(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+        json={"connect_mode": "qr"},
+    )
+    assert started.status_code == 201, started.text
+    conn_id = started.json()["id"]
+    row = _connection_row(db, conn_id)
+    creds = ConnectorCredentialService(db).get_credentials(row) or {}
+    session_id = str(creds["session_id"])
+
+    from app.connectors.types import ConnectionStatus
+
+    row.status = ConnectionStatus.DISCONNECTED.value
+    row.disconnected_at = datetime.now(timezone.utc)
+    db.commit()
+
+    FakeOpenWAClient.deleted_sessions = []
+    deleted = client.delete(
+        f"/api/apps/whatsapp/connections/{conn_id}/permanent",
+        headers=_ws_headers(owner, ws),
+    )
+    assert deleted.status_code == 204, deleted.text
+    assert session_id in FakeOpenWAClient.deleted_sessions
+    db.expire_all()
+    assert db.get(AppConnection, uuid.UUID(conn_id)) is None
+
 
 def test_openwa_webhook_hmac_idempotency_groups_and_outbound_send(
     client, register_user, db, monkeypatch

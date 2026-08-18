@@ -3,6 +3,7 @@ import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { queryKeys } from '@/services/api/query-keys';
 import {
   disconnectAppConnection,
+  deleteAppConnectionPermanent,
   healthCheckAppConnection,
   listAppConnections,
   listConnectionSyncRuns,
@@ -101,6 +102,28 @@ export function useDisconnectConnection() {
       slug: string;
       connectionId: string;
     }) => disconnectAppConnection(slug, connectionId),
+    onSuccess: async (_data, vars) => {
+      await invalidateConnectionCache(
+        queryClient,
+        workspaceId,
+        vars.slug,
+        vars.connectionId,
+      );
+    },
+  });
+}
+
+export function useDeleteConnectionPermanent() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      slug,
+      connectionId,
+    }: {
+      slug: string;
+      connectionId: string;
+    }) => deleteAppConnectionPermanent(slug, connectionId),
     onSuccess: async (_data, vars) => {
       await invalidateConnectionCache(
         queryClient,

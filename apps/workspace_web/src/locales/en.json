@@ -442,8 +442,9 @@
     "usageDescription": "A snapshot of this workspace’s current plan consumption.",
     "viewUsage": "View usage",
     "manageSubscription": "Manage subscription",
-    "upcomingTitle": "Coming later",
-    "upcomingDescription": "These areas are placeholders until their phases land."
+    "recommendedTitle": "Recommended apps",
+    "recommendedDescription": "Featured apps to connect knowledge and channels to this workspace.",
+    "viewApps": "Browse apps"
   },
   "usage": {
     "title": "Usage",
@@ -940,6 +941,8 @@
       "setupComingSoon": "Connection setup is not available yet.",
       "installFirst": "Install this app before managing connections.",
       "empty": "No connections yet.",
+      "emptyTitle": "No connections yet",
+      "emptyHint": "Connect an account to start using this app in Geem.",
       "connect": "Connect",
       "oauthSuccess": "Connected to Google Drive",
       "untitled": "Connection",
@@ -960,6 +963,8 @@
       },
       "checkConnection": "Check connection",
       "disconnect": "Disconnect",
+      "delete": "Delete",
+      "deleting": "Deleting…",
       "reconnect": "Reconnect",
       "sync": "Sync",
       "syncNow": "Sync now",
@@ -970,6 +975,9 @@
       "neverSynced": "Never synced",
       "disconnectTitle": "Disconnect this connection?",
       "disconnectHint": "Local credentials will be cleared. You can reconnect later.",
+      "deleteTitle": "Delete this WhatsApp number?",
+      "deleteHint": "This permanently removes the number from Geem and deletes the WhatsApp session. This cannot be undone.",
+      "deleteConfirmLabel": "Type {{word}} to confirm",
       "limitReached": "Connection limit reached",
       "syncCounters": "Seen {{seen}} · created {{created}} · updated {{updated}} · deleted {{deleted}} · failed {{failed}}",
       "syncTrigger": {
@@ -1134,6 +1142,9 @@
         "expert": "Expert",
         "expertHint": "This Expert answers incoming WhatsApp messages.",
         "unassignedExpert": "No Expert selected",
+        "clearExpert": "Clear Expert",
+        "emptyTitle": "No numbers linked yet",
+        "emptyHint": "Link a WhatsApp number to start receiving and answering messages.",
         "settings": "Channel settings",
         "enabled": "Enabled",
         "enabledHint": "Allow this number to send and receive messages.",
@@ -1155,7 +1166,8 @@
       },
       "toasts": {
         "settingsSaved": "WhatsApp settings saved",
-        "reconnecting": "Trying to reconnect WhatsApp"
+        "reconnecting": "Trying to reconnect WhatsApp",
+        "deleted": "WhatsApp number deleted"
       }
     }
   },

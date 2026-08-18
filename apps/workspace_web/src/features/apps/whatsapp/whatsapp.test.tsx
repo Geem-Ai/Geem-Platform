@@ -18,6 +18,7 @@ const {
   useAppConnections,
   useConnectionSyncRuns,
   useDisconnectConnection,
+  useDeleteConnectionPermanent,
   useHealthCheckConnection,
   useRequestConnectionSync,
   useStartConnection,
@@ -31,6 +32,7 @@ const {
   useAppConnections: vi.fn(),
   useConnectionSyncRuns: vi.fn(),
   useDisconnectConnection: vi.fn(),
+  useDeleteConnectionPermanent: vi.fn(),
   useHealthCheckConnection: vi.fn(),
   useRequestConnectionSync: vi.fn(),
   useStartConnection: vi.fn(),
@@ -64,6 +66,7 @@ vi.mock('@/features/apps/connections/hooks/useConnectionQueries', () => ({
   useAppConnections: (...args: unknown[]) => useAppConnections(...args),
   useConnectionSyncRuns: (...args: unknown[]) => useConnectionSyncRuns(...args),
   useDisconnectConnection: () => useDisconnectConnection(),
+  useDeleteConnectionPermanent: () => useDeleteConnectionPermanent(),
   useHealthCheckConnection: () => useHealthCheckConnection(),
   useRequestConnectionSync: () => useRequestConnectionSync(),
   useStartConnection: () => useStartConnection(),
@@ -185,6 +188,7 @@ function connection(partial: Partial<WhatsAppConnection> = {}): WhatsAppConnecti
     created_at: '2026-01-02T00:00:00Z',
     capabilities: {
       can_disconnect: true,
+      can_delete: false,
       can_health_check: false,
       can_sync: false,
       can_reconnect: true,
@@ -229,6 +233,12 @@ describe('WhatsApp Phase 9F UI', () => {
       isError: false,
       error: null,
     });
+    useDeleteConnectionPermanent.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    });
     useHealthCheckConnection.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -246,7 +256,18 @@ describe('WhatsApp Phase 9F UI', () => {
       error: null,
     });
     useExperts.mockReturnValue({
-      data: [{ id: 'exp-1', name: 'Expert A', status: 'active' }],
+      data: [
+        {
+          id: 'exp-1',
+          name: 'Expert A',
+          status: 'ready',
+          ownership: 'workspace',
+          knowledge_mode: 'rag',
+          description: null,
+          icon_url: null,
+          knowledge_document_count: 0,
+        },
+      ],
       isLoading: false,
     });
     getWhatsAppStatus.mockResolvedValue(
@@ -272,6 +293,8 @@ describe('WhatsApp Phase 9F UI', () => {
   it('connect opens modal with QR and pairing options', () => {
     renderWithProviders(<AppConnectionsPanel app={catalogApp()} canManage />);
 
+    expect(screen.getByTestId('connections-empty')).toBeInTheDocument();
+    expect(screen.getByText(en.apps.whatsapp.connection.emptyTitle)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('connection-connect'));
 
     expect(screen.getByTestId('whatsapp-connect-dialog')).toBeInTheDocument();
@@ -389,7 +412,64 @@ describe('WhatsApp Phase 9F UI', () => {
     });
     useAppConnections.mockReturnValue({
       data: {
-        items: [connection({ status: 'disconnected', provider_status: null })],
+        items: [
+          connection({
+            status: 'active',
+            provider_status: 'ready',
+            capabilities: {
+              can_disconnect: true,
+              can_delete: false,
+              can_health_check: false,
+              can_sync: false,
+              can_reconnect: false,
+            },
+          }),
+        ],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    renderWithProviders(<AppConnectionsPanel app={catalogApp()} canManage />);
+
+    expect(await screen.findByTestId('whatsapp-status-connected')).toBeInTheDocument();
+    expect(screen.getByTestId('whatsapp-connection-phone')).toHaveTextContent('+966500000000');
+    expect(screen.queryByText(/Provider status/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('whatsapp-save-settings')).toBeDisabled();
+    expect(screen.queryByTestId('whatsapp-delete')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('whatsapp-disconnect'));
+    expect(disconnectMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('whatsapp-disconnect-confirm')).toBeInTheDocument();
+  });
+
+  it('shows delete for disconnected numbers and requires typing DELETE', async () => {
+    const deleteMutate = vi.fn();
+    useDeleteConnectionPermanent.mockReturnValue({
+      mutate: deleteMutate,
+      isPending: false,
+      isError: false,
+      error: null,
+    });
+    useAppConnections.mockReturnValue({
+      data: {
+        items: [
+          connection({
+            status: 'disconnected',
+            provider_status: null,
+            capabilities: {
+              can_disconnect: false,
+              can_delete: true,
+              can_health_check: false,
+              can_sync: false,
+              can_reconnect: true,
+            },
+          }),
+        ],
         total: 1,
         limit: 50,
         offset: 0,
@@ -402,16 +482,24 @@ describe('WhatsApp Phase 9F UI', () => {
     renderWithProviders(<AppConnectionsPanel app={catalogApp()} canManage />);
 
     expect(await screen.findByTestId('whatsapp-status-disconnected')).toBeInTheDocument();
-    expect(screen.getByTestId('whatsapp-connection-phone')).toHaveTextContent('+966500000000');
     expect(screen.getByTestId('whatsapp-status-hint')).toHaveTextContent(
       en.apps.whatsapp.connection.statusHint.disconnected,
     );
-    expect(screen.queryByText(/Provider status/i)).not.toBeInTheDocument();
-    expect(screen.getByTestId('whatsapp-save-settings')).toBeDisabled();
+    expect(screen.queryByTestId('whatsapp-disconnect')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('whatsapp-disconnect'));
-    expect(disconnectMutate).not.toHaveBeenCalled();
-    expect(screen.getByTestId('whatsapp-disconnect-confirm')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('whatsapp-delete'));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('whatsapp-delete-confirm')).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('whatsapp-delete-confirm-input'), {
+      target: { value: 'DELETE' },
+    });
+    expect(screen.getByTestId('whatsapp-delete-confirm')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('whatsapp-delete-confirm'));
+    expect(deleteMutate).toHaveBeenCalledWith(
+      { slug: 'whatsapp', connectionId: 'conn-1' },
+      expect.any(Object),
+    );
   });
 
   it('shows member read-only state', async () => {
@@ -431,7 +519,7 @@ describe('WhatsApp Phase 9F UI', () => {
     renderWithProviders(<AppConnectionsPanel app={catalogApp()} canManage={false} />);
 
     expect(await screen.findByTestId('whatsapp-member-readonly')).toBeInTheDocument();
-    expect(screen.getByTestId('whatsapp-expert-select')).toBeDisabled();
+    expect(screen.getByTestId('whatsapp-expert-picker')).toBeDisabled();
     expect(screen.queryByTestId('whatsapp-disconnect')).not.toBeInTheDocument();
   });
 
@@ -458,9 +546,15 @@ describe('WhatsApp Phase 9F UI', () => {
     expect(en.apps.whatsapp.connect.qrTitle).toBeTruthy();
     expect(en.apps.whatsapp.status.connected).toBeTruthy();
     expect(en.apps.whatsapp.connection.statusHint.disconnected).toBeTruthy();
+    expect(en.apps.whatsapp.connection.emptyTitle).toBe('No numbers linked yet');
+    expect(en.apps.connections.delete).toBeTruthy();
+    expect(en.apps.connections.deleteConfirmLabel).toContain('{{word}}');
     expect(ar.apps.whatsapp.connect.qrTitle).toBeTruthy();
     expect(ar.apps.whatsapp.status.connected).toBeTruthy();
     expect(ar.apps.whatsapp.connection.statusHint.disconnected).toBeTruthy();
+    expect(ar.apps.whatsapp.connection.emptyTitle).toBeTruthy();
+    expect(ar.apps.connections.delete).toBeTruthy();
+    expect(ar.apps.connections.deleteConfirmLabel).toContain('{{word}}');
   });
 
   it('dialog can advance into QR and pairing steps', async () => {
