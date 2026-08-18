@@ -203,6 +203,20 @@ describe('MembersPage', () => {
     expect(queryKeys.invitations('ws-a')[1]).toBe('ws-a');
   });
 
+  it('shows an empty state with an invite action when nothing is pending', async () => {
+    listWorkspaceInvitations.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
+    renderPage();
+    expect(await screen.findByTestId('invitations-empty')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('members.emptyInvites'))).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('invitations-empty-invite'));
+    expect(screen.getByTestId('invite-email')).toBeInTheDocument();
+  });
+
   it('lets an admin invite', async () => {
     workspaceState.role = roleSummary('admin');
     workspaceState.permissions = adminPerms();

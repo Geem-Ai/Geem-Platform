@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, MailPlus, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatPeriodDateTime } from '@/features/usage/lib/quota';
 import { RoleBadge } from '@/features/members/components/RoleBadge';
@@ -8,6 +8,7 @@ import type { WorkspaceInvitationSummary } from '@/services/api/invitations';
 type PendingInvitationsProps = {
   invitations: WorkspaceInvitationSummary[];
   busyId?: string | null;
+  onInvite?: () => void;
   onResend: (invitation: WorkspaceInvitationSummary) => void;
   onRevoke: (invitation: WorkspaceInvitationSummary) => void;
 };
@@ -15,6 +16,7 @@ type PendingInvitationsProps = {
 export function PendingInvitations({
   invitations,
   busyId,
+  onInvite,
   onResend,
   onRevoke,
 }: PendingInvitationsProps) {
@@ -22,9 +24,33 @@ export function PendingInvitations({
 
   if (invitations.length === 0) {
     return (
-      <div className="px-5 py-8 space-y-1" data-testid="invitations-empty">
-        <p className="text-sm text-muted-foreground">{t('members.emptyInvites')}</p>
-        <p className="text-xs text-muted-foreground">{t('members.emptyInvitesHint')}</p>
+      <div
+        className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center"
+        data-testid="invitations-empty"
+      >
+        <div
+          className="flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground"
+          aria-hidden
+        >
+          <MailPlus className="size-5" />
+        </div>
+        <div className="space-y-1 max-w-sm">
+          <p className="text-sm font-medium">{t('members.emptyInvites')}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t('members.emptyInvitesHint')}
+          </p>
+        </div>
+        {onInvite ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={onInvite}
+            data-testid="invitations-empty-invite"
+          >
+            <UserPlus className="size-3.5" />
+            {t('members.invite')}
+          </Button>
+        ) : null}
       </div>
     );
   }
