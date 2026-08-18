@@ -33,8 +33,8 @@ todos:
     content: "Phase 9: COMPLETE — 9A–9G PASS (App Store catalog, commerce, Drive, OneDrive, WhatsApp/OpenWA, Apps management + E2E gate). Do not start Phase 10 until requested."
     status: completed
   - id: phase-10
-    content: "Phase 10: 10A PASS (workspace invitations backend). 10B Members UI remaining. Do not start Phase 11 until requested."
-    status: in_progress
+    content: "Phase 10: COMPLETE — 10A PASS (workspace invitations backend) + 10B PASS (Members UX, invite accept, role matrix). Do not start Phase 11 until requested."
+    status: completed
   - id: phase-11
     content: "Phase 11: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
     status: pending
@@ -1259,11 +1259,30 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 10 — Members UX (invites + role matrix + polish)
 
-**Status:** in progress — **10A PASS** (workspace invitations backend). 10B Members UI not started. Runs **before** Hardening (Phase 11).
+**Status:** completed — **10A PASS** + **10B PASS**. Phase 10 COMPLETE. Do not start Phase 11 until requested.
 
-**Baseline already shipped (Phase 1):** sidebar **Members** item → `/members`; list / change role / remove for existing members; `WorkspacePolicy` role matrix; copy still says invites unavailable.
+**Baseline already shipped (Phase 1):** sidebar **Members** item → `/members`; list / change role / remove for existing members; `WorkspacePolicy` role matrix.
 
-**Gap this phase closes:** cannot add people by email; no pending invites; Members UI is a thin stub vs other AI Concept pages; role capabilities are not explained in-product.
+**Delivered:**
+
+**10A**
+- `workspace_invitations`
+- secure tokenized email invitations
+- resend/revoke/accept
+- `EmailProvider` (console local/test; optional SMTP)
+- isolation/idempotency
+
+**10B**
+- polished `/members`
+- invite dialog
+- pending invitations
+- resend/revoke
+- invite acceptance auth flow
+- role matrix
+- EN/AR + RTL
+- Playwright invite acceptance smoke
+
+**Gap this phase closed:** cannot add people by email; no pending invites; Members UI was a thin stub vs other AI Concept pages; role capabilities were not explained in-product.
 
 **Goal:** Production Members experience — invite by email, manage pending invites, show owner/admin/member capabilities, polish `/members` to AI Concept visual language. Sidebar entry stays; do not invent a second nav location.
 
@@ -1283,7 +1302,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 #### 10A — Invitations backend
 
-**Status:** completed — **10A PASS**. `workspace_invitations` + HMAC invite tokens + `EmailProvider` (console local/test only, optional SMTP) + create/list/resend/revoke/accept APIs. Phase 10B UI is not started.
+**Status:** completed — **10A PASS**. `workspace_invitations` + HMAC invite tokens + `EmailProvider` (console local/test only, optional SMTP) + create/list/resend/revoke/accept APIs.
 
 **DB / services:** `workspace_invitations`; focused `InvitationService`; hash invite tokens like API keys (HMAC-SHA256).
 
@@ -1298,14 +1317,15 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 #### 10B — Members UI (AI Concept)
 
-**Frontend (`apps/workspace_web`):**
-- Upgrade [`MembersPage`](apps/workspace_web/src/features/members/pages/MembersPage.tsx): members table + pending invites; invite dialog (email + role); revoke/resend; remove `noInviteHint` once live
-- Invite-accept route (public-ish gated: auth required) with EN/AR + RTL
-- Role matrix card/section (owner vs admin vs member) matching policy
-- Nav: keep existing [`nav-config`](apps/workspace_web/src/app/layouts/workspace/nav-config.ts) Members item; role-aware manage controls only
-- API client under `services/api/` only; no `samples/` imports
+**Status:** completed — **10B PASS**.
 
-**Acceptance (full Phase 10):** Owner/admin invites by email; invitee accepts after auth and appears in members list with the invited role; pending invites list/revoke/resend work; members without manage rights see list + matrix only; EN/AR + RTL; Playwright smoke: invite → accept → appear in Members; no ESP required for CI (console adapter + token from API/test helper).
+**Frontend (`apps/workspace_web`):**
+- Upgraded [`MembersPage`](apps/workspace_web/src/features/members/pages/MembersPage.tsx): members table + pending invites; invite dialog (email + `admin|member`); revoke/resend; role matrix from `WorkspacePolicy`
+- Invite-accept route `/invitations/accept?token=` with login/register return-state; EN/AR + RTL
+- Nav: existing [`nav-config`](apps/workspace_web/src/app/layouts/workspace/nav-config.ts) Members item only; `canManageMembers` for management controls (UX only)
+- API client under `services/api/` only; no `samples/` imports; raw tokens never in query keys, toasts, or `localStorage`
+
+**Acceptance (full Phase 10):** Owner/admin invites by email; invitee accepts after auth and appears in members list with the invited role; pending invites list/revoke/resend work; members without manage rights see list + matrix only; EN/AR + RTL; Playwright smoke: invite → accept → appear in Members; no ESP required for CI (mocked API + fixture token).
 
 ---
 

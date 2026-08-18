@@ -2,7 +2,7 @@
 
 Tokenized **email invitations** let a workspace owner or admin invite someone by email. Accepting the invite creates a `workspace_membership` row. Membership is **not** created until the invitee authenticates with the same email and calls `POST /api/invitations/accept`.
 
-Phase 10A is backend/API only. The Members UI and accept page are Phase 10B.
+Phase 10A is the invitations backend. Phase 10B is the Workspace Members UI: `/members` invite/pending/resend/revoke, `/invitations/accept?token=`, and the role matrix.
 
 ## Lifecycle
 
@@ -63,7 +63,7 @@ Acceptance is **idempotent** for the rightful email: a second accept of an alrea
 
 Domain services depend on `EmailProvider`; they do not know console vs SMTP.
 
-Invitation mail is **multipart** (plain text + HTML), bilingual EN/AR, and tells the invitee they must authenticate with the invited address. Copy lives in `app.workspaces.invitation_email`. User-controlled names are HTML-escaped. The accept URL remains in the text body as `Accept: {url}` for local logs and tests.
+Invitation mail is **multipart** (plain text + HTML), bilingual EN/AR, and tells the invitee they must authenticate with the invited address. Copy lives in `app.workspaces.invitation_email`. User-controlled names are HTML-escaped. The accept URL remains in the text body as `Accept: {url}` for local logs and tests. The HTML header uses the hosted Geem avatar (`https://geem.ai/assets/geem-avatar.webp`); the footer (and plain-text body) link to `https://geem.ai` and `https://geem.ai/support`.
 
 **Transaction decision:** the invitation row is flushed, email is sent, then the transaction commits. If delivery fails, the transaction rolls back so the caller does not receive a 201 for an invitation that was never sent. There is no outbox/job queue in 10A.
 
@@ -106,3 +106,9 @@ Accept URLs use `WORKSPACE_WEB_URL` (`Settings.effective_workspace_web_url`):
 - Tenant isolation: management APIs resolve the workspace through existing membership/authz. Cross-workspace invitation IDs return `invitation_not_found`.
 - Email normalization uses `identity.security.normalize_email` (strip + lower).
 - Last-owner membership rules are unchanged; invitations cannot create owner memberships.
+
+## Workspace UI (Phase 10B)
+
+- Members page: `/members` (existing nav). Owner/admin can invite (`admin` or `member` only), list pending invitations, resend, and revoke. Members can view the roster and role matrix only.
+- Accept route: `/invitations/accept?token=...` (outside the workspace shell). Logged-out invitees sign in or register with `location.state.from` pointing back to this path. After a successful accept the app switches to the joined workspace and replaces the token URL with `/members`.
+- The raw token is sent only to `POST /api/invitations/accept`. It is not stored in `localStorage`, not placed in React Query keys, and not shown in toasts.

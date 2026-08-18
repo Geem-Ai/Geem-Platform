@@ -13,12 +13,12 @@ import {
   extractHostWorkspaceSlug,
   isLocalDevEnvironment,
 } from '@/features/workspaces/lib/hostname';
+import { pickInitialWorkspace } from '@/features/workspaces/lib/pick-workspace';
 import { createWorkspace as apiCreateWorkspace } from '@/services/api';
 import type { Membership, WorkspaceSummary } from '@/services/api/types';
 import {
   clearWorkspaceContext,
   clearWorkspacePreference,
-  loadWorkspacePreference,
   saveWorkspacePreference,
   setWorkspaceContext,
 } from '@/services/auth/workspace-context';
@@ -27,40 +27,13 @@ type WorkspaceContextValue = {
   availableWorkspaces: WorkspaceSummary[];
   currentWorkspace: WorkspaceSummary | null;
   currentMembership: Membership | null;
-  selectWorkspace: (workspaceId: string) => void;
+  selectWorkspace: (workspaceId: string, known?: WorkspaceSummary | null) => void;
   refreshWorkspaces: () => Promise<void>;
   createWorkspace: (input: { name: string; slug: string }) => Promise<WorkspaceSummary>;
   hostSlug: string | null;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
-
-function pickInitialWorkspace(
-  workspaces: WorkspaceSummary[],
-  userId: string,
-  hostSlug: string | null,
-  meCurrent: WorkspaceSummary | null,
-): WorkspaceSummary | null {
-  if (workspaces.length === 0) return null;
-
-  if (hostSlug) {
-    const fromHost = workspaces.find((w) => w.slug === hostSlug);
-    if (fromHost) return fromHost;
-  }
-
-  if (meCurrent) {
-    const match = workspaces.find((w) => w.id === meCurrent.id);
-    if (match) return match;
-  }
-
-  const pref = loadWorkspacePreference(userId);
-  if (pref) {
-    const fromPref = workspaces.find((w) => w.id === pref);
-    if (fromPref) return fromPref;
-  }
-
-  return workspaces[0] ?? null;
-}
 
 function syncClientHints(workspace: WorkspaceSummary | null) {
   if (!workspace) {
@@ -125,9 +98,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [status, user, me, hostSlug]);
 
   const selectWorkspace = useCallback(
-    (workspaceId: string) => {
-      const next = availableWorkspaces.find((w) => w.id === workspaceId);
+    (workspaceId: string, known?: WorkspaceSummary | null) => {
+      const fromList = availableWorkspaces.find((w) => w.id === workspaceId);
+      const next =
+        fromList ?? (known && known.id === workspaceId ? known : undefined);
       if (!next || !user) return;
+
+      if (!fromList) {
+        setAvailableWorkspaces((prev) =>
+          prev.some((w) => w.id === next.id) ? prev : [...prev, next],
+        );
+      }
 
       const previousId = currentWorkspace?.id;
       if (previousId && previousId !== next.id) {
@@ -165,23 +146,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         role: created.role ?? 'owner',
       };
       await refreshWorkspaces();
-      selectWorkspace(summary.id);
-      // Ensure selection even before me reload settles
-      setCurrentWorkspace(summary);
-      syncClientHints(summary);
-      if (user) {
-        saveWorkspacePreference(user.id, summary.id);
-        setCurrentMembership({
-          id: '',
-          workspace_id: summary.id,
-          user_id: user.id,
-          role: 'owner',
-          created_at: new Date().toISOString(),
-        });
-      }
+      selectWorkspace(summary.id, summary);
       return summary;
     },
-    [refreshWorkspaces, selectWorkspace, user],
+    [refreshWorkspaces, selectWorkspace],
   );
 
   useEffect(() => {

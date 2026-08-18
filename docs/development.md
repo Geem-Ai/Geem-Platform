@@ -258,7 +258,7 @@ pip install -r requirements.txt
 pytest -q
 ```
 
-Workspace invitations (Phase 10A): see [invitations.md](./invitations.md). Local/test default is `EMAIL_PROVIDER=console` (logs the accept URL, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation tokens.
+Workspace invitations (Phase 10 complete): see [invitations.md](./invitations.md). Members UI is `/members` plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs the accept URL, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation tokens.
 
 Generate PDF fixtures:
 

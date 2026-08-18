@@ -11,6 +11,7 @@ import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ChatPage } from '@/features/chat/pages/ChatPage';
 import { ChatStartPage } from '@/features/chat/pages/ChatStartPage';
 import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
+import { InvitationAcceptPage } from '@/features/members/pages/InvitationAcceptPage';
 import { MembersPage } from '@/features/members/pages/MembersPage';
 import { OnboardingPage } from '@/features/workspaces/pages/OnboardingPage';
 import { OverviewPage } from '@/features/workspaces/pages/OverviewPage';
@@ -31,6 +32,8 @@ import { InstalledAppsPage } from '@/features/apps/pages/InstalledAppsPage';
 export function AppRouter() {
   return (
     <Routes>
+      <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
+
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

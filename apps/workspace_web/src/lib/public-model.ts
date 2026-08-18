@@ -1,7 +1,7 @@
 /** User-facing Geem model id — never show provider/OpenRouter model names. */
 export const PUBLIC_MODEL_ID = 'dalseen/geem-1.0';
 
-export function publicModelId(_raw?: string | null): string {
+export function publicModelId(): string {
   return PUBLIC_MODEL_ID;
 }
 

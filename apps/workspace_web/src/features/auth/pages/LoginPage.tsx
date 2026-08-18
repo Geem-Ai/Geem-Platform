@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth } from '@/app/router/guards';
+import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
 import { AuthAlert } from '@/features/auth/components/AuthAlert';
@@ -38,10 +39,11 @@ export function LoginPage() {
     clearSessionExpired();
     try {
       const me = await login(email.trim(), password);
-      if (me.workspaces.length === 0) {
-        navigate('/onboarding', { replace: true, state: { from } });
+      const dest = continueAfterAuth(from);
+      if (isInvitationAcceptPath(dest) || me.workspaces.length > 0) {
+        navigate(dest, { replace: true });
       } else {
-        navigate(continueAfterAuth(from), { replace: true });
+        navigate('/onboarding', { replace: true, state: { from } });
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -94,7 +96,11 @@ export function LoginPage() {
         </Button>
         <p className="text-center text-sm text-muted-foreground">
           {t('auth.noAccount')}{' '}
-          <Link to="/register" className="font-medium text-primary hover:underline">
+          <Link
+            to="/register"
+            state={from ? { from } : undefined}
+            className="font-medium text-primary hover:underline"
+          >
             {t('auth.registerLink')}
           </Link>
         </p>

@@ -124,4 +124,34 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('payment-success')).toBeInTheDocument();
     expect(screen.queryByTestId('home')).not.toBeInTheDocument();
   });
+
+  it('returns authenticated users to the invitation accept route', async () => {
+    authState.status = 'authenticated';
+    await act(async () => {
+      render(
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter
+            initialEntries={[
+              {
+                pathname: '/login',
+                state: { from: '/invitations/accept?token=invite-token' },
+              },
+            ]}
+          >
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/invitations/accept"
+                element={<div data-testid="invitation-return" />}
+              />
+              <Route path="/" element={<div data-testid="home" />} />
+            </Routes>
+          </MemoryRouter>
+        </I18nextProvider>,
+      );
+    });
+
+    expect(screen.getByTestId('invitation-return')).toBeInTheDocument();
+    expect(screen.queryByTestId('home')).not.toBeInTheDocument();
+  });
 });

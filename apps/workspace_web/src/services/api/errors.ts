@@ -125,6 +125,15 @@ export type ApiErrorCode =
   | 'channel_binding_required'
   | 'channel_expert_invalid'
   | 'api_key_not_found'
+  | 'invitation_not_found'
+  | 'invitation_already_exists'
+  | 'already_workspace_member'
+  | 'invalid_invitation'
+  | 'invitation_expired'
+  | 'invitation_revoked'
+  | 'invitation_email_mismatch'
+  | 'invitation_already_accepted'
+  | 'email_delivery_failed'
   | 'unknown';
 
 const KNOWN_CODES = new Set<string>([
@@ -252,6 +261,15 @@ const KNOWN_CODES = new Set<string>([
   'channel_binding_required',
   'channel_expert_invalid',
   'api_key_not_found',
+  'invitation_not_found',
+  'invitation_already_exists',
+  'already_workspace_member',
+  'invalid_invitation',
+  'invitation_expired',
+  'invitation_revoked',
+  'invitation_email_mismatch',
+  'invitation_already_accepted',
+  'email_delivery_failed',
 ]);
 
 export class ApiError extends Error {
@@ -438,6 +456,15 @@ export function errorMessageKey(code: string): string {
     openwa_send_failed: 'errors.openwaSendFailed',
     channel_binding_required: 'errors.channelBindingRequired',
     channel_expert_invalid: 'errors.channelExpertInvalid',
+    invitation_not_found: 'members.errors.notFound',
+    invitation_already_exists: 'members.errors.alreadyInvited',
+    already_workspace_member: 'members.errors.alreadyMember',
+    invalid_invitation: 'invitations.invalid',
+    invitation_expired: 'invitations.expired',
+    invitation_revoked: 'invitations.revoked',
+    invitation_email_mismatch: 'invitations.emailMismatch',
+    invitation_already_accepted: 'invitations.alreadyAccepted',
+    email_delivery_failed: 'members.errors.emailFailed',
   };
   return map[code as ApiErrorCode] ?? 'errors.generic';
 }

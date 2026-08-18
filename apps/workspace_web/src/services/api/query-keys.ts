@@ -16,6 +16,8 @@ export const queryKeys = {
   me: ['auth', 'me'] as const,
   workspaces: ['workspaces'] as const,
   members: (workspaceId: string) => workspaceQueryKey(workspaceId, 'members'),
+  invitations: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'invitations'),
   workspace: (workspaceId: string) => workspaceQueryKey(workspaceId, 'detail'),
   documents: (
     workspaceId: string,
