@@ -36,6 +36,49 @@ export function normalizeProviderStatus(
   return String(value ?? '').trim().toLowerCase();
 }
 
+export type WhatsAppUiStatusKey =
+  | 'connecting'
+  | 'waitingForQr'
+  | 'authenticating'
+  | 'connected'
+  | 'disconnected'
+  | 'actionRequired'
+  | 'failed';
+
+export type WhatsAppUiStatus = {
+  key: WhatsAppUiStatusKey;
+  variant: 'info' | 'success' | 'warning' | 'secondary' | 'destructive';
+};
+
+/** Single user-facing status. Prefer this over showing raw provider_status. */
+export function resolveWhatsAppUiStatus(
+  connection: Pick<WhatsAppConnection, 'status' | 'provider_status'>,
+): WhatsAppUiStatus {
+  const provider = normalizeProviderStatus(connection.provider_status);
+  if (provider === 'qr_ready') {
+    return { key: 'waitingForQr', variant: 'warning' };
+  }
+  if (provider === 'authenticating') {
+    return { key: 'authenticating', variant: 'info' };
+  }
+  if (provider === 'ready') {
+    return { key: 'connected', variant: 'success' };
+  }
+  if (connection.status === 'active' && !provider) {
+    return { key: 'connected', variant: 'success' };
+  }
+  if (provider === 'disconnected' || connection.status === 'disconnected') {
+    return { key: 'disconnected', variant: 'secondary' };
+  }
+  if (provider === 'action_required') {
+    return { key: 'actionRequired', variant: 'warning' };
+  }
+  if (provider === 'failed' || connection.status === 'error') {
+    return { key: 'failed', variant: 'destructive' };
+  }
+  return { key: 'connecting', variant: 'info' };
+}
+
 export function isReadyStatus(
   connection: Pick<WhatsAppConnection, 'status' | 'provider_status'> | null | undefined,
 ): boolean {
@@ -115,4 +158,18 @@ export function formatPairingCode(value: string | null | undefined): string {
 export function normalizePhoneForRequest(value: string): string {
   const digits = value.replace(/[^\d]/g, '');
   return digits.startsWith('00') ? digits.slice(2) : digits;
+}
+
+/** Display number for a session card. Prefers `phone`, then OpenWA account id. */
+export function whatsappPhoneLabel(
+  connection: Pick<WhatsAppConnection, 'phone' | 'external_account_id'> | null | undefined,
+): string | null {
+  const raw = String(connection?.phone || connection?.external_account_id || '').trim();
+  if (!raw) return null;
+  const digits = raw.replace(/[^\d]/g, '');
+  if (digits.length >= 6 && digits.length <= 15) {
+    return `+${digits.startsWith('00') ? digits.slice(2) : digits}`;
+  }
+  if (/^\+[\d\s-]+$/.test(raw)) return raw;
+  return null;
 }

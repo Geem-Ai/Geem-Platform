@@ -282,7 +282,7 @@
     "instructionsPlaceholder": "How should this Expert answer and behave?",
     "instructionsHint": "These instructions define how the Expert should answer and behave. Maximum length is enforced by the server.",
     "generateInstructions": {
-      "open": "Generate system instructions with AI",
+      "open": "Generate using Geem AI",
       "title": "Generate system instructions",
       "brief": "Brief",
       "briefPlaceholder": "Describe what this Expert should do…",
@@ -321,7 +321,7 @@
     "uploadLimits": "Max {{maxMb}} MB per file · PDFs up to {{maxPages}} pages",
     "uploadStarted": "Upload received. Processing has started.",
     "googleDrive": {
-      "add": "Add from Google Drive",
+      "add": "Google Drive",
       "addTitle": "Add from Google Drive",
       "addHint": "Choose files from a connected Google Drive account. Supported: PDF, TXT, Markdown, and Google Docs.",
       "added": "Google Drive files queued for synchronization.",
@@ -338,7 +338,7 @@
       "syncing": "Syncing"
     },
     "oneDrive": {
-      "add": "Add from Microsoft OneDrive",
+      "add": "OneDrive",
       "addTitle": "Add from Microsoft OneDrive",
       "addHint": "Choose files from a connected Microsoft OneDrive account (work/school or personal). Supported: PDF, TXT, Markdown, and Office documents (converted to PDF).",
       "added": "OneDrive files queued for synchronization.",
@@ -386,9 +386,15 @@
     "reprocess": "Reprocess",
     "reprocessConfirm": "Reprocess this document? Status will update from the server.",
     "remove": "Remove from Expert",
+    "removed": "Removed from Expert",
     "removeTitle": "Remove from Expert",
     "removeHint": "This removes the document from this Expert only. Other Experts that use the same document keep their access. The Workspace document is not deleted.",
     "confirmRemove": "Remove",
+    "rename": "Rename",
+    "renameTitle": "Rename file",
+    "renameHint": "This changes the name shown for this file. The original filename is kept.",
+    "renamePlaceholder": "File name",
+    "renamed": "File renamed",
     "deleteTitle": "Delete Expert",
     "deleteHint": "Deleting the Expert removes its configuration. Underlying Workspace documents are not deleted automatically.",
     "deleteConfirm": "Delete",
@@ -1086,7 +1092,7 @@
         "qrDescription": "Use Linked Devices in WhatsApp to scan a QR code from this browser.",
         "pairingTitle": "Pairing code",
         "pairingDescription": "Enter your phone number and connect with an 8-character pairing code.",
-        "connectAnother": "Connect another",
+        "connectAnother": "Connect New Number",
         "resume": "Continue linking"
       },
       "status": {
@@ -1126,12 +1132,26 @@
         "phone": "Phone: {{phone}}",
         "providerStatus": "Provider status: {{status}}",
         "expert": "Expert",
+        "expertHint": "This Expert answers incoming WhatsApp messages.",
         "unassignedExpert": "No Expert selected",
         "settings": "Channel settings",
         "enabled": "Enabled",
+        "enabledHint": "Allow this number to send and receive messages.",
         "autoReply": "Auto-reply",
+        "autoReplyHint": "Let the Expert answer incoming chats automatically.",
         "respondToGroups": "Respond to groups",
-        "readOnly": "Members can view WhatsApp connection settings but cannot change them."
+        "respondToGroupsHint": "Also reply when this number is used in group chats.",
+        "readOnly": "Members can view WhatsApp connection settings but cannot change them.",
+        "saveDisabledHint": "Change a setting to save.",
+        "unsaved": "Unsaved changes",
+        "statusHint": {
+          "connecting": "WhatsApp is still linking. Continue to finish setup.",
+          "waitingForQr": "Scan the QR code in WhatsApp to finish linking.",
+          "authenticating": "WhatsApp is confirming this session.",
+          "disconnected": "This session is offline. Reconnect to resume replies.",
+          "actionRequired": "WhatsApp needs attention before replies can continue.",
+          "failed": "Linking failed. Reconnect to try again."
+        }
       },
       "toasts": {
         "settingsSaved": "WhatsApp settings saved",

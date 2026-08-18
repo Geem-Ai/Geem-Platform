@@ -61,7 +61,10 @@ export function GenerateInstructionsDialog({
   }, [open]);
 
   async function handleSubmit(e: FormEvent) {
+    // Dialog content is portaled in the DOM, but React still bubbles submit
+    // through the component tree — stop that so the parent Expert form does not save.
     e.preventDefault();
+    e.stopPropagation();
     const trimmedBrief = brief.trim();
     if (!trimmedBrief || pending) return;
 

@@ -4,6 +4,11 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { GenerateInstructionsDialog } from './GenerateInstructionsDialog';
 
 const MAX_CHARS = 32000;
@@ -39,19 +44,25 @@ export function InstructionsEditor({
         <div className="flex items-center gap-1.5 min-w-0">
           <Label htmlFor={id}>{t('experts.instructions')}</Label>
           {allowGenerate ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0 text-muted-foreground hover:text-primary"
-              disabled={disabled}
-              onClick={() => setGenerateOpen(true)}
-              aria-label={t('experts.generateInstructions.open')}
-              title={t('experts.generateInstructions.open')}
-              data-testid="generate-instructions-button"
-            >
-              <Sparkles className="size-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0 text-primary/80 hover:text-primary"
+                  disabled={disabled}
+                  onClick={() => setGenerateOpen(true)}
+                  aria-label={t('experts.generateInstructions.open')}
+                  data-testid="generate-instructions-button"
+                >
+                  <Sparkles className="ai-sparkle-pulse size-3.5" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {t('experts.generateInstructions.open')}
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
         <span className={`text-xs shrink-0 ${remaining < 500 ? 'text-destructive' : 'text-muted-foreground'}`}>

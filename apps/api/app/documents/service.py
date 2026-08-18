@@ -239,6 +239,27 @@ class DocumentService:
         mime = (document.mime_type or "application/octet-stream").split(";", 1)[0].strip()
         return data, document.original_filename, mime or "application/octet-stream"
 
+    def rename_for_workspace(
+        self, workspace: Workspace, document_id: uuid.UUID, title: str
+    ) -> Document:
+        document = self.get_for_workspace(workspace, document_id)
+        if document.status == "deleting":
+            raise AppError(ErrorCategory.DOCUMENT_DELETED, "Document is being deleted")
+        next_title = title.strip()
+        if not next_title:
+            raise AppError(ErrorCategory.VALIDATION, "Title is required.")
+        if document.title != next_title:
+            document.title = next_title
+            self.db.commit()
+            self.db.refresh(document)
+        security_log(
+            "document.renamed",
+            workspace_id=str(workspace.id),
+            document_id=str(document.id),
+            action="rename",
+        )
+        return document
+
     def delete_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> None:
         """Soft-delete a Workspace document and purge blob + vectors + derived RAG.
 

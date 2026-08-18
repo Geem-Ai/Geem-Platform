@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { ExpertKnowledgeItem } from '@/services/api/types';
 
 interface RemoveKnowledgeDialogProps {
@@ -25,38 +27,40 @@ export function RemoveKnowledgeDialog({
   isPending,
 }: RemoveKnowledgeDialogProps) {
   const { t } = useTranslation();
-
-  if (!item) return null;
+  const filename = item?.title || item?.original_filename || '';
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!isPending) onOpenChange(o); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('experts.removeTitle')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          <strong>{item.title || item.original_filename}</strong>
-        </p>
-        <p className="text-sm text-muted-foreground">{t('experts.removeHint')}</p>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button
-            type="button"
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!isPending) onOpenChange(next);
+      }}
+    >
+      <AlertDialogContent data-testid="remove-knowledge-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('experts.removeTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('experts.removeHint')}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {item ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium break-all">
+            {filename}
+          </div>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>{t('common.cancel')}</AlertDialogCancel>
+          <AlertDialogAction
             variant="destructive"
-            onClick={() => onConfirm(item)}
-            disabled={isPending}
+            disabled={isPending || !item}
+            onClick={(event) => {
+              event.preventDefault();
+              if (item) onConfirm(item);
+            }}
+            data-testid="remove-knowledge-confirm"
           >
             {t('experts.confirmRemove')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

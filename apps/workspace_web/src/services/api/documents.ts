@@ -53,6 +53,13 @@ export function reprocessDocument(documentId: string, mode: 'failed_pages' | 'fu
   );
 }
 
+export function updateDocument(documentId: string, input: { title: string }) {
+  return apiRequest<DocumentSummary>(`/api/documents/${documentId}`, {
+    method: 'PATCH',
+    json: { title: input.title },
+  });
+}
+
 export function downloadDocumentFile(documentId: string) {
   return apiRequestBlob(`/api/documents/${documentId}/file`);
 }

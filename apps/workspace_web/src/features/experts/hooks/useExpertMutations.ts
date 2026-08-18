@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
-import { reprocessDocument } from '@/services/api/documents';
+import { reprocessDocument, updateDocument } from '@/services/api/documents';
 import {
   createExpert,
   deleteExpert,
@@ -134,6 +134,25 @@ export function useReprocessDocument(expertId: string) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.expert(workspaceId, expertId),
       });
+    },
+  });
+}
+
+export function useRenameExpertDocument(expertId: string) {
+  const queryClient = useQueryClient();
+  const workspaceId = useWorkspaceId();
+
+  return useMutation({
+    mutationFn: ({ documentId, title }: { documentId: string; title: string }) =>
+      updateDocument(documentId, { title }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.expertKnowledge(workspaceId, expertId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.expert(workspaceId, expertId),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents(workspaceId) });
     },
   });
 }

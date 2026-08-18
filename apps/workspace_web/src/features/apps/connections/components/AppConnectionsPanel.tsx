@@ -94,6 +94,15 @@ export function AppConnectionsPanel({
 
   const canStart =
     canManage && installed && connector.available && connector.can_connect;
+  const whatsappConnectionCount = whatsappApp
+    ? (connectionsQuery.data?.items.length ?? 0)
+    : 0;
+  const showWhatsAppAddNumber = whatsappApp && whatsappConnectionCount > 0 && canStart;
+
+  function openWhatsAppConnect() {
+    setResumeConnection(null);
+    setWhatsAppDialogOpen(true);
+  }
 
   function startOAuth(connectionId?: string) {
     startMut.mutate(
@@ -116,8 +125,32 @@ export function AppConnectionsPanel({
 
   return (
     <section className="space-y-3" data-testid="app-connections-panel">
-      {showTitle ? (
-        <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+      {showTitle || showWhatsAppAddNumber ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {showTitle ? (
+            <h3 className="text-sm font-semibold">{t('apps.connections.title')}</h3>
+          ) : null}
+          {showWhatsAppAddNumber ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ms-auto"
+              disabled={limitReached}
+              data-testid="whatsapp-connect-another"
+              onClick={openWhatsAppConnect}
+            >
+              {t('apps.whatsapp.connect.connectAnother')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {showWhatsAppAddNumber && limitReached ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="whatsapp-limit-reached"
+        >
+          {t('apps.connections.limitReached')}
+        </p>
       ) : null}
 
       {!installed ? (
@@ -187,10 +220,7 @@ export function AppConnectionsPanel({
                   size="sm"
                   disabled={limitReached}
                   data-testid="connection-connect"
-                  onClick={() => {
-                    setResumeConnection(null);
-                    setWhatsAppDialogOpen(true);
-                  }}
+                  onClick={openWhatsAppConnect}
                 >
                   {t('apps.connections.connect')}
                 </Button>
@@ -217,31 +247,6 @@ export function AppConnectionsPanel({
               }}
             />
           ))}
-
-          {connectionsQuery.data.items.length > 0 && canStart ? (
-            <div className="space-y-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={limitReached}
-                data-testid="whatsapp-connect-another"
-                onClick={() => {
-                  setResumeConnection(null);
-                  setWhatsAppDialogOpen(true);
-                }}
-              >
-                {t('apps.whatsapp.connect.connectAnother')}
-              </Button>
-              {limitReached ? (
-                <p
-                  className="text-sm text-muted-foreground"
-                  data-testid="whatsapp-limit-reached"
-                >
-                  {t('apps.connections.limitReached')}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
 
           <WhatsAppConnectDialog
             appSlug={app.slug}
