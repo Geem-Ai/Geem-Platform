@@ -51,6 +51,33 @@ def url_from_invite_email(message: EmailMessage) -> str:
     raise AssertionError("invitation email is missing an Accept URL")
 
 
+def token_from_verify_email(message: EmailMessage) -> str:
+    url = url_from_verify_email(message)
+    token = parse_qs(urlparse(url).query).get("token", [""])[0]
+    if not token:
+        raise AssertionError("verification email URL is missing a token")
+    return unquote(token)
+
+
+def url_from_verify_email(message: EmailMessage) -> str:
+    blobs = [message.text_body]
+    if message.html_body:
+        blobs.append(message.html_body)
+    for blob in blobs:
+        for line in blob.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("Verify your email:"):
+                continue
+            if "/verify-email" in stripped and "token=" in stripped:
+                start = stripped.find("http")
+                if start < 0:
+                    continue
+                candidate = stripped[start:].split('"', 1)[0].split("<", 1)[0].strip()
+                if "token=" in candidate:
+                    return candidate
+    raise AssertionError("verification email is missing a verify URL")
+
+
 def token_from_reset_email(message: EmailMessage) -> str:
     url = url_from_reset_email(message)
     token = parse_qs(urlparse(url).query).get("token", [""])[0]

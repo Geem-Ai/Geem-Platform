@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { continueAfterAuth } from '@/app/router/guards';
+import { continueAfterAuth, rememberAuthContinue } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,14 @@ export function LoginPage() {
       }
     } catch (err) {
       if (err instanceof ApiError) {
+        if (err.code === 'email_not_verified') {
+          rememberAuthContinue(from);
+          navigate('/check-email', {
+            replace: false,
+            state: { email: email.trim(), from },
+          });
+          return;
+        }
         setErrorKey(errorMessageKey(err.code));
       } else {
         setErrorKey('errors.generic');

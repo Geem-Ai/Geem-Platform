@@ -3,6 +3,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     healthcheck:
@@ -27,6 +29,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.13.2
+    restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -38,6 +41,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minio
@@ -66,6 +70,7 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - ../.env
     environment:
@@ -102,6 +107,7 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - ../.env
     environment:
@@ -128,6 +134,7 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - ../.env
     environment:
@@ -150,6 +157,7 @@ services:
     build:
       context: ../apps/web
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       # Browser calls the published API host (not the Docker service name).
       VITE_API_URL: ${VITE_API_URL:-http://api.geem.dm:8000}
@@ -167,6 +175,7 @@ services:
     build:
       context: ../apps/workspace_web
       dockerfile: Dockerfile
+    restart: unless-stopped
     # Source of truth: apps/workspace_web/.env (do not override here —
     # Compose `environment` would stomp env_file and force http://api.geem.dm:8000,
     # which breaks HTTPS UAT with mixed-content). Tunnel overlay may set VITE_*.
@@ -186,6 +195,7 @@ services:
     build:
       context: ../apps/landpage_web
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - ../apps/landpage_web/.env
     ports:

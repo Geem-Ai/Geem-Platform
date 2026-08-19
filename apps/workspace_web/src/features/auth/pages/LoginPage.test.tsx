@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { LoginPage } from './LoginPage';
+import { ApiError } from '@/services/api/errors';
 
 const login = vi.fn();
 const clearSessionExpired = vi.fn();
@@ -157,5 +158,41 @@ describe('LoginPage', () => {
 
     expect(screen.getByTestId('invitation-return')).toBeInTheDocument();
     expect(screen.queryByTestId('home')).not.toBeInTheDocument();
+  });
+
+  it('sends unverified users to check-email', async () => {
+    login.mockRejectedValue(
+      new ApiError('Email is not verified.', {
+        status: 403,
+        code: 'email_not_verified',
+      }),
+    );
+    await act(async () => {
+      render(
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter initialEntries={['/login']}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/check-email"
+                element={<div data-testid="check-email" />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </I18nextProvider>,
+      );
+    });
+
+    fireEvent.change(screen.getByLabelText(i18n.t('auth.email')), {
+      target: { value: 'pending@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('auth.password')), {
+      target: { value: 'securepass1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('auth.signIn') }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('check-email')).toBeInTheDocument();
+    });
   });
 });

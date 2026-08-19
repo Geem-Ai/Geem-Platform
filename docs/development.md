@@ -49,7 +49,7 @@ Set at least:
 
 Keep `AUTH_REQUIRED=true` and `LEGACY_MVP_WRITES_ENABLED=false`. Document / Query / Jobs require a logged-in Workspace user.
 
-Local billing checkout (Phase 6A/6B) needs **exactly one enabled** `payment_gateway_configs` row. Seed/bootstrap/workspace provision enable **ClickPay** when `CLICKPAY_PROFILE_ID` and `CLICKPAY_SERVER_KEY` are set; otherwise they seed **Noop** (`APP_ENV=local`/`test`). After payment verification the API redirects browsers (`Accept: text/html`) to the Workspace SPA (`/billing/payment/success|failed|pending?purchase=…`). It prefers the checkout `Origin` when that origin is allowed, then `WORKSPACE_WEB_URL`. Empty `WORKSPACE_WEB_URL` falls back to `http://app.{APP_ROOT_DOMAIN}:5174` in local/test (or `http://localhost:5174` when the root domain is localhost); production must set the SPA origin explicitly. The SPA re-fetches the purchase; it does not trust provider query parameters. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
+Local billing checkout (Phase 6A/6B) needs **exactly one enabled** `payment_gateway_configs` row. Seed/bootstrap/workspace provision enable **ClickPay** when `CLICKPAY_PROFILE_ID` and `CLICKPAY_SERVER_KEY` are set (any `APP_ENV`, including production). Otherwise they seed **Noop** only in `APP_ENV=local`/`test`. After payment verification the API redirects browsers (`Accept: text/html`) to the Workspace SPA (`/billing/payment/success|failed|pending?purchase=…`). It prefers the checkout `Origin` when that origin is allowed, then `WORKSPACE_WEB_URL`. Empty `WORKSPACE_WEB_URL` falls back to `http://app.{APP_ROOT_DOMAIN}:5174` in local/test (or `http://localhost:5174` when the root domain is localhost); production must set the SPA origin explicitly. The SPA re-fetches the purchase; it does not trust provider query parameters. Gateway secrets at rest use `SECRETS_ENCRYPTION_KEY` (empty = derived from `JWT_SECRET`).
 
 Google Drive knowledge connector (Phase 9D): set `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` to make the adapter available. Optional: `GOOGLE_DRIVE_REDIRECT_URI` (defaults to `{APP_URL}/api/connectors/oauth/google_drive/callback`), `GOOGLE_DRIVE_SCOPE_MODE` (`selected_files` or `readonly`), `GOOGLE_DRIVE_PICKER_API_KEY`, `GOOGLE_DRIVE_APP_ID`. Without client id/secret the adapter stays registered but `available=false`. Workspace SPA may set `VITE_GOOGLE_DRIVE_PICKER_API_KEY` / `VITE_GOOGLE_DRIVE_APP_ID` instead of relying on the picker-session echo. Full A–Z setup (Google Cloud Console, Picker, webhooks, Workspace UI): [apps/google-drive.md](./apps/google-drive.md).
 
@@ -150,6 +150,21 @@ docker compose -f docker-compose.yml -f docker-compose.tunnel.yml logs -f cloudf
 
 Missing `credentials.json` makes `cloudflared` exit. Cloudflare Free HTTP request bodies cap at **100 MB** (matches `MAX_UPLOAD_MB`).
 
+### Start on boot
+
+Docker is enabled as a system service. Compose services use `restart: unless-stopped`, so the tunnel stack comes back after a reboot.
+
+To also run `docker-compose … up -d` at boot (in case containers were removed). Linger is already enabled for this user:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp infra/systemd/geem-stack.user.service ~/.config/systemd/user/geem-stack.service
+systemctl --user daemon-reload
+systemctl --user enable --now geem-stack.service
+```
+
+Root alternative: `sudo install -m 644 infra/systemd/geem-stack.service /etc/systemd/system/geem-stack.service && sudo systemctl enable --now geem-stack`.
+
 ## Path 1 — full stack with Docker (recommended)
 
 ```bash
@@ -184,7 +199,11 @@ cd infra
 docker compose exec api python -m app.identity.bootstrap
 ```
 
-Requires `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. Safe to re-run: existing users are promoted to platform admin; password is unchanged unless you pass `--reset-password`.
+Requires `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. Safe to re-run: existing users are promoted to platform admin; password is unchanged unless you pass `--reset-password`. To apply current `BOOTSTRAP_*` plan limits onto the existing bootstrap plan (normal boot does not overwrite them):
+
+```bash
+docker compose exec api python -m app.identity.bootstrap --resync-bootstrap-plan
+```
 
 This also ensures the default Workspace, the internal Platform Knowledge Workspace, the Geem General Expert, and (when `APP_ENV` is local/dev) the demo billing catalog.
 
@@ -264,7 +283,7 @@ pip install -r requirements.txt
 pytest -q
 ```
 
-Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs the accept URL, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation tokens.
+Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs invite and email-verification URLs, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation or verification tokens. After register (local/production), the Workspace SPA shows `/check-email`; the console log includes `/verify-email?token=`. `APP_ENV=test` skips the gate unless `EMAIL_VERIFICATION_REQUIRED=true`.
 
 Generate PDF fixtures:
 

@@ -22,7 +22,6 @@ ingress:
     service: http://api:8000
     originRequest:
       httpHostHeader: api.geem.ai
-      # Chat SSE + large uploads
       connectTimeout: 30s
       keepAliveTimeout: 90s
   - hostname: geem.ai
@@ -33,4 +32,6 @@ ingress:
     service: http://landpage_web:80
     originRequest:
       httpHostHeader: www.geem.ai
+  - hostname: "*.geem.ai"
+    service: http://workspace_web:80
   - service: http_status:404

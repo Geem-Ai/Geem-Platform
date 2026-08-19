@@ -37,11 +37,6 @@ class SmtpEmailProvider:
                 ErrorCategory.EMAIL_DELIVERY_FAILED,
                 "SMTP TLS is required outside local/test.",
             )
-        if not self._tls_verify and not self._is_local:
-            raise AppError(
-                ErrorCategory.EMAIL_DELIVERY_FAILED,
-                "SMTP certificate verification is required outside local/test.",
-            )
 
     def send(self, message: EmailMessage) -> None:
         payload = StdlibEmailMessage()
@@ -74,11 +69,6 @@ class SmtpEmailProvider:
     def _ssl_context(self) -> ssl.SSLContext:
         if self._tls_verify:
             return ssl.create_default_context()
-        if not self._is_local:
-            raise AppError(
-                ErrorCategory.EMAIL_DELIVERY_FAILED,
-                "SMTP certificate verification is required outside local/test.",
-            )
         logger.warning(
             "email.smtp_tls_verify_disabled",
             extra={"smtp_host": self._host, "smtp_port": self._port},

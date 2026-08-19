@@ -33,6 +33,9 @@ class ErrorCategory(StrEnum):
     WEAK_PASSWORD = "weak_password"
     INVALID_RESET_TOKEN = "invalid_reset_token"
     RESET_TOKEN_EXPIRED = "reset_token_expired"
+    EMAIL_NOT_VERIFIED = "email_not_verified"
+    INVALID_VERIFICATION_TOKEN = "invalid_verification_token"
+    VERIFICATION_TOKEN_EXPIRED = "verification_token_expired"
 
     # Workspaces / membership
     WORKSPACE_SLUG_TAKEN = "workspace_slug_taken"
@@ -236,6 +239,9 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "weak_password": 422,
     "invalid_reset_token": 400,
     "reset_token_expired": 410,
+    "email_not_verified": 403,
+    "invalid_verification_token": 400,
+    "verification_token_expired": 410,
     "workspace_slug_taken": 409,
     "workspace_slug_invalid": 422,
     "workspace_not_found": 404,

@@ -18,7 +18,9 @@ import {
   refreshSession,
   registerAccount,
   resetPassword,
+  verifyEmail,
   type MeResponse,
+  type RegisterOutcome,
   type User,
 } from '@/services/api';
 import {
@@ -39,8 +41,9 @@ type AuthContextValue = {
   accessToken: string | null;
   me: MeResponse | null;
   login: (email: string, password: string) => Promise<MeResponse>;
-  register: (email: string, password: string) => Promise<MeResponse>;
+  register: (email: string, password: string) => Promise<RegisterOutcome>;
   completePasswordReset: (token: string, password: string) => Promise<MeResponse>;
+  completeEmailVerification: (token: string) => Promise<MeResponse>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   refreshSession: () => Promise<string>;
@@ -145,8 +148,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<RegisterOutcome> => {
       const res = await registerAccount(email, password);
+      if (res.verification_required || !res.access_token || !res.user) {
+        return { verificationRequired: true };
+      }
       applyToken(res.access_token, res.user.id);
       setAccessToken(res.access_token);
       setUser(res.user);
@@ -154,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await fetchMe();
       setMe(data);
       setStatus('authenticated');
-      return data;
+      return { verificationRequired: false, me: data };
     },
     [],
   );
@@ -173,6 +179,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const completeEmailVerification = useCallback(async (token: string) => {
+    const res = await verifyEmail(token);
+    applyToken(res.access_token, res.user.id);
+    setAccessToken(res.access_token);
+    setUser(res.user);
+    setSessionExpired(false);
+    const data = await fetchMe();
+    setMe(data);
+    setStatus('authenticated');
+    return data;
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -201,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       completePasswordReset,
+      completeEmailVerification,
       logout,
       logoutAll,
       refreshSession: doRefresh,
@@ -216,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       completePasswordReset,
+      completeEmailVerification,
       logout,
       logoutAll,
       doRefresh,

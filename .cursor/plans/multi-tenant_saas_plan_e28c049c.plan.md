@@ -426,8 +426,8 @@ Port into `apps/workspace_web` only what the AI shell needs (plus later product 
 ### 9. Authentication adaptation
 
 - Metronic AI has **no auth screens and no auth backend** — only a decorative user dropdown.
-- **Delivered:** login/register/forgot-password/reset-password (GuestRoute) and change-password (`/account`) using **AI Concept UI primitives** (Card, Input, Button) so visuals match the product; do **not** import another Metronic concept’s auth demo.
-- Wire exclusively to FastAPI Identity (`/api/auth/*`); session/JWT refresh owned by `services/auth`. Password reset uses HMAC tokens + email (same pattern as invitations); reset auto-logs in; change-password revokes other sessions.
+- **Delivered:** login/register/forgot-password/reset-password/check-email/verify-email (GuestRoute) and change-password (`/account`) using **AI Concept UI primitives** (Card, Input, Button) so visuals match the product; do **not** import another Metronic concept’s auth demo.
+- Wire exclusively to FastAPI Identity (`/api/auth/*`); session/JWT refresh owned by `services/auth`. Password reset and email verification use HMAC tokens + email (same pattern as invitations); verification gates register outside `APP_ENV=test`; reset/verify auto-log in; change-password revokes other sessions.
 
 ### 10. Workspace adaptation
 

@@ -33,6 +33,7 @@ def provision_tenant_workspace(
     cfg = settings or get_settings()
     SubscriptionService(db, cfg).ensure_bootstrap_subscription(workspace_id)
     CreditService(db, cfg).ensure_account(workspace_id)
+    ensure_clickpay_from_env(db, settings=cfg)
     ensure_local_checkout_gateway(db, settings=cfg)
     ensure_local_demo_catalog(db, settings=cfg)
 
@@ -42,6 +43,22 @@ def clickpay_env_configured(settings: Settings | None = None) -> bool:
     return bool(cfg.clickpay_profile_id.strip() and cfg.clickpay_server_key.strip())
 
 
+def ensure_clickpay_from_env(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+) -> PaymentGatewayConfig | None:
+    """Enable ClickPay from CLICKPAY_* in any APP_ENV. No-op if keys are unset.
+
+    Disables other enabled gateways so checkout sees exactly one adapter.
+    Never enables Noop.
+    """
+    cfg = settings or get_settings()
+    if not clickpay_env_configured(cfg):
+        return None
+    return _enable_clickpay_from_env(db, cfg)
+
+
 def ensure_local_checkout_gateway(
     db: Session,
     *,
@@ -49,13 +66,14 @@ def ensure_local_checkout_gateway(
 ) -> PaymentGatewayConfig | None:
     """Enable ClickPay from env when configured; otherwise seed Noop.
 
-    Local/dev/test only. Never enables a gateway in production.
+    Local/dev/test only for the Noop fallback. Production checkout is
+    ClickPay via ``ensure_clickpay_from_env`` (or a manual registry row).
     """
     cfg = settings or get_settings()
-    if not cfg.is_local:
-        return None
     if clickpay_env_configured(cfg):
         return _enable_clickpay_from_env(db, cfg)
+    if not cfg.is_local:
+        return None
     return ensure_local_noop_gateway(db, settings=cfg)
 
 
@@ -118,7 +136,7 @@ def _enable_clickpay_from_env(db: Session, settings: Settings) -> PaymentGateway
         existing.credentials_encrypted = blob
         extra = dict(existing.extra or {})
         extra["source"] = "env"
-        extra["local"] = True
+        extra["local"] = bool(settings.is_local)
         existing.extra = extra
         db.flush()
         return existing
@@ -127,7 +145,7 @@ def _enable_clickpay_from_env(db: Session, settings: Settings) -> PaymentGateway
         enabled=True,
         test_mode=bool(settings.clickpay_test_mode),
         credentials_encrypted=blob,
-        extra={"source": "env", "local": True},
+        extra={"source": "env", "local": bool(settings.is_local)},
     )
     try:
         with db.begin_nested():

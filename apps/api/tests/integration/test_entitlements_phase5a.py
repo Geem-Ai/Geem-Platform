@@ -234,6 +234,22 @@ def test_ensure_bootstrap_plan_is_idempotent(db) -> None:
     assert EntitlementKey.EXPERTS_LIMIT.value in keys
 
 
+def test_resync_bootstrap_plan_overwrites_entitlements(db) -> None:
+    svc = PlanService(db)
+    plan = svc.ensure_bootstrap_plan()
+    svc.set_entitlement(plan.id, EntitlementKey.EXPERTS_LIMIT.value, 1)
+    db.commit()
+
+    svc.settings.bootstrap_experts_limit = 42
+    svc.settings.bootstrap_plan_name = "Bootstrap (resync)"
+    updated = svc.resync_bootstrap_plan()
+    db.commit()
+    assert updated.name == "Bootstrap (resync)"
+    row = svc.plans.get_entitlement(plan.id, EntitlementKey.EXPERTS_LIMIT.value)
+    assert row is not None
+    assert row.value == "42"
+
+
 def test_ensure_bootstrap_plan_recovers_when_code_lookup_loses_the_race(db) -> None:
     svc = PlanService(db)
     existing = svc.ensure_bootstrap_plan()

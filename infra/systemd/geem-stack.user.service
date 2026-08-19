@@ -1,0 +1,17 @@
+[Unit]
+Description=Geem production stack (Docker Compose + Cloudflare Tunnel)
+After=default.target
+# docker.service is a system unit; wait for the socket before compose up.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/mohammed-kh/Projects/ArabicRag/infra
+Environment=PATH=/home/mohammed-kh/.local/bin:/usr/bin:/bin
+ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+ExecStart=/home/mohammed-kh/.local/bin/docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web cloudflared
+ExecStop=/home/mohammed-kh/.local/bin/docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml stop postgres redis qdrant minio api worker beat workspace_web landpage_web cloudflared
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target

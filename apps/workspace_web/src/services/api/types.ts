@@ -4,6 +4,7 @@ export type User = {
   status: string;
   platform_role: string;
   created_at: string;
+  email_verified_at?: string | null;
 };
 
 export type RoleSummary = {
@@ -39,12 +40,24 @@ export type AuthTokenResponse = {
   user: User;
 };
 
+export type RegisterResponse = {
+  verification_required: boolean;
+  access_token?: string | null;
+  token_type?: string;
+  expires_at?: string | null;
+  user?: User | null;
+};
+
 export type MeResponse = {
   user: User;
   workspaces: WorkspaceSummary[];
   current_workspace: WorkspaceSummary | null;
   membership: Membership | null;
 };
+
+export type RegisterOutcome =
+  | { verificationRequired: true }
+  | { verificationRequired: false; me: MeResponse };
 
 export type Workspace = {
   id: string;

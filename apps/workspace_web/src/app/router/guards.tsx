@@ -6,6 +6,7 @@ import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { ScreenLoader } from '@/components/shared/ScreenLoader';
 
 const PAYMENT_RETURN_STORAGE_KEY = 'geem.billing.paymentReturn';
+const AUTH_CONTINUE_STORAGE_KEY = 'geem.auth.continueFrom';
 
 /** Same-origin relative path including search (payment result needs ?purchase=). */
 export function internalReturnPath(location: {
@@ -45,6 +46,22 @@ export function consumePaymentReturn(): string | null {
   return safeInternalPath(raw);
 }
 
+/** Keep invitation/payment return across the email-verification hop. */
+export function rememberAuthContinue(from: unknown): void {
+  if (typeof sessionStorage === 'undefined') return;
+  const path = safeInternalPath(from);
+  if (!path) return;
+  sessionStorage.setItem(AUTH_CONTINUE_STORAGE_KEY, path);
+}
+
+export function consumeAuthContinue(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  const raw = sessionStorage.getItem(AUTH_CONTINUE_STORAGE_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(AUTH_CONTINUE_STORAGE_KEY);
+  return safeInternalPath(raw);
+}
+
 /** Login/onboarding continue target. Prefers `from`, then stashed payment return. */
 export function continueAfterAuth(from: unknown): string {
   const explicit = safeInternalPath(from);
@@ -56,14 +73,19 @@ export function continueAfterAuth(from: unknown): string {
     pathOnly !== '/register' &&
     pathOnly !== '/forgot-password' &&
     pathOnly !== '/reset-password' &&
+    pathOnly !== '/check-email' &&
+    pathOnly !== '/verify-email' &&
     pathOnly !== '/onboarding'
   ) {
     if (isBillingPaymentResultPath(pathOnly)) {
       consumePaymentReturn();
     }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(AUTH_CONTINUE_STORAGE_KEY);
+    }
     return explicit;
   }
-  return consumePaymentReturn() ?? '/';
+  return consumePaymentReturn() ?? consumeAuthContinue() ?? '/';
 }
 
 /** Guest-only routes (login/register). */
