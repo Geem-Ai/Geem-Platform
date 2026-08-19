@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, UserRoundPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth, rememberAuthContinue } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
@@ -66,6 +66,7 @@ export function RegisterPage() {
     <AuthLayout>
       <DocumentTitle title={t('auth.registerTitle')} />
       <AuthFormHeader
+        icon={UserRoundPlus}
         title={t('auth.registerTitle')}
         subtitle={t('auth.registerSubtitle')}
       />
@@ -95,9 +96,14 @@ export function RegisterPage() {
             <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
           }
         />
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="auth-submit-button w-full"
+          disabled={submitting}
+        >
           {submitting ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
           ) : null}
           {submitting ? t('auth.creatingAccount') : t('auth.createAccount')}
         </Button>

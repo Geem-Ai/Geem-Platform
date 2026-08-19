@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { BadgeCheck, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
@@ -57,6 +57,7 @@ export function VerifyEmailPage() {
     <AuthLayout>
       <DocumentTitle title={t('auth.verifyEmailTitle')} />
       <AuthFormHeader
+        icon={BadgeCheck}
         title={t('auth.verifyEmailTitle')}
         subtitle={
           verifying ? t('auth.verifyEmailWorking') : t('auth.verifyEmailSubtitle')
@@ -64,8 +65,14 @@ export function VerifyEmailPage() {
       />
       <div className="space-y-5" data-testid="verify-email-panel">
         {verifying && !errorKey && (
-          <div className="flex justify-center" data-testid="verify-email-loading">
-            <LoaderCircle className="size-6 animate-spin text-primary" aria-hidden />
+          <div
+            className="flex justify-center rounded-2xl border border-primary/15 bg-primary/5 px-5 py-8"
+            data-testid="verify-email-loading"
+          >
+            <LoaderCircle
+              className="size-7 animate-spin text-primary drop-shadow-sm"
+              aria-hidden
+            />
             <span className="sr-only">{t('auth.verifyEmailWorking')}</span>
           </div>
         )}

@@ -100,6 +100,25 @@ Pattern kept: list page stays mounted; floating inset `Sheet` (`inset-5`, rounde
 
 Phase 3C stateless Ask UI was replaced by Phase 4C persisted Chat (below).
 
+## Auth workspace surface — 2026-08-19
+
+The Workspace authentication shell was visually refreshed using a small set of
+AI Concept layout patterns (no sample imports, assets, or new dependencies):
+
+- `src/ai/layout/components/wrapper.tsx` → inset, rounded workspace window in
+  `features/auth/components/AuthLayout.tsx`
+- `src/ai/components/chat-starter-header.tsx` → compact state-icon and centered
+  heading treatment in `features/auth/components/AuthFields.tsx`
+- `src/ai/components/chat-starter-input.tsx` → elevated bordered form surface in
+  `features/auth/components/AuthLayout.tsx`
+- `src/ai/components/chat-starter-actions.tsx` → compact product-signal cards in
+  `features/auth/components/AuthBrandPanel.tsx`
+
+The animated navy glow, bilingual preview content, Geem avatar, theme behavior,
+and responsive/mobile treatment are Geem-owned production code. Metronic mock
+data, logos, purple gradients, randomized backgrounds, and `motion` utilities
+were not ported.
+
 ## Phase 4C — Production Metronic AI Chat UX
 
 Selectively adapted from `samples/metronic_vite_9.5.0/src/ai/**` into `features/chat/**` (no runtime sample imports, zero mock chat state):

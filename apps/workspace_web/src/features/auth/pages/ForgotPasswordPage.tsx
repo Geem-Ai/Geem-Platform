@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { KeyRound, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth } from '@/app/router/guards';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
@@ -52,14 +52,18 @@ export function ForgotPasswordPage() {
     <AuthLayout>
       <DocumentTitle title={t('auth.forgotTitle')} />
       <AuthFormHeader
+        icon={KeyRound}
         title={t('auth.forgotTitle')}
         subtitle={
           submitted ? t('auth.forgotSuccessSubtitle') : t('auth.forgotSubtitle')
         }
       />
       {submitted ? (
-        <div className="space-y-5" data-testid="forgot-password-success">
-          <AuthAlert tone="warning">{t('auth.forgotSuccessBody')}</AuthAlert>
+        <div
+          className="space-y-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5"
+          data-testid="forgot-password-success"
+        >
+          <AuthAlert tone="success">{t('auth.forgotSuccessBody')}</AuthAlert>
           <p className="text-center text-sm text-muted-foreground">
             <Link
               to="/login"
@@ -85,9 +89,14 @@ export function ForgotPasswordPage() {
             disabled={submitting}
             autoFocus
           />
-          <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          <Button
+            type="submit"
+            size="lg"
+            className="auth-submit-button w-full"
+            disabled={submitting}
+          >
             {submitting ? (
-              <LoaderCircle className="animate-spin" aria-hidden />
+              <LoaderCircle className="size-4 animate-spin" aria-hidden />
             ) : null}
             {submitting ? t('auth.forgotSubmitting') : t('auth.forgotSubmit')}
           </Button>

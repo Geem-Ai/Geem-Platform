@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, MailCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth } from '@/app/router/guards';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
@@ -67,7 +67,11 @@ export function CheckEmailPage() {
   return (
     <AuthLayout>
       <DocumentTitle title={t('auth.checkEmailTitle')} />
-      <AuthFormHeader title={t('auth.checkEmailTitle')} subtitle={subtitle} />
+      <AuthFormHeader
+        icon={MailCheck}
+        title={t('auth.checkEmailTitle')}
+        subtitle={subtitle}
+      />
       <form
         onSubmit={onResend}
         className="space-y-5"
@@ -75,7 +79,7 @@ export function CheckEmailPage() {
         aria-busy={submitting}
       >
         {resent && (
-          <AuthAlert tone="warning">{t('auth.checkEmailResent')}</AuthAlert>
+          <AuthAlert tone="success">{t('auth.checkEmailResent')}</AuthAlert>
         )}
         {errorKey && <AuthAlert>{t(errorKey)}</AuthAlert>}
         {!initialEmail && (
@@ -87,9 +91,14 @@ export function CheckEmailPage() {
             autoFocus
           />
         )}
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="auth-submit-button w-full"
+          disabled={submitting}
+        >
           {submitting ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
           ) : null}
           {submitting ? t('auth.checkEmailResending') : t('auth.checkEmailResend')}
         </Button>
