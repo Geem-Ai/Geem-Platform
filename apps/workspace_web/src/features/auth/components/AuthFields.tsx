@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Input, InputWrapper } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,14 +15,25 @@ type AuthEmailFieldProps = {
 export function AuthFormHeader({
   title,
   subtitle,
+  icon: Icon,
 }: {
   title: string;
   subtitle: string;
+  icon?: LucideIcon;
 }) {
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      <p className="text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
+    <div className="text-center">
+      {Icon ? (
+        <div className="auth-form-icon mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl border border-primary/10 bg-primary/10 text-primary">
+          <Icon className="size-6" aria-hidden />
+        </div>
+      ) : null}
+      <h1 className="text-[1.75rem] font-semibold leading-tight tracking-tight">
+        {title}
+      </h1>
+      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+        {subtitle}
+      </p>
     </div>
   );
 }
@@ -37,9 +48,14 @@ export function AuthEmailField({
   const { t } = useTranslation();
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{t('auth.email')}</Label>
-      <InputWrapper variant="lg">
+    <div className="space-y-2.5">
+      <Label htmlFor={id} className="text-sm font-medium">
+        {t('auth.email')}
+      </Label>
+      <InputWrapper
+        variant="lg"
+        className="auth-input-wrapper h-12 rounded-xl border-input/80 bg-background/80 px-3.5 dark:bg-background/60"
+      >
         <Mail aria-hidden />
         <Input
           id={id}
@@ -95,9 +111,14 @@ export function AuthPasswordField({
   const [visible, setVisible] = useState(false);
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label ?? t('auth.password')}</Label>
-      <InputWrapper variant="lg">
+    <div className="space-y-2.5">
+      <Label htmlFor={id} className="text-sm font-medium">
+        {label ?? t('auth.password')}
+      </Label>
+      <InputWrapper
+        variant="lg"
+        className="auth-input-wrapper h-12 rounded-xl border-input/80 bg-background/80 px-3.5 dark:bg-background/60"
+      >
         <Lock aria-hidden />
         <Input
           id={id}
@@ -116,7 +137,7 @@ export function AuthPasswordField({
         <button
           type="button"
           data-testid={`auth-password-toggle-${id}`}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           aria-label={visible ? t('auth.hidePassword') : t('auth.showPassword')}
           aria-pressed={visible}
           disabled={disabled}
@@ -125,7 +146,7 @@ export function AuthPasswordField({
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
       </InputWrapper>
-      {hint}
+      {hint ? <div className="text-xs leading-5 text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }

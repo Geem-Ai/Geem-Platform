@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, RotateCcwKey } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
@@ -71,6 +71,7 @@ export function ResetPasswordPage() {
     <AuthLayout>
       <DocumentTitle title={t('auth.resetTitle')} />
       <AuthFormHeader
+        icon={RotateCcwKey}
         title={t('auth.resetTitle')}
         subtitle={t('auth.resetSubtitle')}
       />
@@ -107,11 +108,11 @@ export function ResetPasswordPage() {
         <Button
           type="submit"
           size="lg"
-          className="w-full"
+          className="auth-submit-button w-full"
           disabled={submitting || !token}
         >
           {submitting ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
           ) : null}
           {submitting ? t('auth.resetSubmitting') : t('auth.resetSubmit')}
         </Button>

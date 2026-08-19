@@ -50,7 +50,7 @@ export function AuthChrome() {
       <div
         role="group"
         aria-label={t('shell.language')}
-        className="inline-flex rounded-md border border-input bg-background p-0.5 shadow-xs"
+        className="inline-flex rounded-full border border-border/80 bg-card/75 p-1 shadow-sm shadow-black/5 backdrop-blur-md dark:bg-card/70"
       >
         {(['ar', 'en'] as const).map((option) => (
           <button
@@ -60,10 +60,10 @@ export function AuthChrome() {
             aria-pressed={locale === option}
             onClick={() => void i18n.changeLanguage(option)}
             className={cn(
-              'h-7 rounded-[5px] px-2.5 text-xs font-medium transition-colors',
+              'h-7 rounded-full px-3 text-xs font-medium transition-all',
               locale === option
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
             )}
           >
             {t(option === 'ar' ? 'shell.languageAr' : 'shell.languageEn')}
@@ -77,7 +77,9 @@ export function AuthChrome() {
             type="button"
             variant="outline"
             mode="icon"
-            size="sm"
+            size="icon"
+            shape="circle"
+            className="border-border/80 bg-card/75 shadow-sm shadow-black/5 backdrop-blur-md hover:bg-card dark:bg-card/70"
             onClick={cycleTheme}
             aria-label={`${t('shell.theme')}: ${t(`shell.${themeLabelKey(currentTheme)}`)}`}
             data-testid="auth-theme-toggle"

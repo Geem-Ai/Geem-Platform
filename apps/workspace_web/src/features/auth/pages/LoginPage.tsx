@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { continueAfterAuth, rememberAuthContinue } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
@@ -68,6 +68,7 @@ export function LoginPage() {
     <AuthLayout>
       <DocumentTitle title={t('auth.loginTitle')} />
       <AuthFormHeader
+        icon={LogIn}
         title={t('auth.loginTitle')}
         subtitle={t('auth.loginSubtitle')}
       />
@@ -105,9 +106,14 @@ export function LoginPage() {
             {t('auth.forgotLink')}
           </Link>
         </p>
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="auth-submit-button w-full"
+          disabled={submitting}
+        >
           {submitting ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
           ) : null}
           {submitting ? t('auth.signingIn') : t('auth.signIn')}
         </Button>
