@@ -5,10 +5,12 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.main import app
+from app.observability.http_middleware import ObservabilityHttpMiddleware
 from app.observability.request_id import sanitize_request_id
-from app.observability.setup import configure_test_tracing
+from app.observability.setup import configure_test_tracing, reset_test_tracing, tracing_active
 from app.observability.tracing import start_span
 
 
@@ -103,3 +105,49 @@ def test_celery_task_span_can_be_created() -> None:
     with start_span("conversation.purge", task_id="t-1"):
         pass
     assert any(s.name == "conversation.purge" for s in exporter.get_finished_spans())
+
+
+def test_http_middleware_is_not_base_http_middleware() -> None:
+    assert not issubclass(ObservabilityHttpMiddleware, BaseHTTPMiddleware)
+
+
+def test_mark_span_error_strips_httpx_url() -> None:
+    exporter = InMemorySpanExporter()
+    configure_test_tracing(None, exporter)
+    exc = RuntimeError(
+        "POST https://openrouter.ai/api/v1/chat/completions?api_key=secret-token failed"
+    )
+    try:
+        with start_span("openrouter.chat"):
+            raise exc
+    except RuntimeError:
+        pass
+    spans = exporter.get_finished_spans()
+    assert spans
+    blob = (
+        str(spans[-1].status.description)
+        + repr(spans[-1].events)
+        + str(spans[-1].attributes)
+        + str(spans[-1].events)
+    )
+    assert "openrouter.ai" not in blob
+    assert "secret-token" not in blob
+    assert "exception.stacktrace" not in blob
+
+
+def test_configure_test_tracing_swaps_exporter_and_resets() -> None:
+    first = InMemorySpanExporter()
+    configure_test_tracing(None, first)
+    with start_span("swap.a"):
+        pass
+    second = InMemorySpanExporter()
+    configure_test_tracing(None, second)
+    with start_span("swap.b"):
+        pass
+    first_names = {s.name for s in first.get_finished_spans()}
+    second_names = {s.name for s in second.get_finished_spans()}
+    assert "swap.a" in first_names
+    assert "swap.b" not in first_names
+    assert "swap.b" in second_names
+    reset_test_tracing()
+    assert tracing_active() is False

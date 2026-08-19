@@ -28,7 +28,11 @@ def start_span(name: str, **attrs: Any) -> Iterator[Span]:
     ``name`` must be a low-cardinality operation (``chat.turn``, ``qdrant.search``).
     """
     tracer = get_tracer()
-    with tracer.start_as_current_span(name) as span:
+    with tracer.start_as_current_span(
+        name,
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
         attach_request_context(span)
         set_safe_attributes(span, attrs)
         try:
