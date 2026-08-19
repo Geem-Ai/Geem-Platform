@@ -8,6 +8,7 @@
 #   cloudflared tunnel route dns geem-dalseen hub.geem.ai
 #   cloudflared tunnel route dns geem-dalseen api.geem.ai
 #   cloudflared tunnel route dns geem-dalseen geem.ai
+#   cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 
 # name: geem-dalseen
 tunnel: e054f188-97ca-4cab-80da-020f0ae4385b

@@ -52,6 +52,10 @@ def test_workspace_web_url_falls_back_to_localhost_only_when_local() -> None:
         app_root_domain="geem.ai",
     )
     assert production.effective_workspace_web_url == ""
+    assert production.is_allowed_spa_origin("https://acme.geem.ai")
+    assert production.is_allowed_spa_origin("https://app.geem.ai")
+    assert not production.is_allowed_spa_origin("http://acme.geem.ai")
+    assert not production.is_allowed_spa_origin("https://evil-geem.ai")
     explicit = Settings(
         _env_file=None,
         app_env="production",

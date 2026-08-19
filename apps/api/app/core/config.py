@@ -327,15 +327,26 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         return self.app_env.lower() in {"local", "dev", "development", "test"}
 
-    def local_spa_origin_regex(self) -> str | None:
-        """Allow http(s)://{optional-subdomain.}{APP_ROOT_DOMAIN}{:port} in local/dev only."""
-        if not self.is_local:
-            return None
+    def spa_origin_regex(self) -> str | None:
+        """CORS / checkout allowlist derived from APP_ROOT_DOMAIN (one DNS label).
+
+        Local: http(s)://{optional-subdomain.}{root}{:port}
+        Otherwise: https://{subdomain}.{root} only (matches Cloudflare ``*.geem.ai``).
+        Never suffix-match (``evil-geem.ai`` / ``geem.ai.attacker.com``).
+        """
         root = self.app_root_domain.strip().lower().lstrip(".")
         if not root or root in {"localhost", "127.0.0.1"}:
             return None
         escaped = re.escape(root)
-        return rf"^https?://([a-z0-9-]+\.)?{escaped}(:\d+)?$"
+        if self.is_local:
+            return rf"^https?://([a-z0-9-]+\.)?{escaped}(:\d+)?$"
+        return rf"^https://[a-z0-9-]+\.{escaped}$"
+
+    def local_spa_origin_regex(self) -> str | None:
+        """Local/dev-only variant of ``spa_origin_regex`` (tests and older call sites)."""
+        if not self.is_local:
+            return None
+        return self.spa_origin_regex()
 
     def is_allowed_spa_origin(self, origin: str) -> bool:
         raw = (origin or "").strip().rstrip("/")
@@ -343,7 +354,7 @@ class Settings(BaseSettings):
             return False
         if raw in self.cors_origin_list:
             return True
-        pattern = self.local_spa_origin_regex()
+        pattern = self.spa_origin_regex()
         return bool(pattern and re.match(pattern, raw))
 
     @property

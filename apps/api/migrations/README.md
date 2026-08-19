@@ -76,7 +76,7 @@ Production / SaaS default: `AUTH_REQUIRED=true`, `LEGACY_MVP_WRITES_ENABLED=fals
 | Env | Frontend | API | Cookie | CORS |
 |-----|----------|-----|--------|------|
 | Local | `http://localhost:5174` (or configured host:5174) | `http://localhost:8000` | Host-only on API host, `Path=/api/auth`, `HttpOnly`, `SameSite=Lax`, `Secure=false` | Exact origins in `CORS_ORIGINS` + credentials |
-| Production | `{workspace}.geem.ai` or `app.geem.ai` | `api.geem.ai` | Host-only on API host (not shared across customer domains), `Secure=true`, `SameSite=Lax` | Exact allowlist — never `*` |
+| Production | `{workspace}.geem.ai` or `hub.geem.ai` | `api.geem.ai` | Host-only on API host (not shared across customer domains), `Secure=true`, `SameSite=Lax` | Exact `CORS_ORIGINS` + `https://{slug}.{APP_ROOT_DOMAIN}` regex — never `*` |
 
 **Custom domains (`chat.customer.com`):** current cookie is API-host-only. Cross-site custom domains would need a BFF/same-origin proxy or a deliberate cross-site cookie strategy later — do not treat Phase 1 cookies as portable to arbitrary customer origins.
 
