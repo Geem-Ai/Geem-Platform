@@ -11,7 +11,8 @@ The app currently provides:
 
 - Login, forgot password, password reset, email verification, and resend
   verification flows.
-- Secure session restore, refresh-token rotation, and logout.
+- Secure session restore and refresh-token rotation, with logout isolated in a
+  profile screen behind explicit confirmation.
 - Workspace selection with a remembered workspace per user.
 - New text chats with an Expert, defaulting to Geem General when available.
 - Persisted chat history, pinned and recent sections, and a favorites filter.

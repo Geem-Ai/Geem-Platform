@@ -5,6 +5,7 @@ import 'package:geem_workspace/src/controllers/app_controller.dart';
 import 'package:geem_workspace/src/models/models.dart';
 import 'package:geem_workspace/src/screens/chat/chat_shell.dart';
 import 'package:geem_workspace/src/screens/chat/expert_navbar_dropdown.dart';
+import 'package:geem_workspace/src/screens/profile/profile_screen.dart';
 import 'package:geem_workspace/src/services/credential_store.dart';
 import 'package:geem_workspace/src/services/geem_api_client.dart';
 import 'package:geem_workspace/src/theme/geem_theme.dart';
@@ -126,5 +127,47 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets(
+    'sidebar profile control replaces direct logout and opens profile',
+    (tester) async {
+      await pumpShell(tester, const Size(1024, 768));
+
+      expect(find.byKey(const Key('sidebar-profile-button')), findsOneWidget);
+      expect(find.byKey(const Key('sidebar-language-button')), findsOneWidget);
+      expect(find.byIcon(Icons.logout_rounded), findsNothing);
+
+      await tester.tap(find.byKey(const Key('sidebar-profile-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ProfileScreen.screenKey), findsOneWidget);
+      expect(find.byKey(ProfileScreen.logoutButtonKey), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile drawer profile closes the drawer before opening profile',
+    (tester) async {
+      await pumpShell(tester, const Size(320, 700));
+      final scaffold = tester.state<ScaffoldState>(find.byType(Scaffold).first);
+      scaffold.openDrawer();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('sidebar-profile-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ProfileScreen.screenKey), findsOneWidget);
+      expect(scaffold.isDrawerOpen, isFalse);
+    },
+  );
+
+  testWidgets('mobile app-bar profile icon opens profile', (tester) async {
+    await pumpShell(tester, const Size(320, 700));
+
+    await tester.tap(find.byKey(const Key('mobile-profile-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ProfileScreen.screenKey), findsOneWidget);
   });
 }

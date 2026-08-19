@@ -73,12 +73,6 @@ class _NoWorkspaceState extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 22),
-              OutlinedButton.icon(
-                onPressed: AppScope.of(context, listen: false).logout,
-                icon: const Icon(Icons.logout_rounded),
-                label: Text(strings.text('logout')),
-              ),
             ],
           ),
         ),

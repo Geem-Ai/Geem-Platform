@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
@@ -7,6 +9,7 @@ import '../../models/models.dart';
 import '../../theme/geem_theme.dart';
 import '../../widgets/geem_avatar.dart';
 import '../../widgets/geem_gradient_button.dart';
+import '../profile/profile_screen.dart';
 
 class ChatSidebar extends StatelessWidget {
   const ChatSidebar({this.onNavigate, super.key});
@@ -409,38 +412,83 @@ class _SidebarFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(8),
     child: Row(
       children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.primary.withValues(alpha: 0.12),
-          foregroundColor: Theme.of(context).colorScheme.primary,
-          child: Text(
-            controller.userInitials,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
-          ),
-        ),
-        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            controller.user?.email ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+          child: Tooltip(
+            message: context.strings.text('profile'),
+            child: Semantics(
+              button: true,
+              label: context.strings.text('profile'),
+              child: InkWell(
+                key: const Key('sidebar-profile-button'),
+                onTap: () => unawaited(openProfileScreen(context)),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 5,
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.12),
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        child: Text(
+                          controller.userInitials,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              controller.user?.email ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (controller.currentWorkspace != null)
+                              Text(
+                                controller.currentWorkspace!.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                      fontSize: 10.5,
+                                    ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
         IconButton(
+          key: const Key('sidebar-language-button'),
           onPressed: controller.toggleLocale,
           tooltip: context.strings.text('language'),
           icon: const Icon(Icons.language_rounded, size: 19),
-        ),
-        IconButton(
-          onPressed: controller.logout,
-          tooltip: context.strings.text('logout'),
-          icon: const Icon(Icons.logout_rounded, size: 19),
         ),
       ],
     ),
