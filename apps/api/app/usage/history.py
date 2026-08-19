@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from sqlalchemy import BigInteger, String, case, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
+from app.core.errors import AppError, ErrorCategory
 from app.db.models import UsageEvent
 from app.usage.metrics import CreditLedgerEntryType
 from app.usage.models import CreditLedgerEntry
@@ -89,8 +91,9 @@ def normalize_history_kind(kind: str | None) -> HistoryKindFilter:
 
 
 class UsageHistoryService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, settings: Settings | None = None) -> None:
         self.db = db
+        self.settings = settings or get_settings()
 
     def list_items(
         self,
@@ -124,9 +127,13 @@ class UsageHistoryService:
         cap = max(1, min(int(limit), 100))
         skip = max(0, int(offset))
         filter_kind = normalize_history_kind(kind)
-        combined = self._apply_time(
-            self._combined(workspace_id), from_at=from_at, to_at=to_at
+        start, end = resolve_history_window(
+            from_at,
+            to_at,
+            max_days=self.settings.usage_history_max_days,
+            default_days=self.settings.usage_history_default_days,
         )
+        combined = self._combined(workspace_id, start=start, end=end)
         counts = self._counts(combined)
         filtered = self._apply_kind(combined, filter_kind)
         total = int(self.db.scalar(select(func.count()).select_from(filtered)) or 0)
@@ -175,18 +182,6 @@ class UsageHistoryService:
         out = int(row[1] or 0)
         return UsageHistoryTokens(input=inp, output=out, total=inp + out)
 
-    def _apply_time(self, combined, *, from_at: datetime | None, to_at: datetime | None):
-        start = _aware(from_at)
-        end = _aware(to_at)
-        if start is None and end is None:
-            return combined
-        stmt = select(combined)
-        if start is not None:
-            stmt = stmt.where(combined.c.created_at >= start)
-        if end is not None:
-            stmt = stmt.where(combined.c.created_at < end)
-        return stmt.subquery("usage_history_time")
-
     def _counts(self, combined) -> UsageHistoryCounts:
         rows = self.db.execute(
             select(combined.c.kind, func.count()).group_by(combined.c.kind)
@@ -215,7 +210,13 @@ class UsageHistoryService:
             )
         return combined
 
-    def _combined(self, workspace_id: uuid.UUID):
+    def _combined(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        start: datetime,
+        end: datetime,
+    ):
         token_sum = func.coalesce(UsageEvent.input_tokens, 0) + func.coalesce(
             UsageEvent.output_tokens, 0
         )
@@ -233,6 +234,8 @@ class UsageHistoryService:
             cast(null(), String(64)).label("source_type"),
         ).where(
             UsageEvent.workspace_id == workspace_id,
+            UsageEvent.created_at >= start,
+            UsageEvent.created_at < end,
             or_(
                 UsageEvent.input_tokens > 0,
                 UsageEvent.output_tokens > 0,
@@ -259,9 +262,49 @@ class UsageHistoryService:
             cast(CreditLedgerEntry.source_type, String(64)).label("source_type"),
         ).where(
             CreditLedgerEntry.workspace_id == workspace_id,
+            CreditLedgerEntry.created_at >= start,
+            CreditLedgerEntry.created_at < end,
             CreditLedgerEntry.entry_type.in_(list(VISIBLE_CREDIT_KINDS.keys())),
         )
         return union_all(ai, credits).subquery("usage_history")
+
+
+def resolve_history_window(
+    from_at: datetime | None,
+    to_at: datetime | None,
+    *,
+    max_days: int,
+    default_days: int,
+    now: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None or current.tzinfo.utcoffset(current) is None:
+        current = current.replace(tzinfo=timezone.utc)
+    end = _aware(to_at) or current
+    start = _aware(from_at)
+    if start is None:
+        # No from/to (Workspace "All time"): use the max allowed window so the
+        # UI is not silently clipped to 30 days. Only `to` still uses default_days.
+        window = max_days if from_at is None and to_at is None else default_days
+        start = end - timedelta(days=window)
+    if start >= end:
+        raise AppError(
+            ErrorCategory.VALIDATION,
+            "Usage history 'from' must be before 'to'.",
+            details={"from": start.isoformat(), "to": end.isoformat()},
+        )
+    span = end - start
+    if span > timedelta(days=max_days):
+        raise AppError(
+            ErrorCategory.VALIDATION,
+            f"Usage history range cannot exceed {max_days} days.",
+            details={
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+                "max_days": max_days,
+            },
+        )
+    return start, end
 
 
 def _aware(value: datetime | None) -> datetime | None:

@@ -6,7 +6,7 @@ import json
 import os
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import func, select, text
@@ -14,8 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.maintenance.seed_usage_scale import seed_usage_events
 from app.usage.api_activity import ApiActivityService
-from app.usage.models import UsageDailyWorkspace
+from app.usage.models import UsageDailyWorkspace, UsagePeriodCounter
 from app.usage.rollup import UsageDailyRollupService
+from app.usage.summary import UsageSummaryService
 from app.workspaces.service import WorkspaceService
 
 pytestmark = [
@@ -36,29 +37,34 @@ def _api_key(db: Session, workspace, actor_id: uuid.UUID, name: str):
 
 
 def test_one_million_events_summary_and_history_plans(db: Session, register_user) -> None:
-    user_a = register_user(email="scale-a@example.com")
-    user_b = register_user(email="scale-b@example.com")
-    actor_a = uuid.UUID(user_a["user"]["id"])
-    actor_b = uuid.UUID(user_b["user"]["id"])
-    ws_a, _ = WorkspaceService(db).create_workspace(
-        name="Scale A", slug="scale-a", created_by=actor_a
-    )
-    ws_b, _ = WorkspaceService(db).create_workspace(
-        name="Scale B", slug="scale-b", created_by=actor_b
-    )
-    key_a = _api_key(db, ws_a, actor_a, "a")
-    key_b = _api_key(db, ws_b, actor_b, "b")
-    start_day = "2026-07-20"
+    actors = []
+    for label in ("a", "b", "c", "d", "e"):
+        user = register_user(email=f"scale-{label}@example.com")
+        actors.append(uuid.UUID(user["user"]["id"]))
+    workspaces = []
+    keys = []
+    for slug, actor in zip(
+        ("scale-a", "scale-b", "scale-c", "scale-d", "scale-e"),
+        actors,
+        strict=True,
+    ):
+        ws, _ = WorkspaceService(db).create_workspace(
+            name=slug, slug=slug, created_by=actor
+        )
+        workspaces.append(ws)
+        keys.append(_api_key(db, ws, actor, slug))
+    ws_a = workspaces[0]
+    start_day = "2026-03-01"
     now = datetime(2026, 8, 19, 15, 0, tzinfo=UTC)
 
     t0 = time.perf_counter()
     inserted = seed_usage_events(
         db,
         event_count=1_000_000,
-        workspace_ids=[ws_a.id, ws_b.id],
-        api_key_ids=[key_a.id, key_b.id],
+        workspace_ids=[ws.id for ws in workspaces],
+        api_key_ids=[key.id for key in keys],
         start_day=start_day,
-        days=30,
+        days=180,
     )
     db.commit()
     seed_ms = int((time.perf_counter() - t0) * 1000)
@@ -66,7 +72,7 @@ def test_one_million_events_summary_and_history_plans(db: Session, register_user
 
     t1 = time.perf_counter()
     UsageDailyRollupService(db).backfill(
-        datetime(2026, 7, 20, tzinfo=UTC).date(),
+        datetime(2026, 3, 1, tzinfo=UTC).date(),
         datetime(2026, 8, 18, tzinfo=UTC).date(),
     )
     db.commit()
@@ -87,7 +93,27 @@ def test_one_million_events_summary_and_history_plans(db: Session, register_user
     assert len(history.items) == 50
 
     db.execute(text("SET LOCAL enable_seqscan = off"))
-    plan = db.execute(
+    july_plan = db.execute(
+        text(
+            """
+            EXPLAIN (ANALYZE, FORMAT JSON)
+            SELECT id FROM usage_events
+            WHERE workspace_id = :ws
+              AND created_at >= TIMESTAMP WITH TIME ZONE '2026-07-01 00:00:00+00'
+              AND created_at < TIMESTAMP WITH TIME ZONE '2026-08-01 00:00:00+00'
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        ),
+        {"ws": ws_a.id},
+    ).scalar()
+    july_blob = json.dumps(july_plan)
+    assert "Index Scan" in july_blob or "Index Only Scan" in july_blob
+    assert "usage_events_2026_03" not in july_blob
+    assert "usage_events_2026_07" in july_blob or "2026_07" in july_blob
+
+    # Cross-month: July + August.
+    cross_plan = db.execute(
         text(
             """
             EXPLAIN (ANALYZE, FORMAT JSON)
@@ -101,15 +127,51 @@ def test_one_million_events_summary_and_history_plans(db: Session, register_user
         ),
         {
             "ws": ws_a.id,
-            "start": now - timedelta(days=30),
-            "end": now,
+            "start": datetime(2026, 7, 1, tzinfo=UTC),
+            "end": datetime(2026, 8, 19, tzinfo=UTC),
         },
     ).scalar()
-    plan_blob = json.dumps(plan)
-    assert "ix_usage_events_workspace_created" in plan_blob
+    cross_blob = json.dumps(cross_plan)
+    assert "Index Scan" in cross_blob or "Index Only Scan" in cross_blob
+    assert "usage_events_2026_03" not in cross_blob
+    assert "usage_events_2026_07" in cross_blob or "2026_07" in cross_blob
+    assert "usage_events_2026_08" in cross_blob or "2026_08" in cross_blob
+
+    summary_plan = db.execute(
+        text(
+            """
+            EXPLAIN (ANALYZE, FORMAT JSON)
+            SELECT api_key_id, SUM(billed_tokens)
+            FROM usage_daily_workspace
+            WHERE workspace_id = :ws
+              AND day >= DATE '2026-07-20'
+              AND day < DATE '2026-08-19'
+            GROUP BY api_key_id
+            """
+        ),
+        {"ws": ws_a.id},
+    ).scalar()
+    summary_blob = json.dumps(summary_plan)
+    assert "usage_daily_workspace" in summary_blob
+    assert "Seq Scan on usage_events" not in summary_blob
+
+    UsageSummaryService(db).summarize(ws_a.id)
+    monthly_used = UsageSummaryService(db).summarize(ws_a.id).ai_monthly.used
+    assert monthly_used == 0
+    counters = int(
+        db.scalar(
+            select(func.count())
+            .select_from(UsagePeriodCounter)
+            .where(UsagePeriodCounter.workspace_id == ws_a.id)
+        )
+        or 0
+    )
+    assert counters == 0
 
     report = {
         "fixture_events": inserted,
+        "workspaces": 5,
+        "days": 180,
         "seed_ms": seed_ms,
         "rollup_ms": rollup_ms,
         "rollup_rows": rollup_rows,
@@ -117,7 +179,9 @@ def test_one_million_events_summary_and_history_plans(db: Session, register_user
         "summary_ms": summary_ms,
         "history_ms": history_ms,
         "history_plan_uses_index": True,
+        "july_pruned": "usage_events_2026_03" not in july_blob,
+        "cross_month_pruned": "usage_events_2026_03" not in cross_blob,
     }
-    print("PHASE11B_SCALE " + json.dumps(report))
+    print("PHASE11C_SCALE " + json.dumps(report))
     assert summary_ms < 5_000
     assert history_ms < 5_000

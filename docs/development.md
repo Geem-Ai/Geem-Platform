@@ -312,6 +312,7 @@ Use this when you want a debugger, `pytest` against real services, or faster UI 
    ```bash
    source .venv/bin/activate
    celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
+   celery -A app.worker.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
    ```
 
 4. Workspace UI:

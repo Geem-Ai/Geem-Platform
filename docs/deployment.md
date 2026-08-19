@@ -221,7 +221,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 20s
+      start_period: 180s
     restart: unless-stopped
 
   worker:
@@ -241,8 +241,27 @@ services:
       redis:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
     command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://rag:CHANGE_DB_PASSWORD@postgres:5432/rag
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A app.worker.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
     restart: unless-stopped
 
 volumes:

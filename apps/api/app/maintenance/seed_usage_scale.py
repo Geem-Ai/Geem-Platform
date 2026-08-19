@@ -18,12 +18,15 @@ import sys
 import time
 import uuid
 
+from datetime import date, timedelta
+
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import Integer, String, Text
 
 from app.db.session import SessionLocal
+from app.usage.partitions import UsagePartitionService, month_start
 
 logger = logging.getLogger("geem.maintenance.seed_usage_scale")
 
@@ -44,6 +47,11 @@ def seed_usage_events(
         raise ValueError("event_count must be >= 1")
     if not workspace_ids or not api_key_ids:
         raise ValueError("workspace_ids and api_key_ids are required")
+    if days < 1:
+        raise ValueError("days must be >= 1")
+    start = date.fromisoformat(start_day)
+    end = start + timedelta(days=days - 1)
+    UsagePartitionService(db).ensure_range(month_start(start), month_start(end))
     stmt = text(
         """
         INSERT INTO usage_events (

@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     soft_delete_retention_days: int = 30
     purge_batch_size: int = 50
 
+    # Phase 11C — raw usage_events monthly partitions + history window.
+    # Retention is calendar months including the current UTC month (default 13).
+    usage_events_retention_months: int = 13
+    usage_events_partitions_ahead_months: int = 2
+    usage_history_max_days: int = 90
+    # When only `to` is sent. Omitting both from/to uses usage_history_max_days.
+    usage_history_default_days: int = 30
+
     # Phase 2C+: Document/Query/Jobs HTTP always require authenticated Workspace.
     # Public: /api/auth/login|register|refresh|forgot-password|reset-password,
     # /api/health/*, OpenAPI in local. Authenticated change-password under /api/auth.
@@ -550,8 +558,26 @@ def assert_secure_settings(settings: Settings) -> None:
         )
 
 
+def assert_usage_scale_settings(settings: Settings) -> None:
+    if not 1 <= int(settings.usage_events_retention_months) <= 60:
+        raise RuntimeError(
+            "USAGE_EVENTS_RETENTION_MONTHS must be an integer between 1 and 60."
+        )
+    if not 1 <= int(settings.usage_events_partitions_ahead_months) <= 12:
+        raise RuntimeError(
+            "USAGE_EVENTS_PARTITIONS_AHEAD_MONTHS must be an integer between 1 and 12."
+        )
+    if not 1 <= int(settings.usage_history_max_days) <= 366:
+        raise RuntimeError("USAGE_HISTORY_MAX_DAYS must be an integer between 1 and 366.")
+    if not 1 <= int(settings.usage_history_default_days) <= int(settings.usage_history_max_days):
+        raise RuntimeError(
+            "USAGE_HISTORY_DEFAULT_DAYS must be between 1 and USAGE_HISTORY_MAX_DAYS."
+        )
+
+
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
     assert_secure_settings(settings)
+    assert_usage_scale_settings(settings)
     return settings
