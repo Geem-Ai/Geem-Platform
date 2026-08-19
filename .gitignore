@@ -3,6 +3,7 @@
 infra/.env
 infra/cloudflared/*.json
 infra/cloudflared/cert.pem
+infra/cloudflared/Untitled
 .venv/
 venv/
 __pycache__/
