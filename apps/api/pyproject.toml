@@ -2,6 +2,9 @@
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "performance: large fixtures / EXPLAIN timings; run with GEEM_USAGE_SCALE=1",
+]
 
 [tool.ruff]
 line-length = 100

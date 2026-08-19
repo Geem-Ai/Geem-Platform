@@ -21,7 +21,12 @@ celery_app = Celery(
     "arabic_rag",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.worker.tasks", "app.connectors.tasks", "app.retention.tasks"],
+    include=[
+        "app.worker.tasks",
+        "app.connectors.tasks",
+        "app.retention.tasks",
+        "app.usage.tasks",
+    ],
 )
 
 celery_app.conf.update(

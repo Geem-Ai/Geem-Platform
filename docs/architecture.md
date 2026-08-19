@@ -14,7 +14,6 @@ Domain code depends on protocols in `app/core/protocols.py` and `app/notificatio
 
 Pipeline version fields are stored on `documents.processing_version` when a document becomes `ready`.
 
-## Retention and audit (Phase 11A)
+## Usage scale (Phase 11B)
 
-- Soft-delete + purge: [data-retention.md](./data-retention.md)
-- Mutation audit log: [audit.md](./audit.md)
+- Daily API usage rollups: [usage-scaling.md](./usage-scaling.md)
