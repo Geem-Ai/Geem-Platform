@@ -1,20 +1,22 @@
-"""Read-only public-API usage for the Workspace UI (Phase 7C).
+"""Read-only public-API usage for the Workspace UI (Phase 7C / 11B).
 
-Counts only ``usage_events`` with ``api_key_id IS NOT NULL`` — internal
-Workspace Chat (``api_key_id IS NULL``) is excluded. Rate-limit value comes
-from EntitlementService via QuotaService, never from plan names.
+Counts only API-attributed usage (``api_key_id IS NOT NULL``). Internal
+Workspace Chat is excluded. Period summaries read ``usage_daily_workspace``
+for complete UTC days and a bounded raw ``usage_events`` scan for partial
+edges (including today). Detailed history remains raw events.
 
-There is no durable request counter (7B rate limits are Redis windows);
-this surface reports AI token attribution, key last-used, and history.
+Rate-limit value comes from EntitlementService via QuotaService.
+Monthly Workspace AI remaining comes from ``usage_period_counters``, never
+from events or rollups.
 """
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import Integer, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api_keys.models import ApiKey
@@ -32,6 +34,8 @@ from app.usage.api_activity_schemas import (
     ApiUsagePeriodOut,
     ApiUsageSummaryOut,
 )
+from app.usage.event_tokens import billed_tokens_expr
+from app.usage.models import UsageDailyWorkspace
 from app.usage.summary import UsageSummaryService
 from app.usage.weights import OPERATION_FAMILY, OpenRouterFamily
 
@@ -64,19 +68,55 @@ def normalize_api_usage_period(raw: str | None) -> str:
 
 def _window(period: str, *, now: datetime | None = None) -> _Window:
     key = normalize_api_usage_period(period)
-    end = now or datetime.now(timezone.utc)
+    end = now or datetime.now(UTC)
     if end.tzinfo is None:
-        end = end.replace(tzinfo=timezone.utc)
+        end = end.replace(tzinfo=UTC)
     return _Window(key=key, start=end - _PERIOD_DELTA[key], end=end)
 
 
-def _billed_expr():
-    """Prefer cost_metadata billed_tokens (pool charge); else input+output."""
-    from_meta = cast(UsageEvent.cost_metadata["billed_tokens"].astext, Integer)
-    fallback = func.coalesce(UsageEvent.input_tokens, 0) + func.coalesce(
-        UsageEvent.output_tokens, 0
-    )
-    return func.coalesce(from_meta, fallback)
+def _utc_day_start(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, tzinfo=UTC)
+
+
+def _utc_date(value: datetime) -> date:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).date()
+
+
+@dataclass(frozen=True, slots=True)
+class WindowParts:
+    """Split a sliding window into complete UTC days + bounded raw ranges.
+
+    Complete days are read from ``usage_daily_workspace``. Partial edges
+    (including "today") are scanned from ``usage_events`` only for those
+    timestamp ranges — never the full 7d/30d raw table.
+    """
+
+    complete_days: tuple[date, ...]
+    partial_ranges: tuple[tuple[datetime, datetime], ...]
+
+
+def split_usage_window(window: _Window) -> WindowParts:
+    start = window.start
+    end = window.end
+    if start >= end:
+        return WindowParts(complete_days=(), partial_ranges=())
+
+    complete: list[date] = []
+    partials: list[tuple[datetime, datetime]] = []
+    cursor = _utc_date(start)
+    if start != _utc_day_start(cursor):
+        first_end = min(end, _utc_day_start(cursor + timedelta(days=1)))
+        if first_end > start:
+            partials.append((start, first_end))
+        cursor = cursor + timedelta(days=1)
+    while _utc_day_start(cursor) + timedelta(days=1) <= end:
+        complete.append(cursor)
+        cursor = cursor + timedelta(days=1)
+    if _utc_day_start(cursor) < end:
+        partials.append((_utc_day_start(cursor), end))
+    return WindowParts(complete_days=tuple(complete), partial_ranges=tuple(partials))
 
 
 def _family_for_row(family: str | None, operation_type: str | None) -> str:
@@ -103,29 +143,21 @@ class ApiActivityService:
         workspace_id: uuid.UUID,
         *,
         period: str | None = None,
+        now: datetime | None = None,
     ) -> ApiUsageSummaryOut:
-        window = _window(period)
-        billed_expr = _billed_expr()
-        api_filter = (
-            UsageEvent.workspace_id == workspace_id,
-            UsageEvent.api_key_id.is_not(None),
-            UsageEvent.created_at >= window.start,
-            UsageEvent.created_at < window.end,
+        window = _window(period, now=now)
+        parts = split_usage_window(window)
+        billed_by_key: dict[uuid.UUID, int] = {}
+        self._merge_billed(
+            billed_by_key,
+            self._billed_by_key_from_rollups(workspace_id, parts.complete_days),
         )
-
-        billed = int(
-            self.db.scalar(select(func.coalesce(func.sum(billed_expr), 0)).where(*api_filter))
-            or 0
-        )
-        grouped = self.db.execute(
-            select(
-                UsageEvent.api_key_id,
-                func.coalesce(func.sum(billed_expr), 0).label("billed_tokens"),
+        for range_start, range_end in parts.partial_ranges:
+            self._merge_billed(
+                billed_by_key,
+                self._billed_by_key_from_events(workspace_id, range_start, range_end),
             )
-            .where(*api_filter)
-            .group_by(UsageEvent.api_key_id)
-        ).all()
-        billed_by_key = {row.api_key_id: int(row.billed_tokens or 0) for row in grouped}
+        billed = sum(billed_by_key.values())
 
         keys = list(
             self.db.scalars(
@@ -186,6 +218,55 @@ class ApiActivityService:
             keys=key_out,
         )
 
+    @staticmethod
+    def _merge_billed(
+        dest: dict[uuid.UUID, int], src: dict[uuid.UUID, int]
+    ) -> None:
+        for key_id, tokens in src.items():
+            dest[key_id] = dest.get(key_id, 0) + tokens
+
+    def _billed_by_key_from_rollups(
+        self, workspace_id: uuid.UUID, days: tuple[date, ...]
+    ) -> dict[uuid.UUID, int]:
+        if not days:
+            return {}
+        grouped = self.db.execute(
+            select(
+                UsageDailyWorkspace.api_key_id,
+                func.coalesce(func.sum(UsageDailyWorkspace.billed_tokens), 0).label(
+                    "billed_tokens"
+                ),
+            )
+            .where(
+                UsageDailyWorkspace.workspace_id == workspace_id,
+                UsageDailyWorkspace.day.in_(days),
+            )
+            .group_by(UsageDailyWorkspace.api_key_id)
+        ).all()
+        return {row.api_key_id: int(row.billed_tokens or 0) for row in grouped}
+
+    def _billed_by_key_from_events(
+        self,
+        workspace_id: uuid.UUID,
+        start: datetime,
+        end: datetime,
+    ) -> dict[uuid.UUID, int]:
+        billed_expr = billed_tokens_expr()
+        grouped = self.db.execute(
+            select(
+                UsageEvent.api_key_id,
+                func.coalesce(func.sum(billed_expr), 0).label("billed_tokens"),
+            )
+            .where(
+                UsageEvent.workspace_id == workspace_id,
+                UsageEvent.api_key_id.is_not(None),
+                UsageEvent.created_at >= start,
+                UsageEvent.created_at < end,
+            )
+            .group_by(UsageEvent.api_key_id)
+        ).all()
+        return {row.api_key_id: int(row.billed_tokens or 0) for row in grouped}
+
     def history(
         self,
         workspace_id: uuid.UUID,
@@ -198,7 +279,7 @@ class ApiActivityService:
         window = _window(period)
         cap = max(1, min(int(limit), 100))
         skip = max(0, int(offset))
-        billed_expr = _billed_expr()
+        billed_expr = billed_tokens_expr()
         family_expr = UsageEvent.cost_metadata["family"].astext
 
         filters = [

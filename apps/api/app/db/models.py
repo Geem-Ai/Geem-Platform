@@ -60,6 +60,7 @@ from app.usage.models import (  # noqa: E402
     CreditLedgerEntry,
     StorageReservation,
     StorageUsageEvent,
+    UsageDailyWorkspace,
     UsagePeriodCounter,
     WorkspaceResourceUsage,
 )
@@ -113,6 +114,7 @@ __all__ = [
     "Purchase",
     "CreditAccount",
     "CreditLedgerEntry",
+    "UsageDailyWorkspace",
     "UsagePeriodCounter",
     "StorageUsageEvent",
     "StorageReservation",
@@ -290,6 +292,11 @@ class UsageEvent(Base):
             "api_key_id",
             "created_at",
             postgresql_where=text("api_key_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_usage_events_workspace_created",
+            "workspace_id",
+            text("created_at DESC"),
         ),
     )
 

@@ -8,12 +8,13 @@ original grant.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -111,6 +112,67 @@ class CreditLedgerEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     account: Mapped[CreditAccount] = relationship(back_populates="ledger_entries")
+
+
+class UsageDailyWorkspace(Base):
+    """UTC calendar-day rollup of API-attributed ``usage_events``.
+
+    Grain: one row per (workspace_id, day, api_key_id). Internal Workspace
+    Chat (``api_key_id IS NULL``) and platform rows (``workspace_id IS NULL``)
+    are not stored. Quotas do **not** read this table.
+    """
+
+    __tablename__ = "usage_daily_workspace"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "day",
+            "api_key_id",
+            name="uq_usage_daily_workspace_ws_day_key",
+        ),
+        Index("ix_usage_daily_workspace_day", "day"),
+        CheckConstraint(
+            "event_count >= 0",
+            name="ck_usage_daily_workspace_event_count_non_negative",
+        ),
+        CheckConstraint(
+            "billed_tokens >= 0",
+            name="ck_usage_daily_workspace_billed_non_negative",
+        ),
+        CheckConstraint(
+            "input_tokens >= 0",
+            name="ck_usage_daily_workspace_input_non_negative",
+        ),
+        CheckConstraint(
+            "output_tokens >= 0",
+            name="ck_usage_daily_workspace_output_non_negative",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    billed_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class UsagePeriodCounter(Base):

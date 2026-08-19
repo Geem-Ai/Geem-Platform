@@ -4,10 +4,10 @@ overview: "Deferred to Phase 10 (Hardening). Scale Geem metering for millions of
 todos:
   - id: phase-a-indexes
     content: Add (workspace_id, created_at DESC) composite; verify credit ledger index; EXPLAIN/load fixture
-    status: pending
+    status: completed
   - id: phase-c-rollups
     content: Add usage_daily_workspace + Celery upsert; point ApiActivityService.summarize at rollups
-    status: pending
+    status: completed
   - id: phase-b-partition
     content: Migrate usage_events to monthly RANGE partitions via Alembic on deploy
     status: pending
