@@ -6,5 +6,5 @@ import type { SiteCopy } from './types';
 export type { SiteCopy };
 
 export function getSiteCopy(locale: Locale): SiteCopy {
-  return locale === 'ar' ? ar : en;
+  return locale === 'en' ? en : ar;
 }

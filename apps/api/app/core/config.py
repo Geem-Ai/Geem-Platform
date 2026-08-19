@@ -15,6 +15,7 @@ DEFAULT_RESERVED_WORKSPACE_SLUGS: frozenset[str] = frozenset(
         "api",
         "admin",
         "app",
+        "hub",
         "app-uat",
         "api-uat",
         "landpage",

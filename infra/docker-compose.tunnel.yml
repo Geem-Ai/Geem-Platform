@@ -1,41 +1,41 @@
-# UAT Cloudflare Tunnel overlay (locally-managed config.yml).
+# Cloudflare Tunnel overlay (locally-managed config.yml).
 # Does not replace local geem.dm / localhost DX — use it in addition:
 #
 #   cd infra
-#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
+#   docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
 #
 # Requires infra/cloudflared/credentials.json (see infra/cloudflared/config.yml).
 # Ingress:
-#   app-uat.geem.ai       →  http://workspace_web:5174
-#   api-uat.geem.ai       →  http://api:8000
-#   landpage-uat.geem.ai  →  http://landpage_web:4321
+#   hub.geem.ai   →  http://workspace_web:5174
+#   api.geem.ai   →  http://api:8000
+#   geem.ai       →  http://landpage_web:4321
 
 services:
   api:
     environment:
-      APP_URL: https://api-uat.geem.ai
+      APP_URL: https://api.geem.ai
       TRUST_PROXY_HEADERS: "true"
-      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+      WORKSPACE_WEB_URL: https://hub.geem.ai
 
   worker:
     environment:
-      APP_URL: https://api-uat.geem.ai
+      APP_URL: https://api.geem.ai
       TRUST_PROXY_HEADERS: "true"
-      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+      WORKSPACE_WEB_URL: https://hub.geem.ai
 
   workspace_web:
     environment:
-      VITE_API_URL: https://api-uat.geem.ai
+      VITE_API_URL: https://api.geem.ai
       VITE_ROOT_DOMAIN: geem.ai
       VITE_APP_ENV: local
-      VITE_TUNNEL_HOST: app-uat.geem.ai
+      VITE_TUNNEL_HOST: hub.geem.ai
 
   landpage_web:
     environment:
-      PUBLIC_SITE_URL: https://landpage-uat.geem.ai
-      PUBLIC_WORKSPACE_URL: https://app-uat.geem.ai
-      PUBLIC_API_BASE_URL: https://api-uat.geem.ai
-      PUBLIC_TUNNEL_HOST: landpage-uat.geem.ai
+      PUBLIC_SITE_URL: https://geem.ai
+      PUBLIC_WORKSPACE_URL: https://hub.geem.ai
+      PUBLIC_API_BASE_URL: https://api.geem.ai
+      PUBLIC_TUNNEL_HOST: geem.ai
 
   cloudflared:
     image: cloudflare/cloudflared:latest
