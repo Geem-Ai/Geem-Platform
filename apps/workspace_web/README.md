@@ -53,7 +53,7 @@ From `infra/`:
 docker compose up workspace_web
 ```
 
-Service `workspace_web` maps host **5174** → container 5174. Existing `web` service is unchanged.
+Service `workspace_web` maps host **5174** → container 5174 (Vite dev). The Cloudflare Tunnel overlay builds `Dockerfile.prod` and serves nginx on port **80** (published as host **5174**).
 
 ## Notes
 

@@ -58,10 +58,14 @@ register_google_drive_connector()
 register_microsoft_onedrive_connector()
 register_openwa_connector()
 
+_docs_enabled = settings.is_local
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="Geem — Arabic-first AI workspace API",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 

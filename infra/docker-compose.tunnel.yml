@@ -6,9 +6,9 @@
 #
 # Requires infra/cloudflared/credentials.json (see infra/cloudflared/config.yml).
 # Ingress:
-#   hub.geem.ai   →  http://workspace_web:5174
+#   hub.geem.ai   →  http://workspace_web:80  (production nginx, not Vite)
 #   api.geem.ai   →  http://api:8000
-#   geem.ai       →  http://landpage_web:4321
+#   geem.ai       →  http://landpage_web:80  (production nginx, not Astro dev)
 
 services:
   api:
@@ -16,26 +16,50 @@ services:
       APP_URL: https://api.geem.ai
       TRUST_PROXY_HEADERS: "true"
       WORKSPACE_WEB_URL: https://hub.geem.ai
+    volumes: !reset []
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   worker:
     environment:
       APP_URL: https://api.geem.ai
       TRUST_PROXY_HEADERS: "true"
       WORKSPACE_WEB_URL: https://hub.geem.ai
+    volumes: !reset []
+
+  beat:
+    volumes: !reset []
 
   workspace_web:
-    environment:
-      VITE_API_URL: https://api.geem.ai
-      VITE_ROOT_DOMAIN: geem.ai
-      VITE_APP_ENV: local
-      VITE_TUNNEL_HOST: hub.geem.ai
+    build:
+      context: ../apps/workspace_web
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: https://api.geem.ai
+        VITE_ROOT_DOMAIN: geem.ai
+        VITE_APP_ENV: production
+    environment: !reset {}
+    env_file: !reset []
+    volumes: !reset []
+    ports: !override
+      - "5174:80"
+    command: ["nginx", "-g", "daemon off;"]
 
   landpage_web:
-    environment:
-      PUBLIC_SITE_URL: https://geem.ai
-      PUBLIC_WORKSPACE_URL: https://hub.geem.ai
-      PUBLIC_API_BASE_URL: https://api.geem.ai
-      PUBLIC_TUNNEL_HOST: geem.ai
+    build:
+      context: ../apps/landpage_web
+      dockerfile: Dockerfile.prod
+      args:
+        PUBLIC_SITE_URL: https://geem.ai
+        PUBLIC_WORKSPACE_URL: https://hub.geem.ai
+        PUBLIC_API_BASE_URL: https://api.geem.ai
+    environment: !reset {}
+    env_file: !reset []
+    volumes: !reset []
+    ports: !override
+      - "4321:80"
+    command: ["nginx", "-g", "daemon off;"]
 
   cloudflared:
     image: cloudflare/cloudflared:latest
