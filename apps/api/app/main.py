@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pathlib import Path
 
 from app.api import documents, health, query
 from app.api.v1.openai_compat import (
@@ -59,6 +61,21 @@ register_microsoft_onedrive_connector()
 register_openwa_connector()
 
 _docs_enabled = settings.is_local
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    from app.db.session import SessionLocal
+    from app.usage.partitions import bootstrap_startup_partitions
+
+    db = SessionLocal()
+    try:
+        bootstrap_startup_partitions(db)
+    finally:
+        db.close()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
@@ -66,6 +83,7 @@ app = FastAPI(
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     openapi_url="/openapi.json" if _docs_enabled else None,
+    lifespan=lifespan,
 )
 
 

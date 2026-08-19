@@ -10,13 +10,13 @@ todos:
     status: completed
   - id: phase-b-partition
     content: Migrate usage_events to monthly RANGE partitions via Alembic on deploy
-    status: pending
+    status: completed
   - id: phase-d-retention
     content: Celery Beat service + schedules for partitions/rollups/retention (fully automated)
-    status: pending
+    status: completed
   - id: phase-e-hygiene
     content: cost_metadata allowlist + max history date window on list APIs
-    status: pending
+    status: completed
   - id: plan-phase10
     content: Linked under Phase 10 in multi-tenant SaaS plan (saved; execute only when Phase 10 starts)
     status: completed

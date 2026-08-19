@@ -47,9 +47,11 @@ def prepare_database() -> Generator[None, None, None]:
     import app.db.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    from app.usage.partitions import UsagePartitionService
     from app.workspaces.rbac_seed import seed_permission_catalog
 
     with TestingSessionLocal() as session:
+        UsagePartitionService(session).ensure_test_window()
         seed_permission_catalog(session)
         session.commit()
     yield

@@ -298,6 +298,7 @@ class UsageEvent(Base):
             "workspace_id",
             text("created_at DESC"),
         ),
+        {"postgresql_partition_by": "RANGE (created_at)"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -350,4 +351,14 @@ class UsageEvent(Base):
         nullable=True,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        primary_key=True,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+from app.usage.cost_metadata import register_usage_event_sanitizer  # noqa: E402,I001
+
+register_usage_event_sanitizer()

@@ -165,10 +165,11 @@ class Message(Base):
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=MessageStatus.COMPLETED.value
     )
-    # Optional link to usage metering (Phase 5 ledger is separate).
+    # Optional logical link to usage metering. Not a PostgreSQL FK: partitioned
+    # ``usage_events`` primary key is ``(id, created_at)`` and cannot be
+    # referenced by ``id`` alone. UUIDs remain unique by construction.
     usage_event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("usage_events.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

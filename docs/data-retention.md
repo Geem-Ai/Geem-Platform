@@ -85,7 +85,9 @@ the sweep).
 
 ## Invoke purge in development
 
-Celery Beat is **not** scheduled for these tasks in Phase 11A. With a worker:
+Celery Beat is **not** scheduled for these soft-delete purge tasks in Phase 11A
+(they remain on-demand). Usage-event partition ensure/rollup/retention **is**
+on Beat (Phase 11C); see [usage-scaling.md](./usage-scaling.md). With a worker:
 
 ```bash
 cd apps/api

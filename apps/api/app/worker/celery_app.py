@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
+from celery.signals import worker_ready
 
 from app.core.config import get_settings
 
@@ -61,5 +63,32 @@ celery_app.conf.update(
             "task": "renew_microsoft_onedrive_subscriptions",
             "schedule": 21600.0,  # every 6 hours
         },
+        # Phase 11C — UTC crontab (enable_utc=True). Roll yesterday + day-before
+        # so delayed settlement still lands in the idempotent rollup.
+        "rollup-usage-daily": {
+            "task": "rollup_usage_daily",
+            "schedule": crontab(hour=0, minute=10),
+            "kwargs": {"recent_days": 2},
+        },
+        "ensure-usage-event-partitions": {
+            "task": "ensure_usage_event_partitions",
+            "schedule": crontab(hour=0, minute=20),
+        },
+        "retain-usage-event-partitions": {
+            "task": "retain_usage_event_partitions",
+            "schedule": crontab(hour=0, minute=30),
+        },
     },
 )
+
+
+@worker_ready.connect
+def _ensure_usage_partitions_on_worker(**_kwargs) -> None:
+    from app.db.session import SessionLocal
+    from app.usage.partitions import bootstrap_startup_partitions
+
+    db = SessionLocal()
+    try:
+        bootstrap_startup_partitions(db)
+    finally:
+        db.close()

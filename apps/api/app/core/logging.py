@@ -51,6 +51,14 @@ class JsonFormatter(logging.Formatter):
             "gateway_config_id",
             "action",
             "invitation_id",
+            "checked_months",
+            "created_partitions",
+            "existing_partitions",
+            "dropped_partitions",
+            "inspected_partitions",
+            "retention_cutoff",
+            "row_count",
+            "event_count",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)

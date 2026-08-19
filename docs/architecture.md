@@ -14,6 +14,6 @@ Domain code depends on protocols in `app/core/protocols.py` and `app/notificatio
 
 Pipeline version fields are stored on `documents.processing_version` when a document becomes `ready`.
 
-## Usage scale (Phase 11B)
+## Usage scale (Phase 11B + 11C)
 
-- Daily API usage rollups: [usage-scaling.md](./usage-scaling.md)
+- Daily API usage rollups, monthly `usage_events` partitions, Celery Beat: [usage-scaling.md](./usage-scaling.md)

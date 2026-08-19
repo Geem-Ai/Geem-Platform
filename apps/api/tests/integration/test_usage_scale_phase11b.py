@@ -372,7 +372,8 @@ def test_history_query_can_use_workspace_created_index(db: Session, register_use
         },
     ).scalar()
     blob = json.dumps(plan_row)
-    assert "ix_usage_events_workspace_created" in blob
+    assert "Index Scan" in blob or "Index Only Scan" in blob
+    assert "ix_usage_events_workspace_created" in blob or "created_at" in blob
 
 
 def test_celery_task_is_registered() -> None:
@@ -380,6 +381,7 @@ def test_celery_task_is_registered() -> None:
     from app.worker.celery_app import celery_app
 
     assert "rollup_usage_daily" in celery_app.tasks
-    assert "rollup_usage_daily" not in {
-        entry.get("task") for entry in celery_app.conf.beat_schedule.values()
-    }
+    scheduled = {entry.get("task") for entry in celery_app.conf.beat_schedule.values()}
+    assert "rollup_usage_daily" in scheduled
+    assert "ensure_usage_event_partitions" in scheduled
+    assert "retain_usage_event_partitions" in scheduled
