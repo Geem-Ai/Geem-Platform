@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -389,6 +390,13 @@ class AuthService:
         self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
         self.sessions.revoke_all_for_user(user.id, when=now)
         tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
+        record_audit(
+            self.db,
+            action=AuditAction.AUTH_PASSWORD_RESET,
+            entity_type=AuditEntityType.USER,
+            entity_id=user.id,
+            actor_user_id=user.id,
+        )
         self.db.commit()
         security_log("auth.password_reset", user_id=str(user.id), session_id=str(tokens.session_id))
         return user, tokens
@@ -477,6 +485,13 @@ class AuthService:
         revoked = self.sessions.revoke_all_for_user_except(
             user.id,
             except_session_id=current_session_id,
+        )
+        record_audit(
+            self.db,
+            action=AuditAction.AUTH_PASSWORD_CHANGED,
+            entity_type=AuditEntityType.USER,
+            entity_id=user.id,
+            actor_user_id=user.id,
         )
         self.db.commit()
         security_log(

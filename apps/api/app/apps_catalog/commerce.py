@@ -213,12 +213,43 @@ class AppCommerceService:
         kind = (purchase.payload or {}).get("kind") or purchase.kind
         if kind == PurchaseKind.APP_ONE_TIME.value:
             self.fulfill_one_time_purchase(purchase)
+            from app.audit import AuditAction, AuditEntityType, record_audit
+
+            record_audit(
+                self.db,
+                action=AuditAction.APP_PURCHASED,
+                entity_type=AuditEntityType.PURCHASE,
+                entity_id=purchase.id,
+                workspace_id=purchase.workspace_id,
+                actor_user_id=purchase.actor_id,
+                metadata={"kind": str(kind)},
+                allowlist=frozenset({"kind"}),
+                required=False,
+            )
             return
         if kind in {
             PurchaseKind.APP_SUBSCRIPTION.value,
             PurchaseKind.APP_SUBSCRIPTION_RENEWAL.value,
         }:
             self.fulfill_subscription_purchase(purchase)
+            from app.audit import AuditAction, AuditEntityType, record_audit
+
+            action = (
+                AuditAction.APP_RENEWED
+                if kind == PurchaseKind.APP_SUBSCRIPTION_RENEWAL.value
+                else AuditAction.APP_PURCHASED
+            )
+            record_audit(
+                self.db,
+                action=action,
+                entity_type=AuditEntityType.PURCHASE,
+                entity_id=purchase.id,
+                workspace_id=purchase.workspace_id,
+                actor_user_id=purchase.actor_id,
+                metadata={"kind": str(kind)},
+                allowlist=frozenset({"kind"}),
+                required=False,
+            )
             return
         raise AppError(ErrorCategory.INVALID_PURCHASE, "Unknown App purchase kind.")
 

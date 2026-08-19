@@ -317,12 +317,78 @@ class DocumentService:
             action="delete",
         )
 
-    def _purge_object_and_vectors(self, document: Document) -> None:
+    def purge_document_lifecycle(
+        self, workspace_id: uuid.UUID, document_id: uuid.UUID
+    ) -> None:
+        """Retry-safe Phase 8 physical purge + hard-delete of a tenant document row.
+
+        Used by Workspace retention purge. Missing rows are success. Does not
+        require the Workspace to still be selectable as an active tenant.
+        Hard-deletes the Postgres row only after MinIO and Qdrant succeed.
+        """
+        from sqlalchemy import select
+
+        from app.experts.models import ExpertDocument
+
+        document = self.repo.get_for_workspace(workspace_id, document_id, include_deleted=True)
+        if document is None:
+            return
+        if document.workspace_id != workspace_id:
+            raise AppError(ErrorCategory.FORBIDDEN, "Document workspace mismatch.")
+
+        if document.deleted_at is None:
+            document.status = "deleting"
+            links = list(
+                self.db.scalars(
+                    select(ExpertDocument).where(ExpertDocument.document_id == document.id)
+                )
+            )
+            for link in links:
+                self.db.delete(link)
+            for chunk in list(document.chunks):
+                self.db.delete(chunk)
+            for page in list(document.pages):
+                self.db.delete(page)
+            document.soft_delete()
+            self.db.commit()
+
+        if not self._purge_object_and_vectors(document):
+            logger.warning(
+                "document.lifecycle_purge_deferred",
+                extra={
+                    "document_id": str(document.id),
+                    "workspace_id": str(workspace_id),
+                },
+            )
+            return
+        leftover = self.repo.get_for_workspace(workspace_id, document_id, include_deleted=True)
+        if leftover is None:
+            return
+        for chunk in list(leftover.chunks):
+            self.db.delete(chunk)
+        for page in list(leftover.pages):
+            self.db.delete(page)
+        for job in list(leftover.jobs):
+            self.db.delete(job)
+        remaining_links = list(
+            self.db.scalars(
+                select(ExpertDocument).where(ExpertDocument.document_id == leftover.id)
+            )
+        )
+        for link in remaining_links:
+            self.db.delete(link)
+        self.db.delete(leftover)
+        self.db.commit()
+
+    def _purge_object_and_vectors(self, document: Document) -> bool:
+        """Best-effort MinIO + Qdrant delete. False means the PG row must stay."""
+        minio_ok = True
         keys = resolve_document_storage_key(document.id, document.workspace_id)
         for key in keys.candidate_read_keys(document.storage_key, include_legacy_flat=True):
             try:
                 self.storage.delete(key)
             except AppError as exc:
+                minio_ok = False
                 logger.warning(
                     "document.minio_purge_failed",
                     extra={
@@ -332,6 +398,7 @@ class DocumentService:
                         "error": str(exc),
                     },
                 )
+        qdrant_ok = True
         try:
             self.vectors.delete_by_document(
                 str(document.id),
@@ -352,6 +419,7 @@ class DocumentService:
                     workspace_id=document.workspace_id,
                 )
             except AppError as retry_exc:
+                qdrant_ok = False
                 logger.warning(
                     "document.qdrant_purge_retry_failed",
                     extra={
@@ -359,6 +427,7 @@ class DocumentService:
                         "error": str(retry_exc),
                     },
                 )
+        return minio_ok and qdrant_ok
 
     def restore_for_workspace(self, workspace: Workspace, document_id: uuid.UUID) -> Document:
         """Restore is closed after Phase 8 physical purge.

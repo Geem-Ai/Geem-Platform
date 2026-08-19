@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService, AppAccessStatus
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.apps_catalog.encryption import AppConfigEncryptionService
 from app.apps_catalog.models import (
     AppBillingType,
@@ -472,12 +473,21 @@ class AppInstallationService:
             existing.installed_by_user_id = actor_id
             existing.installed_at = now
             existing.uninstalled_at = None
+            record_audit(
+                self.db,
+                action=AuditAction.APP_INSTALLED,
+                entity_type=AuditEntityType.APP_INSTALLATION,
+                entity_id=existing.id,
+                workspace_id=workspace.id,
+                actor_user_id=actor_id,
+                metadata={"app_slug": slug, "reinstall": True},
+                allowlist=frozenset({"app_slug", "reinstall"}),
+            )
             self.db.commit()
             self.db.refresh(existing)
             row = self.repo.get_installation_for_workspace(workspace.id, existing.id)
             assert row is not None
             self._run_install_hooks(workspace_id=workspace.id, installation=row, app=app)
-            self.db.commit()
             security_log(
                 "app_installed",
                 workspace_id=str(workspace.id),
@@ -500,11 +510,20 @@ class AppInstallationService:
             config_encrypted=None,
         )
         self.repo.create_installation(row)
+        record_audit(
+            self.db,
+            action=AuditAction.APP_INSTALLED,
+            entity_type=AuditEntityType.APP_INSTALLATION,
+            entity_id=row.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata={"app_slug": slug, "reinstall": False},
+            allowlist=frozenset({"app_slug", "reinstall"}),
+        )
         self.db.commit()
         loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
         assert loaded is not None
         self._run_install_hooks(workspace_id=workspace.id, installation=loaded, app=app)
-        self.db.commit()
         security_log(
             "app_installed",
             workspace_id=str(workspace.id),
@@ -544,6 +563,16 @@ class AppInstallationService:
         now = datetime.now(timezone.utc)
         row.status = AppInstallationStatus.UNINSTALLED.value
         row.uninstalled_at = now
+        record_audit(
+            self.db,
+            action=AuditAction.APP_UNINSTALLED,
+            entity_type=AuditEntityType.APP_INSTALLATION,
+            entity_id=row.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata={"app_slug": slug},
+            allowlist=frozenset({"app_slug"}),
+        )
         self.db.commit()
         loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
         assert loaded is not None

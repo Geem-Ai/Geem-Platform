@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.schemas import Citation
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.conversations.models import (
     PREVIEW_CONTENT_MAX_CHARS,
@@ -179,6 +180,14 @@ class ConversationService:
             actor_id=actor.id,
         )
         self.repo.soft_delete(conversation)
+        record_audit(
+            self.db,
+            action=AuditAction.CONVERSATION_SOFT_DELETED,
+            entity_type=AuditEntityType.CONVERSATION,
+            entity_id=conversation.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor.id,
+        )
         self.db.commit()
 
     def clear_history(

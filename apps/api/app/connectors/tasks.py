@@ -117,6 +117,20 @@ def run_connector_sync(
 
     db = SessionLocal()
     try:
+        from app.workspaces.models import Workspace
+
+        workspace_row = db.get(Workspace, ws_id)
+        if workspace_row is None or workspace_row.deleted_at is not None:
+            logger.info(
+                "connector_sync_skipped_workspace_deleted",
+                extra={"workspace_id": str(ws_id), "connection_id": str(conn_id)},
+            )
+            return {
+                "workspace_id": str(ws_id),
+                "connection_id": str(conn_id),
+                "sync_run_id": str(run_id),
+                "status": "skipped_workspace_deleted",
+            }
         with tenant_context(
             workspace_id=ws_id,
             actor_id=act_id,

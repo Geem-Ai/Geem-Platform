@@ -385,6 +385,32 @@ class OpenWAChannelService:
             binding.respond_to_groups = respond_to_groups
         if enabled is not None:
             binding.enabled = enabled
+        from app.audit import AuditAction, AuditEntityType, record_audit
+
+        record_audit(
+            self.db,
+            action=AuditAction.APP_CONNECTION_UPDATED,
+            entity_type=AuditEntityType.APP_CONNECTION,
+            entity_id=row.id,
+            workspace_id=workspace.id,
+            actor_user_id=membership.user_id,
+            metadata={
+                "app_slug": app.slug,
+                "auto_reply_enabled": binding.auto_reply_enabled,
+                "respond_to_groups": binding.respond_to_groups,
+                "enabled": binding.enabled,
+                "expert_id": str(binding.expert_id) if binding.expert_id else None,
+            },
+            allowlist=frozenset(
+                {
+                    "app_slug",
+                    "auto_reply_enabled",
+                    "respond_to_groups",
+                    "enabled",
+                    "expert_id",
+                }
+            ),
+        )
         self.db.flush()
         return self._serialize_connection(
             row,

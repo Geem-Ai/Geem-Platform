@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
     log_level: str = "INFO"
 
+    # Phase 11A — days a soft-deleted Workspace/Expert/Conversation is retained
+    # before Celery purge tasks may hard-delete operational data.
+    soft_delete_retention_days: int = 30
+    purge_batch_size: int = 50
+
     # Phase 2C+: Document/Query/Jobs HTTP always require authenticated Workspace.
     # Public: /api/auth/login|register|refresh|forgot-password|reset-password,
     # /api/health/*, OpenAPI in local. Authenticated change-password under /api/auth.

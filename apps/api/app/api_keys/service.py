@@ -22,6 +22,7 @@ from app.api_keys.security import (
     parse_presented_api_key,
     reject_invalid_api_key,
 )
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -81,6 +82,16 @@ class ApiKeyService:
         )
         try:
             self.keys.create(row)
+            record_audit(
+                self.db,
+                action=AuditAction.API_KEY_CREATED,
+                entity_type=AuditEntityType.API_KEY,
+                entity_id=row.id,
+                workspace_id=workspace.id,
+                actor_user_id=actor_id,
+                metadata={"prefix": row.key_prefix, "scopes": normalized_scopes},
+                allowlist=frozenset({"prefix", "scopes"}),
+            )
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
@@ -94,6 +105,16 @@ class ApiKeyService:
             )
             try:
                 self.keys.create(row)
+                record_audit(
+                    self.db,
+                    action=AuditAction.API_KEY_CREATED,
+                    entity_type=AuditEntityType.API_KEY,
+                    entity_id=row.id,
+                    workspace_id=workspace.id,
+                    actor_user_id=actor_id,
+                    metadata={"prefix": row.key_prefix, "scopes": normalized_scopes},
+                    allowlist=frozenset({"prefix", "scopes"}),
+                )
                 self.db.commit()
             except IntegrityError as exc:
                 self.db.rollback()
@@ -125,6 +146,16 @@ class ApiKeyService:
 
         if row.revoked_at is None:
             row.revoked_at = datetime.now(timezone.utc)
+            record_audit(
+                self.db,
+                action=AuditAction.API_KEY_REVOKED,
+                entity_type=AuditEntityType.API_KEY,
+                entity_id=row.id,
+                workspace_id=workspace_id,
+                actor_user_id=actor_id,
+                metadata={"prefix": row.key_prefix},
+                allowlist=frozenset({"prefix"}),
+            )
             self.db.commit()
             security_log(
                 "api_key.revoked",

@@ -56,6 +56,23 @@ def ingest_document(
                 "status": "deleted",
             }
 
+        from app.workspaces.models import Workspace
+
+        workspace_row = db.get(Workspace, document.workspace_id)
+        if workspace_row is None or workspace_row.deleted_at is not None:
+            security_log(
+                "ingest.skipped_workspace_deleted",
+                document_id=document_id,
+                workspace_id=str(document.workspace_id) if document.workspace_id else None,
+                task_id=getattr(self.request, "id", None),
+                action="ingest_skipped",
+            )
+            return {
+                "document_id": document_id,
+                "workspace_id": str(document.workspace_id) if document.workspace_id else None,
+                "status": "workspace_deleted",
+            }
+
         # Fail closed on tenant mismatch (including None vs UUID).
         if document.workspace_id != task_workspace_id:
             security_log(
