@@ -332,7 +332,7 @@ pip install -r requirements.txt
 pytest -q
 ```
 
-Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs invite and email-verification URLs, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation or verification tokens. After register (local/production), the Workspace SPA shows `/check-email`; the console log includes `/verify-email?token=`. `APP_ENV=test` skips the gate unless `EMAIL_VERIFICATION_REQUIRED=true`.
+Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Soft-delete retention / purge (Phase 11A): [data-retention.md](./data-retention.md). Audit log: [audit.md](./audit.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs invite and email-verification URLs, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation or verification tokens. After register (local/production), the Workspace SPA shows `/check-email`; the console log includes `/verify-email?token=`. `APP_ENV=test` skips the gate unless `EMAIL_VERIFICATION_REQUIRED=true`.
 
 Generate PDF fixtures:
 

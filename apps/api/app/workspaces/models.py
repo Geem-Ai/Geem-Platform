@@ -166,6 +166,11 @@ class Workspace(Base, SoftDeleteMixin):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Set when retention purge finished operational cleanup. The row remains as
+    # a billing/usage/audit tombstone (id preserved; slug anonymized).
+    purged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     creator: Mapped[User | None] = relationship(back_populates="created_workspaces")
     memberships: Mapped[list[WorkspaceMembership]] = relationship(

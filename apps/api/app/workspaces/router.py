@@ -84,6 +84,15 @@ def update_workspace(
     return to_workspace_out(workspace, membership)
 
 
+@router.delete("/{workspace_id}", status_code=204)
+def delete_workspace(
+    workspace_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    WorkspaceService(db).soft_delete_workspace(workspace_id=workspace_id, actor_id=user.id)
+
+
 @router.get("/{workspace_id}/members", response_model=list[MemberOut])
 def list_members(
     workspace_id: uuid.UUID,

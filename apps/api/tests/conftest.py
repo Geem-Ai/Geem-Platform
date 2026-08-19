@@ -74,7 +74,7 @@ def clean_tables() -> Generator[None, None, None]:
                 "expert_documents, expert_sources, workspace_expert_grants, experts, "
                 "usage_events, chunks, document_pages, ingestion_jobs, documents, "
                 "api_keys, sessions, password_reset_tokens, email_verification_tokens, workspace_invitations, workspace_role_permissions, "
-                "workspace_memberships, workspace_roles, workspaces, users "
+                "workspace_memberships, workspace_roles, audit_logs, workspaces, users "
                 "RESTART IDENTITY CASCADE"
             )
         )

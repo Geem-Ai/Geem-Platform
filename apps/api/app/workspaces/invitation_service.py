@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -120,6 +121,16 @@ class InvitationService:
         try:
             self.invitations.create(invitation)
             self._deliver(invitation, workspace, raw_token, actor_id=actor_id)
+            record_audit(
+                self.db,
+                action=AuditAction.INVITE_CREATED,
+                entity_type=AuditEntityType.INVITATION,
+                entity_id=invitation.id,
+                workspace_id=workspace.id,
+                actor_user_id=actor_id,
+                metadata={"role_id": str(invitation.role_id)},
+                allowlist=frozenset({"role_id"}),
+            )
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
@@ -214,6 +225,14 @@ class InvitationService:
             )
         if invitation.revoked_at is None:
             invitation.revoked_at = _now()
+            record_audit(
+                self.db,
+                action=AuditAction.INVITE_REVOKED,
+                entity_type=AuditEntityType.INVITATION,
+                entity_id=invitation.id,
+                workspace_id=workspace.id,
+                actor_user_id=actor_id,
+            )
             self.db.commit()
             security_log(
                 "workspace_invitation_revoked",
@@ -302,6 +321,16 @@ class InvitationService:
         if invitation.accepted_at is None:
             invitation.accepted_at = _now()
         try:
+            record_audit(
+                self.db,
+                action=AuditAction.INVITE_ACCEPTED,
+                entity_type=AuditEntityType.INVITATION,
+                entity_id=invitation.id,
+                workspace_id=invitation.workspace_id,
+                actor_user_id=user.id,
+                metadata={"already_member": already_member},
+                allowlist=frozenset({"already_member"}),
+            )
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
@@ -350,6 +379,19 @@ class InvitationService:
             invitation.role_id = role_id
         try:
             self._deliver(invitation, workspace, raw_token, actor_id=actor_id)
+            action = (
+                AuditAction.INVITE_RESENT
+                if log_event == "workspace_invitation_resent"
+                else AuditAction.INVITE_CREATED
+            )
+            record_audit(
+                self.db,
+                action=action,
+                entity_type=AuditEntityType.INVITATION,
+                entity_id=invitation.id,
+                workspace_id=workspace.id,
+                actor_user_id=actor_id,
+            )
             self.db.commit()
         except Exception:
             self.db.rollback()

@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -278,6 +279,14 @@ class ExpertService:
             created_by=actor.id,
         )
         self.repo.create(expert)
+        record_audit(
+            self.db,
+            action=AuditAction.EXPERT_CREATED,
+            entity_type=AuditEntityType.EXPERT,
+            entity_id=expert.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor.id,
+        )
         self.db.commit()
         security_log(
             "expert.created",
@@ -347,6 +356,14 @@ class ExpertService:
             expert.status = status
         if icon_url is not None:
             expert.icon_url = icon_url.strip() or None
+        record_audit(
+            self.db,
+            action=AuditAction.EXPERT_UPDATED,
+            entity_type=AuditEntityType.EXPERT,
+            entity_id=expert.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor.id,
+        )
         self.db.commit()
         security_log(
             "expert.updated",
@@ -380,6 +397,14 @@ class ExpertService:
         linked_doc_ids = [link.document_id for link in self.repo.list_document_links(expert.id)]
         # Soft-delete Expert; do NOT delete underlying Documents (may be shared).
         expert.soft_delete()
+        record_audit(
+            self.db,
+            action=AuditAction.EXPERT_SOFT_DELETED,
+            entity_type=AuditEntityType.EXPERT,
+            entity_id=expert.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor.id,
+        )
         self.db.commit()
         security_log(
             "expert.deleted",

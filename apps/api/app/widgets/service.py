@@ -126,6 +126,18 @@ class WidgetService:
             setattr(row, key, value)
         if row.status == WidgetInstanceStatus.DISABLED.value:
             row.status = WidgetInstanceStatus.ACTIVE.value
+        from app.audit import AuditAction, AuditEntityType, record_audit
+
+        record_audit(
+            self.db,
+            action=AuditAction.APP_WIDGET_UPDATED,
+            entity_type=AuditEntityType.APP_CONNECTION,
+            entity_id=row.id,
+            workspace_id=workspace.id,
+            actor_user_id=membership.user_id,
+            metadata={"expert_id": str(row.expert_id) if row.expert_id else None},
+            allowlist=frozenset({"expert_id"}),
+        )
         self.db.commit()
         self.db.refresh(row)
         return self._to_out(row)

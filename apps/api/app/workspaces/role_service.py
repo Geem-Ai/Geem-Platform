@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.core.errors import AppError, ErrorCategory
 from app.workspaces.invitation_repository import InvitationRepository
 from app.workspaces.models import (
@@ -111,6 +112,16 @@ class RoleService:
             self.db.add(role)
             self.db.flush()
             self._replace_permissions(role, keys)
+            record_audit(
+                self.db,
+                action=AuditAction.ROLE_CREATED,
+                entity_type=AuditEntityType.ROLE,
+                entity_id=role.id,
+                workspace_id=workspace_id,
+                actor_user_id=actor_id,
+                metadata={"permission_keys": keys},
+                allowlist=frozenset({"permission_keys"}),
+            )
             self.db.commit()
             self.db.expire_all()
         except IntegrityError as exc:
@@ -156,6 +167,29 @@ class RoleService:
             keys = self._validate_assignable_keys(permission_keys)
             self._replace_permissions(role, keys)
         try:
+            record_audit(
+                self.db,
+                action=AuditAction.ROLE_UPDATED,
+                entity_type=AuditEntityType.ROLE,
+                entity_id=role.id,
+                workspace_id=workspace_id,
+                actor_user_id=actor_id,
+                metadata={
+                    "permissions_changed": permission_keys is not None,
+                },
+                allowlist=frozenset({"permissions_changed"}),
+            )
+            if permission_keys is not None:
+                record_audit(
+                    self.db,
+                    action=AuditAction.ROLE_PERMISSIONS_CHANGED,
+                    entity_type=AuditEntityType.ROLE,
+                    entity_id=role.id,
+                    workspace_id=workspace_id,
+                    actor_user_id=actor_id,
+                    metadata={"permission_keys": permission_keys},
+                    allowlist=frozenset({"permission_keys"}),
+                )
             self.db.commit()
             self.db.expire_all()
         except IntegrityError as exc:
@@ -191,6 +225,14 @@ class RoleService:
                 details={"assigned_count": assigned, "pending_invitations": pending},
             )
         self.db.delete(role)
+        record_audit(
+            self.db,
+            action=AuditAction.ROLE_DELETED,
+            entity_type=AuditEntityType.ROLE,
+            entity_id=role_id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_id,
+        )
         self.db.commit()
         self.db.expire_all()
 

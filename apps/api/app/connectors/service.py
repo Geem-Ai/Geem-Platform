@@ -21,6 +21,7 @@ from app.apps_catalog.models import (
 )
 from app.apps_catalog.policy import can_connect_apps, can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.crypto import decrypt_secret, encrypt_secret
 from app.common.security_log import security_log
 from app.connectors.credentials import ConnectorCredentialService
@@ -453,6 +454,16 @@ class ConnectorConnectionService:
         if actor_id is not None:
             row.connected_by_user_id = actor_id
         self.db.flush()
+        record_audit(
+            self.db,
+            action=AuditAction.APP_CONNECTION_CREATED,
+            entity_type=AuditEntityType.APP_CONNECTION,
+            entity_id=row.id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_id,
+            metadata={"connector_key": row.connector_key},
+            allowlist=frozenset({"connector_key"}),
+        )
         security_log(
             "app.connection.connected",
             workspace_id=str(workspace_id),
@@ -543,6 +554,14 @@ class ConnectorConnectionService:
         row.disconnected_at = _now()
         row.health = ConnectionHealth.UNKNOWN.value
         self.db.flush()
+        record_audit(
+            self.db,
+            action=AuditAction.APP_CONNECTION_DISCONNECTED,
+            entity_type=AuditEntityType.APP_CONNECTION,
+            entity_id=row.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+        )
         security_log(
             "app.connection.disconnected",
             workspace_id=str(workspace.id),

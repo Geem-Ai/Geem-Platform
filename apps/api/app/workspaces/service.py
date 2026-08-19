@@ -3,9 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -78,6 +80,16 @@ class WorkspaceService:
             )
             self.memberships.create(membership)
             self._provision_tenant_billing(workspace)
+            record_audit(
+                self.db,
+                action=AuditAction.WORKSPACE_CREATED,
+                entity_type=AuditEntityType.WORKSPACE,
+                entity_id=workspace.id,
+                workspace_id=workspace.id,
+                actor_user_id=created_by,
+                metadata={"slug": workspace.slug},
+                allowlist=frozenset({"slug"}),
+            )
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
@@ -156,6 +168,14 @@ class WorkspaceService:
             workspace.name = clean
         if settings is not None:
             workspace.settings = settings
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_UPDATED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+        )
         self.db.commit()
         security_log(
             "workspace.updated",
@@ -163,6 +183,104 @@ class WorkspaceService:
             user_id=str(actor_id),
         )
         return workspace
+
+    def soft_delete_workspace(self, *, workspace_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+        """Tenant-facing Workspace delete: archive + revoke access immediately.
+
+        Permanent MinIO/Qdrant/graph cleanup runs later via RetentionPurgeService.
+        """
+        from datetime import datetime, timezone
+
+        from sqlalchemy import update
+
+        from app.api_keys.models import ApiKey
+        from app.apps_catalog.models import AppInstallation
+        from app.connectors.credentials import ConnectorCredentialService
+        from app.connectors.models import AppConnection
+        from app.connectors.types import ConnectionHealth, ConnectionStatus
+        from app.conversations.models import Conversation
+        from app.experts.models import Expert, ExpertType
+        from app.widgets.models import WidgetInstance, WidgetInstanceStatus
+        from app.workspaces.models import WorkspaceInvitation
+
+        workspace, membership = self.get_workspace_for_user(workspace_id, actor_id)
+        WorkspacePolicy.require(membership, WorkspaceAction.DELETE_WORKSPACE)
+        if workspace.kind != WorkspaceKind.TENANT.value:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.deleted_at is not None:
+            return
+
+        stamp = datetime.now(timezone.utc)
+        workspace.soft_delete(when=stamp)
+        workspace.status = WorkspaceStatus.ARCHIVED.value
+
+        self.db.execute(
+            update(ApiKey)
+            .where(ApiKey.workspace_id == workspace.id, ApiKey.revoked_at.is_(None))
+            .values(revoked_at=stamp)
+        )
+        self.db.execute(
+            update(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.workspace_id == workspace.id,
+                WorkspaceInvitation.accepted_at.is_(None),
+                WorkspaceInvitation.revoked_at.is_(None),
+            )
+            .values(revoked_at=stamp)
+        )
+        creds = ConnectorCredentialService(self.db, settings=self.settings)
+        connections = list(
+            self.db.scalars(select(AppConnection).where(AppConnection.workspace_id == workspace.id))
+        )
+        for row in connections:
+            creds.clear_all_secrets(row)
+            row.status = ConnectionStatus.REVOKED.value
+            row.disconnected_at = stamp
+            row.health = ConnectionHealth.UNKNOWN.value
+        self.db.execute(
+            update(WidgetInstance)
+            .where(WidgetInstance.workspace_id == workspace.id)
+            .values(status=WidgetInstanceStatus.DISABLED.value)
+        )
+        self.db.execute(
+            update(AppInstallation)
+            .where(AppInstallation.workspace_id == workspace.id)
+            .values(config_encrypted=None)
+        )
+        self.db.execute(
+            update(Expert)
+            .where(
+                Expert.workspace_id == workspace.id,
+                Expert.type == ExpertType.WORKSPACE.value,
+                Expert.deleted_at.is_(None),
+            )
+            .values(deleted_at=stamp)
+        )
+        self.db.execute(
+            update(Conversation)
+            .where(
+                Conversation.workspace_id == workspace.id,
+                Conversation.deleted_at.is_(None),
+            )
+            .values(deleted_at=stamp, updated_at=stamp)
+        )
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_SOFT_DELETED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata={"slug": workspace.slug, "status": workspace.status},
+            allowlist=frozenset({"slug", "status"}),
+        )
+        self.db.commit()
+        security_log(
+            "workspace.soft_deleted",
+            workspace_id=str(workspace.id),
+            user_id=str(actor_id),
+            slug=workspace.slug,
+        )
 
     def list_members(
         self, *, workspace_id: uuid.UUID, actor_id: uuid.UUID
@@ -221,6 +339,20 @@ class WorkspaceService:
 
         target.role_id = new_role.id
         target.workspace_role = new_role
+        record_audit(
+            self.db,
+            action=AuditAction.MEMBER_ROLE_CHANGED,
+            entity_type=AuditEntityType.MEMBERSHIP,
+            entity_id=target.id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_id,
+            metadata={
+                "target_user_id": str(target_user_id),
+                "role_id": str(new_role.id),
+                "system_key": new_role.system_key,
+            },
+            allowlist=frozenset({"target_user_id", "role_id", "system_key"}),
+        )
         self.db.commit()
         self.db.refresh(target)
         security_log(
@@ -263,6 +395,16 @@ class WorkspaceService:
             )
 
         self.memberships.delete(target)
+        record_audit(
+            self.db,
+            action=AuditAction.MEMBER_REMOVED,
+            entity_type=AuditEntityType.MEMBERSHIP,
+            entity_id=target.id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_id,
+            metadata={"target_user_id": str(target_user_id)},
+            allowlist=frozenset({"target_user_id"}),
+        )
         self.db.commit()
         security_log(
             "workspace.membership_removed",

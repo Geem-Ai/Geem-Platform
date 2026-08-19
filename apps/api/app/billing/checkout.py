@@ -13,6 +13,7 @@ from urllib.parse import urlencode, urljoin
 
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.billing.fulfillment import PurchaseFulfillmentService, purchase_grant_request_id
 from app.billing.gateways.dtos import (
     CheckoutRequest,
@@ -263,6 +264,16 @@ class BillingService:
         }
         self.db.flush()
         self._issue_invoice(purchase)
+        record_audit(
+            self.db,
+            action=AuditAction.BILLING_PURCHASE_PAID,
+            entity_type=AuditEntityType.PURCHASE,
+            entity_id=purchase.id,
+            workspace_id=purchase.workspace_id,
+            actor_user_id=purchase.actor_id,
+            metadata={"kind": purchase.kind},
+            allowlist=frozenset({"kind"}),
+        )
         logger.info(
             "billing_purchase_paid",
             extra={
@@ -393,6 +404,16 @@ class BillingService:
         """Terminal failure that the caller must commit (do not raise after flush)."""
         purchase.status = PurchaseStatus.FAILED.value
         purchase.extra = {**(purchase.extra or {}), "failure": failure}
+        record_audit(
+            self.db,
+            action=AuditAction.BILLING_PURCHASE_FAILED,
+            entity_type=AuditEntityType.PURCHASE,
+            entity_id=purchase.id,
+            workspace_id=purchase.workspace_id,
+            metadata={"failure": failure},
+            allowlist=frozenset({"failure"}),
+            required=False,
+        )
         self.db.flush()
         return purchase
 

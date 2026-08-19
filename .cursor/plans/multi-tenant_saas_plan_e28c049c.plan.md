@@ -39,8 +39,8 @@ todos:
     content: "Phase 10: COMPLETE — 10A PASS + 10B PASS + 10C PASS (dynamic workspace RBAC + permission-aware UI). Do not start Phase 11 until requested."
     status: completed
   - id: phase-11
-    content: "Phase 11: Hardening — soft-delete purge, audit, isolation/load/UI tests + usage_events scale (partition/rollups/Beat; see usage_events_scale.plan.md)"
-    status: pending
+    content: "Phase 11A PASS — soft-delete purge + audit completeness. 11B+ (OTEL, Playwright, usage partition/rollups/Beat) not started."
+    status: in_progress
   - id: phase-12
     content: "Phase 12: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
     status: pending
@@ -1261,7 +1261,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9H Acceptance:** Subscribe → install → configure Expert/appearance/origins → public bootstrap respects allowlist; expired subscription fails closed; docs in `docs/apps/chat-widget.md`. **PASS.**
 
-**Next:** Phase 11 when explicitly requested — not started. (Phase 10 already complete.)
+**Next:** Phase 11B+ when explicitly requested. Phase 11A PASS.
 
 ---
 
@@ -1355,7 +1355,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 11 — Hardening
 
-**Status:** pending — do not start until Phase 10 (Members UX) is complete and this phase is explicitly requested.
+**Status:** in progress — **11A PASS**. Do not start 11B+ (OTEL, Playwright, usage scale/Beat) until requested.
 
 Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat; optionally invite path), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
 

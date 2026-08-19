@@ -82,6 +82,7 @@ from app.connectors.models import (  # noqa: E402
     ConnectorWebhookEvent,
 )
 from app.widgets.models import WidgetConversationBinding, WidgetInstance  # noqa: E402
+from app.audit.models import AuditLog  # noqa: E402
 
 __all__ = [
     "Document",
@@ -133,6 +134,7 @@ __all__ = [
     "ConnectorWebhookEvent",
     "WidgetInstance",
     "WidgetConversationBinding",
+    "AuditLog",
 ]
 
 
