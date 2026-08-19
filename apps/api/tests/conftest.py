@@ -82,6 +82,14 @@ def clean_tables() -> Generator[None, None, None]:
         )
 
 
+@pytest.fixture(autouse=True)
+def reset_test_tracing_after_each_test() -> Generator[None, None, None]:
+    yield
+    from app.observability.setup import reset_test_tracing
+
+    reset_test_tracing()
+
+
 @pytest.fixture()
 def db() -> Generator[Session, None, None]:
     session = TestingSessionLocal()

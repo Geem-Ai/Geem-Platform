@@ -8,7 +8,12 @@ from typing import Any
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    SimpleSpanProcessor,
+    SpanExporter,
+    SpanExportResult,
+)
 from opentelemetry.sdk.trace.sampling import (
     ALWAYS_OFF,
     ALWAYS_ON,
@@ -26,8 +31,30 @@ _STATE: dict[str, Any] = {
     "log_filter": False,
     "provider": False,
     "libs": False,
+    "enabled": False,
     "test_exporter": None,
 }
+
+
+class _DelegatingSpanExporter(SpanExporter):
+    """Forwards to the current test exporter so configure_test_tracing can swap."""
+
+    def export(self, spans) -> SpanExportResult:  # type: ignore[no-untyped-def]
+        inner = _STATE.get("test_exporter")
+        if inner is None:
+            return SpanExportResult.SUCCESS
+        return inner.export(spans)
+
+    def shutdown(self) -> None:
+        inner = _STATE.get("test_exporter")
+        if inner is not None:
+            inner.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        inner = _STATE.get("test_exporter")
+        if inner is None:
+            return True
+        return bool(inner.force_flush(timeout_millis=timeout_millis))
 
 
 def parse_otlp_headers(raw: str) -> dict[str, str]:
@@ -58,7 +85,7 @@ def _sampler():
 
 
 def tracing_active() -> bool:
-    return bool(_STATE["provider"])
+    return bool(_STATE["enabled"])
 
 
 def _install_log_filter() -> None:
@@ -79,6 +106,7 @@ def setup_observability(app: Any | None = None) -> None:
     settings = get_settings()
     if not settings.otel_enabled:
         return
+    _STATE["enabled"] = True
     _ensure_provider(test_exporter=None)
     _instrument_libraries()
 
@@ -87,15 +115,19 @@ def configure_test_tracing(app: Any, exporter: SpanExporter) -> None:
     """In-memory exporter for tests. Does not open network connections."""
     _install_log_filter()
     _STATE["test_exporter"] = exporter
+    _STATE["enabled"] = True
     _ensure_provider(test_exporter=exporter)
+
+
+def reset_test_tracing() -> None:
+    """Drop the in-memory test exporter and disable tracing unless production OTEL is on."""
+    _STATE["test_exporter"] = None
+    if not get_settings().otel_enabled:
+        _STATE["enabled"] = False
 
 
 def _ensure_provider(*, test_exporter: SpanExporter | None) -> None:
     if _STATE["provider"]:
-        if test_exporter is not None:
-            provider = trace.get_tracer_provider()
-            if isinstance(provider, TracerProvider):
-                provider.add_span_processor(SimpleSpanProcessor(test_exporter))
         return
 
     settings = get_settings()
@@ -109,7 +141,7 @@ def _ensure_provider(*, test_exporter: SpanExporter | None) -> None:
     sampler = ALWAYS_ON if test_exporter is not None else _sampler()
     provider = TracerProvider(resource=resource, sampler=sampler)
     if test_exporter is not None:
-        provider.add_span_processor(SimpleSpanProcessor(test_exporter))
+        provider.add_span_processor(SimpleSpanProcessor(_DelegatingSpanExporter()))
     elif (settings.otel_exporter_otlp_endpoint or "").strip():
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 

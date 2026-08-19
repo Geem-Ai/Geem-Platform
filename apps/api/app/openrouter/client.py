@@ -135,7 +135,6 @@ class OpenRouterClient:
 
         request_id = str(uuid.uuid4())
         url = f"{self.base_url}{path}"
-        last_error: Exception | None = None
         last_status = 0
         last_body: dict[str, Any] | None = None
 
@@ -199,7 +198,6 @@ class OpenRouterClient:
                 return last_body, meta, response.status_code
 
             except httpx.TimeoutException as exc:
-                last_error = exc
                 if attempt < max_attempts - 1:
                     delay = BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)]
                     delay *= 0.5 + random.random()
@@ -211,7 +209,6 @@ class OpenRouterClient:
                     retryable=True,
                 ) from exc
             except httpx.HTTPError as exc:
-                last_error = exc
                 if attempt < max_attempts - 1:
                     delay = BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)]
                     delay *= 0.5 + random.random()
@@ -225,7 +222,7 @@ class OpenRouterClient:
 
         raise AppError(
             ErrorCategory.PARSER_FAILED,
-            f"OpenRouter request failed after retries: {last_error}",
+            "OpenRouter request failed after retries",
             details={"status": last_status},
             retryable=True,
         )

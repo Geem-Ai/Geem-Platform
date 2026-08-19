@@ -56,7 +56,8 @@ Provider HTTP exceptions are logged without dumping headers or full bodies.
 
 When `OTEL_ENABLED=true`:
 
-- FastAPI (route template as the HTTP span; health/docs excluded)
+- HTTP requests via a pass-through ASGI wrapper (`http.request` plus `http.route`;
+  not `BaseHTTPMiddleware`). Inactive tracing is a direct pass-through.
 - Celery (worker process init)
 - SQLAlchemy, httpx, Redis (standard instrumentors)
 - Manual spans around Chat, Expert query, RAG retrieve/rerank, ingest,

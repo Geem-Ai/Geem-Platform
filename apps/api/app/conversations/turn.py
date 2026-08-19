@@ -23,6 +23,7 @@ from app.experts.query_service import ExpertQueryService
 from app.usage.metered import MeteredWorkspaceGeneration
 from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace
+from app.observability.attributes import mark_span_error
 from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ class ChatTurnExecutor:
             "chat.turn",
             expert_id=str(expert_id),
             workspace_id=str(workspace.id),
-        ):
+        ) as span:
             yield {
                 "event": "message_start",
                 "data": {
@@ -163,6 +164,7 @@ class ChatTurnExecutor:
                 if not settled and not meter.closed:
                     meter.release()
             except AppError as exc:
+                mark_span_error(span, exc)
                 if not meter.closed:
                     meter.release()
                 yield {
@@ -178,7 +180,8 @@ class ChatTurnExecutor:
                 if not meter.closed:
                     meter.release()
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                mark_span_error(span, exc)
                 logger.exception("public_chat_turn_failed")
                 if not meter.closed:
                     meter.release()

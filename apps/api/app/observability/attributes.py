@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID
 
@@ -42,6 +43,7 @@ FORBIDDEN_ATTR_KEYS = frozenset(
 )
 
 _MAX_STRING = 256
+_URL_RE = re.compile(r"https?://[^\s\"'>]+", re.IGNORECASE)
 
 
 def _is_forbidden_key(key: str) -> bool:
@@ -115,8 +117,16 @@ def attach_request_context(span: Span | None = None) -> None:
 
 
 def mark_span_error(span: Span, exc: BaseException) -> None:
+    """Mark the span failed without recording raw exception strings (URLs, headers)."""
     if not span.is_recording():
         return
-    safe = sanitize_error_message(str(exc), max_len=200) or "error"
+    raw = _URL_RE.sub("[url]", str(exc))
+    safe = sanitize_error_message(raw, max_len=200) or type(exc).__name__
     span.set_status(Status(StatusCode.ERROR, safe))
-    span.record_exception(exc)
+    span.add_event(
+        "exception",
+        {
+            "exception.type": type(exc).__name__,
+            "exception.message": safe,
+        },
+    )
