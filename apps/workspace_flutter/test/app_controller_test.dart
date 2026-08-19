@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geem_workspace/src/controllers/app_controller.dart';
+import 'package:geem_workspace/src/models/models.dart';
 import 'package:geem_workspace/src/services/credential_store.dart';
 import 'package:geem_workspace/src/services/geem_api_client.dart';
 import 'package:http/http.dart' as http;
@@ -102,5 +103,101 @@ void main() {
 
     expect(controller.sessionState, AppSessionState.unauthenticated);
     expect(credentials.refreshToken, isNull);
+  });
+
+  test('expert selection accepts only ready experts on an idle new chat', () {
+    final credentials = _MemoryCredentialStore();
+    final controller =
+        AppController(
+            api: GeemApiClient(
+              baseUrl: 'https://api.example.test',
+              credentials: credentials,
+            ),
+            credentials: credentials,
+            initialLocale: const Locale('en'),
+          )
+          ..experts = const [
+            Expert(
+              id: 'general',
+              name: 'Geem General',
+              status: 'ready',
+              ownership: 'platform',
+              knowledgeMode: 'general',
+            ),
+            Expert(
+              id: 'research',
+              name: 'Research',
+              status: 'ready',
+              ownership: 'workspace',
+              knowledgeMode: 'rag',
+            ),
+            Expert(
+              id: 'draft',
+              name: 'Draft',
+              status: 'draft',
+              ownership: 'workspace',
+              knowledgeMode: 'rag',
+            ),
+          ];
+    addTearDown(controller.dispose);
+
+    controller.selectedExpertId = 'general';
+    controller.selectExpert('draft');
+    expect(controller.selectedExpertId, 'general');
+
+    controller.selectExpert('research');
+    expect(controller.selectedExpertId, 'research');
+
+    controller.sending = true;
+    controller.selectExpert('general');
+    expect(controller.selectedExpertId, 'research');
+
+    controller.sending = false;
+    controller.activeConversation = Conversation(
+      id: 'conversation-1',
+      workspaceId: 'workspace-1',
+      expertId: 'research',
+      title: 'Existing chat',
+      isPinned: false,
+      isFavorite: false,
+      updatedAt: DateTime(2026),
+    );
+    controller.selectExpert('general');
+    expect(controller.selectedExpertId, 'research');
+  });
+
+  test('new chat replaces a stale expert with Geem General', () async {
+    final credentials = _MemoryCredentialStore();
+    final controller =
+        AppController(
+            api: GeemApiClient(
+              baseUrl: 'https://api.example.test',
+              credentials: credentials,
+            ),
+            credentials: credentials,
+            initialLocale: const Locale('en'),
+          )
+          ..experts = const [
+            Expert(
+              id: 'draft',
+              name: 'Draft',
+              status: 'draft',
+              ownership: 'workspace',
+              knowledgeMode: 'rag',
+            ),
+            Expert(
+              id: 'general',
+              name: 'Geem General',
+              status: 'ready',
+              ownership: 'platform',
+              knowledgeMode: 'general',
+            ),
+          ]
+          ..selectedExpertId = 'draft';
+    addTearDown(controller.dispose);
+
+    await controller.newChat();
+
+    expect(controller.selectedExpertId, 'general');
   });
 }

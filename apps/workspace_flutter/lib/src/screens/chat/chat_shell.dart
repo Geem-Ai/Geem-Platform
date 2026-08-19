@@ -6,6 +6,7 @@ import '../../theme/geem_theme.dart';
 import '../../widgets/geem_avatar.dart';
 import 'chat_sidebar.dart';
 import 'chat_view.dart';
+import 'expert_navbar_dropdown.dart';
 
 class ChatShell extends StatelessWidget {
   const ChatShell({super.key});
@@ -79,17 +80,19 @@ class _MobileChatShell extends StatelessWidget {
             const GeemAvatar(size: 32),
             const SizedBox(width: 9),
             Expanded(
-              child: Text(
-                title?.isNotEmpty == true
-                    ? title!
-                    : context.strings.text('appName'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: controller.activeConversation == null
+                  ? const ExpertNavbarDropdown(compact: true)
+                  : Text(
+                      title?.isNotEmpty == true
+                          ? title!
+                          : context.strings.text('untitled'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ],
         ),

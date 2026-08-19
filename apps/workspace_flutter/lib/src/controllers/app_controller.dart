@@ -438,8 +438,10 @@ class AppController extends ChangeNotifier {
   }
 
   void selectExpert(String expertId) {
-    if (activeConversation != null || streaming) return;
-    if (!experts.any((item) => item.id == expertId)) return;
+    if (activeConversation != null || chatBusy) return;
+    if (!experts.any((item) => item.id == expertId && item.isAvailable)) {
+      return;
+    }
     selectedExpertId = expertId;
     _notify();
   }
@@ -621,7 +623,8 @@ class AppController extends ChangeNotifier {
         workspaceId == null) {
       return;
     }
-    if (activeConversation == null && selectedExpertId == null) {
+    final newChatExpert = activeConversation == null ? selectedExpert : null;
+    if (activeConversation == null && newChatExpert?.isAvailable != true) {
       errorCode = 'expert_required';
       _notify();
       return;
@@ -635,7 +638,7 @@ class AppController extends ChangeNotifier {
     final wasUntitled = conversation?.title?.trim().isEmpty ?? true;
     try {
       if (conversation == null) {
-        final expertId = selectedExpertId!;
+        final expertId = newChatExpert!.id;
         conversation = await _api.createConversation(expertId);
         if (!_isCurrentContext(generation, workspaceId)) return;
         final provisional = conversation.copyWith(
@@ -977,7 +980,9 @@ class AppController extends ChangeNotifier {
 
   void _ensureSelectedExpert() {
     if (selectedExpertId != null &&
-        experts.any((item) => item.id == selectedExpertId)) {
+        experts.any(
+          (item) => item.id == selectedExpertId && item.isAvailable,
+        )) {
       return;
     }
     final available = experts

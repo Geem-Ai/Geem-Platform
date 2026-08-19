@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_scope.dart';
 import '../../controllers/app_controller.dart';
@@ -10,6 +8,9 @@ import '../../localization/app_strings.dart';
 import '../../models/models.dart';
 import '../../theme/geem_theme.dart';
 import '../../widgets/geem_avatar.dart';
+import '../../widgets/geem_markdown.dart';
+import '../../widgets/geem_thinking_typewriter.dart';
+import 'expert_navbar_dropdown.dart';
 
 class ChatView extends StatelessWidget {
   const ChatView({super.key});
@@ -122,6 +123,7 @@ class _ChatStarter extends StatelessWidget {
     final strings = context.strings;
     return Column(
       children: [
+        if (MediaQuery.sizeOf(context).width >= 1024) const _ChatToolbar(),
         if (controller.errorCode != null) const _ChatErrorBanner(),
         Expanded(
           child: LayoutBuilder(
@@ -159,7 +161,7 @@ class _ChatStarter extends StatelessWidget {
                               ),
                         ),
                         const SizedBox(height: 32),
-                        const _ChatComposer(showExpertPicker: true),
+                        const _ChatComposer(),
                         const SizedBox(height: 22),
                         Text(
                           strings.text('starterDisclaimer'),
@@ -201,8 +203,6 @@ class _ConversationView extends StatelessWidget {
                   key: ValueKey(controller.activeConversation!.id),
                   messages: controller.messages,
                   userInitials: controller.userInitials,
-                  streaming: controller.streaming,
-                  streamStage: controller.streamStage,
                 ),
         ),
         Padding(
@@ -221,9 +221,12 @@ class _ChatToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final conversation = AppScope.of(context).activeConversation!;
-    final title = conversation.title?.trim().isNotEmpty == true
-        ? conversation.title!.trim()
+    final conversation = AppScope.of(context).activeConversation;
+    final conversationTitle = conversation?.title?.trim();
+    final title = conversation == null
+        ? context.strings.text('newChat')
+        : conversationTitle?.isNotEmpty == true
+        ? conversationTitle!
         : context.strings.text('untitled');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -233,56 +236,18 @@ class _ChatToolbar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontSize: 17),
-                ),
-                if (conversation.expert != null) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Text(
-                        conversation.expert!.name,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (conversation.expert!.ownership == 'platform') ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Geem',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ],
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontSize: 17),
             ),
           ),
+          const SizedBox(width: 14),
+          const ExpertNavbarDropdown(),
+          const SizedBox(width: 12),
           const GeemAvatar(size: 38),
         ],
       ),
@@ -347,15 +312,11 @@ class _MessageList extends StatefulWidget {
   const _MessageList({
     required this.messages,
     required this.userInitials,
-    required this.streaming,
-    required this.streamStage,
     super.key,
   });
 
   final List<ChatMessage> messages;
   final String userInitials;
-  final bool streaming;
-  final String? streamStage;
 
   @override
   State<_MessageList> createState() => _MessageListState();
@@ -426,9 +387,6 @@ class _MessageListState extends State<_MessageList> {
         itemBuilder: (context, index) => _MessageRow(
           message: widget.messages[index],
           userInitials: widget.userInitials,
-          streamStage: index == widget.messages.length - 1
-              ? widget.streamStage
-              : null,
         ),
       ),
       if (!stickToBottom)
@@ -451,20 +409,17 @@ class _MessageListState extends State<_MessageList> {
 }
 
 class _MessageRow extends StatelessWidget {
-  const _MessageRow({
-    required this.message,
-    required this.userInitials,
-    required this.streamStage,
-  });
+  const _MessageRow({required this.message, required this.userInitials});
 
   final ChatMessage message;
   final String userInitials;
-  final String? streamStage;
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
-    final bubbleColor = isUser ? GeemColors.brand : context.geemTokens.muted;
+    final bubbleColor = isUser
+        ? GeemColors.brand
+        : context.geemTokens.muted.withValues(alpha: 0.5);
     final foreground = isUser
         ? Colors.white
         : Theme.of(context).colorScheme.onSurface;
@@ -489,8 +444,8 @@ class _MessageRow extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 13,
+                      horizontal: 20,
+                      vertical: 16,
                     ),
                     decoration: BoxDecoration(
                       color: bubbleColor,
@@ -500,11 +455,17 @@ class _MessageRow extends StatelessWidget {
                         bottomStart: Radius.circular(isUser ? 16 : 4),
                         bottomEnd: Radius.circular(isUser ? 4 : 16),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.045),
+                          blurRadius: 5,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
                     child: _MessageBody(
                       message: message,
                       foreground: foreground,
-                      streamStage: streamStage,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -543,15 +504,10 @@ class _MessageRow extends StatelessWidget {
 }
 
 class _MessageBody extends StatelessWidget {
-  const _MessageBody({
-    required this.message,
-    required this.foreground,
-    required this.streamStage,
-  });
+  const _MessageBody({required this.message, required this.foreground});
 
   final ChatMessage message;
   final Color foreground;
-  final String? streamStage;
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +517,14 @@ class _MessageBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (isWaiting)
-          _ThinkingStatus(stage: streamStage)
+          GeemThinkingTypewriter(
+            messages: _thinkingMessages(context),
+            semanticsLabel: context.strings.text('thinking'),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12.5,
+            ),
+          )
         else if (!message.isAssistant)
           SelectionArea(
             child: Text(
@@ -570,29 +533,21 @@ class _MessageBody extends StatelessWidget {
             ),
           )
         else
-          MarkdownBody(
-            data: message.content,
-            selectable: true,
-            styleSheet: _markdownStyle(context, foreground),
-            onTapLink: (_, href, _) => _openMarkdownLink(href),
-            imageBuilder: (_, _, alt) => Text(
-              alt ?? '',
-              style: TextStyle(color: foreground, fontStyle: FontStyle.italic),
-            ),
-          ),
+          GeemMarkdown(data: message.content, foreground: foreground),
         if (message.status == 'streaming' && message.content.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: SizedBox(
-              width: 14,
-              child: LinearProgressIndicator(
-                minHeight: 2,
-                color: Theme.of(context).colorScheme.primary,
-                backgroundColor: Colors.transparent,
+            padding: const EdgeInsets.only(top: 2),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: PulsingCursor(
+                width: 8,
+                height: 16,
+                margin: const EdgeInsetsDirectional.only(start: 4),
+                color: foreground,
               ),
             ),
           ),
-        if (message.citations.isNotEmpty) ...[
+        if (message.status != 'streaming' && message.citations.isNotEmpty) ...[
           const SizedBox(height: 12),
           _CitationPanel(citations: message.citations),
         ],
@@ -617,42 +572,6 @@ class _MessageBody extends StatelessWidget {
             label: Text(context.strings.text('retry')),
           ),
         ],
-      ],
-    );
-  }
-}
-
-class _ThinkingStatus extends StatelessWidget {
-  const _ThinkingStatus({required this.stage});
-
-  final String? stage;
-
-  @override
-  Widget build(BuildContext context) {
-    final key = switch (stage) {
-      'retrieving' => 'retrieving',
-      'retrying' => 'retrying',
-      'generating' => 'generating',
-      _ => 'thinking',
-    };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox.square(
-          dimension: 14,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(width: 9),
-        Text(
-          context.strings.text(key),
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 12.5,
-          ),
-        ),
       ],
     );
   }
@@ -720,9 +639,7 @@ class _CitationPanel extends StatelessWidget {
 }
 
 class _ChatComposer extends StatefulWidget {
-  const _ChatComposer({this.showExpertPicker = false});
-
-  final bool showExpertPicker;
+  const _ChatComposer();
 
   @override
   State<_ChatComposer> createState() => _ChatComposerState();
@@ -742,7 +659,10 @@ class _ChatComposerState extends State<_ChatComposer> {
   void send(AppController controller) {
     final value = input.text.trim();
     if (value.isEmpty || controller.chatBusy) return;
-    if (widget.showExpertPicker && controller.selectedExpert == null) return;
+    if (controller.activeConversation == null &&
+        controller.selectedExpert?.isAvailable != true) {
+      return;
+    }
     input.clear();
     setState(() {});
     unawaited(controller.sendMessage(value));
@@ -754,16 +674,16 @@ class _ChatComposerState extends State<_ChatComposer> {
     final controller = AppScope.of(context);
     final strings = context.strings;
     final selected = controller.selectedExpert;
+    final isNewChat = controller.activeConversation == null;
     final canSend =
         input.text.trim().isNotEmpty &&
         !controller.chatBusy &&
-        (!widget.showExpertPicker || selected != null);
-    final placeholder = widget.showExpertPicker && selected != null
-        ? strings.text('askHint').replaceAll('{{name}}', selected.name)
-        : strings.text(
-            widget.showExpertPicker ? 'expertRequired' : 'messageHint',
-          );
+        (!isNewChat || selected?.isAvailable == true);
+    final placeholder = isNewChat && selected?.isAvailable == true
+        ? strings.text('askHint').replaceAll('{{name}}', selected!.name)
+        : strings.text(isNewChat ? 'expertRequired' : 'messageHint');
     return Container(
+      key: const Key('chat-composer'),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
@@ -778,56 +698,6 @@ class _ChatComposerState extends State<_ChatComposer> {
       ),
       child: Column(
         children: [
-          if (widget.showExpertPicker) ...[
-            Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 8, 5),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: controller.selectedExpertId,
-                        hint: Text(strings.text('selectExpert')),
-                        borderRadius: BorderRadius.circular(14),
-                        items: controller.experts
-                            .where((expert) => expert.isAvailable)
-                            .map(
-                              (expert) => DropdownMenuItem(
-                                value: expert.id,
-                                child: Text(
-                                  expert.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(growable: false),
-                        onChanged: controller.chatBusy
-                            ? null
-                            : (value) {
-                                if (value != null) {
-                                  controller.selectExpert(value);
-                                }
-                              },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-          ],
           Padding(
             padding: const EdgeInsetsDirectional.fromSTEB(16, 9, 9, 9),
             child: Row(
@@ -910,58 +780,11 @@ String _formatTime(DateTime value) {
   return '${local.day}/${local.month} · $hour:$minute';
 }
 
-MarkdownStyleSheet _markdownStyle(BuildContext context, Color foreground) {
-  final theme = Theme.of(context);
-  final border = context.geemTokens.border;
-  final body = TextStyle(color: foreground, fontSize: 14, height: 1.75);
-  return MarkdownStyleSheet.fromTheme(theme).copyWith(
-    p: body,
-    a: body.copyWith(
-      color: theme.colorScheme.primary,
-      decoration: TextDecoration.underline,
-      decorationColor: theme.colorScheme.primary,
-    ),
-    h1: body.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
-    h2: body.copyWith(fontSize: 19, fontWeight: FontWeight.w700),
-    h3: body.copyWith(fontSize: 17, fontWeight: FontWeight.w600),
-    h4: body.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
-    strong: body.copyWith(fontWeight: FontWeight.w700),
-    em: body.copyWith(fontStyle: FontStyle.italic),
-    listBullet: body,
-    code: body.copyWith(
-      fontFamily: 'monospace',
-      fontSize: 12.5,
-      backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
-    ),
-    blockSpacing: 10,
-    tableColumnWidth: const IntrinsicColumnWidth(),
-    tableScrollbarThumbVisibility: true,
-    tableBorder: TableBorder.all(color: border),
-    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-    blockquotePadding: EdgeInsetsDirectional.fromSTEB(
-      12,
-      8,
-      10,
-      8,
-    ).resolve(Directionality.of(context)),
-    blockquoteDecoration: BoxDecoration(
-      color: theme.colorScheme.surface.withValues(alpha: 0.55),
-      border: BorderDirectional(
-        start: BorderSide(color: theme.colorScheme.primary, width: 3),
-      ),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    codeblockPadding: const EdgeInsets.all(12),
-    codeblockDecoration: BoxDecoration(
-      color: theme.colorScheme.surface.withValues(alpha: 0.75),
-      border: Border.all(color: border),
-      borderRadius: BorderRadius.circular(10),
-    ),
-  );
-}
-
-Future<void> _openMarkdownLink(String? href) async {
-  final uri = href == null ? null : Uri.tryParse(href);
-  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) return;
-  await launchUrl(uri, mode: LaunchMode.externalApplication);
-}
+List<String> _thinkingMessages(BuildContext context) => [
+  context.strings.text('thinking'),
+  context.strings.text('thinkingCheckingSources'),
+  context.strings.text('thinkingGatheringContext'),
+  context.strings.text('thinkingReadingKnowledge'),
+  context.strings.text('thinkingPreparingAnswer'),
+  context.strings.text('thinkingLookingUp'),
+];
