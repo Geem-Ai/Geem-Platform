@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5174,
-    // Local geem.dm + UAT Cloudflare Tunnel (app-uat.geem.ai)
+    // Local geem.dm + Cloudflare Tunnel (hub.geem.ai)
     allowedHosts: ['.geem.dm', '.geem.ai', 'localhost'],
     ...(tunnelHost
       ? {

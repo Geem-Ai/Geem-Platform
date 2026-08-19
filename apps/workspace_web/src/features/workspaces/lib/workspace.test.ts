@@ -22,6 +22,7 @@ describe('hostname slug extraction', () => {
 
   it('rejects reserved infrastructure hosts', () => {
     expect(extractHostWorkspaceSlug('api.geem.ai', 'geem.ai')).toBeNull();
+    expect(extractHostWorkspaceSlug('hub.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('app-uat.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('api-uat.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('landpage-uat.geem.ai', 'geem.ai')).toBeNull();

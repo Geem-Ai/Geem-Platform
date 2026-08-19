@@ -33,7 +33,7 @@ function themeLabelKey(theme: ThemeOption): 'themeLight' | 'themeDark' | 'themeS
 export function AuthChrome() {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const locale: AppLocale = i18n.language === 'ar' ? 'ar' : 'en';
+  const locale: AppLocale = i18n.language === 'en' ? 'en' : 'ar';
   const currentTheme: ThemeOption = isThemeOption(theme) ? theme : 'light';
 
   function cycleTheme() {
@@ -52,7 +52,7 @@ export function AuthChrome() {
         aria-label={t('shell.language')}
         className="inline-flex rounded-md border border-input bg-background p-0.5 shadow-xs"
       >
-        {(['en', 'ar'] as const).map((option) => (
+        {(['ar', 'en'] as const).map((option) => (
           <button
             key={option}
             type="button"

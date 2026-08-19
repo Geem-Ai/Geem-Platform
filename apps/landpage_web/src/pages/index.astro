@@ -1,3 +1,5 @@
 ---
-return Astro.redirect('/ar', 301);
+import { defaultLocale } from '../lib/i18n';
+
+return Astro.redirect(`/${defaultLocale}`, 301);
 ---

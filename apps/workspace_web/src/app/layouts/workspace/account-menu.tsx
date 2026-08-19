@@ -55,7 +55,7 @@ type LogoutKind = 'session' | 'all';
 type ThemeOption = 'light' | 'dark' | 'system';
 
 const THEME_OPTIONS: ThemeOption[] = ['light', 'dark', 'system'];
-const LOCALE_OPTIONS: AppLocale[] = ['en', 'ar'];
+const LOCALE_OPTIONS: AppLocale[] = ['ar', 'en'];
 
 function initials(email: string | undefined): string {
   if (!email) return '?';
@@ -84,7 +84,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
   const { user, logout, logoutAll } = useAuth();
   const { availableWorkspaces, currentWorkspace, selectWorkspace } = useWorkspace();
   const navigate = useNavigate();
-  const locale = (i18n.language === 'ar' ? 'ar' : 'en') as AppLocale;
+  const locale = (i18n.language === 'en' ? 'en' : 'ar') as AppLocale;
   const currentTheme: ThemeOption = isThemeOption(theme) ? theme : 'light';
 
   const [logoutKind, setLogoutKind] = useState<LogoutKind | null>(null);

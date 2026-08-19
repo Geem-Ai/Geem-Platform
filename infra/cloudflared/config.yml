@@ -3,30 +3,30 @@
 #
 # Create / refresh (once, on the host):
 #   cloudflared tunnel login
-#   cloudflared tunnel create geem-uat
+#   cloudflared tunnel create geem-dalseen
 #   cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
-#   cloudflared tunnel route dns geem-uat app-uat.geem.ai
-#   cloudflared tunnel route dns geem-uat api-uat.geem.ai
-#   cloudflared tunnel route dns geem-uat landpage-uat.geem.ai
+#   cloudflared tunnel route dns geem-dalseen hub.geem.ai
+#   cloudflared tunnel route dns geem-dalseen api.geem.ai
+#   cloudflared tunnel route dns geem-dalseen geem.ai
 
-# name: geem-uat
-tunnel: ff3689b0-3e00-44b1-bc9a-893bc84d37ad
+# name: geem-dalseen
+tunnel: e054f188-97ca-4cab-80da-020f0ae4385b
 credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
-  - hostname: app-uat.geem.ai
+  - hostname: hub.geem.ai
     service: http://workspace_web:5174
     originRequest:
-      httpHostHeader: app-uat.geem.ai
-  - hostname: api-uat.geem.ai
+      httpHostHeader: hub.geem.ai
+  - hostname: api.geem.ai
     service: http://api:8000
     originRequest:
-      httpHostHeader: api-uat.geem.ai
+      httpHostHeader: api.geem.ai
       # Chat SSE + large uploads
       connectTimeout: 30s
       keepAliveTimeout: 90s
-  - hostname: landpage-uat.geem.ai
+  - hostname: geem.ai
     service: http://landpage_web:4321
     originRequest:
-      httpHostHeader: landpage-uat.geem.ai
+      httpHostHeader: geem.ai
   - service: http_status:404

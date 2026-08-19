@@ -1,12 +1,12 @@
 <!doctype html>
-<html class="h-full" lang="en" dir="ltr">
+<html class="h-full" lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/webp" href="/brand/geem-avatar.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Geem — Arabic-first AI workspace" />
     <meta name="author" content="Geem" />
-    <title>Geem | Arabic-first AI workspace</title>
+    <title>Geem | مساحة عمل ذكاء اصطناعي بالعربية أولاً</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -24,13 +24,13 @@
             theme === 'dark' || (theme === 'system' && prefersDark);
           if (isDarkMode) document.documentElement.classList.add('dark');
 
-          const locale = localStorage.getItem('geem-locale') || 'en';
+          const locale = localStorage.getItem('geem-locale') === 'en' ? 'en' : 'ar';
           document.documentElement.lang = locale;
           document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
           document.title =
-            locale === 'ar'
-              ? 'Geem | مساحة عمل ذكاء اصطناعي بالعربية أولاً'
-              : 'Geem | Arabic-first AI workspace';
+            locale === 'en'
+              ? 'Geem | Arabic-first AI workspace'
+              : 'Geem | مساحة عمل ذكاء اصطناعي بالعربية أولاً';
         } catch (e) {}
       })();
     </script>
