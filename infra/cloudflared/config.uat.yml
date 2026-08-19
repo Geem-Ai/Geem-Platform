@@ -1,0 +1,33 @@
+# Locally-managed Cloudflare Tunnel (development / UAT) — this Mac only.
+# Credentials are gitignored: infra/cloudflared/credentials-uat.json
+#
+# Create / refresh (once, on this host):
+#   cloudflared tunnel login
+#   cloudflared tunnel create geem-uat
+#   cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials-uat.json
+#   cloudflared tunnel route dns geem-uat app-uat.geem.ai
+#   cloudflared tunnel route dns geem-uat api-uat.geem.ai
+#   cloudflared tunnel route dns geem-uat landpage-uat.geem.ai
+#
+# Do not route *.geem.ai here — production keeps tenant hosts.
+
+# name: geem-uat (UUID also lives in credentials-uat.json as TunnelID)
+tunnel: geem-uat
+credentials-file: /etc/cloudflared/credentials-uat.json
+
+ingress:
+  - hostname: app-uat.geem.ai
+    service: http://workspace_web:5174
+    originRequest:
+      httpHostHeader: app-uat.geem.ai
+  - hostname: api-uat.geem.ai
+    service: http://api:8000
+    originRequest:
+      httpHostHeader: api-uat.geem.ai
+      connectTimeout: 30s
+      keepAliveTimeout: 90s
+  - hostname: landpage-uat.geem.ai
+    service: http://landpage_web:4321
+    originRequest:
+      httpHostHeader: landpage-uat.geem.ai
+  - service: http_status:404

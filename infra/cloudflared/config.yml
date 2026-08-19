@@ -1,5 +1,6 @@
-# Locally-managed Cloudflare Tunnel (UAT).
+# Locally-managed Cloudflare Tunnel (production host).
 # Credentials are gitignored: infra/cloudflared/credentials.json
+# Development/UAT on a separate Mac: config.uat.yml + credentials-uat.json.
 #
 # Create / refresh (once, on the host):
 #   cloudflared tunnel login
