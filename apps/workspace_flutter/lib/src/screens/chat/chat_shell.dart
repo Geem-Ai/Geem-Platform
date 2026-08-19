@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app_scope.dart';
 import '../../localization/app_strings.dart';
 import '../../theme/geem_theme.dart';
 import '../../widgets/geem_avatar.dart';
+import '../profile/profile_screen.dart';
 import 'chat_sidebar.dart';
 import 'chat_view.dart';
 import 'expert_navbar_dropdown.dart';
@@ -98,18 +101,23 @@ class _MobileChatShell extends StatelessWidget {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsetsDirectional.only(end: 12),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.11),
-              foregroundColor: Theme.of(context).colorScheme.primary,
-              child: Text(
-                controller.userInitials,
-                style: const TextStyle(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
+            padding: const EdgeInsetsDirectional.only(end: 6),
+            child: IconButton(
+              key: const Key('mobile-profile-button'),
+              onPressed: () => unawaited(openProfileScreen(context)),
+              tooltip: context.strings.text('profile'),
+              icon: CircleAvatar(
+                radius: 16,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.11),
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                child: Text(
+                  controller.userInitials,
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
