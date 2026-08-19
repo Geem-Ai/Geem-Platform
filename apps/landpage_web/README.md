@@ -49,7 +49,7 @@ Public build-time variables (see `.env.example`):
 
 ## Docker
 
-Local Compose service: `landpage_web` on port **4321** (dev server).
+Cloudflare Tunnel overlay uses the **production** nginx image (`Dockerfile.prod`) on port **80** (published as host **4321**). Local Compose without the overlay still uses `npm run dev`.
 
 UAT Cloudflare Tunnel: **https://landpage-uat.geem.ai** (see [docs/development.md](../../docs/development.md) § C).
 

@@ -5,7 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 ARG PUBLIC_SITE_URL=https://geem.ai
-ARG PUBLIC_WORKSPACE_URL=https://app.geem.ai
+ARG PUBLIC_WORKSPACE_URL=https://hub.geem.ai
 ARG PUBLIC_SIGNUP_URL=
 ARG PUBLIC_CONTACT_URL=
 ARG PUBLIC_DOCS_URL=

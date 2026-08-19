@@ -125,11 +125,11 @@ cloudflared tunnel route dns geem-dalseen geem.ai
 
 | Public hostname | Origin (Docker DNS) |
 |-----------------|---------------------|
-| `hub.geem.ai` | `http://workspace_web:5174` |
+| `hub.geem.ai` | `http://workspace_web:80` (production nginx) |
 | `api.geem.ai` | `http://api:8000` |
-| `geem.ai` | `http://landpage_web:4321` |
+| `geem.ai` | `http://landpage_web:80` (production nginx) |
 
-`.env` `CORS_ORIGINS` must include `https://hub.geem.ai`. Start the overlay (recreates `workspace_web` so Vite picks up `VITE_API_URL=https://api.geem.ai`, and `landpage_web` so Astro picks up `PUBLIC_SITE_URL=https://geem.ai`):
+`.env` `CORS_ORIGINS` must include `https://hub.geem.ai`. Start the overlay (rebuilds `workspace_web` and `landpage_web` as production nginx images with `VITE_API_URL` / `PUBLIC_SITE_URL` baked in):
 
 ```bash
 cd infra
@@ -329,5 +329,5 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | Embedding dimension errors | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models |
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
 | Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
-| Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:5174`, `http://api:8000`, and `http://landpage_web:4321` |
+| Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:80`, `http://api:8000`, and `http://landpage_web:80` |
 | Tunnel CORS / login refresh fails | `CORS_ORIGINS` includes `https://hub.geem.ai`; browser calls `https://api.geem.ai` (recreate `workspace_web` after enabling the overlay) |

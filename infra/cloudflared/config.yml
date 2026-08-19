@@ -15,7 +15,7 @@ credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: hub.geem.ai
-    service: http://workspace_web:5174
+    service: http://workspace_web:80
     originRequest:
       httpHostHeader: hub.geem.ai
   - hostname: api.geem.ai
@@ -26,7 +26,11 @@ ingress:
       connectTimeout: 30s
       keepAliveTimeout: 90s
   - hostname: geem.ai
-    service: http://landpage_web:4321
+    service: http://landpage_web:80
     originRequest:
       httpHostHeader: geem.ai
+  - hostname: www.geem.ai
+    service: http://landpage_web:80
+    originRequest:
+      httpHostHeader: www.geem.ai
   - service: http_status:404
