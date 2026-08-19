@@ -432,6 +432,8 @@ class ConversationService:
                 citations.append(Citation.model_validate(item))
             except ValidationError:
                 continue
+        # ``usage_event_id`` is a logical UUID only. Do not join ``usage_events``
+        # here — the telemetry row may have been dropped by partition retention.
         return MessageOut(
             id=message.id,
             conversation_id=message.conversation_id,

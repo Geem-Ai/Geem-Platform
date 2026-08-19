@@ -38,6 +38,7 @@ from app.experts.models import ExpertKnowledgeMode, ExpertStatus, ExpertType
 from app.experts.policy import ExpertAction
 from app.identity.models import User
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.observability.tracing import start_span
 
 if TYPE_CHECKING:  # pragma: no cover
     from app.rag.service import RagService
@@ -87,22 +88,27 @@ class ExpertQueryService:
             actor=actor,
             expert_id=expert_id,
         )
-        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
-            return self._rag.query_general_expert(
+        with start_span(
+            "expert.query",
+            expert_id=str(expert_id),
+            workspace_id=str(workspace.id),
+        ):
+            if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+                return self._rag.query_general_expert(
+                    question=question,
+                    knowledge=knowledge,
+                    history=history,
+                    usage_context=usage_context,
+                    attachment=attachment,
+                )
+            return self._rag.query_expert(
                 question=question,
                 knowledge=knowledge,
+                top_k=top_k,
                 history=history,
                 usage_context=usage_context,
                 attachment=attachment,
             )
-        return self._rag.query_expert(
-            question=question,
-            knowledge=knowledge,
-            top_k=top_k,
-            history=history,
-            usage_context=usage_context,
-            attachment=attachment,
-        )
 
     def query_stream(
         self,
@@ -158,20 +164,25 @@ class ExpertQueryService:
             expert_id=expert_id,
             actor_id=actor_id,
         )
-        if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
-            return self._rag.query_general_expert(
+        with start_span(
+            "expert.query",
+            expert_id=str(expert_id),
+            workspace_id=str(workspace.id),
+        ):
+            if knowledge.authorized.expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value:
+                return self._rag.query_general_expert(
+                    question=question,
+                    knowledge=knowledge,
+                    history=history,
+                    usage_context=usage_context,
+                )
+            return self._rag.query_expert(
                 question=question,
                 knowledge=knowledge,
+                top_k=top_k,
                 history=history,
                 usage_context=usage_context,
             )
-        return self._rag.query_expert(
-            question=question,
-            knowledge=knowledge,
-            top_k=top_k,
-            history=history,
-            usage_context=usage_context,
-        )
 
     def query_stream_for_workspace(
         self,

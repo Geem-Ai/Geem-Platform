@@ -379,6 +379,15 @@ def test_beat_schedule_is_utc_crontab() -> None:
     assert tasks["rollup_usage_daily"]["kwargs"]["recent_days"] == 2
     assert isinstance(tasks["ensure_usage_event_partitions"]["schedule"], crontab)
     assert isinstance(tasks["retain_usage_event_partitions"]["schedule"], crontab)
+    assert isinstance(tasks["purge_deleted_conversations"]["schedule"], crontab)
+    assert isinstance(tasks["purge_deleted_experts"]["schedule"], crontab)
+    assert isinstance(tasks["purge_deleted_workspaces"]["schedule"], crontab)
+    conv = tasks["purge_deleted_conversations"]["schedule"]
+    exp = tasks["purge_deleted_experts"]["schedule"]
+    wss = tasks["purge_deleted_workspaces"]["schedule"]
+    assert conv.hour == {1} and conv.minute == {0}
+    assert exp.hour == {1} and exp.minute == {15}
+    assert wss.hour == {1} and wss.minute == {30}
     from app.usage.tasks import (
         ensure_usage_event_partitions,
         retain_usage_event_partitions,

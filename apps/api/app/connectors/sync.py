@@ -28,6 +28,8 @@ from app.connectors.schemas import (
 from app.connectors.service import ConnectorConnectionService
 from app.connectors.types import SyncRunStatus, SyncTrigger
 from app.core.errors import AppError, ErrorCategory
+from app.observability.attributes import set_safe_attributes
+from app.observability.tracing import start_span
 from app.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
@@ -256,6 +258,25 @@ class ConnectorSyncService:
     ) -> ConnectorSyncRun:
         """Run inside Celery with tenant context already set by the task."""
         _ = actor_id
+        span_name = "connector.sync"
+        with start_span(
+            span_name,
+            workspace_id=str(workspace_id),
+            connection_id=str(connection_id),
+        ):
+            return self._execute_sync_run_inner(
+                workspace_id=workspace_id,
+                connection_id=connection_id,
+                sync_run_id=sync_run_id,
+            )
+
+    def _execute_sync_run_inner(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        connection_id: uuid.UUID,
+        sync_run_id: uuid.UUID,
+    ) -> ConnectorSyncRun:
         connection_sync_lock(self.db, connection_id)
         run = self.repo.get_sync_run(workspace_id, connection_id, sync_run_id)
         if run is None:
@@ -267,6 +288,14 @@ class ConnectorSyncService:
             row, app, _inst = self.connections.require_usable_connection(
                 workspace_id, connection_id
             )
+            from opentelemetry.trace import get_current_span
+
+            key = row.connector_key or ""
+            span_name = {
+                "google_drive": "connector.drive.sync",
+                "microsoft_onedrive": "connector.onedrive.sync",
+            }.get(key, "connector.sync")
+            set_safe_attributes(get_current_span(), {"connector.key": key, "operation": span_name})
             adapter = self.registry.get(row.connector_key)
             if not hasattr(adapter, "sync"):
                 raise AppError(

@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     # When only `to` is sent. Omitting both from/to uses usage_history_max_days.
     usage_history_default_days: int = 30
 
+    # Phase 11D — optional OpenTelemetry. Disabled by default (no exporter, no network).
+    otel_enabled: bool = False
+    otel_service_name: str = "geem-api"
+    otel_exporter_otlp_endpoint: str = ""
+    otel_exporter_otlp_headers: str = ""
+    otel_traces_sampler: str = "parentbased_traceidratio"
+    otel_traces_sampler_arg: float = 0.1
+
     # Phase 2C+: Document/Query/Jobs HTTP always require authenticated Workspace.
     # Public: /api/auth/login|register|refresh|forgot-password|reset-password,
     # /api/health/*, OpenAPI in local. Authenticated change-password under /api/auth.
@@ -575,9 +583,44 @@ def assert_usage_scale_settings(settings: Settings) -> None:
         )
 
 
+_OTEL_SAMPLERS = frozenset(
+    {
+        "parentbased_traceidratio",
+        "traceidratio",
+        "trace_id_ratio",
+        "always_on",
+        "alwayson",
+        "always_off",
+        "alwaysoff",
+    }
+)
+
+
+def assert_otel_settings(settings: Settings) -> None:
+    name = (settings.otel_traces_sampler or "").strip().lower()
+    if name not in _OTEL_SAMPLERS:
+        raise RuntimeError(
+            "OTEL_TRACES_SAMPLER must be parentbased_traceidratio, traceidratio, "
+            "always_on, or always_off."
+        )
+    arg = float(settings.otel_traces_sampler_arg)
+    if not 0.0 <= arg <= 1.0:
+        raise RuntimeError("OTEL_TRACES_SAMPLER_ARG must be between 0 and 1.")
+    if not (settings.otel_service_name or "").strip():
+        raise RuntimeError("OTEL_SERVICE_NAME must be a non-empty service name.")
+    if settings.otel_enabled and not settings.is_local:
+        endpoint = (settings.otel_exporter_otlp_endpoint or "").strip()
+        if not endpoint:
+            raise RuntimeError(
+                "OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is empty. "
+                "Set an OTLP collector URL or disable OpenTelemetry."
+            )
+
+
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
     assert_secure_settings(settings)
     assert_usage_scale_settings(settings)
+    assert_otel_settings(settings)
     return settings

@@ -167,7 +167,8 @@ class Message(Base):
     )
     # Optional logical link to usage metering. Not a PostgreSQL FK: partitioned
     # ``usage_events`` primary key is ``(id, created_at)`` and cannot be
-    # referenced by ``id`` alone. UUIDs remain unique by construction.
+    # referenced by ``id`` alone. After raw-event retention the UUID may not
+    # resolve; Message APIs must treat that as optional, not an error.
     usage_event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,

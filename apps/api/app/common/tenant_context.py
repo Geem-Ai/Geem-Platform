@@ -17,6 +17,7 @@ from app.common.request_context import (
     reset_request_context,
     set_request_context,
 )
+from app.observability.attributes import attach_request_context
 
 
 @contextmanager
@@ -38,6 +39,7 @@ def tenant_context(
         extras=extras,
     )
     token = set_request_context(ctx)
+    attach_request_context()
     try:
         yield ctx
     finally:

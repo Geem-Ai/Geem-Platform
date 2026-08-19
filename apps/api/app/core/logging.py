@@ -59,6 +59,12 @@ class JsonFormatter(logging.Formatter):
             "retention_cutoff",
             "row_count",
             "event_count",
+            "trace_id",
+            "span_id",
+            "task_id",
+            "duration_ms",
+            "operation",
+            "auth_type",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)

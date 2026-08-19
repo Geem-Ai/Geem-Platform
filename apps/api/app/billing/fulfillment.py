@@ -12,6 +12,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.usage.credits import CreditService
 from app.usage.metrics import CreditLedgerEntryType
+from app.observability.tracing import start_span
 
 
 GRANT_REQUEST_ID_PREFIX = "purchase:"
@@ -118,4 +119,9 @@ class PurchaseFulfillmentService:
         handler = self._registry().get(str(kind))
         if handler is None:
             raise AppError(ErrorCategory.INVALID_PURCHASE, "Unknown purchase kind.")
-        handler.fulfill(purchase)
+        with start_span(
+            "billing.fulfill",
+            purchase_kind=str(kind),
+            workspace_id=str(purchase.workspace_id),
+        ):
+            handler.fulfill(purchase)

@@ -134,6 +134,7 @@ services:
         condition: service_healthy
     command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
 
+  # Dedicated Beat (Phase 11C/11D). No OTEL collector is required for this stack.
   beat:
     build:
       context: ../apps/api

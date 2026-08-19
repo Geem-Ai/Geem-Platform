@@ -16,6 +16,8 @@ This stack is **not** a single PHP site. You need Docker for Postgres, Redis, Qd
 | Workspace UI (`apps/workspace_web`) | `npm run build` → Nginx document root (`dist/`) |
 | TLS, HTTP, SPA fallback | aaPanel website + Nginx |
 
+Optional OpenTelemetry export (`OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`) is documented in [observability.md](./observability.md). The normal Compose stack does **not** include a collector. Celery Beat remains a dedicated `beat` service.
+
 Do **not** run the Compose `web` / `workspace_web` services in production. Those images start Vite **dev** servers with bind mounts. Serve a production `dist/` from Nginx instead.
 
 ## Recommended host layout

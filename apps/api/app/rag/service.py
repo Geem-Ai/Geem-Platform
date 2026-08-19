@@ -37,6 +37,7 @@ from app.usage.accounting import accumulate_result_usage, parse_provider_usage
 from app.usage.attribution import GenerationUsageContext
 from app.usage.openrouter_billing import provider_meta, record_openrouter_event
 from app.usage.weights import OpenRouterFamily, billed_usage
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -587,13 +588,18 @@ class RagService:
             provider=self.embedder,
         )
 
-        hits = self.vectors.search_expert(
-            knowledge_workspace_id=scope.knowledge_workspace_id,
-            expert_id=scope.expert_id,
-            vector=query_vec,
-            top_k=effective_top_k,
-            document_ids=ready_id_strs,
-        )
+        with start_span(
+            "rag.retrieve",
+            expert_id=str(scope.expert_id),
+            workspace_id=str(scope.knowledge_workspace_id),
+        ):
+            hits = self.vectors.search_expert(
+                knowledge_workspace_id=scope.knowledge_workspace_id,
+                expert_id=scope.expert_id,
+                vector=query_vec,
+                top_k=effective_top_k,
+                document_ids=ready_id_strs,
+            )
 
         resolver = ExpertKnowledgeResolver(self.db, self.settings)
         enriched: list[dict] = []

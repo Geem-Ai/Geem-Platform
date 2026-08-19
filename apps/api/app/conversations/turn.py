@@ -23,6 +23,7 @@ from app.experts.query_service import ExpertQueryService
 from app.usage.metered import MeteredWorkspaceGeneration
 from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -72,26 +73,31 @@ class ChatTurnExecutor:
         history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         usage_ctx = meter.context()
-        result = self.expert_query.query_for_workspace(
-            workspace=workspace,
-            expert_id=expert_id,
-            question=question,
-            history=history,
-            usage_context=usage_ctx,
-            actor_id=invocation.api_key_id,
-        )
-        citations = ConversationService.normalize_citations(result.get("citations") or [])
-        billed = settled_tokens_from_payload(
-            self.settings, result, extra_billed=usage_ctx.extra_billed_tokens
-        )
-        meter.settle(result)
-        return {
-            "answer": result.get("answer") or "",
-            "citations": citations,
-            "billed_tokens": billed,
-            "insufficient_context": bool(result.get("insufficient_context")),
-            "model": public_model_or_none(result.get("model")),
-        }
+        with start_span(
+            "chat.turn",
+            expert_id=str(expert_id),
+            workspace_id=str(workspace.id),
+        ):
+            result = self.expert_query.query_for_workspace(
+                workspace=workspace,
+                expert_id=expert_id,
+                question=question,
+                history=history,
+                usage_context=usage_ctx,
+                actor_id=invocation.api_key_id,
+            )
+            citations = ConversationService.normalize_citations(result.get("citations") or [])
+            billed = settled_tokens_from_payload(
+                self.settings, result, extra_billed=usage_ctx.extra_billed_tokens
+            )
+            meter.settle(result)
+            return {
+                "answer": result.get("answer") or "",
+                "citations": citations,
+                "billed_tokens": billed,
+                "insufficient_context": bool(result.get("insufficient_context")),
+                "model": public_model_or_none(result.get("model")),
+            }
 
     def stream(
         self,
@@ -106,80 +112,81 @@ class ChatTurnExecutor:
         usage_ctx = meter.context()
         accumulated = ""
         settled = False
-        yield {
-            "event": "message_start",
-            "data": {
-                "request_id": request_id,
-                "expert_id": str(expert_id),
-            },
-        }
-        try:
-            for item in self.expert_query.query_stream_for_workspace(
-                workspace=workspace,
-                expert_id=expert_id,
-                question=question,
-                usage_context=usage_ctx,
-                actor_id=invocation.api_key_id,
-            ):
-                event = item.get("event")
-                data = item.get("data") or {}
-                if event == "token":
-                    text = data.get("text") or ""
-                    accumulated += text
-                    yield {"event": "delta", "data": {"content": text}}
-                elif event == "replace":
-                    # RAG/OpenRouter emits replace as a full-buffer reset
-                    # (empty on fallback, or the complete answer). Mapping
-                    # that onto concatenative delta.content duplicates text.
-                    accumulated = data.get("text") or ""
-                    yield {"event": "replace", "data": {"content": accumulated}}
-                elif event == "final":
-                    citations = ConversationService.normalize_citations(
-                        data.get("citations") or []
-                    )
-                    answer = data.get("answer") or accumulated or ""
-                    billed = settled_tokens_from_payload(
-                        self.settings, data, extra_billed=usage_ctx.extra_billed_tokens
-                    )
-                    meter.settle(data)
-                    settled = True
-                    yield {
-                        "event": "message_complete",
-                        "data": {
-                            "request_id": request_id,
-                            "answer": answer,
-                            "citations": citations,
-                            "usage": {"billed_tokens": billed},
-                        },
-                    }
-                # Drop internal status events from the public contract.
-            if not settled and not meter.closed:
-                meter.release()
-        except AppError as exc:
-            if not meter.closed:
-                meter.release()
+        with start_span(
+            "chat.turn",
+            expert_id=str(expert_id),
+            workspace_id=str(workspace.id),
+        ):
             yield {
-                "event": "error",
+                "event": "message_start",
                 "data": {
-                    "code": exc.category.value,
-                    "error": exc.category.value,
-                    "message": exc.message,
-                    "details": exc.details,
+                    "request_id": request_id,
+                    "expert_id": str(expert_id),
                 },
             }
-        except GeneratorExit:
-            if not meter.closed:
-                meter.release()
-            raise
-        except Exception:  # noqa: BLE001
-            logger.exception("public_chat_turn_failed")
-            if not meter.closed:
-                meter.release()
-            yield {
-                "event": "error",
-                "data": {
-                    "code": ErrorCategory.GENERATION_FAILED.value,
-                    "error": ErrorCategory.GENERATION_FAILED.value,
-                    "message": "Generation failed.",
-                },
-            }
+            try:
+                for item in self.expert_query.query_stream_for_workspace(
+                    workspace=workspace,
+                    expert_id=expert_id,
+                    question=question,
+                    usage_context=usage_ctx,
+                    actor_id=invocation.api_key_id,
+                ):
+                    event = item.get("event")
+                    data = item.get("data") or {}
+                    if event == "token":
+                        text = data.get("text") or ""
+                        accumulated += text
+                        yield {"event": "delta", "data": {"content": text}}
+                    elif event == "replace":
+                        accumulated = data.get("text") or ""
+                        yield {"event": "replace", "data": {"content": accumulated}}
+                    elif event == "final":
+                        citations = ConversationService.normalize_citations(
+                            data.get("citations") or []
+                        )
+                        answer = data.get("answer") or accumulated or ""
+                        billed = settled_tokens_from_payload(
+                            self.settings, data, extra_billed=usage_ctx.extra_billed_tokens
+                        )
+                        meter.settle(data)
+                        settled = True
+                        yield {
+                            "event": "message_complete",
+                            "data": {
+                                "request_id": request_id,
+                                "answer": answer,
+                                "citations": citations,
+                                "usage": {"billed_tokens": billed},
+                            },
+                        }
+                if not settled and not meter.closed:
+                    meter.release()
+            except AppError as exc:
+                if not meter.closed:
+                    meter.release()
+                yield {
+                    "event": "error",
+                    "data": {
+                        "code": exc.category.value,
+                        "error": exc.category.value,
+                        "message": exc.message,
+                        "details": exc.details,
+                    },
+                }
+            except GeneratorExit:
+                if not meter.closed:
+                    meter.release()
+                raise
+            except Exception:  # noqa: BLE001
+                logger.exception("public_chat_turn_failed")
+                if not meter.closed:
+                    meter.release()
+                yield {
+                    "event": "error",
+                    "data": {
+                        "code": ErrorCategory.GENERATION_FAILED.value,
+                        "error": ErrorCategory.GENERATION_FAILED.value,
+                        "message": "Generation failed.",
+                    },
+                }

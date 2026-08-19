@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_ready
+from celery.signals import worker_process_init, worker_ready
 
 from app.core.config import get_settings
 
@@ -78,8 +78,29 @@ celery_app.conf.update(
             "task": "retain_usage_event_partitions",
             "schedule": crontab(hour=0, minute=30),
         },
+        # Phase 11D — lifecycle purge (SOFT_DELETE_RETENTION_DAYS). Offset from
+        # 00:10/00:20/00:30 usage maintenance.
+        "purge-deleted-conversations": {
+            "task": "purge_deleted_conversations",
+            "schedule": crontab(hour=1, minute=0),
+        },
+        "purge-deleted-experts": {
+            "task": "purge_deleted_experts",
+            "schedule": crontab(hour=1, minute=15),
+        },
+        "purge-deleted-workspaces": {
+            "task": "purge_deleted_workspaces",
+            "schedule": crontab(hour=1, minute=30),
+        },
     },
 )
+
+
+@worker_process_init.connect
+def _setup_worker_observability(**_kwargs) -> None:
+    from app.observability.setup import setup_observability
+
+    setup_observability()
 
 
 @worker_ready.connect

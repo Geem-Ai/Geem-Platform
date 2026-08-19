@@ -81,6 +81,7 @@ from app.usage.metrics import AiUsageReservationStatus, CreditLedgerEntryType, U
 from app.usage.models import AiUsageReservation, CreditLedgerEntry, UsagePeriodCounter
 from app.usage.periods import PeriodType, utcnow
 from app.usage.repository import AiUsageReservationRepository, UsageCounterRepository
+from app.observability.tracing import start_span
 
 
 class AiUsageService:
@@ -114,11 +115,21 @@ class AiUsageService:
         self._advisory_lock(workspace_id)
         existing = self.reservations.get_by_request_id(workspace_id, rid)
         if existing is not None:
-            return self._to_dto(existing)
+            with start_span(
+                "usage.reserve",
+                workspace_id=str(workspace_id),
+                reservation_outcome="idempotent_replay",
+            ):
+                return self._to_dto(existing)
 
         try:
             with self.db.begin_nested():
-                return self._reserve_locked(
+                with start_span(
+                    "usage.reserve",
+                    workspace_id=str(workspace_id),
+                    reservation_outcome="created",
+                ):
+                    return self._reserve_locked(
                     workspace_id,
                     rid,
                     estimated_tokens,
@@ -155,10 +166,27 @@ class AiUsageService:
                 details={"request_id": rid},
             )
         if row.status == AiUsageReservationStatus.SETTLED.value:
-            return self._to_dto(row)
+            with start_span(
+                "usage.settle",
+                workspace_id=str(workspace_id),
+                billed_tokens=actual_usage,
+                reservation_outcome="idempotent_settled",
+            ):
+                return self._to_dto(row)
         if row.status == AiUsageReservationStatus.RELEASED.value:
-            return self._to_dto(row)
-        return self._settle_locked(row, actual_usage)
+            with start_span(
+                "usage.settle",
+                workspace_id=str(workspace_id),
+                reservation_outcome="already_released",
+            ):
+                return self._to_dto(row)
+        with start_span(
+            "usage.settle",
+            workspace_id=str(workspace_id),
+            billed_tokens=actual_usage,
+            reservation_outcome="settled",
+        ):
+            return self._settle_locked(row, actual_usage)
 
     def release_ai_usage(
         self,

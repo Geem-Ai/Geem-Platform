@@ -14,6 +14,7 @@ from app.storage.document_keys import (
     document_storage_key,
     resolve_document_storage_key,
 )
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -43,24 +44,26 @@ class MinioObjectStorage:
 
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         try:
-            self.client.put_object(
-                self.bucket,
-                key,
-                io.BytesIO(data),
-                length=len(data),
-                content_type=content_type,
-            )
+            with start_span("minio.put"):
+                self.client.put_object(
+                    self.bucket,
+                    key,
+                    io.BytesIO(data),
+                    length=len(data),
+                    content_type=content_type,
+                )
         except S3Error as exc:
             raise AppError(ErrorCategory.STORAGE_ERROR, f"Failed to store object: {exc}") from exc
 
     def get_bytes(self, key: str) -> bytes:
         try:
-            response = self.client.get_object(self.bucket, key)
-            try:
-                return response.read()
-            finally:
-                response.close()
-                response.release_conn()
+            with start_span("minio.get"):
+                response = self.client.get_object(self.bucket, key)
+                try:
+                    return response.read()
+                finally:
+                    response.close()
+                    response.release_conn()
         except S3Error as exc:
             raise AppError(ErrorCategory.STORAGE_ERROR, f"Failed to read object: {exc}") from exc
 
@@ -75,7 +78,8 @@ class MinioObjectStorage:
 
     def delete(self, key: str) -> None:
         try:
-            self.client.remove_object(self.bucket, key)
+            with start_span("minio.delete"):
+                self.client.remove_object(self.bucket, key)
         except S3Error as exc:
             # Idempotent delete: missing object is OK
             if exc.code in {"NoSuchKey", "NoSuchObject"}:

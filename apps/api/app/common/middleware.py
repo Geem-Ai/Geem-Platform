@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
@@ -9,6 +7,7 @@ from starlette.responses import Response
 from app.common.request_context import RequestContext, reset_request_context, set_request_context
 from app.common.workspace_resolver import resolve_workspace_hint
 from app.core.config import get_settings
+from app.observability.request_id import sanitize_request_id
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -21,7 +20,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         settings = get_settings()
-        request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+        request_id = sanitize_request_id(request.headers.get("X-Request-Id"))
         hint = resolve_workspace_hint(request, settings)
         ctx = RequestContext(
             request_id=request_id,

@@ -61,7 +61,12 @@ A missing or already-purged row is success (idempotent). If conversations,
 workspace Experts, or documents remain after a pass, `purged_at` is **not**
 set and the next invocation retries.
 
-## Historical records that survive Workspace purge
+## `messages.usage_event_id`
+
+This UUID is a **logical** pointer to `usage_events.id`, not a foreign key
+(partitioned PK is `(id, created_at)`). Raw events are kept ~13 months. After
+a partition drop, conversation/message APIs still succeed; the telemetry row
+is simply gone. Do not reintroduce an `id`-only FK.
 
 These keep `workspace_id` pointing at the tombstone so ledgers stay attributable:
 
@@ -83,11 +88,20 @@ Postgres document row when object or vector delete fails so the next purge can
 retry. A failure in tenant A does not abort tenant B (per-entity try/except in
 the sweep).
 
-## Invoke purge in development
+## Invoke purge
 
-Celery Beat is **not** scheduled for these soft-delete purge tasks in Phase 11A
-(they remain on-demand). Usage-event partition ensure/rollup/retention **is**
-on Beat (Phase 11C); see [usage-scaling.md](./usage-scaling.md). With a worker:
+Celery Beat (UTC) runs the same Phase 11A tasks (idempotent, `SOFT_DELETE_RETENTION_DAYS`):
+
+| Time | Task |
+|------|------|
+| 01:00 | `purge_deleted_conversations` |
+| 01:15 | `purge_deleted_experts` |
+| 01:30 | `purge_deleted_workspaces` |
+
+Usage partition jobs stay at 00:10 / 00:20 / 00:30. See [usage-scaling.md](./usage-scaling.md)
+and [observability.md](./observability.md).
+
+Manual invoke with a worker:
 
 ```bash
 cd apps/api
