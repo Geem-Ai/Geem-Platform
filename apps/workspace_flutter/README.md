@@ -16,7 +16,8 @@ The app currently provides:
 - New text chats with an Expert, defaulting to Geem General when available.
 - Persisted chat history, pinned and recent sections, and a favorites filter.
 - Favorite/unfavorite, pin/unpin, rename, and delete conversation actions.
-- Streaming GFM Markdown answers, generation status, stop, retry, citations,
+- Styled streaming GFM Markdown answers, Workspace Web-matched thinking
+  typewriter/caret, stop, retry, citations,
   safe external links, and asynchronously generated conversation titles.
 - Responsive desktop/tablet shell and mobile drawer without sample prompts.
 
