@@ -31,7 +31,7 @@ Example for product domain `geem.ai` (replace with yours):
 
 Keep Postgres, Redis, Qdrant, and MinIO **off** the public internet. Compose already leaves Postgres / Redis / Qdrant unpublished; do not add `ports:` for them, and do not publish MinIO `9000`/`9001` in production.
 
-Split-host (`app.` vs `api.`) also works (same-site cookies across subdomains), but you must list **every** SPA origin in `CORS_ORIGINS` — production does **not** enable the local `*.domain` CORS regex.
+Split-host (`app.` vs `api.`) also works (same-site cookies across subdomains). List canonical SPA origins in `CORS_ORIGINS`. The API also allows `https://{one-label}.{APP_ROOT_DOMAIN}` (never `*`, never suffix matching). Local/dev additionally allows `http` and ports.
 
 ## Server requirements
 
@@ -120,7 +120,7 @@ OPENROUTER_API_KEY=
 # Optional JSON: AI_TOKEN_MODEL_MULTIPLIERS={"openai/gpt-5.6-luna":3}
 ```
 
-If you will serve tenant hosts (`https://acme.example.com`) **without** proxying `/api` on those hosts, add each origin to `CORS_ORIGINS` (comma-separated, exact, no `*`).
+If you will serve tenant hosts (`https://acme.example.com`) **without** proxying `/api` on those hosts, set `APP_ROOT_DOMAIN=example.com` so `https://{slug}.example.com` is allowed. Keep canonical hosts (`https://hub.example.com`) in `CORS_ORIGINS` (comma-separated, exact, no `*`).
 
 Generate secrets on the VPS:
 
@@ -448,7 +448,7 @@ aaPanel **Cron** can run that plus a `tar` of the MinIO/Qdrant volumes.
 
 - [ ] `APP_ENV=production`
 - [ ] `JWT_SECRET` ≥ 32 chars, not the example value
-- [ ] `CORS_ORIGINS` exact HTTPS origins, never `*`
+- [ ] `CORS_ORIGINS` exact HTTPS origins, never `*`; `APP_ROOT_DOMAIN` for `{slug}` hosts
 - [ ] `TRUST_PROXY_HEADERS=true` only because Nginx **overwrites** `X-Forwarded-For`
 - [ ] API bound to `127.0.0.1:8000`, not `0.0.0.0:8000` on a public interface
 - [ ] MinIO / Qdrant / Postgres / Redis unpublished

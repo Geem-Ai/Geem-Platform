@@ -1,4 +1,4 @@
-# Local full stack. Public tunnel hostnames (hub.geem.ai / api.geem.ai / geem.ai):
+# Local full stack. Public tunnel hostnames (hub.geem.ai / api.geem.ai / geem.ai / *.geem.ai):
 #   docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
 services:
   postgres:

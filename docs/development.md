@@ -103,9 +103,9 @@ address=/geem.dm/127.0.0.1
 
 Then open **http://app.geem.dm:5174**, not `http://api.geem.dm:5174` (that host is the API, not the SPA).
 
-Vite already allows Host headers for `.geem.dm` and `.geem.ai`. With `APP_ENV=local`, the API also allows CORS for `http(s)://{sub.}geem.dm[:port]` in addition to the exact `CORS_ORIGINS` list.
+Vite already allows Host headers for `.geem.dm` and `.geem.ai`. The API allows CORS for one-label hosts under `APP_ROOT_DOMAIN` in addition to the exact `CORS_ORIGINS` list (`http(s)` + optional port when `APP_ENV=local`; `https://{slug}.{root}` otherwise).
 
-### C. Cloudflare Tunnel (`hub.geem.ai` / `api.geem.ai` / `geem.ai`)
+### C. Cloudflare Tunnel (`hub.geem.ai` / `api.geem.ai` / `geem.ai` / `*.geem.ai`)
 
 Expose the local Compose stack on HTTPS without opening ports. This is a **dev/UAT** path (Vite `--reload`), not production. Prefer Cloudflare Access in front of the hostnames.
 
@@ -121,15 +121,17 @@ cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
 cloudflared tunnel route dns geem-dalseen hub.geem.ai
 cloudflared tunnel route dns geem-dalseen api.geem.ai
 cloudflared tunnel route dns geem-dalseen geem.ai
+cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 ```
 
 | Public hostname | Origin (Docker DNS) |
 |-----------------|---------------------|
 | `hub.geem.ai` | `http://workspace_web:80` (production nginx) |
 | `api.geem.ai` | `http://api:8000` |
-| `geem.ai` | `http://landpage_web:80` (production nginx) |
+| `geem.ai` / `www.geem.ai` | `http://landpage_web:80` (production nginx) |
+| `{slug}.geem.ai` | `http://workspace_web:80` (same SPA; reserved labels stay on the rows above) |
 
-`.env` `CORS_ORIGINS` must include `https://hub.geem.ai`. Start the overlay (rebuilds `workspace_web` and `landpage_web` as production nginx images with `VITE_API_URL` / `PUBLIC_SITE_URL` baked in):
+`.env` `CORS_ORIGINS` must include `https://hub.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai` (HTTPS, one label). Start the overlay (rebuilds `workspace_web` and `landpage_web` as production nginx images with `VITE_API_URL` / `PUBLIC_SITE_URL` baked in):
 
 ```bash
 cd infra
@@ -139,6 +141,7 @@ docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-
 | Public | Local (still works) |
 |--------|---------------------|
 | https://hub.geem.ai | http://app.geem.dm:5174 |
+| https://{slug}.geem.ai | http://{slug}.geem.dm:5174 |
 | https://api.geem.ai | http://api.geem.dm:8000 |
 | https://geem.ai | http://localhost:4321 |
 
@@ -328,7 +331,7 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 - Access token: in-memory `Authorization: Bearer`
 - Refresh: HttpOnly cookie `geem_refresh`, `Path=/api/auth`, `SameSite=Lax`, `Secure=false` when `APP_ENV=local`
 - Browser must call the API with `credentials: 'include'` (already done in the Workspace client)
-- `CORS_ORIGINS` is an exact-origin list (no `*`)
+- `CORS_ORIGINS` is an exact-origin list (no `*`); `APP_ROOT_DOMAIN` also allows one-label tenant hosts
 - Do not put `http://api.geem.dm:5174` in `CORS_ORIGINS` — that is not an SPA origin
 
 ## What not to expect from the legacy stack
@@ -349,4 +352,4 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
 | Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
 | Tunnel 1033 / cloudflared exits | `infra/cloudflared/credentials.json` present; start with `-f docker-compose.tunnel.yml`; `config.yml` origins are `http://workspace_web:80`, `http://api:8000`, and `http://landpage_web:80` |
-| Tunnel CORS / login refresh fails | `CORS_ORIGINS` includes `https://hub.geem.ai`; browser calls `https://api.geem.ai` (recreate `workspace_web` after enabling the overlay) |
+| Tunnel CORS / login refresh fails | `CORS_ORIGINS` includes `https://hub.geem.ai`; `APP_ROOT_DOMAIN=geem.ai` for `{slug}.geem.ai`; browser calls `https://api.geem.ai` (recreate `workspace_web` after enabling the overlay) |

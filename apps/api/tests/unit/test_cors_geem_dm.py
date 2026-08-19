@@ -33,6 +33,29 @@ def test_local_cors_helper_uses_root_domain(monkeypatch) -> None:
     get_settings.cache_clear()
 
 
+def test_production_spa_origin_regex_matches_one_label_https() -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret="a" * 40,
+        cors_origins="https://hub.geem.ai",
+        app_root_domain="geem.ai",
+    )
+    pattern = settings.spa_origin_regex()
+    assert pattern is not None
+    assert re.match(pattern, "https://acme.geem.ai")
+    assert re.match(pattern, "https://hub.geem.ai")
+    assert not re.match(pattern, "http://acme.geem.ai")
+    assert not re.match(pattern, "https://acme.geem.ai:5174")
+    assert not re.match(pattern, "https://foo.bar.geem.ai")
+    assert not re.match(pattern, "https://evil-geem.ai")
+    assert not re.match(pattern, "https://geem.ai.attacker.com")
+    assert not re.match(pattern, "https://geem.ai")
+    assert settings.is_allowed_spa_origin("https://acme.geem.ai")
+    assert settings.is_allowed_spa_origin("https://hub.geem.ai")
+    assert not settings.is_allowed_spa_origin("https://geem.ai")
+
+
 def test_production_settings_still_reject_star_cors() -> None:
     settings = Settings(
         _env_file=None,

@@ -9,6 +9,7 @@
 #   hub.geem.ai   →  http://workspace_web:80  (production nginx, not Vite)
 #   api.geem.ai   →  http://api:8000
 #   geem.ai       →  http://landpage_web:80  (production nginx, not Astro dev)
+#   *.geem.ai     →  http://workspace_web:80  (tenant hosts; DNS CNAME * → tunnel)
 
 services:
   api:

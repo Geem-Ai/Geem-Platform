@@ -75,7 +75,7 @@ _cors_kwargs: dict = {
     "allow_methods": ["*"],
     "allow_headers": ["*"],
 }
-_regex = settings.local_spa_origin_regex()
+_regex = settings.spa_origin_regex()
 if _regex:
     _cors_kwargs["allow_origin_regex"] = _regex
 
