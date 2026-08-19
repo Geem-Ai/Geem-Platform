@@ -1,0 +1,65 @@
+# Development / UAT Cloudflare Tunnel overlay (this Mac).
+# Keeps bind-mounts and Vite/Astro/Uvicorn --reload from docker-compose.yml.
+# Does not replace local geem.dm / localhost DX — use it in addition.
+#
+#   cd infra
+#   docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
+#
+# Requires infra/cloudflared/credentials-uat.json (see infra/cloudflared/config.uat.yml).
+# Do NOT start docker-compose.tunnel.yml on this host (that overlay claims
+# hub.geem.ai / api.geem.ai / geem.ai / *.geem.ai for production).
+#
+# Ingress:
+#   app-uat.geem.ai       →  http://workspace_web:5174  (Vite)
+#   api-uat.geem.ai       →  http://api:8000
+#   landpage-uat.geem.ai  →  http://landpage_web:4321   (Astro dev)
+
+services:
+  api:
+    environment:
+      APP_URL: https://api-uat.geem.ai
+      TRUST_PROXY_HEADERS: "true"
+      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+      APP_ROOT_DOMAIN: geem.dm
+
+  worker:
+    environment:
+      APP_URL: https://api-uat.geem.ai
+      TRUST_PROXY_HEADERS: "true"
+      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+      APP_ROOT_DOMAIN: geem.dm
+
+  beat:
+    environment:
+      APP_URL: https://api-uat.geem.ai
+      TRUST_PROXY_HEADERS: "true"
+      WORKSPACE_WEB_URL: https://app-uat.geem.ai
+      APP_ROOT_DOMAIN: geem.dm
+
+  workspace_web:
+    environment:
+      VITE_API_URL: https://api-uat.geem.ai
+      VITE_ROOT_DOMAIN: geem.ai
+      VITE_APP_ENV: local
+      VITE_TUNNEL_HOST: app-uat.geem.ai
+
+  landpage_web:
+    environment:
+      PUBLIC_SITE_URL: https://landpage-uat.geem.ai
+      PUBLIC_WORKSPACE_URL: https://app-uat.geem.ai
+      PUBLIC_API_BASE_URL: https://api-uat.geem.ai
+      PUBLIC_TUNNEL_HOST: landpage-uat.geem.ai
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.uat.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      api:
+        condition: service_started
+      workspace_web:
+        condition: service_started
+      landpage_web:
+        condition: service_started

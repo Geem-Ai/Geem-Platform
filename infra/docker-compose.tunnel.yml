@@ -1,10 +1,14 @@
-# Cloudflare Tunnel overlay (locally-managed config.yml).
-# Does not replace local geem.dm / localhost DX — use it in addition:
+# Production Cloudflare Tunnel overlay (baked nginx, no Vite reload).
+# NEVER run this file on the development Mac — it claims hub.geem.ai /
+# api.geem.ai / geem.ai / *.geem.ai and would steal production traffic.
+# Run on the production host only.
+# Does not replace local geem.dm / localhost DX on a laptop:
 #
 #   cd infra
-#   docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
 #
 # Requires infra/cloudflared/credentials.json (see infra/cloudflared/config.yml).
+# Development/UAT on this Mac: docker-compose.uat.yml + config.uat.yml.
 # Ingress:
 #   hub.geem.ai   →  http://workspace_web:80  (production nginx, not Vite)
 #   api.geem.ai   →  http://api:8000

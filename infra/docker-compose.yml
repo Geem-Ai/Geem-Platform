@@ -1,5 +1,8 @@
-# Local full stack. Public tunnel hostnames (hub.geem.ai / api.geem.ai / geem.ai / *.geem.ai):
-#   docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+# Local full stack (bind-mounts, --reload).
+# Production host (baked nginx + hub.geem.ai / api.geem.ai / geem.ai):
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+# This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat):
+#   docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
 services:
   postgres:
     image: postgres:16-alpine

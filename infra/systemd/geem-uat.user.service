@@ -1,0 +1,18 @@
+[Unit]
+Description=Geem development/UAT stack (Docker Compose + Cloudflare Tunnel)
+After=default.target
+# docker.service is a system unit; wait for the socket before compose up.
+# Do not enable this unit on the production host (use geem-stack.service instead).
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h/PlaygroundProjects/ArabicRag/infra
+Environment=PATH=/usr/local/bin:/opt/homebrew/bin:%h/.local/bin:/usr/bin:/bin
+ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+ExecStart=docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web cloudflared
+ExecStop=docker compose -f docker-compose.yml -f docker-compose.uat.yml stop postgres redis qdrant minio api worker beat workspace_web landpage_web cloudflared
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target
