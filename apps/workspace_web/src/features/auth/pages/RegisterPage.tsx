@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { continueAfterAuth } from '@/app/router/guards';
+import { continueAfterAuth, rememberAuthContinue } from '@/app/router/guards';
 import { isInvitationAcceptPath } from '@/features/members/lib/invitation-path';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { AuthAlert } from '@/features/auth/components/AuthAlert';
@@ -36,9 +36,17 @@ export function RegisterPage() {
     setSubmitting(true);
     setErrorKey(null);
     try {
-      const me = await register(email.trim(), password);
+      const result = await register(email.trim(), password);
+      if (result.verificationRequired) {
+        rememberAuthContinue(from);
+        navigate('/check-email', {
+          replace: true,
+          state: { email: email.trim(), from },
+        });
+        return;
+      }
       const dest = continueAfterAuth(from);
-      if (isInvitationAcceptPath(dest) || me.workspaces.length > 0) {
+      if (isInvitationAcceptPath(dest) || result.me.workspaces.length > 0) {
         navigate(dest, { replace: true });
       } else {
         navigate('/onboarding', { replace: true, state: { from } });

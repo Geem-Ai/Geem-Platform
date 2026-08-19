@@ -34,6 +34,14 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=1, max_length=128)
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 
@@ -44,6 +52,7 @@ class UserOut(BaseModel):
     status: str
     platform_role: str
     created_at: datetime
+    email_verified_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -102,6 +111,14 @@ class AuthTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_at: datetime
     user: UserOut
+
+
+class RegisterResponse(BaseModel):
+    verification_required: bool
+    access_token: str | None = None
+    token_type: str = "bearer"
+    expires_at: datetime | None = None
+    user: UserOut | None = None
 
 
 class MeResponse(BaseModel):

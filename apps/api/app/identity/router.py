@@ -26,14 +26,17 @@ from app.identity.schemas import (
     OkResponse,
     RefreshRequest,
     RegisterRequest,
+    RegisterResponse,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     UserOut,
+    VerifyEmailRequest,
     WorkspaceSummaryOut,
     membership_out,
     workspace_summary_out,
 )
 from app.identity.security import decode_access_token
-from app.identity.service import AuthService, AuthTokens
+from app.identity.service import AuthService, AuthTokens, RegisterResult
 from app.notifications.factory import get_email_provider
 from app.notifications.protocol import EmailProvider
 from app.workspaces.service import WorkspaceService
@@ -74,6 +77,20 @@ def _token_response(
     )
 
 
+def _register_response(
+    result: RegisterResult, response: Response, settings: Settings
+) -> RegisterResponse:
+    if result.verification_required or result.tokens is None:
+        return RegisterResponse(verification_required=True)
+    _set_refresh_cookie(response, result.tokens.refresh_token, settings)
+    return RegisterResponse(
+        verification_required=False,
+        access_token=result.tokens.access_token,
+        expires_at=result.tokens.access_expires_at,
+        user=UserOut.model_validate(result.user),
+    )
+
+
 def _rate_key(request: Request, email: str | None = None) -> str:
     ip = client_ip(request) or "unknown"
     if email:
@@ -81,23 +98,24 @@ def _rate_key(request: Request, email: str | None = None) -> str:
     return ip
 
 
-@router.post("/register", response_model=AuthTokenResponse)
+@router.post("/register", response_model=RegisterResponse)
 def register(
     body: RegisterRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> AuthTokenResponse:
+    email: EmailProvider = Depends(get_email_provider),
+) -> RegisterResponse:
     check_auth_rate_limit("register", _rate_key(request, str(body.email)), settings=settings)
-    svc = AuthService(db, settings)
-    user, tokens = svc.register(
+    svc = AuthService(db, settings, email=email)
+    result = svc.register(
         email=str(body.email),
         password=body.password,
         user_agent=request.headers.get("User-Agent"),
         ip_address=client_ip(request),
     )
-    return _token_response(user, tokens, response, settings)
+    return _register_response(result, response, settings)
 
 
 @router.post("/login", response_model=AuthTokenResponse)
@@ -149,6 +167,39 @@ def reset_password(
         ip_address=client_ip(request),
     )
     return _token_response(user, tokens, response, settings)
+
+
+@router.post("/verify-email", response_model=AuthTokenResponse)
+def verify_email(
+    body: VerifyEmailRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> AuthTokenResponse:
+    check_auth_rate_limit("verify_email", _rate_key(request), settings=settings)
+    svc = AuthService(db, settings)
+    user, tokens = svc.verify_email(
+        token=body.token,
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=client_ip(request),
+    )
+    return _token_response(user, tokens, response, settings)
+
+
+@router.post("/resend-verification", response_model=OkResponse)
+def resend_verification(
+    body: ResendVerificationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    email: EmailProvider = Depends(get_email_provider),
+) -> OkResponse:
+    check_auth_rate_limit(
+        "resend_verification", _rate_key(request, str(body.email)), settings=settings
+    )
+    AuthService(db, settings, email=email).resend_verification(email=str(body.email))
+    return OkResponse(ok=True)
 
 
 @router.post("/change-password", response_model=OkResponse)

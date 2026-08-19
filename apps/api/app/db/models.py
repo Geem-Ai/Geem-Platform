@@ -24,7 +24,12 @@ from app.common.soft_delete import SoftDeleteMixin
 from app.db.session import Base
 
 # Domain models registered on the same Base metadata (Phase 1A+).
-from app.identity.models import PasswordResetToken, Session, User  # noqa: E402
+from app.identity.models import (  # noqa: E402
+    EmailVerificationToken,
+    PasswordResetToken,
+    Session,
+    User,
+)
 from app.workspaces.models import (  # noqa: E402
     Permission,
     Workspace,

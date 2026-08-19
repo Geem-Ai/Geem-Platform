@@ -10,7 +10,21 @@ from sqlalchemy.orm import Session
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.identity.models import PlatformRole, Session as AuthSession, PasswordResetToken, User, UserStatus
+from app.identity.email_verification_email import render_email_verification_email
+from app.identity.email_verification_tokens import (
+    MAX_EMAIL_VERIFICATION_TOKEN_LENGTH,
+    email_verification_url,
+    generate_email_verification_token,
+    hash_email_verification_token,
+)
+from app.identity.models import (
+    PlatformRole,
+    Session as AuthSession,
+    EmailVerificationToken,
+    PasswordResetToken,
+    User,
+    UserStatus,
+)
 from app.identity.password_reset_email import render_password_reset_email
 from app.identity.password_reset_tokens import (
     MAX_PASSWORD_RESET_TOKEN_LENGTH,
@@ -18,7 +32,12 @@ from app.identity.password_reset_tokens import (
     hash_password_reset_token,
     password_reset_url,
 )
-from app.identity.repository import PasswordResetTokenRepository, SessionRepository, UserRepository
+from app.identity.repository import (
+    EmailVerificationTokenRepository,
+    PasswordResetTokenRepository,
+    SessionRepository,
+    UserRepository,
+)
 from app.identity.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
@@ -40,6 +59,13 @@ class AuthTokens:
     session_id: uuid.UUID
 
 
+@dataclass(slots=True)
+class RegisterResult:
+    user: User
+    tokens: AuthTokens | None
+    verification_required: bool
+
+
 class AuthService:
     def __init__(
         self,
@@ -53,6 +79,7 @@ class AuthService:
         self.users = UserRepository(db)
         self.sessions = SessionRepository(db)
         self.reset_tokens = PasswordResetTokenRepository(db)
+        self.verify_tokens = EmailVerificationTokenRepository(db)
         self.email = email
 
     def register(
@@ -62,7 +89,7 @@ class AuthService:
         password: str,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> tuple[User, AuthTokens]:
+    ) -> RegisterResult:
         normalized = normalize_email(email)
         if not normalized or "@" not in normalized:
             raise AppError(ErrorCategory.VALIDATION, "Invalid email address.")
@@ -70,21 +97,40 @@ class AuthService:
             raise AppError(ErrorCategory.EMAIL_ALREADY_EXISTS, "Email is already registered.")
 
         validate_password(password)
+        now = datetime.now(timezone.utc)
+        verification_required = self.settings.effective_email_verification_required
         user = User(
             email=normalized,
             password_hash=hash_password(password),
             status=UserStatus.ACTIVE.value,
             platform_role=PlatformRole.NONE.value,
+            email_verified_at=None if verification_required else now,
         )
         self.users.create(user)
-        tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
+        tokens: AuthTokens | None = None
         try:
+            if verification_required:
+                self._create_and_send_verification(user, now=now)
+            else:
+                tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
             raise AppError(ErrorCategory.EMAIL_ALREADY_EXISTS, "Email is already registered.") from exc
-        security_log("auth.register", user_id=str(user.id), email=normalized)
-        return user, tokens
+        except AppError:
+            self.db.rollback()
+            raise
+        security_log(
+            "auth.register",
+            user_id=str(user.id),
+            email=normalized,
+            verification_required=verification_required,
+        )
+        return RegisterResult(
+            user=user,
+            tokens=tokens,
+            verification_required=verification_required,
+        )
 
     def login(
         self,
@@ -105,6 +151,8 @@ class AuthService:
         if not verify_password(password, user.password_hash):
             security_log("auth.login_failed", user_id=str(user.id), reason="bad_password")
             raise AppError(ErrorCategory.INVALID_CREDENTIALS, "Invalid email or password.")
+
+        self._require_email_verified(user)
 
         tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
         self.db.commit()
@@ -165,6 +213,11 @@ class AuthService:
             self.sessions.revoke(session, when=now)
             self.db.commit()
             raise AppError(ErrorCategory.UNAUTHORIZED, "User is not active.")
+        if user.email_verified_at is None:
+            self.sessions.revoke(session, when=now)
+            self.db.commit()
+            security_log("auth.refresh_failed", user_id=str(user.id), reason="email_not_verified")
+            raise AppError(ErrorCategory.EMAIL_NOT_VERIFIED, "Email is not verified.")
 
         return self._rotate_session(
             user,
@@ -330,6 +383,8 @@ class AuthService:
             raise AppError(ErrorCategory.INVALID_RESET_TOKEN, "Invalid or expired reset link.")
 
         user.password_hash = hash_password(password)
+        if user.email_verified_at is None:
+            user.email_verified_at = now
         row.used_at = now
         self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
         self.sessions.revoke_all_for_user(user.id, when=now)
@@ -337,6 +392,67 @@ class AuthService:
         self.db.commit()
         security_log("auth.password_reset", user_id=str(user.id), session_id=str(tokens.session_id))
         return user, tokens
+
+    def verify_email(
+        self,
+        *,
+        token: str,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> tuple[User, AuthTokens]:
+        raw = (token or "").strip()
+        if not raw or len(raw) > MAX_EMAIL_VERIFICATION_TOKEN_LENGTH:
+            raise AppError(ErrorCategory.INVALID_VERIFICATION_TOKEN, "Invalid or expired verification link.")
+
+        token_hash = hash_email_verification_token(raw, settings=self.settings)
+        row = self.verify_tokens.get_by_token_hash(token_hash)
+        if row is None or row.used_at is not None:
+            raise AppError(ErrorCategory.INVALID_VERIFICATION_TOKEN, "Invalid or expired verification link.")
+
+        now = datetime.now(timezone.utc)
+        if row.expires_at <= now:
+            row.used_at = now
+            self.db.commit()
+            raise AppError(ErrorCategory.VERIFICATION_TOKEN_EXPIRED, "Verification link has expired.")
+
+        user = self.users.get_by_id(row.user_id)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            row.used_at = now
+            self.db.commit()
+            raise AppError(ErrorCategory.INVALID_VERIFICATION_TOKEN, "Invalid or expired verification link.")
+
+        if user.email_verified_at is None:
+            user.email_verified_at = now
+        row.used_at = now
+        self.verify_tokens.invalidate_unused_for_user(user.id, when=now)
+        tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
+        self.db.commit()
+        security_log("auth.email_verified", user_id=str(user.id), session_id=str(tokens.session_id))
+        return user, tokens
+
+    def resend_verification(self, *, email: str) -> None:
+        """Always succeeds from the caller's perspective (no email enumeration)."""
+        normalized = normalize_email(email)
+        user = self.users.get_by_email(normalized)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            security_log("auth.resend_verification_skipped", email=normalized, reason="unknown_or_disabled")
+            return
+        if user.email_verified_at is not None:
+            security_log("auth.resend_verification_skipped", user_id=str(user.id), reason="already_verified")
+            return
+        if self.email is None:
+            security_log("auth.resend_verification_failed", user_id=str(user.id), reason="no_email_provider")
+            return
+
+        now = datetime.now(timezone.utc)
+        try:
+            self._create_and_send_verification(user, now=now)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            security_log("auth.resend_verification_failed", user_id=str(user.id), reason="email_delivery")
+            return
+        security_log("auth.resend_verification_sent", user_id=str(user.id))
 
     def change_password(
         self,
@@ -406,3 +522,45 @@ class AuthService:
             access_expires_at=access_exp,
             session_id=session.id,
         )
+
+    def _require_email_verified(self, user: User) -> None:
+        if user.email_verified_at is not None:
+            return
+        security_log("auth.email_not_verified", user_id=str(user.id))
+        raise AppError(ErrorCategory.EMAIL_NOT_VERIFIED, "Email is not verified.")
+
+    def _create_and_send_verification(self, user: User, *, now: datetime) -> None:
+        if self.email is None:
+            raise AppError(ErrorCategory.EMAIL_DELIVERY_FAILED, "Email delivery is unavailable.")
+
+        self.verify_tokens.invalidate_unused_for_user(user.id, when=now)
+        raw = generate_email_verification_token()
+        expires_at = now + timedelta(hours=self.settings.effective_email_verification_ttl_hours)
+        row = EmailVerificationToken(
+            user_id=user.id,
+            token_hash=hash_email_verification_token(raw, settings=self.settings),
+            expires_at=expires_at,
+        )
+        self.verify_tokens.create(row)
+        self.db.flush()
+
+        verify_link = email_verification_url(raw, settings=self.settings)
+        content = render_email_verification_email(
+            verify_url=verify_link,
+            expires_at=expires_at,
+            email=user.email,
+        )
+        try:
+            self.email.send(
+                EmailMessage(
+                    to=user.email,
+                    subject=content.subject,
+                    text_body=content.text_body,
+                    html_body=content.html_body,
+                )
+            )
+        except AppError:
+            raise
+        except Exception as exc:
+            security_log("auth.verification_email_failed", user_id=str(user.id), reason="email_delivery")
+            raise AppError(ErrorCategory.EMAIL_DELIVERY_FAILED, "Email delivery failed.") from exc

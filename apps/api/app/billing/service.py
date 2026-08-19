@@ -94,6 +94,31 @@ class PlanService:
         self.db.flush()
         return self.plans.get_by_id(plan.id) or plan
 
+    def resync_bootstrap_plan(self) -> Plan:
+        """Overwrite bootstrap plan name/description/entitlements from Settings.
+
+        Normal boot still uses :meth:`ensure_bootstrap_plan` (insert-only) so
+        operator edits survive. Call this from ``python -m app.identity.bootstrap
+        --resync-bootstrap-plan`` when you want env values applied.
+        """
+        plan = self.ensure_bootstrap_plan()
+        plan.name = self.settings.bootstrap_plan_name
+        plan.description = self.settings.bootstrap_plan_description
+        defaults: dict[EntitlementKey, int] = {
+            EntitlementKey.AI_TOKENS_DAILY: self.settings.bootstrap_ai_tokens_daily,
+            EntitlementKey.AI_TOKENS_WEEKLY: self.settings.bootstrap_ai_tokens_weekly,
+            EntitlementKey.AI_TOKENS_MONTHLY: self.settings.bootstrap_ai_tokens_monthly,
+            EntitlementKey.EXPERTS_LIMIT: self.settings.bootstrap_experts_limit,
+            EntitlementKey.STORAGE_BYTES: self.settings.bootstrap_storage_bytes,
+            EntitlementKey.API_REQUESTS_PER_MINUTE: (
+                self.settings.bootstrap_api_requests_per_minute
+            ),
+        }
+        for key, value in defaults.items():
+            self.set_entitlement(plan.id, key.value, value)
+        self.db.flush()
+        return self.plans.get_by_id(plan.id) or plan
+
     def create_plan(
         self,
         *,

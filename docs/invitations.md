@@ -59,7 +59,7 @@ Acceptance is **idempotent** for the rightful email: a second accept of an alrea
 | Value | When |
 |-------|------|
 | `console` | **Local/test only.** Logs the message, including the accept URL (raw token). Forbidden in non-local env (`assert_secure_settings` + factory). |
-| `smtp` | Optional SMTP. Required in non-local together with `SMTP_HOST`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS=true`, and `SMTP_TLS_VERIFY=true`. |
+| `smtp` | Optional SMTP. Required in non-local together with `SMTP_HOST`, `SMTP_FROM_EMAIL`, and `SMTP_USE_TLS=true`. `SMTP_TLS_VERIFY=false` is allowed for self-signed SMTP hosts (logs a warning). |
 
 Domain services depend on `EmailProvider`; they do not know console vs SMTP.
 
@@ -88,7 +88,7 @@ SMTP_USE_TLS=true
 SMTP_TLS_VERIFY=true
 ```
 
-STARTTLS uses `ssl.create_default_context()` so the SMTP server certificate is verified. `SMTP_TLS_VERIFY=false` is allowed in local/test only (self-signed hosts). Non-local boot (`assert_secure_settings`) and the SMTP adapter refuse `SMTP_USE_TLS=false` and `SMTP_TLS_VERIFY=false` so invitation tokens are neither sent in the clear nor exposed to a TLS man-in-the-middle. Local/test may disable TLS for tools like Mailhog.
+STARTTLS uses `ssl.create_default_context()` when `SMTP_TLS_VERIFY=true`. `SMTP_TLS_VERIFY=false` skips certificate checks (self-signed SMTP) and logs a warning; STARTTLS is still required outside local/test (`SMTP_USE_TLS=true`). Local/test may disable TLS for tools like Mailhog.
 
 Passwords are `repr=False` / `exclude=True` on Settings and must not be logged.
 

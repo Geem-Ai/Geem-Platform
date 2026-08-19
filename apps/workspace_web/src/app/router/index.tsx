@@ -17,6 +17,8 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
+import { CheckEmailPage } from '@/features/auth/pages/CheckEmailPage';
+import { VerifyEmailPage } from '@/features/auth/pages/VerifyEmailPage';
 import { AccountPage } from '@/features/settings/pages/AccountPage';
 import { ChatPage } from '@/features/chat/pages/ChatPage';
 import { ChatStartPage } from '@/features/chat/pages/ChatStartPage';
@@ -63,6 +65,8 @@ export function AppRouter() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/check-email" element={<CheckEmailPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>

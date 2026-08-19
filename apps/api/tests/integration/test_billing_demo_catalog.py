@@ -6,7 +6,10 @@ from decimal import Decimal
 
 from app.billing.checkout import BillingService
 from app.billing.gateways.registry import GatewayRegistry
-from app.billing.provisioning import ensure_local_checkout_gateway
+from app.billing.provisioning import (
+    ensure_clickpay_from_env,
+    ensure_local_checkout_gateway,
+)
 from app.billing.repository import PaymentGatewayConfigRepository
 from app.billing.seed import (
     DEMO_CREDIT_PACKS,
@@ -113,6 +116,30 @@ def test_seed_with_clickpay_env_enables_clickpay_and_disables_noop(db) -> None:
     assert stored["profile_id"] == "43334"
     assert stored["server_key"] == "sk_clickpay_test"
     assert GatewayRegistry(db, clickpay_settings).get_enabled().code == "clickpay"
+
+
+def test_ensure_clickpay_from_env_enables_in_production_and_disables_noop(db) -> None:
+    ensure_local_checkout_gateway(db, settings=_local_settings())
+    prod = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret="a" * 40,
+        cors_origins="https://app.geem.ai",
+        clickpay_profile_id="43334",
+        clickpay_server_key="sk_clickpay_test",
+        clickpay_test_mode=False,
+        clickpay_base_url="https://secure.clickpay.com.sa",
+    )
+    gateway = ensure_clickpay_from_env(db, settings=prod)
+    assert gateway is not None
+    assert gateway.code == "clickpay"
+    assert gateway.enabled is True
+    assert gateway.test_mode is False
+    assert (gateway.extra or {}).get("local") is False
+    noop = PaymentGatewayConfigRepository(db).get_by_code("noop")
+    assert noop is not None
+    assert noop.enabled is False
+    assert GatewayRegistry(db, prod).get_enabled().code == "clickpay"
 
 
 def test_ensure_local_demo_catalog_skips_non_local_env(db) -> None:

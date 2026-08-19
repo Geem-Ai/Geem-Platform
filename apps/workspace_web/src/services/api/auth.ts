@@ -1,8 +1,8 @@
 import { apiRequest } from './client';
-import type { AuthTokenResponse, MeResponse } from './types';
+import type { AuthTokenResponse, MeResponse, RegisterResponse } from './types';
 
-export async function registerAccount(email: string, password: string): Promise<AuthTokenResponse> {
-  return apiRequest<AuthTokenResponse>('/api/auth/register', {
+export async function registerAccount(email: string, password: string): Promise<RegisterResponse> {
+  return apiRequest<RegisterResponse>('/api/auth/register', {
     method: 'POST',
     json: { email, password },
     skipAuth: true,
@@ -67,6 +67,24 @@ export async function resetPassword(
   return apiRequest<AuthTokenResponse>('/api/auth/reset-password', {
     method: 'POST',
     json: { token, password },
+    skipAuth: true,
+    skipWorkspace: true,
+  });
+}
+
+export async function verifyEmail(token: string): Promise<AuthTokenResponse> {
+  return apiRequest<AuthTokenResponse>('/api/auth/verify-email', {
+    method: 'POST',
+    json: { token },
+    skipAuth: true,
+    skipWorkspace: true,
+  });
+}
+
+export async function resendVerification(email: string): Promise<{ ok: boolean }> {
+  return apiRequest<{ ok: boolean }>('/api/auth/resend-verification', {
+    method: 'POST',
+    json: { email },
     skipAuth: true,
     skipWorkspace: true,
   });

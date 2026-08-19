@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.identity.models import Session as AuthSession
-from app.identity.models import PasswordResetToken, User
+from app.identity.models import EmailVerificationToken, PasswordResetToken, User
 from app.identity.security import normalize_email
 
 
@@ -53,6 +53,34 @@ class PasswordResetTokenRepository:
             select(PasswordResetToken).where(
                 PasswordResetToken.user_id == user_id,
                 PasswordResetToken.used_at.is_(None),
+            )
+        ).all()
+        for row in rows:
+            row.used_at = now
+        return len(rows)
+
+
+class EmailVerificationTokenRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def get_by_token_hash(self, token_hash: str) -> EmailVerificationToken | None:
+        return self.db.scalar(
+            select(EmailVerificationToken).where(EmailVerificationToken.token_hash == token_hash)
+        )
+
+    def create(self, token: EmailVerificationToken) -> EmailVerificationToken:
+        self.db.add(token)
+        self.db.flush()
+        return token
+
+    def invalidate_unused_for_user(self, user_id: uuid.UUID, *, when: datetime | None = None) -> int:
+        """Mark unused tokens for the user as used so only the newest verify link works."""
+        now = when or datetime.now(timezone.utc)
+        rows = self.db.scalars(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == user_id,
+                EmailVerificationToken.used_at.is_(None),
             )
         ).all()
         for row in rows:

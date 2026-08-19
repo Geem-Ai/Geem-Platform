@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 # Central reserved workspace slug list (infrastructure / product hosts).
@@ -209,7 +212,7 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_from_name: str = "Geem"
     smtp_use_tls: bool = True  # required true outside local/test
-    # false skips SMTP server cert verification (self-signed hosts). Local/test only.
+    # false skips SMTP server cert verification (self-signed hosts).
     smtp_tls_verify: bool = True
     smtp_timeout_seconds: float = 10.0
     # Empty → reuse API-key HMAC pepper (local derives from JWT_SECRET).
@@ -219,6 +222,10 @@ class Settings(BaseSettings):
     password_reset_ttl_hours: int = 1
     # Empty → reuse invitation / API-key HMAC pepper (local derives from JWT_SECRET).
     password_reset_token_hash_pepper: str = Field(default="", repr=False, exclude=True)
+
+    # Email verification after register. None → required except APP_ENV=test.
+    email_verification_required: bool | None = None
+    email_verification_ttl_hours: int = 24
 
     # Phase 9D — Google Drive knowledge connector (OAuth). Empty → unavailable.
     google_drive_client_id: str = ""
@@ -399,6 +406,17 @@ class Settings(BaseSettings):
         return hours if hours > 0 else 1
 
     @property
+    def effective_email_verification_required(self) -> bool:
+        if self.email_verification_required is not None:
+            return bool(self.email_verification_required)
+        return self.app_env.lower() != "test"
+
+    @property
+    def effective_email_verification_ttl_hours(self) -> int:
+        hours = int(self.email_verification_ttl_hours)
+        return hours if hours > 0 else 24
+
+    @property
     def google_drive_configured(self) -> bool:
         return bool(
             (self.google_drive_client_id or "").strip()
@@ -509,10 +527,10 @@ def assert_secure_settings(settings: Settings) -> None:
             "tokens and SMTP credentials are not sent in the clear."
         )
     if not settings.smtp_tls_verify:
-        raise RuntimeError(
-            "SMTP_TLS_VERIFY must be true in non-local environments so invitation "
-            "tokens are not exposed to a TLS man-in-the-middle. Install a CA-trusted "
-            "certificate on the SMTP host instead of disabling verification."
+        logger.warning(
+            "SMTP_TLS_VERIFY is false: SMTP server certificates are not checked. "
+            "Invitation and verification emails can be intercepted by a TLS "
+            "man-in-the-middle. Prefer a CA-trusted certificate on the SMTP host."
         )
 
 

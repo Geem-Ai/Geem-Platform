@@ -159,20 +159,20 @@ def test_assert_secure_settings_rejects_smtp_without_tls() -> None:
         )
 
 
-def test_assert_secure_settings_rejects_smtp_without_cert_verify() -> None:
-    with pytest.raises(RuntimeError, match="SMTP_TLS_VERIFY"):
-        assert_secure_settings(
-            Settings(
-                _env_file=None,
-                app_env="production",
-                jwt_secret="a" * 40,
-                cors_origins="https://app.geem.ai",
-                api_key_hash_pepper="b" * 40,
-                email_provider="smtp",
-                smtp_host="smtp.example.com",
-                smtp_from_email="noreply@geem.ai",
-                smtp_password="super-secret-smtp",
-                smtp_use_tls=True,
-                smtp_tls_verify=False,
-            )
-        )
+def test_assert_secure_settings_allows_smtp_without_cert_verify(caplog) -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret="a" * 40,
+        cors_origins="https://app.geem.ai",
+        api_key_hash_pepper="b" * 40,
+        email_provider="smtp",
+        smtp_host="smtp.example.com",
+        smtp_from_email="noreply@geem.ai",
+        smtp_password="super-secret-smtp",
+        smtp_use_tls=True,
+        smtp_tls_verify=False,
+    )
+    with caplog.at_level("WARNING"):
+        assert_secure_settings(settings)
+    assert "SMTP_TLS_VERIFY is false" in caplog.text

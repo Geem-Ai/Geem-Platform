@@ -16,14 +16,19 @@ Optional:
 
 Safe to re-run: existing admin email is promoted to platform_role=admin;
 password is only set when creating a new user (existing passwords unchanged
-unless BOOTSTRAP_ADMIN_RESET_PASSWORD=true). Local/dev also seeds a demo
-billing catalog (Starter/Pro/Business + credit packs) for checkout testing.
+unless BOOTSTRAP_ADMIN_RESET_PASSWORD=true). Pass ``--resync-bootstrap-plan``
+to overwrite the bootstrap plan name/description/entitlements from env
+(``BOOTSTRAP_PLAN_*`` / ``BOOTSTRAP_AI_TOKENS_*`` / ``BOOTSTRAP_EXPERTS_LIMIT`` /
+``BOOTSTRAP_STORAGE_BYTES`` / ``BOOTSTRAP_API_REQUESTS_PER_MINUTE``). Local/dev
+also seeds a demo billing catalog (Starter/Pro/Business + credit packs) for
+checkout testing.
 """
 
 from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime, timezone
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -42,6 +47,7 @@ def bootstrap_platform_admin(
     password: str | None = None,
     reset_password: bool = False,
     ensure_default_workspace: bool = True,
+    resync_bootstrap_plan: bool = False,
 ) -> User:
     settings = get_settings()
     email_raw = email or settings.bootstrap_admin_email
@@ -64,12 +70,15 @@ def bootstrap_platform_admin(
                 password_hash=hash_password(password_raw),
                 status=UserStatus.ACTIVE.value,
                 platform_role=PlatformRole.ADMIN.value,
+                email_verified_at=datetime.now(timezone.utc),
             )
             users.create(user)
             logger.info("bootstrap_admin_created email=%s", normalized)
         else:
             user.platform_role = PlatformRole.ADMIN.value
             user.status = UserStatus.ACTIVE.value
+            if user.email_verified_at is None:
+                user.email_verified_at = datetime.now(timezone.utc)
             if reset_password:
                 user.password_hash = hash_password(password_raw)
                 logger.info("bootstrap_admin_password_reset email=%s", normalized)
@@ -103,10 +112,18 @@ def bootstrap_platform_admin(
         # Bootstrap/dev plan so existing tenant Workspaces have entitlements.
         from app.billing.service import PlanService
 
-        PlanService(db, settings).ensure_bootstrap_plan()
-        from app.billing.provisioning import ensure_local_checkout_gateway
+        plans = PlanService(db, settings)
+        if resync_bootstrap_plan:
+            plans.resync_bootstrap_plan()
+        else:
+            plans.ensure_bootstrap_plan()
+        from app.billing.provisioning import (
+            ensure_clickpay_from_env,
+            ensure_local_checkout_gateway,
+        )
         from app.billing.seed import ensure_local_demo_catalog
 
+        ensure_clickpay_from_env(db, settings=settings)
         ensure_local_checkout_gateway(db, settings=settings)
         ensure_local_demo_catalog(db, settings=settings)
 
@@ -127,11 +144,23 @@ def bootstrap_platform_admin(
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     settings = get_settings()
-    reset = False
-    # Allow one-shot password reset via argv flag
-    if "--reset-password" in sys.argv:
-        reset = True
-    user = bootstrap_platform_admin(reset_password=reset)
+    reset = "--reset-password" in sys.argv
+    resync_plan = "--resync-bootstrap-plan" in sys.argv
+    if resync_plan and not reset:
+        from app.billing.service import PlanService
+
+        db = SessionLocal()
+        try:
+            plan = PlanService(db, settings).resync_bootstrap_plan()
+            db.commit()
+        finally:
+            db.close()
+        print(f"Bootstrap plan resynced: {plan.code} ({plan.name})")
+        return
+    user = bootstrap_platform_admin(
+        reset_password=reset,
+        resync_bootstrap_plan=resync_plan,
+    )
     print(
         f"Platform admin ready: {user.email} (id={user.id}) "
         f"default_workspace_slug={settings.default_workspace_slug}"

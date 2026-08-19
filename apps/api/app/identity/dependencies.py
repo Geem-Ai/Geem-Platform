@@ -61,6 +61,8 @@ def get_current_user(
     user = UserRepository(db).get_by_id(user_id)
     if user is None or user.status != UserStatus.ACTIVE.value:
         raise AppError(ErrorCategory.UNAUTHORIZED, "User is not active.")
+    if user.email_verified_at is None:
+        raise AppError(ErrorCategory.EMAIL_NOT_VERIFIED, "Email is not verified.")
 
     session = SessionRepository(db).get_by_id(session_id)
     if session is None or session.user_id != user.id:

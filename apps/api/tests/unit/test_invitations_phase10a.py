@@ -194,9 +194,33 @@ def test_smtp_provider_rejects_cleartext_outside_local() -> None:
     assert exc.value.category == ErrorCategory.EMAIL_DELIVERY_FAILED
 
 
-def test_smtp_provider_rejects_unverified_tls_outside_local() -> None:
+def test_smtp_starttls_can_skip_certificate_verification_in_production(monkeypatch) -> None:
+    import ssl
+
     from app.notifications.smtp import SmtpEmailProvider
 
+    captured: dict = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self, *, context=None):
+            captured["context"] = context
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, msg):
+            captured["sent"] = True
+
+    monkeypatch.setattr("app.notifications.smtp.smtplib.SMTP", FakeSMTP)
     production = Settings(
         _env_file=None,
         app_env="production",
@@ -208,9 +232,14 @@ def test_smtp_provider_rejects_unverified_tls_outside_local() -> None:
         smtp_use_tls=True,
         smtp_tls_verify=False,
     )
-    with pytest.raises(AppError) as exc:
-        SmtpEmailProvider(production)
-    assert exc.value.category == ErrorCategory.EMAIL_DELIVERY_FAILED
+    SmtpEmailProvider(production).send(
+        EmailMessage(to="a@example.com", subject="Invite", text_body="body")
+    )
+    ctx = captured["context"]
+    assert isinstance(ctx, ssl.SSLContext)
+    assert ctx.verify_mode == ssl.CERT_NONE
+    assert ctx.check_hostname is False
+    assert captured["sent"] is True
 
 
 def test_invitation_out_schema_excludes_secrets() -> None:
