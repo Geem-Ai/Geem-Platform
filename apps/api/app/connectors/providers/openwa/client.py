@@ -23,6 +23,7 @@ from app.connectors.providers.openwa.schemas import (
 from app.connectors.sanitize import sanitize_error_message
 from app.core.config import Settings, get_settings
 from app.core.errors import ErrorCategory
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,8 @@ class OpenWAClient:
         body = OpenWASendTextRequest(
             chatId=chat_id, text=text, linkPreview=link_preview
         ).model_dump(exclude_none=True)
-        data = self._request_json("POST", path, json_body=body, expect=(201, 200))
+        with start_span("openwa.send_message"):
+            data = self._request_json("POST", path, json_body=body, expect=(201, 200))
         return OpenWASendTextResponse.model_validate(data)
 
     def _headers(self) -> dict[str, str]:

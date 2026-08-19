@@ -24,6 +24,7 @@ from app.usage.openrouter_billing import provider_meta, record_openrouter_event
 from app.usage.weights import OpenRouterFamily
 from app.storage.minio_storage import MinioObjectStorage
 from app.storage.qdrant_store import QdrantVectorStore, deterministic_point_id
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,10 @@ class IngestionPipeline:
         return self._membership_sync
 
     def run(self, document_id: uuid.UUID, mode: str = "full") -> None:
+        with start_span("document.ingest", document_id=str(document_id)):
+            self._run(document_id, mode=mode)
+
+    def _run(self, document_id: uuid.UUID, mode: str = "full") -> None:
         document = self.db.get(Document, document_id)
         if not document:
             raise AppError(ErrorCategory.NOT_FOUND, f"Document {document_id} not found")

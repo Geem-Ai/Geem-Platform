@@ -331,9 +331,11 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pytest -q
+# Isolation / quota concurrency (Phase 11D): pytest -q -m isolation && pytest -q -m load
+# Observability: pytest -q tests/unit/test_observability_phase11d.py
 ```
 
-Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Soft-delete retention / purge (Phase 11A): [data-retention.md](./data-retention.md). Audit log: [audit.md](./audit.md). Usage scale / daily rollups (Phase 11B): [usage-scaling.md](./usage-scaling.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs invite and email-verification URLs, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation or verification tokens. After register (local/production), the Workspace SPA shows `/check-email`; the console log includes `/verify-email?token=`. `APP_ENV=test` skips the gate unless `EMAIL_VERIFICATION_REQUIRED=true`.
+Workspace invitations (Phase 10): see [invitations.md](./invitations.md). Dynamic roles and permission-aware navigation (Phase 10C): see [rbac.md](./rbac.md). Soft-delete retention / purge (Phase 11A): [data-retention.md](./data-retention.md). Audit log: [audit.md](./audit.md). Usage scale / daily rollups (Phase 11B/11C): [usage-scaling.md](./usage-scaling.md). Observability (Phase 11D): [observability.md](./observability.md). Load/isolation harness: [load-testing.md](./load-testing.md). Members UI is `/members` (Members + Roles tabs) plus `/invitations/accept?token=`. Local/test default is `EMAIL_PROVIDER=console` (logs invite and email-verification URLs, including the raw token). Production must use `EMAIL_PROVIDER=smtp`. Do not expect the API to return invitation or verification tokens. After register (local/production), the Workspace SPA shows `/check-email`; the console log includes `/verify-email?token=`. `APP_ENV=test` skips the gate unless `EMAIL_VERIFICATION_REQUIRED=true`.
 
 Generate PDF fixtures:
 

@@ -250,6 +250,12 @@ Malformed integers fail Settings startup with a validation error.
 
 ## Phase leftovers (not 11C)
 
-- OTEL / tracing
-- Final Playwright / RTL suites
-- Extra quota load harness beyond the 1M architecture checks
+Logical `messages.usage_event_id` (no FK) may outlive the telemetry row after
+partition drop. Message APIs treat a missing event as optional. See
+[data-retention.md](./data-retention.md) and Phase 11D tests.
+
+OTEL, isolation/quota load harness: [observability.md](./observability.md),
+[load-testing.md](./load-testing.md).
+
+- Final Playwright / RTL suites (Phase 11E)
+- Platform Admin (Phase 12)

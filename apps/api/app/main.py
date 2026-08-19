@@ -17,6 +17,7 @@ from app.api.v1.openai_compat import (
 )
 from app.api.v1.router import router as public_v1_router
 from app.common.middleware import RequestContextMiddleware
+from app.observability.http_middleware import ObservabilityHttpMiddleware
 from app.core.config import get_settings
 from app.core.errors import HTTP_STATUS_BY_CATEGORY, AppError, ErrorCategory
 from app.core.logging import setup_logging
@@ -99,6 +100,7 @@ if _regex:
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(ObservabilityHttpMiddleware)
 # Outermost: answer widget preflight before SPA-only CORS rejects customer Origins.
 app.add_middleware(PublicWidgetCorsMiddleware)
 
@@ -127,6 +129,10 @@ app.include_router(chat_widget_router)
 app.include_router(public_widgets_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
+
+from app.observability.setup import record_http_error_on_span, setup_observability
+
+setup_observability(app)
 
 _WIDGET_STATIC = Path(__file__).resolve().parent / "widgets" / "static"
 _WIDGET_JS = _WIDGET_STATIC / "geem-widget.js"
@@ -180,6 +186,8 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         for key in ("metric", "limit", "used", "remaining", "retry_after"):
             if key in exc.details:
                 payload[key] = exc.details[key]
+    if code >= 500:
+        record_http_error_on_span(status_code=code, message=exc.category.value)
     return JSONResponse(status_code=code, content=payload, headers=exc.headers or None)
 
 

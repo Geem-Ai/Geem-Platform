@@ -92,3 +92,6 @@ def _bind_api_key_context(
     )
     set_request_context(updated)
     request.state.request_context = updated
+    from app.observability.attributes import attach_request_context
+
+    attach_request_context()

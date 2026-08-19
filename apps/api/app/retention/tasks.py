@@ -1,15 +1,12 @@
-"""Celery tasks for soft-delete retention purge (Phase 11A).
+"""Celery tasks for soft-delete retention purge (Phase 11A / 11D).
 
-Not registered on Celery Beat in this slice — invoke manually in development:
+Beat (UTC), offset from usage maintenance at 00:10/00:20/00:30:
 
-    celery -A app.worker.celery_app call purge_deleted_conversations
-    celery -A app.worker.celery_app call purge_deleted_experts
-    celery -A app.worker.celery_app call purge_deleted_workspaces
+* 01:00 — purge_deleted_conversations
+* 01:15 — purge_deleted_experts
+* 01:30 — purge_deleted_workspaces
 
-Or from a Python shell with a worker running:
-
-    from app.retention.tasks import purge_deleted_workspaces
-    purge_deleted_workspaces.delay()
+``SOFT_DELETE_RETENTION_DAYS`` remains authoritative. Tasks are idempotent.
 """
 
 from __future__ import annotations
@@ -19,23 +16,32 @@ import logging
 from app.db.session import SessionLocal
 from app.retention.service import RetentionPurgeService
 from app.worker.celery_app import celery_app
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
 
+_SPAN = {
+    "purge_deleted_conversations": "conversation.purge",
+    "purge_deleted_experts": "expert.purge",
+    "purge_deleted_workspaces": "workspace.purge",
+}
+
+
 def _run(method_name: str, *, limit: int | None = None) -> dict:
-    db = SessionLocal()
-    try:
-        svc = RetentionPurgeService(db)
-        method = getattr(svc, method_name)
-        result = method(limit=limit) if limit is not None else method()
-        return result.as_dict()
-    except Exception:
-        db.rollback()
-        logger.exception("retention.task_failed", extra={"method": method_name})
-        raise
-    finally:
-        db.close()
+    with start_span(_SPAN.get(method_name, "lifecycle.purge")):
+        db = SessionLocal()
+        try:
+            svc = RetentionPurgeService(db)
+            method = getattr(svc, method_name)
+            result = method(limit=limit) if limit is not None else method()
+            return result.as_dict()
+        except Exception:
+            db.rollback()
+            logger.exception("retention.task_failed", extra={"method": method_name})
+            raise
+        finally:
+            db.close()
 
 
 @celery_app.task(name="purge_deleted_conversations", bind=True, max_retries=1)

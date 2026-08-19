@@ -40,6 +40,7 @@ from app.connectors.repository import ConnectorRepository
 from app.connectors.types import ConnectionHealth, ConnectionStatus
 from app.conversations.models import Conversation, Message
 from app.core.config import Settings, get_settings
+from app.observability.tracing import start_span
 from app.db.models import Document, IngestionJob
 from app.documents.service import DocumentService
 from app.experts.membership_sync import ExpertVectorMembershipSynchronizer
@@ -387,38 +388,39 @@ class RetentionPurgeService:
         if deleted_at is None or deleted_at > self.cutoff(now=now):
             return False
 
-        self._retire_access(workspace_id)
-        self._retire_connectors(workspace_id)
-        self._retire_widgets_and_attachments(workspace_id)
-        self._purge_workspace_conversations(workspace_id, now=now)
-        self._purge_workspace_experts(workspace_id, now=now)
-        self._purge_workspace_documents(workspace_id)
-        self._cancel_commercial_access(workspace_id)
-        self._delete_operational_rows(workspace_id)
-        leftover = self._remaining_tenant_graph(workspace_id)
-        if leftover:
-            logger.error(
-                "retention.workspace_purge_incomplete",
-                extra={"workspace_id": str(workspace_id), "leftover": leftover},
+        with start_span("workspace.purge", workspace_id=str(workspace_id)):
+            self._retire_access(workspace_id)
+            self._retire_connectors(workspace_id)
+            self._retire_widgets_and_attachments(workspace_id)
+            self._purge_workspace_conversations(workspace_id, now=now)
+            self._purge_workspace_experts(workspace_id, now=now)
+            self._purge_workspace_documents(workspace_id)
+            self._cancel_commercial_access(workspace_id)
+            self._delete_operational_rows(workspace_id)
+            leftover = self._remaining_tenant_graph(workspace_id)
+            if leftover:
+                logger.error(
+                    "retention.workspace_purge_incomplete",
+                    extra={"workspace_id": str(workspace_id), "leftover": leftover},
+                )
+                self.db.commit()
+                return False
+            workspace = self.db.get(Workspace, workspace_id)
+            if workspace is None:
+                return True
+            self._anonymize_tombstone(workspace, now=now)
+            record_audit(
+                self.db,
+                action=AuditAction.WORKSPACE_PURGED,
+                entity_type=AuditEntityType.WORKSPACE,
+                entity_id=workspace_id,
+                workspace_id=workspace_id,
+                metadata={"tombstone": True},
+                required=False,
             )
             self.db.commit()
-            return False
-        workspace = self.db.get(Workspace, workspace_id)
-        if workspace is None:
+            security_log("workspace.purged", workspace_id=str(workspace_id))
             return True
-        self._anonymize_tombstone(workspace, now=now)
-        record_audit(
-            self.db,
-            action=AuditAction.WORKSPACE_PURGED,
-            entity_type=AuditEntityType.WORKSPACE,
-            entity_id=workspace_id,
-            workspace_id=workspace_id,
-            metadata={"tombstone": True},
-            required=False,
-        )
-        self.db.commit()
-        security_log("workspace.purged", workspace_id=str(workspace_id))
-        return True
 
     def _retire_access(self, workspace_id: uuid.UUID) -> None:
         stamp = _now()

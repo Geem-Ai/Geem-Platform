@@ -128,6 +128,9 @@ def _bind_user_context(request: Request, *, user: User, session: AuthSession) ->
     )
     set_request_context(updated)
     request.state.request_context = updated
+    from app.observability.attributes import attach_request_context
+
+    attach_request_context()
 
 
 def _bind_workspace_context(
@@ -152,3 +155,6 @@ def _bind_workspace_context(
     )
     set_request_context(updated)
     request.state.request_context = updated
+    from app.observability.attributes import attach_request_context
+
+    attach_request_context()

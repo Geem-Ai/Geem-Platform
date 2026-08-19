@@ -15,6 +15,7 @@ from app.storage.scopes import (
     VectorScope,
     WorkspaceVectorScope,
 )
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,8 @@ class QdrantVectorStore:
                         payload=p.get("payload") or {},
                     )
                 )
-            self.client.upsert(collection_name=self.collection, points=qpoints, wait=True)
+            with start_span("qdrant.upsert"):
+                self.client.upsert(collection_name=self.collection, points=qpoints, wait=True)
         except Exception as exc:
             raise AppError(ErrorCategory.QDRANT_FAILED, f"Upsert failed: {exc}") from exc
 
@@ -270,13 +272,14 @@ class QdrantVectorStore:
                 )
 
             query_filter = qm.Filter(must=must)
-            response = self.client.query_points(
-                collection_name=self.collection,
-                query=vector,
-                limit=top_k,
-                query_filter=query_filter,
-                with_payload=True,
-            )
+            with start_span("qdrant.search"):
+                response = self.client.query_points(
+                    collection_name=self.collection,
+                    query=vector,
+                    limit=top_k,
+                    query_filter=query_filter,
+                    with_payload=True,
+                )
             results = response.points if hasattr(response, "points") else response
             out: list[dict[str, Any]] = []
             for hit in results:
@@ -338,11 +341,12 @@ class QdrantVectorStore:
                         match=qm.MatchValue(value=str(workspace_id)),
                     )
                 )
-            self.client.delete(
-                collection_name=self.collection,
-                points_selector=qm.FilterSelector(filter=qm.Filter(must=must)),
-                wait=True,
-            )
+            with start_span("qdrant.delete"):
+                self.client.delete(
+                    collection_name=self.collection,
+                    points_selector=qm.FilterSelector(filter=qm.Filter(must=must)),
+                    wait=True,
+                )
         except Exception as exc:
             raise AppError(ErrorCategory.QDRANT_FAILED, f"Delete by document failed: {exc}") from exc
 

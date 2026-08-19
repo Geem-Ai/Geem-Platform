@@ -12,11 +12,25 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
+from app.observability.tracing import start_span
 
 logger = logging.getLogger(__name__)
 
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504, 529}
 BACKOFF_SECONDS = [2.0, 5.0, 15.0, 45.0]
+
+
+def _openrouter_span_name(path: str) -> str:
+    lowered = (path or "").lower()
+    if "embed" in lowered:
+        return "openrouter.embed"
+    if "rerank" in lowered:
+        return "openrouter.rerank"
+    if "ocr" in lowered or "pdf" in lowered:
+        return "openrouter.ocr"
+    if "audio" in lowered or "transcription" in lowered:
+        return "openrouter.stt"
+    return "openrouter.chat"
 
 
 class OpenRouterClient:
@@ -54,42 +68,43 @@ class OpenRouterClient:
         request_id = str(uuid.uuid4())
         url = f"{self.base_url}{path}"
         started = time.perf_counter()
-        with httpx.Client(timeout=timeout) as client:
-            with client.stream(
-                method,
-                url,
-                headers=self._headers(request_id),
-                json=json_body,
-            ) as response:
-                if response.status_code >= 400:
-                    try:
-                        err_body = response.read().decode("utf-8", errors="replace")
-                    except Exception:
-                        err_body = ""
-                    raise AppError(
-                        ErrorCategory.GENERATION_FAILED,
-                        f"OpenRouter stream failed with status {response.status_code}",
-                        details={"body": err_body[:500], "request_id": request_id},
-                        retryable=response.status_code in RETRYABLE_STATUS,
-                    )
+        with start_span(_openrouter_span_name(path)):
+            with httpx.Client(timeout=timeout) as client:
+                with client.stream(
+                    method,
+                    url,
+                    headers=self._headers(request_id),
+                    json=json_body,
+                ) as response:
+                    if response.status_code >= 400:
+                        try:
+                            err_body = response.read().decode("utf-8", errors="replace")
+                        except Exception:
+                            err_body = ""
+                        raise AppError(
+                            ErrorCategory.GENERATION_FAILED,
+                            f"OpenRouter stream failed with status {response.status_code}",
+                            details={"status": response.status_code, "request_id": request_id},
+                            retryable=response.status_code in RETRYABLE_STATUS,
+                        )
 
-                for line in response.iter_lines():
-                    if not line:
-                        continue
-                    if line.startswith(":"):
-                        continue
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    if isinstance(chunk, dict):
-                        chunk["_request_id"] = request_id
-                        yield chunk
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        if line.startswith(":"):
+                            continue
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(chunk, dict):
+                            chunk["_request_id"] = request_id
+                            yield chunk
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         logger.info(
@@ -127,13 +142,14 @@ class OpenRouterClient:
         for attempt in range(max_attempts):
             started = time.perf_counter()
             try:
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.request(
-                        method,
-                        url,
-                        headers=self._headers(request_id),
-                        json=json_body,
-                    )
+                with start_span(_openrouter_span_name(path)):
+                    with httpx.Client(timeout=timeout) as client:
+                        response = client.request(
+                            method,
+                            url,
+                            headers=self._headers(request_id),
+                            json=json_body,
+                        )
                 latency_ms = int((time.perf_counter() - started) * 1000)
                 last_status = response.status_code
                 try:
@@ -203,7 +219,7 @@ class OpenRouterClient:
                     continue
                 raise AppError(
                     ErrorCategory.PARSER_FAILED,
-                    f"OpenRouter HTTP error: {exc}",
+                    "OpenRouter HTTP error",
                     retryable=True,
                 ) from exc
 
