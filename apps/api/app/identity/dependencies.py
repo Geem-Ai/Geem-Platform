@@ -15,6 +15,7 @@ from app.identity.models import Session as AuthSession
 from app.identity.models import User, UserStatus
 from app.identity.repository import SessionRepository, UserRepository
 from app.identity.security import decode_access_token
+from app.workspaces.lifecycle import require_active_workspace
 from app.workspaces.models import Workspace, WorkspaceMembership
 from app.workspaces.service import WorkspaceService
 
@@ -106,6 +107,10 @@ def require_workspace(
             ErrorCategory.WORKSPACE_NOT_FOUND,
             "No workspace context provided.",
         )
+
+    # Phase 12B: suspended (and other non-active) Workspaces fail closed for
+    # all session-authenticated tenant APIs that depend on require_workspace.
+    require_active_workspace(workspace)
 
     _bind_workspace_context(
         request,

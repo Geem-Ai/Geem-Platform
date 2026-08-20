@@ -61,11 +61,29 @@ Login stays on Identity: `POST /api/auth/login` then `GET /api/platform/me`.
 
 `GET /api/platform/me` — session user + `platform_role` + `authorized`. No tenant Workspace is resolved.
 
-Existing `/api/platform/experts*` scaffolding from Phase 3A now uses the same host + `require_platform_admin` dependencies.
+## Phase 12B — Workspace & User administration
+
+Authoritative inventory and lifecycle (disable/enable). Workspace RBAC never authorizes these routes.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/platform/workspaces` | Paginated; default `kind=tenant`; filters: search, status, kind, created_from/to |
+| GET | `/api/platform/workspaces/{id}` | Detail + owners, subscription summary, resource counts |
+| GET | `/api/platform/workspaces/{id}/members` | Dynamic `role_id` / role name (Phase 10 RBAC) |
+| POST | `/api/platform/workspaces/{id}/disable` | Sets `status=suspended`; reason required; audited |
+| POST | `/api/platform/workspaces/{id}/enable` | Restores `active`; audited |
+| GET | `/api/platform/users` | Paginated; filters: search, status, platform_role |
+| GET | `/api/platform/users/{id}` | Detail + tenant memberships |
+| POST | `/api/platform/users/{id}/disable` | Sets `status=disabled`, revokes sessions; cannot self-disable |
+| POST | `/api/platform/users/{id}/enable` | Restores `active` |
+
+**Lifecycle:** Workspace disable ≠ soft-delete. Suspended Workspaces fail closed at `require_workspace`, API-key auth, Chat Widget public messages, and connector webhooks via `require_active_workspace`. System Workspaces (`kind=system`) cannot be disabled.
+
+Existing `/api/platform/experts*` scaffolding from Phase 3A uses the same host + `require_platform_admin` dependencies.
 
 ## Later slices
 
-12B–12G should orchestrate existing services (`WorkspaceService`, billing/credits/usage, `ExpertService`, app catalog) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
+12C–12G should orchestrate existing services (billing/credits/usage, ExpertService, app catalog) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
 
 ## Local `dashboard_web`
 

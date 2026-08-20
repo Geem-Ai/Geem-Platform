@@ -71,9 +71,15 @@ def test_settings_phase0_class_defaults(monkeypatch: pytest.MonkeyPatch) -> None
     assert "http://localhost:5174" in settings.cors_origin_list
     assert settings.is_local is True
     assert "admin" in settings.reserved_slugs
+    assert "admins" in settings.reserved_slugs
     assert "hub" in settings.reserved_slugs
     assert "app-uat" in settings.reserved_slugs
     assert "api-uat" in settings.reserved_slugs
     assert "admin-uat" in settings.reserved_slugs
+    assert "hub-uat" in settings.reserved_slugs
     assert "landpage-uat" in settings.reserved_slugs
+    assert "default" in settings.reserved_slugs
+    assert "mcp" in settings.reserved_slugs
+    assert "staging" in settings.reserved_slugs
+    assert "grafana" in settings.reserved_slugs
     assert settings.access_token_ttl_seconds == 900

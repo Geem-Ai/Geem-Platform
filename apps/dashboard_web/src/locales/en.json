@@ -94,10 +94,111 @@
     "notFound": "Not found",
     "rateLimited": "Too many attempts. Wait a moment and try again.",
     "platformAdminRequired": "Platform Admin access required.",
-    "platformAdminHostRequired": "This API is only available on the Platform Admin host."
+    "platformAdminHostRequired": "This API is only available on the Platform Admin host.",
+    "systemWorkspaceProtected": "System workspaces cannot be disabled.",
+    "cannotDisableSelf": "You cannot disable your own account."
   },
   "common": {
     "cancel": "Cancel",
-    "close": "Close"
+    "close": "Close",
+    "search": "Search",
+    "status": "Status",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}} of {{pages}}",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "pagination": "Pagination",
+    "working": "Working…",
+    "reasonRequired": "Reason (required)",
+    "reasonOptional": "Note (optional)",
+    "reasonPlaceholder": "Short operational reason"
+  },
+  "status": {
+    "workspace": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "archived": "Archived",
+      "unknown": "Unknown"
+    },
+    "user": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "unknown": "Unknown"
+    },
+    "platformRole": {
+      "admin": "Platform Admin",
+      "none": "None",
+      "unknown": "Unknown"
+    },
+    "kind": {
+      "tenant": "Tenant",
+      "system": "System",
+      "unknown": "Unknown"
+    }
+  },
+  "workspaces": {
+    "title": "Workspaces",
+    "subtitle": "Global inventory of Geem Workspaces. Default list shows tenant Workspaces.",
+    "listTitle": "All Workspaces",
+    "searchPlaceholder": "Search name or slug",
+    "kind": "Kind",
+    "empty": "No Workspaces match these filters.",
+    "membersCount": "{{count}} members",
+    "backToList": "Back to Workspaces",
+    "overview": "Overview",
+    "resources": "Resources",
+    "membersSection": "Members",
+    "members": "Members",
+    "owners": "Owners",
+    "created": "Created",
+    "plan": "Plan",
+    "subscriptionStatus": "Subscription",
+    "experts": "Experts",
+    "apiKeys": "API keys",
+    "appInstallations": "App installations",
+    "storage": "Storage",
+    "noMembers": "No members.",
+    "ownerRole": "Owner",
+    "disable": "Disable Workspace",
+    "enable": "Enable Workspace",
+    "disableTitle": "Disable this Workspace?",
+    "disableHint": "Disabling prevents its users, API keys, and connected channels from using Geem until the Workspace is enabled again.",
+    "enableTitle": "Enable this Workspace?",
+    "enableHint": "Re-enabling restores normal access. It does not reset subscriptions, credits, or data.",
+    "disableSuccess": "Workspace disabled.",
+    "enableSuccess": "Workspace enabled.",
+    "systemProtected": "System Workspaces are protected and cannot be disabled here."
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Global inventory of Geem accounts.",
+    "listTitle": "All Users",
+    "searchPlaceholder": "Search email",
+    "platformRole": "Platform role",
+    "empty": "No users match these filters.",
+    "workspacesCount": "{{count}} workspaces",
+    "backToList": "Back to Users",
+    "profile": "Profile",
+    "security": "Security summary",
+    "workspacesSection": "Workspaces",
+    "created": "Created",
+    "emailVerified": "Email verified",
+    "unverified": "Unverified",
+    "lastLogin": "Last session activity",
+    "status": "Status",
+    "activeSessions": "Active sessions",
+    "noWorkspaces": "No Workspace memberships.",
+    "disable": "Disable User",
+    "enable": "Enable User",
+    "disableTitle": "Disable this user?",
+    "disableHint": "Disabling revokes active sessions and blocks sign-in until the account is enabled again.",
+    "enableTitle": "Enable this user?",
+    "enableHint": "Re-enabling allows the user to sign in again. Existing Workspace memberships are unchanged.",
+    "disableSuccess": "User disabled.",
+    "enableSuccess": "User enabled.",
+    "selfProtected": "You cannot disable your own Platform Admin account from this screen."
   }
 }

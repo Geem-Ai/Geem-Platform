@@ -43,6 +43,7 @@ class ErrorCategory(StrEnum):
     WORKSPACE_NOT_FOUND = "workspace_not_found"
     MEMBERSHIP_NOT_FOUND = "membership_not_found"
     WORKSPACE_ACCESS_DENIED = "workspace_access_denied"
+    SYSTEM_WORKSPACE_PROTECTED = "system_workspace_protected"
     INSUFFICIENT_WORKSPACE_ROLE = "insufficient_workspace_role"
     LAST_WORKSPACE_OWNER = "last_workspace_owner"
     UNKNOWN_PERMISSION = "unknown_permission"
@@ -50,6 +51,7 @@ class ErrorCategory(StrEnum):
     ROLE_IN_USE = "role_in_use"
     ROLE_PROTECTED = "role_protected"
     ROLE_NAME_TAKEN = "role_name_taken"
+    CANNOT_DISABLE_SELF = "cannot_disable_self"
 
     # Documents (Phase 2A) — cross-tenant misses use document_not_found (404), not 403
     DOCUMENT_NOT_FOUND = "document_not_found"
@@ -248,6 +250,8 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "workspace_not_found": 404,
     "membership_not_found": 404,
     "workspace_access_denied": 403,
+    "system_workspace_protected": 409,
+    "cannot_disable_self": 409,
     "insufficient_workspace_role": 403,
     "last_workspace_owner": 409,
     "unknown_permission": 422,

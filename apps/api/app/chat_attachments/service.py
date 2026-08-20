@@ -17,7 +17,8 @@ from app.core.errors import AppError, ErrorCategory
 from app.identity.models import User
 from app.storage.minio_storage import MinioObjectStorage
 from app.usage.storage import StorageHold, StorageQuotaService
-from app.workspaces.models import Workspace, WorkspaceStatus
+from app.workspaces.lifecycle import require_active_workspace
+from app.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -256,9 +257,4 @@ class ChatAttachmentService:
 
     @staticmethod
     def _require_active_workspace(workspace: Workspace) -> None:
-        if workspace.status != WorkspaceStatus.ACTIVE.value:
-            raise AppError(
-                ErrorCategory.WORKSPACE_ACCESS_DENIED,
-                "Workspace is not active.",
-                details={"status": workspace.status},
-            )
+        require_active_workspace(workspace)

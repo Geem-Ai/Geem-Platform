@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS (Platform Admin foundation + dashboard_web). 12B–12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS (Workspace/User admin + lifecycle). 12C–12G not started."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS**. 12B–12G not started. Do not start 12B until requested.
+**Status:** in_progress — **12A PASS** + **12B PASS**. 12C–12G not started. Do not start 12C until requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1394,8 +1394,21 @@ Delivered:
 
 **Not in 12A:** Workspace/user/plan/credit/expert/app-store/gateway/analytics CRUD (12B–12G).
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — only 12A foundation is PASS.
+#### Phase 12B — Workspace & User administration (PASS)
 
+Delivered:
+
+- Paginated Platform Admin Workspace list/detail/members (`GET /api/platform/workspaces*`); default `kind=tenant`; system Workspaces opt-in via filter
+- Tenant Workspace disable/enable → `WorkspaceStatus.SUSPENDED` / `ACTIVE` (not soft-delete); reason required for disable; system Workspaces protected (`system_workspace_protected`)
+- Central fail-closed guard `require_active_workspace` on `require_workspace`, API-key auth, Chat Widget public messages, connector webhooks
+- Paginated global Users list/detail with memberships; user disable/enable (`UserStatus.DISABLED`/`ACTIVE`) with session revoke + self-disable protection
+- Audit actions: `workspace.disabled`, `workspace.enabled`, `user.disabled`, `user.enabled`
+- `dashboard_web` `/workspaces`, `/workspaces/:id`, `/users`, `/users/:id` with real APIs, filters, lifecycle dialogs, EN/AR + RTL
+- Backend + frontend + Playwright admin smoke (incl. system Workspace protection)
+
+**Deferred in 12B (intentional):** Platform Admin Workspace create; membership mutations (invite path remains authoritative); slug edits; billing mutations (12C); full Audit Logs UI (12G).
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — 12A+12B PASS; commerce/ops slices remain.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

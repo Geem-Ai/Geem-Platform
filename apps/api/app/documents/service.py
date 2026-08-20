@@ -23,7 +23,8 @@ from app.ingestion.pdf_utils import validate_pdf_bytes
 from app.storage.document_keys import resolve_document_storage_key
 from app.storage.minio_storage import MinioObjectStorage
 from app.storage.qdrant_store import QdrantVectorStore
-from app.workspaces.models import Workspace, WorkspaceStatus
+from app.workspaces.lifecycle import require_active_workspace
+from app.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -553,12 +554,7 @@ class DocumentService:
     def _require_active_workspace(self, workspace: Workspace) -> None:
         if workspace.deleted_at is not None:
             raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
-        if workspace.status != WorkspaceStatus.ACTIVE.value:
-            raise AppError(
-                ErrorCategory.WORKSPACE_ACCESS_DENIED,
-                "Workspace is not active.",
-                details={"status": workspace.status},
-            )
+        require_active_workspace(workspace)
 
     def _validate_upload(
         self,
