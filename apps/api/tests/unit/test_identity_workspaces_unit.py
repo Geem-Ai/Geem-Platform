@@ -35,9 +35,13 @@ def test_extract_subdomain_slug() -> None:
     assert extract_subdomain_slug("app-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("api-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("admin-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("hub-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("landpage-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("admin.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("admins.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("www.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("mcp.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("staging.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("www.localhost", "localhost", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("api.localhost", "localhost", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("ACME.geem.ai", "geem.ai", reserved_slugs=reserved) == "acme"

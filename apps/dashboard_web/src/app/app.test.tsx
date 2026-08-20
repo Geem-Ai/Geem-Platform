@@ -205,7 +205,7 @@ describe('Platform Admin app', () => {
     expect(await screen.findByTestId('login-form')).toBeInTheDocument();
   });
 
-  it('renders navigation and a coming-soon placeholder', async () => {
+  it('renders Workspaces list from Platform Admin API', async () => {
     installFetch(async (url) => {
       if (url.includes('/api/auth/refresh')) {
         return json({
@@ -222,6 +222,29 @@ describe('Platform Admin app', () => {
           authorized: true,
         });
       }
+      if (url.includes('/api/platform/workspaces') && !url.includes('/members')) {
+        return json({
+          items: [
+            {
+              id: 'ws-1',
+              name: 'Acme',
+              slug: 'acme',
+              kind: 'tenant',
+              status: 'active',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+              members_count: 2,
+              experts_count: 1,
+              current_plan_code: 'free',
+              current_plan_name: 'Free',
+              subscription_status: 'active',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
       return json({}, 404);
     });
 
@@ -231,8 +254,94 @@ describe('Platform Admin app', () => {
     expect(screen.getByTestId('nav-workspaces')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('nav-workspaces'));
-    expect(await screen.findByTestId('coming-soon-page')).toBeInTheDocument();
-    expect(screen.getByText(/Coming in 12B/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('workspaces-page')).toBeInTheDocument();
+    expect(screen.getByTestId('workspaces-list')).toBeInTheDocument();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+    expect(screen.queryByTestId('coming-soon-page')).not.toBeInTheDocument();
+  });
+
+  it('renders Users list and hides self-disable on detail', async () => {
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/users/') && !url.includes('/disable')) {
+        const id = url.split('/api/platform/users/')[1]?.split('?')[0];
+        return json({
+          id,
+          email: id === 'admin-1' ? 'admin@example.com' : 'owner@example.com',
+          status: 'active',
+          platform_role: id === 'admin-1' ? 'admin' : 'none',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          email_verified_at: '2026-01-01T00:00:00Z',
+          active_session_count: 1,
+          memberships: [
+            {
+              membership_id: 'm1',
+              workspace_id: 'ws-1',
+              workspace_name: 'Acme',
+              workspace_slug: 'acme',
+              workspace_status: 'active',
+              role_id: 'r1',
+              role_name: 'Owner',
+              is_owner_role: true,
+              created_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        });
+      }
+      if (url.includes('/api/platform/users')) {
+        return json({
+          items: [
+            {
+              id: 'admin-1',
+              email: 'admin@example.com',
+              status: 'active',
+              platform_role: 'admin',
+              created_at: '2026-01-01T00:00:00Z',
+              workspace_memberships_count: 0,
+            },
+            {
+              id: 'user-2',
+              email: 'owner@example.com',
+              status: 'active',
+              platform_role: 'none',
+              created_at: '2026-01-02T00:00:00Z',
+              workspace_memberships_count: 1,
+            },
+          ],
+          total: 2,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+    await screen.findByTestId('overview-page');
+    await user.click(screen.getByTestId('nav-users'));
+    expect(await screen.findByTestId('users-page')).toBeInTheDocument();
+    expect(screen.getByText('owner@example.com')).toBeInTheDocument();
+
+    await user.click(screen.getByText('admin@example.com'));
+    expect(await screen.findByTestId('user-detail-page')).toBeInTheDocument();
+    expect(screen.getByTestId('user-self-protected')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-disable-button')).not.toBeInTheDocument();
   });
 
   it('opens mobile navigation', async () => {

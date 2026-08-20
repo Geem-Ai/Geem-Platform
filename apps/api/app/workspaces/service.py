@@ -11,6 +11,7 @@ from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
+from app.workspaces.lifecycle import require_active_workspace
 from app.workspaces.models import (
     Workspace,
     WorkspaceKind,
@@ -140,6 +141,9 @@ class WorkspaceService:
                 user_id=str(user_id),
             )
             raise AppError(ErrorCategory.WORKSPACE_ACCESS_DENIED, "Not a member of this workspace.")
+        # Fail closed for suspended/archived — covers path-scoped tenant APIs that
+        # bypass require_workspace (PATCH/DELETE members/RBAC/invites).
+        require_active_workspace(workspace)
         return workspace, membership
 
     def get_by_slug_for_user(
@@ -181,6 +185,128 @@ class WorkspaceService:
             "workspace.updated",
             workspace_id=str(workspace.id),
             user_id=str(actor_id),
+        )
+        return workspace
+
+    def disable_workspace(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        reason: str,
+    ) -> Workspace:
+        """Platform Admin lifecycle: suspend a tenant Workspace (not soft-delete)."""
+        clean_reason = (reason or "").strip()
+        if not clean_reason:
+            raise AppError(ErrorCategory.VALIDATION, "A reason is required to disable a workspace.")
+        if len(clean_reason) > 500:
+            raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
+
+        workspace = self.workspaces.get_by_id(workspace_id)
+        if workspace is None:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.kind == WorkspaceKind.SYSTEM.value:
+            raise AppError(
+                ErrorCategory.SYSTEM_WORKSPACE_PROTECTED,
+                "System workspaces cannot be disabled.",
+            )
+        if workspace.status == WorkspaceStatus.ARCHIVED.value or workspace.deleted_at is not None:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Archived or deleted workspaces cannot be disabled.",
+                details={"status": workspace.status},
+            )
+        if workspace.status == WorkspaceStatus.SUSPENDED.value:
+            return workspace
+
+        before = workspace.status
+        workspace.status = WorkspaceStatus.SUSPENDED.value
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_DISABLED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata={
+                "before_status": before,
+                "after_status": workspace.status,
+                "reason": clean_reason,
+            },
+            allowlist=frozenset({"before_status", "after_status", "reason"}),
+        )
+        self.db.commit()
+        security_log(
+            "workspace.disabled",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            before_status=before,
+            after_status=workspace.status,
+        )
+        return workspace
+
+    def enable_workspace(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        reason: str | None = None,
+    ) -> Workspace:
+        """Platform Admin lifecycle: restore a suspended tenant Workspace."""
+        clean_reason = (reason or "").strip() or None
+        if clean_reason is not None and len(clean_reason) > 500:
+            raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
+
+        workspace = self.workspaces.get_by_id(workspace_id)
+        if workspace is None:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.kind == WorkspaceKind.SYSTEM.value:
+            raise AppError(
+                ErrorCategory.SYSTEM_WORKSPACE_PROTECTED,
+                "System workspaces cannot be enabled via tenant lifecycle controls.",
+            )
+        if workspace.status == WorkspaceStatus.ARCHIVED.value or workspace.deleted_at is not None:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Archived or deleted workspaces cannot be re-enabled.",
+                details={"status": workspace.status},
+            )
+        if workspace.status == WorkspaceStatus.ACTIVE.value:
+            return workspace
+        if workspace.status != WorkspaceStatus.SUSPENDED.value:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Only suspended workspaces can be re-enabled.",
+                details={"status": workspace.status},
+            )
+
+        before = workspace.status
+        workspace.status = WorkspaceStatus.ACTIVE.value
+        meta: dict[str, str] = {
+            "before_status": before,
+            "after_status": workspace.status,
+        }
+        allow = {"before_status", "after_status"}
+        if clean_reason:
+            meta["reason"] = clean_reason
+            allow.add("reason")
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_ENABLED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata=meta,
+            allowlist=frozenset(allow),
+        )
+        self.db.commit()
+        security_log(
+            "workspace.enabled",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            before_status=before,
+            after_status=workspace.status,
         )
         return workspace
 

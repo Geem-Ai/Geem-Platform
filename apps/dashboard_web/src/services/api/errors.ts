@@ -14,6 +14,8 @@ export type ApiErrorCode =
   | 'aborted'
   | 'platform_admin_required'
   | 'platform_admin_host_required'
+  | 'system_workspace_protected'
+  | 'cannot_disable_self'
   | 'unknown';
 
 const KNOWN_CODES = new Set<string>([
@@ -30,6 +32,8 @@ const KNOWN_CODES = new Set<string>([
   'email_not_verified',
   'platform_admin_required',
   'platform_admin_host_required',
+  'system_workspace_protected',
+  'cannot_disable_self',
 ]);
 
 export class ApiError extends Error {
@@ -97,6 +101,18 @@ export function errorMessageKey(code: string): string {
     not_found: 'errors.notFound',
     platform_admin_required: 'errors.platformAdminRequired',
     platform_admin_host_required: 'errors.platformAdminHostRequired',
+    system_workspace_protected: 'errors.systemWorkspaceProtected',
+    cannot_disable_self: 'errors.cannotDisableSelf',
   };
   return map[code as ApiErrorCode] ?? 'errors.generic';
+}
+
+export function getErrorMessage(error: unknown, t: (key: string) => string): string {
+  if (error instanceof ApiError) {
+    return t(errorMessageKey(error.code));
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return t('errors.generic');
 }

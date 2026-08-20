@@ -26,6 +26,8 @@ from app.connectors.repository import ConnectorRepository, hash_routing_token
 from app.connectors.sanitize import sanitize_error_message
 from app.connectors.types import CONNECTION_USABLE_STATUSES, WebhookEventStatus
 from app.core.errors import AppError, ErrorCategory
+from app.workspaces.lifecycle import require_active_workspace
+from app.workspaces.repository import WorkspaceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +106,38 @@ class ConnectorWebhookDispatcher:
                 reason="app_missing",
             )
             raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")
+
+        workspace = WorkspaceRepository(self.db).get_by_id(connection.workspace_id)
+        if workspace is None:
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="workspace_missing",
+            )
+            raise AppError(
+                ErrorCategory.CONNECTOR_WEBHOOK_UNAUTHORIZED,
+                "Invalid webhook routing token.",
+            )
+        try:
+            require_active_workspace(workspace)
+        except AppError:
+            logger.info(
+                "connector_webhook_rejected",
+                extra={
+                    "reason": "workspace_inactive",
+                    "workspace_id": str(connection.workspace_id),
+                    "connection_id": str(connection.id),
+                    "status": workspace.status,
+                },
+            )
+            self._maybe_revoke_openwa_webhooks(
+                connection,
+                raw_body=raw_body,
+                headers=headers,
+                reason="workspace_inactive",
+            )
+            raise
 
         try:
             self.access.require_active(connection.workspace_id, app_slug=app.slug)

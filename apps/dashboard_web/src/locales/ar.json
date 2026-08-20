@@ -94,10 +94,111 @@
     "notFound": "غير موجود",
     "rateLimited": "محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.",
     "platformAdminRequired": "يلزم حساب إدارة المنصة.",
-    "platformAdminHostRequired": "هذه الواجهة متاحة فقط على نطاق إدارة المنصة."
+    "platformAdminHostRequired": "هذه الواجهة متاحة فقط على نطاق إدارة المنصة.",
+    "systemWorkspaceProtected": "مساحات النظام محمية ولا يمكن تعطيلها.",
+    "cannotDisableSelf": "لا يمكنك تعطيل حسابك أنت من هذه الشاشة."
   },
   "common": {
     "cancel": "إلغاء",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "search": "بحث",
+    "status": "الحالة",
+    "filter": "تصفية",
+    "all": "الكل",
+    "none": "لا يوجد",
+    "previous": "السابق",
+    "next": "التالي",
+    "page": "صفحة {{page}} من {{pages}}",
+    "range": "{{from}}–{{to}} من {{total}}",
+    "pagination": "ترقيم الصفحات",
+    "working": "جارٍ العمل…",
+    "reasonRequired": "السبب (مطلوب)",
+    "reasonOptional": "ملاحظة (اختياري)",
+    "reasonPlaceholder": "سبب تشغيلي مختصر"
+  },
+  "status": {
+    "workspace": {
+      "active": "نشطة",
+      "suspended": "معلّقة",
+      "archived": "مؤرشفة",
+      "unknown": "غير معروف"
+    },
+    "user": {
+      "active": "نشط",
+      "disabled": "معطّل",
+      "unknown": "غير معروف"
+    },
+    "platformRole": {
+      "admin": "مدير المنصة",
+      "none": "بدون",
+      "unknown": "غير معروف"
+    },
+    "kind": {
+      "tenant": "عميل",
+      "system": "نظام",
+      "unknown": "غير معروف"
+    }
+  },
+  "workspaces": {
+    "title": "مساحات العمل",
+    "subtitle": "جرد عام لمساحات جِيم. القائمة الافتراضية تعرض مساحات العملاء.",
+    "listTitle": "كل المساحات",
+    "searchPlaceholder": "ابحث بالاسم أو المعرّف",
+    "kind": "النوع",
+    "empty": "لا توجد مساحات تطابق هذه التصفية.",
+    "membersCount": "{{count}} أعضاء",
+    "backToList": "العودة إلى المساحات",
+    "overview": "نظرة عامة",
+    "resources": "الموارد",
+    "membersSection": "الأعضاء",
+    "members": "الأعضاء",
+    "owners": "المالكون",
+    "created": "تاريخ الإنشاء",
+    "plan": "الخطة",
+    "subscriptionStatus": "الاشتراك",
+    "experts": "الخبراء",
+    "apiKeys": "مفاتيح API",
+    "appInstallations": "تثبيتات التطبيقات",
+    "storage": "التخزين",
+    "noMembers": "لا يوجد أعضاء.",
+    "ownerRole": "مالك",
+    "disable": "تعطيل المساحة",
+    "enable": "تفعيل المساحة",
+    "disableTitle": "تعطيل هذه المساحة؟",
+    "disableHint": "التعطيل يمنع المستخدمين ومفاتيح API والقنوات المتصلة من استخدام جِيم حتى إعادة التفعيل.",
+    "enableTitle": "تفعيل هذه المساحة؟",
+    "enableHint": "إعادة التفعيل تستعيد الوصول دون إعادة ضبط الاشتراكات أو الأرصدة أو البيانات.",
+    "disableSuccess": "تم تعطيل المساحة.",
+    "enableSuccess": "تم تفعيل المساحة.",
+    "systemProtected": "مساحات النظام محمية ولا يمكن تعطيلها من هنا."
+  },
+  "users": {
+    "title": "المستخدمون",
+    "subtitle": "جرد عام لحسابات جِيم.",
+    "listTitle": "كل المستخدمين",
+    "searchPlaceholder": "ابحث بالبريد",
+    "platformRole": "دور المنصة",
+    "empty": "لا يوجد مستخدمون يطابقون هذه التصفية.",
+    "workspacesCount": "{{count}} مساحات",
+    "backToList": "العودة إلى المستخدمين",
+    "profile": "الملف",
+    "security": "ملخص الأمان",
+    "workspacesSection": "مساحات العمل",
+    "created": "تاريخ الإنشاء",
+    "emailVerified": "تحقق البريد",
+    "unverified": "غير مُتحقق",
+    "lastLogin": "آخر نشاط للجلسة",
+    "status": "الحالة",
+    "activeSessions": "الجلسات النشطة",
+    "noWorkspaces": "لا توجد عضويات في مساحات.",
+    "disable": "تعطيل المستخدم",
+    "enable": "تفعيل المستخدم",
+    "disableTitle": "تعطيل هذا المستخدم؟",
+    "disableHint": "التعطيل يلغي الجلسات النشطة ويمنع تسجيل الدخول حتى إعادة التفعيل.",
+    "enableTitle": "تفعيل هذا المستخدم؟",
+    "enableHint": "إعادة التفعيل تسمح بتسجيل الدخول مجددًا دون تغيير عضويات المساحات.",
+    "disableSuccess": "تم تعطيل المستخدم.",
+    "enableSuccess": "تم تفعيل المستخدم.",
+    "selfProtected": "لا يمكنك تعطيل حساب إدارة المنصة الخاص بك من هذه الشاشة."
   }
 }

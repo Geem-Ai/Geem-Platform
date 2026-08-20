@@ -37,6 +37,8 @@ from app.experts.models import Expert, ExpertStatus
 from app.experts.service import ExpertService
 from app.usage.metered import MeteredWorkspaceGeneration
 from app.widgets.retention import WidgetRetentionService
+from app.workspaces.lifecycle import require_active_workspace
+from app.workspaces.models import Workspace, WorkspaceMembership
 from app.widgets.models import (
     WidgetConversationBinding,
     WidgetInstance,
@@ -55,7 +57,6 @@ from app.widgets.session_tokens import (
     parse_bare_session_uuid,
     parse_session_token,
 )
-from app.workspaces.models import Workspace, WorkspaceMembership
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,7 @@ class WidgetService:
         workspace = self.db.get(Workspace, row.workspace_id)
         if workspace is None:
             raise AppError(ErrorCategory.NOT_FOUND, "Widget not found.")
+        require_active_workspace(workspace)
         self._require_ready_expert(workspace, row.expert_id)
 
         session_uuid, session_token = self._resolve_session_token(

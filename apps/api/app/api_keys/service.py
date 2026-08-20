@@ -26,7 +26,8 @@ from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.workspaces.models import Workspace, WorkspaceKind, WorkspaceStatus
+from app.workspaces.lifecycle import require_active_workspace
+from app.workspaces.models import Workspace, WorkspaceKind
 from app.workspaces.repository import WorkspaceRepository
 
 
@@ -56,12 +57,7 @@ class ApiKeyService:
         expires_at: datetime | None = None,
     ) -> CreatedApiKey:
         self._require_tenant_workspace(workspace)
-        if workspace.status != WorkspaceStatus.ACTIVE.value:
-            raise AppError(
-                ErrorCategory.WORKSPACE_ACCESS_DENIED,
-                "Workspace is not active.",
-                details={"status": workspace.status},
-            )
+        require_active_workspace(workspace)
 
         clean_name = (name or "").strip()
         if not clean_name or len(clean_name) > 100:
@@ -215,7 +211,9 @@ class ApiKeyService:
             )
             reject_invalid_api_key()
 
-        if workspace.status != WorkspaceStatus.ACTIVE.value:
+        try:
+            require_active_workspace(workspace)
+        except AppError:
             security_log(
                 "api_key.auth_failed",
                 reason="workspace_inactive",
@@ -223,11 +221,7 @@ class ApiKeyService:
                 workspace_id=str(workspace.id),
                 status=workspace.status,
             )
-            raise AppError(
-                ErrorCategory.WORKSPACE_ACCESS_DENIED,
-                "Workspace is not active.",
-                details={"status": workspace.status},
-            )
+            raise
 
         scopes = tuple(str(s) for s in (row.scopes or list(DEFAULT_SCOPES)))
         principal = ApiKeyPrincipal(

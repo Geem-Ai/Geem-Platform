@@ -4,6 +4,10 @@ import { GuestRoute, RequirePlatformAdmin } from '@/app/router/guards';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
 import { OverviewPage } from '@/features/overview/pages/OverviewPage';
+import { UsersPage } from '@/features/users/pages/UsersPage';
+import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
+import { WorkspacesPage } from '@/features/workspaces/pages/WorkspacesPage';
+import { WorkspaceDetailPage } from '@/features/workspaces/pages/WorkspaceDetailPage';
 
 export function AppRouter() {
   return (
@@ -15,11 +19,10 @@ export function AppRouter() {
       <Route element={<RequirePlatformAdmin />}>
         <Route element={<AdminLayout />}>
           <Route index element={<OverviewPage />} />
-          <Route
-            path="workspaces"
-            element={<ComingSoonPage titleKey="nav.workspaces" phase="12B" />}
-          />
-          <Route path="users" element={<ComingSoonPage titleKey="nav.users" phase="12B" />} />
+          <Route path="workspaces" element={<WorkspacesPage />} />
+          <Route path="workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="users/:userId" element={<UserDetailPage />} />
           <Route
             path="experts"
             element={<ComingSoonPage titleKey="nav.platformExperts" phase="12D" />}

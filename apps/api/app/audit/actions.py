@@ -9,10 +9,15 @@ class AuditAction(StrEnum):
     AUTH_PASSWORD_CHANGED = "auth.password_changed"
     AUTH_PASSWORD_RESET = "auth.password_reset"
 
+    USER_DISABLED = "user.disabled"
+    USER_ENABLED = "user.enabled"
+
     WORKSPACE_CREATED = "workspace.created"
     WORKSPACE_UPDATED = "workspace.updated"
     WORKSPACE_SOFT_DELETED = "workspace.soft_deleted"
     WORKSPACE_PURGED = "workspace.purged"
+    WORKSPACE_DISABLED = "workspace.disabled"
+    WORKSPACE_ENABLED = "workspace.enabled"
 
     MEMBER_ROLE_CHANGED = "workspace.member_role_changed"
     MEMBER_REMOVED = "workspace.member_removed"

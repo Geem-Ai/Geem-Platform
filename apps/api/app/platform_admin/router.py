@@ -12,8 +12,9 @@ Workspace membership / X-Workspace-* headers are ignored as grants.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.schemas import DocumentCreateResponse
@@ -35,7 +36,18 @@ from app.platform_admin.dependencies import (
     require_platform_admin,
     require_platform_admin_host,
 )
-from app.platform_admin.schemas import PlatformMeResponse
+from app.platform_admin.schemas import (
+    PlatformMeResponse,
+    PlatformUserDetailOut,
+    PlatformUserDisableRequest,
+    PlatformUserLifecycleRequest,
+    PlatformUserListResponse,
+    PlatformWorkspaceDetailOut,
+    PlatformWorkspaceEnableRequest,
+    PlatformWorkspaceLifecycleRequest,
+    PlatformWorkspaceListResponse,
+    PlatformWorkspaceMembersResponse,
+)
 from app.platform_admin.service import PlatformAdminService
 from app.worker.tasks import enqueue_ingest
 
@@ -53,6 +65,147 @@ def platform_me(
 ) -> PlatformMeResponse:
     """Authoritative Platform Admin identity bootstrap. No tenant Workspace."""
     return PlatformAdminService(db).get_me(actor=user)
+
+
+# --- Phase 12B: Workspaces ---
+
+
+@router.get("/workspaces", response_model=PlatformWorkspaceListResponse)
+def list_platform_workspaces(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    status: str | None = Query(default=None, max_length=32),
+    kind: str | None = Query(default=None, max_length=32),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+) -> PlatformWorkspaceListResponse:
+    return PlatformAdminService(db).list_workspaces(
+        actor=user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        status=status,
+        kind=kind,
+        created_from=created_from,
+        created_to=created_to,
+    )
+
+
+@router.get("/workspaces/{workspace_id}", response_model=PlatformWorkspaceDetailOut)
+def get_platform_workspace(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceDetailOut:
+    return PlatformAdminService(db).get_workspace(actor=user, workspace_id=workspace_id)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/members",
+    response_model=PlatformWorkspaceMembersResponse,
+)
+def list_platform_workspace_members(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PlatformWorkspaceMembersResponse:
+    return PlatformAdminService(db).list_workspace_members(
+        actor=user,
+        workspace_id=workspace_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/disable",
+    response_model=PlatformWorkspaceDetailOut,
+)
+def disable_platform_workspace(
+    workspace_id: uuid.UUID,
+    body: PlatformWorkspaceLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceDetailOut:
+    return PlatformAdminService(db).disable_workspace(
+        actor=user, workspace_id=workspace_id, reason=body.reason
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/enable",
+    response_model=PlatformWorkspaceDetailOut,
+)
+def enable_platform_workspace(
+    workspace_id: uuid.UUID,
+    body: PlatformWorkspaceEnableRequest = PlatformWorkspaceEnableRequest(),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceDetailOut:
+    return PlatformAdminService(db).enable_workspace(
+        actor=user, workspace_id=workspace_id, reason=body.reason
+    )
+
+
+# --- Phase 12B: Users ---
+
+
+@router.get("/users", response_model=PlatformUserListResponse)
+def list_platform_users(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=320),
+    status: str | None = Query(default=None, max_length=32),
+    platform_role: str | None = Query(default=None, max_length=32),
+) -> PlatformUserListResponse:
+    return PlatformAdminService(db).list_users(
+        actor=user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        status=status,
+        platform_role=platform_role,
+    )
+
+
+@router.get("/users/{user_id}", response_model=PlatformUserDetailOut)
+def get_platform_user(
+    user_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformUserDetailOut:
+    return PlatformAdminService(db).get_user(actor=user, user_id=user_id)
+
+
+@router.post("/users/{user_id}/disable", response_model=PlatformUserDetailOut)
+def disable_platform_user(
+    user_id: uuid.UUID,
+    body: PlatformUserDisableRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformUserDetailOut:
+    return PlatformAdminService(db).disable_user(
+        actor=user, user_id=user_id, reason=body.reason
+    )
+
+
+@router.post("/users/{user_id}/enable", response_model=PlatformUserDetailOut)
+def enable_platform_user(
+    user_id: uuid.UUID,
+    body: PlatformUserLifecycleRequest = PlatformUserLifecycleRequest(),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformUserDetailOut:
+    return PlatformAdminService(db).enable_user(
+        actor=user, user_id=user_id, reason=body.reason
+    )
 
 
 def _platform_out(expert: Expert) -> ExpertOut:
