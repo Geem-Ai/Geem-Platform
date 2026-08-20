@@ -1,9 +1,9 @@
-# Agent instructions — Geem / ArabicRag
+# Agent instructions — Geem
 
 ## Product
 
 - Product name: **Geem**
-- Repo folder may remain `ArabicRag`; user-facing strings use **Geem**
+- GitHub repo: [Mohamkh93/Geem](https://github.com/Mohamkh93/Geem)
 - Workspace SaaS UI: `apps/workspace_web`
 - Legacy MVP UI: `apps/web` (keep runnable; do not rename/delete)
 - Future: `apps/dashboard_web` (Platform Admin — Phase 12)

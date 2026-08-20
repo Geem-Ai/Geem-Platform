@@ -203,7 +203,7 @@ systemctl --user enable --now geem-stack.service
 
 Root alternative: `sudo install -m 644 infra/systemd/geem-stack.service /etc/systemd/system/geem-stack.service && sudo systemctl enable --now geem-stack`.
 
-**UAT / this Mac** (`geem-uat`; edit `WorkingDirectory` in the unit if the repo is not `~/PlaygroundProjects/ArabicRag`):
+**UAT / this Mac** (`geem-uat`; edit `WorkingDirectory` in the unit if the repo is not `~/PlaygroundProjects/Geem`):
 
 ```bash
 mkdir -p ~/.config/systemd/user

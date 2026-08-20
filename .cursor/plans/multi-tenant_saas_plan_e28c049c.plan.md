@@ -1,6 +1,6 @@
 ---
 name: Multi-Tenant SaaS Plan
-overview: "Evolve the ArabicRag MVP into Geem — a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; future siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp."
+overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; future siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp."
 todos:
   - id: phase-0
     content: "Phase 0: Create apps/workspace_web (keep apps/web); Geem branding assets; backend foundations + Metronic prep"
@@ -57,7 +57,7 @@ isProject: false
 | Public site / brand domain | [geem.ai](https://geem.ai) |
 | Official avatar | [https://geem.ai/assets/geem-avatar.webp](https://geem.ai/assets/geem-avatar.webp) |
 | Avatar character | Chibi-style figure in ghutra/agal + thobe with stacked **Ge** / **em** chest mark; friendly Arabic-first assistant persona |
-| Repo codename | ArabicRag (legacy folder name may remain); product-facing strings, titles, and packages use **Geem** |
+| Repo | [Mohamkh93/Geem](https://github.com/Mohamkh93/Geem); product-facing strings, titles, and packages use **Geem** |
 
 **Branding rules for UI:**
 - Replace Metronic demo logos (`logo-34.svg`, mini-logo, fake avatars) with Geem brand assets in `apps/workspace_web`.

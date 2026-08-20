@@ -14,7 +14,7 @@ def write_blank_pdf(path: Path, pages: int, note: str) -> None:
     writer = PdfWriter()
     for _ in range(pages):
         writer.add_blank_page(width=612, height=792)
-    writer.add_metadata({"/Title": note, "/Producer": "ArabicRagFixtures"})
+    writer.add_metadata({"/Title": note, "/Producer": "GeemFixtures"})
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as f:
         writer.write(f)

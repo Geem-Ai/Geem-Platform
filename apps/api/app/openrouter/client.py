@@ -44,7 +44,7 @@ class OpenRouterClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": self.settings.app_url,
-            "X-Title": "ArabicRag",
+            "X-Title": "Geem",
             "X-Request-ID": request_id,
         }
 

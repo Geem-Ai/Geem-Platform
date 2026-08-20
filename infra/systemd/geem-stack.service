@@ -1,6 +1,6 @@
 [Unit]
 Description=Geem production stack (Docker Compose + Cloudflare Tunnel)
-Documentation=file:///home/mohammed-kh/Projects/ArabicRag/docs/development.md
+Documentation=file:///home/mohammed-kh/Projects/Geem/docs/development.md
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
@@ -10,7 +10,7 @@ Type=oneshot
 RemainAfterExit=yes
 User=mohammed-kh
 Group=docker
-WorkingDirectory=/home/mohammed-kh/Projects/ArabicRag/infra
+WorkingDirectory=/home/mohammed-kh/Projects/Geem/infra
 Environment=PATH=/home/mohammed-kh/.local/bin:/usr/bin:/bin
 ExecStart=/home/mohammed-kh/.local/bin/docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web cloudflared
 ExecStop=/home/mohammed-kh/.local/bin/docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml stop postgres redis qdrant minio api worker beat workspace_web landpage_web cloudflared
