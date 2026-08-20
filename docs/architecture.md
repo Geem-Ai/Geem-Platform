@@ -19,3 +19,4 @@ Pipeline version fields are stored on `documents.processing_version` when a docu
 - Daily API usage rollups, monthly `usage_events` partitions, Celery Beat: [usage-scaling.md](./usage-scaling.md)
 - OpenTelemetry (optional): [observability.md](./observability.md)
 - Isolation / quota load harness: [load-testing.md](./load-testing.md)
+- Platform Admin host + `platform_role`: [platform-admin.md](./platform-admin.md)

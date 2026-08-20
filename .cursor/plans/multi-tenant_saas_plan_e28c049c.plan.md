@@ -39,11 +39,11 @@ todos:
     content: "Phase 10: COMPLETE — 10A PASS + 10B PASS + 10C PASS (dynamic workspace RBAC + permission-aware UI). Do not start Phase 11 until requested."
     status: completed
   - id: phase-11
-    content: "Phase 11A–11D PASS (OTEL, isolation/quota load, purge Beat). 11E Playwright/RTL not started."
-    status: in_progress
+    content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
+    status: completed
   - id: phase-12
-    content: "Phase 12: Platform Admin APIs + apps/dashboard_web (separate from workspace_web). Last step — do not start until requested."
-    status: pending
+    content: "Phase 12: in_progress — 12A PASS (Platform Admin foundation + dashboard_web). 12B–12G not started."
+    status: in_progress
 isProject: false
 ---
 
@@ -1261,7 +1261,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9H Acceptance:** Subscribe → install → configure Expert/appearance/origins → public bootstrap respects allowlist; expired subscription fails closed; docs in `docs/apps/chat-widget.md`. **PASS.**
 
-**Next:** Phase 11E (Playwright / RTL) when explicitly requested. Phase 11A PASS. Phase 11B PASS. Phase 11C PASS. Phase 11D PASS.
+**Next:** Phase 12 when explicitly requested. Phase 11 COMPLETE — **11A PASS** + **11B PASS** + **11C PASS** + **11D PASS** + **11E PASS**.
 
 ---
 
@@ -1355,7 +1355,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 11 — Hardening
 
-**Status:** in progress — **11A PASS** + **11B PASS** + **11C PASS** + **11D PASS**. Do not start 11E (Playwright, RTL visual sweep) until requested.
+**Status:** completed — **11A PASS** + **11B PASS** + **11C PASS** + **11D PASS** + **11E PASS**. Phase 11 COMPLETE.
 
 Soft-delete purges for **other entities** (workspaces/experts/conversations), audit completeness, OTEL, Playwright smoke (auth→expert→chat; optionally invite path), load-test quotas, confirm no `samples/` imports, RTL regression pass. Workspace document MinIO/Qdrant purge is Phase 8.
 
@@ -1372,15 +1372,29 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ---
 
-### Phase 12 — Platform Admin (separate scope / future `dashboard_web`)
+### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** pending — **last step.** Do not start until Phase 9 (App Store), Phase 10 (Members UX), and Phase 11 (Hardening) are complete and this phase is explicitly requested.
+**Status:** in_progress — **12A PASS**. 12B–12G not started. Do not start 12B until requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
-**UI:** Implement as a **separate** frontend app — prefer scaffolding `apps/dashboard_web` when this phase starts (not pages inside `workspace_web`). May reuse the same shadcn/Metronic **primitive patterns** (copied or later shared package), but keep Platform Admin IA, routing, authz, and deployment separate from the Workspace product.
+**UI:** Separate frontend app `apps/dashboard_web` (not pages inside `workspace_web`). May reuse the same shadcn/Metronic **primitive patterns** (copied, not runtime-imported), but keep Platform Admin IA, routing, authz, and deployment separate from the Workspace product.
 
-**Acceptance:** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only.
+**Locked security:** Workspace Owner ≠ Platform Admin. Access is `users.platform_role == admin` only. Workspace API keys cannot call `/api/platform/*`. `APP_ADMIN_HOST` is the production host boundary. `dashboard_web` is not a tenant application.
+
+#### Phase 12A — foundation + `dashboard_web` (PASS)
+
+Delivered:
+
+- Canonical `require_platform_admin` + `require_platform_admin_host` (`apps/api/app/platform_admin/`)
+- `GET /api/platform/me` bootstrap; existing `/api/platform/experts*` normalized onto the same deps
+- Independent Vite/React SPA `apps/dashboard_web` (port **5175**): login via Identity, `RequirePlatformAdmin`, AdminLayout, Overview (no fake metrics), EN/AR + RTL, light/dark (`geem-admin-theme`), API client with **no** Workspace headers
+- Docker Compose `dashboard_web`; docs: [`docs/platform-admin.md`](../../docs/platform-admin.md)
+- Backend + frontend + Playwright smoke tests
+
+**Not in 12A:** Workspace/user/plan/credit/expert/app-store/gateway/analytics CRUD (12B–12G).
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — only 12A foundation is PASS.
 
 ---
 
@@ -1392,7 +1406,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 | Product name | **Geem** |
 | Brand avatar | Vendored from `https://geem.ai/assets/geem-avatar.webp` |
 | Brand domain | `geem.ai` (tenant subdomains e.g. `{slug}.geem.ai` when configured) |
-| Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); `landpage_web` (Astro marketing); later `dashboard_web` |
+| Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); `landpage_web` (Astro marketing); `dashboard_web` (Platform Admin, 12A+) |
 | Workspace UI path | **New** `apps/workspace_web` — do **not** rename `apps/web` |
 | UI foundation | Metronic Vite 9.5.0 **AI Concept only** (ported into `apps/workspace_web`), rebranded as Geem |
 | Samples | Read-only (`metronic_vite_9.5.0`, `clickpay_gateway`); no runtime dependency |

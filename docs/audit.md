@@ -60,5 +60,18 @@ Apps: install/uninstall; purchase/renew fulfillment; connection created/disconne
 
 Conversations: soft-delete/purge.
 
+## Platform Admin (Phase 12+)
+
+Platform Admin mutations are high-impact and **must** be audited when those APIs land (12B+). Each mutation records:
+
+- `actor_user_id`
+- `action`
+- `entity_type` / `entity_id` (target)
+- allowlisted metadata
+- `request_id` when present
+- `created_at`
+
+`workspace_id` may be null for global platform actions. Do not authorize Platform Admin via Workspace RBAC. 12A does not write fake audit rows.
+
 Purge outcomes use `required=False` so a tombstone Workspace can still be
 anonymized if audit insert is degraded.

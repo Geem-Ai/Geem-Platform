@@ -1,6 +1,12 @@
-"""Minimal Platform Expert admin APIs (Phase 3A scaffolding for Phase 11).
+"""Platform Admin HTTP surface.
 
-Protected by ``platform_role=admin``. Not the full Platform Admin product surface.
+All routes require:
+
+- APP_ADMIN_HOST (enforced in production; relaxed in local/test)
+- an authenticated human session (not a Workspace API key)
+- users.platform_role == admin
+
+Workspace membership / X-Workspace-* headers are ignored as grants.
 """
 
 from __future__ import annotations
@@ -24,11 +30,29 @@ from app.experts.schemas import (
     WorkspaceExpertGrantOut,
 )
 from app.experts.service import ExpertService
-from app.identity.dependencies import get_current_user
 from app.identity.models import User
+from app.platform_admin.dependencies import (
+    require_platform_admin,
+    require_platform_admin_host,
+)
+from app.platform_admin.schemas import PlatformMeResponse
+from app.platform_admin.service import PlatformAdminService
 from app.worker.tasks import enqueue_ingest
 
-router = APIRouter(prefix="/api/platform", tags=["platform"])
+router = APIRouter(
+    prefix="/api/platform",
+    tags=["platform"],
+    dependencies=[Depends(require_platform_admin_host)],
+)
+
+
+@router.get("/me", response_model=PlatformMeResponse)
+def platform_me(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformMeResponse:
+    """Authoritative Platform Admin identity bootstrap. No tenant Workspace."""
+    return PlatformAdminService(db).get_me(actor=user)
 
 
 def _platform_out(expert: Expert) -> ExpertOut:
@@ -55,7 +79,7 @@ def _platform_out(expert: Expert) -> ExpertOut:
 
 @router.get("/experts", response_model=list[ExpertOut])
 def list_platform_experts(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> list[ExpertOut]:
     experts = ExpertService(db).list_platform_experts(actor=user)
@@ -65,7 +89,7 @@ def list_platform_experts(
 @router.post("/experts", response_model=ExpertOut, status_code=201)
 def create_platform_expert(
     body: PlatformExpertCreateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertOut:
     expert = ExpertService(db).create_platform_expert(
@@ -86,7 +110,7 @@ def create_platform_expert(
 def update_platform_expert(
     expert_id: uuid.UUID,
     body: ExpertUpdateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertOut:
     expert = ExpertService(db).update_platform_expert(
@@ -107,7 +131,7 @@ def update_platform_expert(
 @router.delete("/experts/{expert_id}", status_code=204)
 def delete_platform_expert(
     expert_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> None:
     ExpertService(db).delete_platform_expert(actor=user, expert_id=expert_id)
@@ -121,7 +145,7 @@ def delete_platform_expert(
 def grant_platform_expert(
     expert_id: uuid.UUID,
     body: PlatformExpertGrantRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> WorkspaceExpertGrantOut:
     grant = ExpertService(db).grant_platform_expert(
@@ -136,7 +160,7 @@ def grant_platform_expert(
 def revoke_platform_expert(
     expert_id: uuid.UUID,
     workspace_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> None:
     ExpertService(db).revoke_platform_expert(
@@ -154,7 +178,7 @@ def revoke_platform_expert(
 def link_platform_expert_document(
     expert_id: uuid.UUID,
     body: ExpertDocumentLinkRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertDocumentLinkOut:
     link = ExpertService(db).link_platform_document(
@@ -170,7 +194,7 @@ def link_platform_expert_document(
 async def upload_platform_knowledge_document(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> DocumentCreateResponse:
     """Upload a Document into the Platform Knowledge system Workspace."""
@@ -208,7 +232,7 @@ async def upload_platform_expert_document(
     expert_id: uuid.UUID,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertUploadResponse:
     """Privileged upload for a Platform Expert (Phase 3B).

@@ -1,0 +1,103 @@
+{
+  "app": {
+    "name": "Geem",
+    "product": "Geem Admin",
+    "tagline": "Platform administration",
+    "documentTitle": "{{page}} · {{name}} Admin",
+    "defaultTitle": "{{name}} Admin · {{tagline}}"
+  },
+  "auth": {
+    "loginTitle": "Platform Admin sign in",
+    "loginSubtitle": "Sign in with your Geem account. Workspace membership does not grant Platform Admin access.",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Your password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "logout": "Log out",
+    "logoutAll": "Log out everywhere",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmHint": "You will need to sign in again to use Geem Admin.",
+    "logoutAllConfirmTitle": "Log out everywhere?",
+    "logoutAllConfirmHint": "This ends every active session for your account.",
+    "loggingOut": "Logging out…",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "accessRequiredTitle": "Platform Admin access required",
+    "accessRequiredBody": "This account is signed in but is not a Platform Admin. Workspace Owner or Administrator roles do not grant access here.",
+    "brandEyebrow": "Geem Platform Admin",
+    "brandHeadline": "Operate Geem from a dedicated admin surface.",
+    "brandBody": "Manage the platform independently of any Workspace. Tenant membership never becomes Platform Admin access.",
+    "highlightHostTitle": "Separate host",
+    "highlightHostBody": "Geem Admin lives on its own host. It is not a tenant application.",
+    "highlightRoleTitle": "Platform Admin role only",
+    "highlightRoleBody": "Access requires a Platform Admin account. Workspace roles cannot grant this.",
+    "highlightAuditTitle": "Auditable later",
+    "highlightAuditBody": "High-impact mutations in later phases write to the existing audit log.",
+    "copyright": "© {{year}} Geem"
+  },
+  "nav": {
+    "overview": "Overview",
+    "platform": "Platform",
+    "workspaces": "Workspaces",
+    "users": "Users",
+    "ai": "AI",
+    "platformExperts": "Platform Experts",
+    "usage": "Usage",
+    "commerce": "Commerce",
+    "plans": "Plans",
+    "credits": "Credits",
+    "appStore": "App Store",
+    "purchases": "Purchases",
+    "paymentGateways": "Payment Gateways",
+    "operations": "Operations",
+    "auditLogs": "Audit Logs"
+  },
+  "overview": {
+    "title": "Overview",
+    "welcome": "Welcome to Geem Admin",
+    "context": "You are in Platform Admin. This surface is independent of Workspace membership and tenant RBAC.",
+    "signedInAs": "Signed in as",
+    "roleLabel": "Platform role",
+    "roleAdmin": "Platform Admin",
+    "quickLinks": "Sections",
+    "comingPhase": "Coming in {{phase}}"
+  },
+  "placeholder": {
+    "title": "{{section}}",
+    "body": "This section is reserved for a later Phase 12 slice. No management APIs are available here yet.",
+    "phaseHint": "Coming in {{phase}}"
+  },
+  "shell": {
+    "menu": "Open navigation",
+    "close": "Close",
+    "gettingReady": "Getting ready…",
+    "account": "Account",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "language": "Language",
+    "languageEn": "English",
+    "languageAr": "العربية",
+    "navigation": "Platform navigation"
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again.",
+    "invalidCredentials": "Email or password is incorrect.",
+    "sessionExpired": "Your session expired. Sign in again.",
+    "emailNotVerified": "Verify your email before signing in.",
+    "forbidden": "You do not have access to this resource.",
+    "network": "Network error. Check your connection.",
+    "validation": "Check the form and try again.",
+    "notFound": "Not found",
+    "rateLimited": "Too many attempts. Wait a moment and try again.",
+    "platformAdminRequired": "Platform Admin access required.",
+    "platformAdminHostRequired": "This API is only available on the Platform Admin host."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close"
+  }
+}

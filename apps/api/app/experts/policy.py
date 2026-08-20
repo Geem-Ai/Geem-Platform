@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from app.core.errors import AppError, ErrorCategory
-from app.identity.models import PlatformRole
 from app.workspaces.models import WorkspaceMembership
 from app.workspaces.permissions import WorkspacePermission
 from app.workspaces.rbac_service import has_permission, require_permission
@@ -58,11 +56,9 @@ class ExpertPolicy:
 
     @staticmethod
     def require_platform_admin(platform_role: str | None) -> None:
-        if platform_role != PlatformRole.ADMIN.value:
-            raise AppError(
-                ErrorCategory.PLATFORM_ADMIN_REQUIRED,
-                "Platform admin role required.",
-            )
+        from app.platform_admin.authz import require_platform_admin_role
+
+        require_platform_admin_role(platform_role)
 
     @staticmethod
     def is_manage_action(action: ExpertAction) -> bool:

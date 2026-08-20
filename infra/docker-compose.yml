@@ -1,7 +1,7 @@
 # Local full stack (bind-mounts, --reload).
 # Production host (baked nginx + hub.geem.ai / api.geem.ai / geem.ai):
 #   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
-# This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat):
+# This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat / admin-uat):
 #   docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
 services:
   postgres:
@@ -195,6 +195,23 @@ services:
       api:
         condition: service_started
     command: npm run dev -- --host 0.0.0.0 --port 5174
+
+  dashboard_web:
+    build:
+      context: ../apps/dashboard_web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../apps/dashboard_web/.env
+    ports:
+      - "5175:5175"
+    volumes:
+      - ../apps/dashboard_web:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_started
+    command: npm run dev -- --host 0.0.0.0 --port 5175
 
   landpage_web:
     build:

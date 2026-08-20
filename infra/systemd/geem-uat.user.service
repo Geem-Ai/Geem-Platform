@@ -10,8 +10,8 @@ RemainAfterExit=yes
 WorkingDirectory=%h/PlaygroundProjects/Geem/infra
 Environment=PATH=/usr/local/bin:/opt/homebrew/bin:%h/.local/bin:/usr/bin:/bin
 ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
-ExecStart=docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web cloudflared
-ExecStop=docker compose -f docker-compose.yml -f docker-compose.uat.yml stop postgres redis qdrant minio api worker beat workspace_web landpage_web cloudflared
+ExecStart=docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web dashboard_web cloudflared
+ExecStop=docker compose -f docker-compose.yml -f docker-compose.uat.yml stop postgres redis qdrant minio api worker beat workspace_web landpage_web dashboard_web cloudflared
 TimeoutStartSec=0
 
 [Install]

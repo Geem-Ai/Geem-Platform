@@ -63,6 +63,7 @@ class ErrorCategory(StrEnum):
     EXPERT_ACCESS_DENIED = "expert_access_denied"
     EXPERT_IMMUTABLE = "expert_immutable"
     PLATFORM_ADMIN_REQUIRED = "platform_admin_required"
+    PLATFORM_ADMIN_HOST_REQUIRED = "platform_admin_host_required"
 
     # Experts (Phase 3B) — Expert-scoped RAG lifecycle / availability
     EXPERT_NOT_READY = "expert_not_ready"
@@ -263,6 +264,7 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "expert_access_denied": 403,
     "expert_immutable": 403,
     "platform_admin_required": 403,
+    "platform_admin_host_required": 403,
     # Phase 3B — Expert lifecycle / availability
     "expert_not_ready": 409,
     "expert_disabled": 403,

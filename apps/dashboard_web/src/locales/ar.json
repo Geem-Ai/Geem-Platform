@@ -1,0 +1,103 @@
+{
+  "app": {
+    "name": "Geem",
+    "product": "Geem Admin",
+    "tagline": "إدارة المنصة",
+    "documentTitle": "{{page}} · إدارة {{name}}",
+    "defaultTitle": "إدارة {{name}} · {{tagline}}"
+  },
+  "auth": {
+    "loginTitle": "دخول إدارة المنصة",
+    "loginSubtitle": "سجّل الدخول بحساب Geem. عضوية مساحة العمل لا تمنح صلاحية إدارة المنصة.",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "كلمة المرور",
+    "signIn": "تسجيل الدخول",
+    "signingIn": "جارٍ تسجيل الدخول…",
+    "logout": "تسجيل الخروج",
+    "logoutAll": "تسجيل الخروج من كل الجلسات",
+    "logoutConfirmTitle": "تسجيل الخروج؟",
+    "logoutConfirmHint": "ستحتاج إلى تسجيل الدخول مجددًا لاستخدام إدارة Geem.",
+    "logoutAllConfirmTitle": "تسجيل الخروج من كل الجلسات؟",
+    "logoutAllConfirmHint": "سينهي هذا كل الجلسات النشطة لحسابك.",
+    "loggingOut": "جارٍ تسجيل الخروج…",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
+    "accessRequiredTitle": "يلزم حساب إدارة المنصة",
+    "accessRequiredBody": "هذا الحساب مسجّل الدخول لكنه ليس مدير منصة. أدوار مالك أو مسؤول مساحة العمل لا تمنح الدخول هنا.",
+    "brandEyebrow": "إدارة منصة Geem",
+    "brandHeadline": "أدِر Geem من لوحة إدارة مستقلة.",
+    "brandBody": "إدارة المنصة مستقلة عن أي مساحة عمل. عضوية مساحة العمل لا تمنح صلاحية إدارة المنصة.",
+    "highlightHostTitle": "نطاق مستقل",
+    "highlightHostBody": "واجهة إدارة Geem على نطاقها الخاص. ليست تطبيقًا تابعًا لمساحة عمل.",
+    "highlightRoleTitle": "دور إدارة المنصة فقط",
+    "highlightRoleBody": "الدخول يتطلب حساب مدير منصة. أدوار مساحة العمل لا تمنح هذه الصلاحية.",
+    "highlightAuditTitle": "قابل للتدقيق لاحقًا",
+    "highlightAuditBody": "التغييرات عالية الأثر في المراحل القادمة تُسجَّل في سجل التدقيق.",
+    "copyright": "© {{year}} Geem"
+  },
+  "nav": {
+    "overview": "نظرة عامة",
+    "platform": "المنصة",
+    "workspaces": "مساحات العمل",
+    "users": "المستخدمون",
+    "ai": "الذكاء الاصطناعي",
+    "platformExperts": "خبراء المنصة",
+    "usage": "الاستخدام",
+    "commerce": "التجارة",
+    "plans": "الخطط",
+    "credits": "الأرصدة",
+    "appStore": "متجر التطبيقات",
+    "purchases": "المشتريات",
+    "paymentGateways": "بوابات الدفع",
+    "operations": "التشغيل",
+    "auditLogs": "سجلات التدقيق"
+  },
+  "overview": {
+    "title": "نظرة عامة",
+    "welcome": "مرحبًا بك في إدارة Geem",
+    "context": "أنت في إدارة المنصة. هذه الواجهة مستقلة عن عضوية مساحة العمل وصلاحياتها.",
+    "signedInAs": "مسجّل الدخول باسم",
+    "roleLabel": "دور المنصة",
+    "roleAdmin": "مدير منصة",
+    "quickLinks": "الأقسام",
+    "comingPhase": "قادم في {{phase}}"
+  },
+  "placeholder": {
+    "title": "{{section}}",
+    "body": "هذا القسم محجوز لشريحة لاحقة من المرحلة 12. لا توجد واجهات إدارة هنا بعد.",
+    "phaseHint": "قادم في {{phase}}"
+  },
+  "shell": {
+    "menu": "فتح التنقل",
+    "close": "إغلاق",
+    "gettingReady": "جارٍ التجهيز…",
+    "account": "الحساب",
+    "theme": "المظهر",
+    "themeLight": "فاتح",
+    "themeDark": "داكن",
+    "themeSystem": "النظام",
+    "language": "اللغة",
+    "languageEn": "English",
+    "languageAr": "العربية",
+    "navigation": "تنقل المنصة"
+  },
+  "errors": {
+    "generic": "حدث خطأ. حاول مرة أخرى.",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    "sessionExpired": "انتهت الجلسة. سجّل الدخول مجددًا.",
+    "emailNotVerified": "تحقق من بريدك قبل تسجيل الدخول.",
+    "forbidden": "ليست لديك صلاحية الوصول.",
+    "network": "خطأ في الشبكة. تحقق من الاتصال.",
+    "validation": "راجع النموذج ثم حاول مرة أخرى.",
+    "notFound": "غير موجود",
+    "rateLimited": "محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.",
+    "platformAdminRequired": "يلزم حساب إدارة المنصة.",
+    "platformAdminHostRequired": "هذه الواجهة متاحة فقط على نطاق إدارة المنصة."
+  },
+  "common": {
+    "cancel": "إلغاء",
+    "close": "إغلاق"
+  }
+}

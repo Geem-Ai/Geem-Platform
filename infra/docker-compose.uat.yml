@@ -13,6 +13,7 @@
 #   app-uat.geem.ai       →  http://workspace_web:5174  (Vite)
 #   api-uat.geem.ai       →  http://api:8000
 #   landpage-uat.geem.ai  →  http://landpage_web:4321   (Astro dev)
+#   admin-uat.geem.ai     →  http://dashboard_web:5175  (Vite; not a tenant app)
 
 services:
   api:
@@ -50,6 +51,13 @@ services:
       PUBLIC_API_BASE_URL: https://api-uat.geem.ai
       PUBLIC_TUNNEL_HOST: landpage-uat.geem.ai
 
+  dashboard_web:
+    environment:
+      VITE_API_URL: https://api-uat.geem.ai
+      VITE_ADMIN_HOST: admin-uat.geem.ai
+      VITE_APP_ENV: local
+      VITE_TUNNEL_HOST: admin-uat.geem.ai
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -62,4 +70,6 @@ services:
       workspace_web:
         condition: service_started
       landpage_web:
+        condition: service_started
+      dashboard_web:
         condition: service_started

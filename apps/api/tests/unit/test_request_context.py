@@ -74,5 +74,6 @@ def test_settings_phase0_class_defaults(monkeypatch: pytest.MonkeyPatch) -> None
     assert "hub" in settings.reserved_slugs
     assert "app-uat" in settings.reserved_slugs
     assert "api-uat" in settings.reserved_slugs
+    assert "admin-uat" in settings.reserved_slugs
     assert "landpage-uat" in settings.reserved_slugs
     assert settings.access_token_ttl_seconds == 900

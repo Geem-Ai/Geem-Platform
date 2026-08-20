@@ -21,6 +21,7 @@ DEFAULT_RESERVED_WORKSPACE_SLUGS: frozenset[str] = frozenset(
         "hub",
         "app-uat",
         "api-uat",
+        "admin-uat",
         "landpage",
         "landpage-uat",
         "dashboard",
@@ -54,7 +55,10 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_name: str = "Geem"
     app_url: str = "http://localhost:8000"
-    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:5173,http://localhost:5174,http://localhost:5175,"
+        "http://localhost:3000"
+    )
     log_level: str = "INFO"
 
     # Phase 11A — days a soft-deleted Workspace/Expert/Conversation is retained

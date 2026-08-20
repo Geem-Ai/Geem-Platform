@@ -6,7 +6,7 @@
 - GitHub repo: [Geem-Ai/Geem-Platform](https://github.com/Geem-Ai/Geem-Platform)
 - Workspace SaaS UI: `apps/workspace_web`
 - Legacy MVP UI: `apps/web` (keep runnable; do not rename/delete)
-- Future: `apps/dashboard_web` (Platform Admin — Phase 12)
+- Future: `apps/dashboard_web` (Platform Admin — Phase 12A+)
 - Marketing: `apps/landpage_web` (Astro static site; independent of Phase 11/12)
 
 ## UI Boundary Rule (mandatory)
@@ -38,7 +38,7 @@ Metronic upgrades are **manual selective ports** into `apps/workspace_web`. Docu
 |-----|------|
 | `apps/web` | Existing MVP — leave intact during transition |
 | `apps/workspace_web` | Geem Workspace SaaS product UI |
-| `apps/dashboard_web` | Platform Admin (future — README placeholder only) |
+| `apps/dashboard_web` | Geem Platform Admin UI (`platform_role=admin` only; not a tenant app) |
 | `apps/landpage_web` | Geem public marketing site (Astro static) |
 
 Reuse patterns from `apps/web` by **copying/adapting**, not runtime imports across apps.
