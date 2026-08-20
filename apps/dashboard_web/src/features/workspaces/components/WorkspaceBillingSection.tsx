@@ -16,6 +16,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { AssignPlanDialog } from '@/features/plans/components/AssignPlanDialog';
 import { GrantCreditsDialog } from '@/features/credits/components/GrantCreditsDialog';
+import {
+  creditEntryTypeKey,
+  creditLedgerDelta,
+  formatSignedCredits,
+} from '@/features/credits/lib/ledger';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,10 +47,15 @@ import type { PlatformEntitlementItem, PlatformUsageMeter } from '@/services/api
 
 type WorkspaceBillingSectionProps = {
   workspaceId: string;
+  workspaceName: string;
   isSystem: boolean;
 };
 
-export function WorkspaceBillingSection({ workspaceId, isSystem }: WorkspaceBillingSectionProps) {
+export function WorkspaceBillingSection({
+  workspaceId,
+  workspaceName,
+  isSystem,
+}: WorkspaceBillingSectionProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -121,7 +131,11 @@ export function WorkspaceBillingSection({ workspaceId, isSystem }: WorkspaceBill
           >
             {t('billing.changePlan')}
           </Button>
-          <Button onClick={() => setGrantOpen(true)} data-testid="workspace-grant-credits-button">
+          <Button
+            onClick={() => setGrantOpen(true)}
+            disabled={!creditsQuery.isSuccess || creditsQuery.isFetching}
+            data-testid="workspace-grant-credits-button"
+          >
             {t('credits.grant')}
           </Button>
         </div>
@@ -164,7 +178,9 @@ export function WorkspaceBillingSection({ workspaceId, isSystem }: WorkspaceBill
             {creditsQuery.isLoading ? (
               <div className="h-16 animate-pulse rounded bg-muted" />
             ) : creditsQuery.isError ? (
-              <p className="text-destructive">{getErrorMessage(creditsQuery.error, t)}</p>
+              <p className="text-destructive" role="alert">
+                {getErrorMessage(creditsQuery.error, t)}
+              </p>
             ) : (
               <>
                 <Row
@@ -178,12 +194,20 @@ export function WorkspaceBillingSection({ workspaceId, isSystem }: WorkspaceBill
                     data-testid="credit-recent-row"
                   >
                     <span>
-                      {entry.entry_type}
+                      {t(`credits.entryTypes.${creditEntryTypeKey(entry.entry_type)}`)}
                       {entry.reason ? ` · ${entry.reason}` : ''}
                     </span>
-                    <span className="tabular-nums">
-                      {entry.amount > 0 ? '+' : ''}
-                      {formatInteger(entry.amount, i18n.language)}
+                    <span
+                      className={cn(
+                        'tabular-nums',
+                        creditLedgerDelta(entry) < 0
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-green-700 dark:text-green-300',
+                      )}
+                    >
+                      <bdi dir="ltr">
+                        {formatSignedCredits(creditLedgerDelta(entry), i18n.language)}
+                      </bdi>
                     </span>
                   </div>
                 ))}
@@ -324,12 +348,16 @@ export function WorkspaceBillingSection({ workspaceId, isSystem }: WorkspaceBill
         currentEntitlements={entitlementsQuery.data?.items ?? []}
         onAssigned={invalidateBilling}
       />
-      <GrantCreditsDialog
-        open={grantOpen}
-        onOpenChange={setGrantOpen}
-        workspaceId={workspaceId}
-        onGranted={invalidateBilling}
-      />
+      {creditsQuery.isSuccess ? (
+        <GrantCreditsDialog
+          open={grantOpen}
+          onOpenChange={setGrantOpen}
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          currentBalance={creditsQuery.data.balance}
+          onGranted={invalidateBilling}
+        />
+      ) : null}
     </div>
   );
 }

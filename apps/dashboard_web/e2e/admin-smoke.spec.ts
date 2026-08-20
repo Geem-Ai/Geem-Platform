@@ -491,6 +491,12 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   // Plans smoke
   await page.getByTestId('nav-plans').click();
   await expect(page.getByTestId('plans-page')).toBeVisible();
+  await expect(page.getByTestId('plans-list')).toBeVisible();
+  expect(
+    await page.getByTestId('plans-list').evaluate((element) => (
+      element.scrollWidth <= element.clientWidth
+    )),
+  ).toBe(true);
   await expect(page.getByText('Free', { exact: true }).first()).toBeVisible();
   await expect(page.getByTestId('plan-bootstrap-badge').first()).toBeVisible();
   await page.getByText('Free', { exact: true }).first().click();
@@ -504,6 +510,11 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await page.getByTestId('credits-workspace-row').click();
   await expect(page.getByTestId('credits-balance')).toBeVisible();
   await expect(page.getByTestId('credits-history-list')).toBeVisible();
+  expect(
+    await page.getByTestId('credits-history-list').evaluate((element) => (
+      element.scrollWidth <= element.clientWidth
+    )),
+  ).toBe(true);
 
   // Users smoke
   await page.getByTestId('nav-users').click();
