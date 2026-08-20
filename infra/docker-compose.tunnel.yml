@@ -13,6 +13,7 @@
 #   hub.geem.ai   →  http://workspace_web:80  (production nginx, not Vite)
 #   api.geem.ai   →  http://api:8000
 #   geem.ai       →  http://landpage_web:80  (production nginx, not Astro dev)
+#   mtfm.geem.ai  →  http://dashboard_web:80 (Platform Admin; nginx + /api proxy)
 #   *.geem.ai     →  http://workspace_web:80  (tenant hosts; DNS CNAME * → tunnel)
 
 services:
@@ -66,10 +67,26 @@ services:
       - "4321:80"
     command: ["nginx", "-g", "daemon off;"]
 
+  dashboard_web:
+    build:
+      context: ../apps/dashboard_web
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: https://mtfm.geem.ai
+        VITE_ADMIN_HOST: mtfm.geem.ai
+        VITE_APP_ENV: production
+    environment: !reset {}
+    env_file: !reset []
+    volumes: !reset []
+    ports: !override
+      - "5175:80"
+    command: ["nginx", "-g", "daemon off;"]
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --config /etc/cloudflared/config.yml run
+    # HTTP/2 is more stable than QUIC on this host (avoids intermittent 502s).
+    command: tunnel --protocol http2 --config /etc/cloudflared/config.yml run
     volumes:
       - ./cloudflared:/etc/cloudflared:ro
     depends_on:
@@ -78,4 +95,6 @@ services:
       workspace_web:
         condition: service_started
       landpage_web:
+        condition: service_started
+      dashboard_web:
         condition: service_started

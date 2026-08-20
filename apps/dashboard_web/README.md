@@ -27,6 +27,6 @@ Point `VITE_API_URL` at the FastAPI origin (same Identity login as Workspace). T
 | http://admin.geem.dm:5175 | If you already use `*.geem.dm` |
 | https://admin-uat.geem.ai | UAT Cloudflare Tunnel (`docker-compose.uat.yml`) |
 
-Ensure `.env` `CORS_ORIGINS` includes `http://localhost:5175` (and `https://admin-uat.geem.ai` for UAT). Production reverse-proxy should serve `APP_ADMIN_HOST` (e.g. `admin.geem.ai`) and route `/api/platform/*` to FastAPI with that Host.
+Ensure `.env` `CORS_ORIGINS` includes `http://localhost:5175` (and `https://admin-uat.geem.ai` for UAT; `https://mtfm.geem.ai` for production). Production reverse-proxy should serve `APP_ADMIN_HOST` (e.g. `mtfm.geem.ai`) and route `/api/*` to FastAPI with that Host.
 
 See [docs/platform-admin.md](../../docs/platform-admin.md) for the security model.

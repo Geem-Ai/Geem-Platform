@@ -30,6 +30,7 @@ describe('hostname slug extraction', () => {
     expect(extractHostWorkspaceSlug('landpage-uat.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('admin.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('admins.geem.ai', 'geem.ai')).toBeNull();
+    expect(extractHostWorkspaceSlug('mtfm.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('mcp.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('staging.geem.ai', 'geem.ai')).toBeNull();
     expect(extractHostWorkspaceSlug('www.geem.ai', 'geem.ai')).toBeNull();

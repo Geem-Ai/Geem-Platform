@@ -9,6 +9,7 @@
 #   cloudflared tunnel route dns geem-dalseen hub.geem.ai
 #   cloudflared tunnel route dns geem-dalseen api.geem.ai
 #   cloudflared tunnel route dns geem-dalseen geem.ai
+#   cloudflared tunnel route dns geem-dalseen mtfm.geem.ai
 #   cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 
 # name: geem-dalseen
@@ -34,6 +35,11 @@ ingress:
     service: http://landpage_web:80
     originRequest:
       httpHostHeader: www.geem.ai
+  # Platform Admin (APP_ADMIN_HOST) — must be before *.geem.ai
+  - hostname: mtfm.geem.ai
+    service: http://dashboard_web:80
+    originRequest:
+      httpHostHeader: mtfm.geem.ai
   - hostname: "*.geem.ai"
     service: http://workspace_web:80
   - service: http_status:404
