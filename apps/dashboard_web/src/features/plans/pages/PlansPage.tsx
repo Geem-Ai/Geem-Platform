@@ -369,7 +369,7 @@ function PlanRow({ plan, locale }: { plan: PlatformPlanListItem; locale: string 
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {plan.description || t('plans.noDescription')}
             </p>
-            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+            <p className="mt-1 truncate font-mono text-[11px] font-bold text-muted-foreground">
               <bdi dir="ltr">{plan.code}</bdi>
             </p>
           </div>
