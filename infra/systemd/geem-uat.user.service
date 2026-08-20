@@ -7,7 +7,7 @@ After=default.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=%h/PlaygroundProjects/ArabicRag/infra
+WorkingDirectory=%h/PlaygroundProjects/Geem/infra
 Environment=PATH=/usr/local/bin:/opt/homebrew/bin:%h/.local/bin:/usr/bin:/bin
 ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
 ExecStart=docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d postgres redis qdrant minio minio-init api worker beat workspace_web landpage_web cloudflared
