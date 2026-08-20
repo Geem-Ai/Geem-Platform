@@ -3,7 +3,7 @@
 ## Product
 
 - Product name: **Geem**
-- GitHub repo: [Mohamkh93/Geem](https://github.com/Mohamkh93/Geem)
+- GitHub repo: [Geem-Ai/Geem-Platform](https://github.com/Geem-Ai/Geem-Platform)
 - Workspace SaaS UI: `apps/workspace_web`
 - Legacy MVP UI: `apps/web` (keep runnable; do not rename/delete)
 - Future: `apps/dashboard_web` (Platform Admin — Phase 12)
