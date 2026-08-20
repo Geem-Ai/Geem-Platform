@@ -79,11 +79,35 @@ Authoritative inventory and lifecycle (disable/enable). Workspace RBAC never aut
 
 **Lifecycle:** Workspace disable ≠ soft-delete. Suspended Workspaces fail closed at `require_workspace`, API-key auth, Chat Widget public messages, and connector webhooks via `require_active_workspace`. System Workspaces (`kind=system`) cannot be disabled.
 
+## Phase 12C — Plans, subscriptions & credits
+
+Orchestrates existing Workspace Geem billing (`PlanService`, `SubscriptionService`, `CreditService`, `EntitlementService`). Does **not** administer App Store `app_plans` / gateways / purchases.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/platform/entitlement-catalog` | Canonical entitlement keys/units |
+| GET | `/api/platform/plans` | Paginated; filters: search, status, currency |
+| POST | `/api/platform/plans` | Create plan + entitlements atomically |
+| GET | `/api/platform/plans/{id}` | Detail + subscriber count |
+| PATCH | `/api/platform/plans/{id}` | Metadata/entitlements; reason required if in-use entitlements change |
+| POST | `/api/platform/plans/{id}/activate` | `status=active` |
+| POST | `/api/platform/plans/{id}/deactivate` | `status=archived`; bootstrap plan protected |
+| GET | `/api/platform/workspaces/{id}/subscription` | Current subscription |
+| GET | `/api/platform/workspaces/{id}/subscriptions` | History (canceled + active) |
+| POST | `/api/platform/workspaces/{id}/subscription/assign` | Manual assign/change; tenant only |
+| GET | `/api/platform/workspaces/{id}/entitlements` | Effective entitlements via `EntitlementService` |
+| GET | `/api/platform/workspaces/{id}/usage` | Usage snapshot (AI/experts/storage/credits) |
+| GET | `/api/platform/workspaces/{id}/credits` | Balance + recent ledger |
+| GET | `/api/platform/workspaces/{id}/credits/history` | Paginated visible ledger kinds |
+| POST | `/api/platform/workspaces/{id}/credits/grant` | Append-only GRANT; idempotent `request_id` |
+
+System Workspaces cannot receive tenant subscriptions or credit grants (`system_workspace_not_billable`). Credit packs / payment gateway CRUD deferred.
+
 Existing `/api/platform/experts*` scaffolding from Phase 3A uses the same host + `require_platform_admin` dependencies.
 
 ## Later slices
 
-12C–12G should orchestrate existing services (billing/credits/usage, ExpertService, app catalog) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
+12D–12G should orchestrate existing services (ExpertService, app catalog, gateways, analytics) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
 
 ## Local `dashboard_web`
 

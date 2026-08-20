@@ -178,3 +178,205 @@ class PlatformUserLifecycleRequest(BaseModel):
 
 class PlatformUserDisableRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+# --- Phase 12C: Plans ---
+
+
+class PlatformEntitlementValueIn(BaseModel):
+    key: str = Field(..., min_length=1, max_length=128)
+    value: int = Field(..., ge=0)
+
+
+class PlatformPlanEntitlementOut(BaseModel):
+    key: str
+    value: int | bool | str
+    value_type: str
+
+
+class PlatformPlanListItem(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+    description: str | None = None
+    status: str
+    price_amount: str | None = None
+    currency: str
+    is_bootstrap: bool = False
+    is_commercial: bool = False
+    subscriber_count: int = 0
+    entitlements: list[PlatformPlanEntitlementOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformPlanListResponse(BaseModel):
+    items: list[PlatformPlanListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformPlanDetailOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+    description: str | None = None
+    status: str
+    price_amount: str | None = None
+    currency: str
+    is_bootstrap: bool = False
+    is_commercial: bool = False
+    subscriber_count: int = 0
+    entitlements: list[PlatformPlanEntitlementOut]
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformPlanCreateRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    price_amount: str | None = None
+    currency: str = Field(default="SAR", min_length=3, max_length=3)
+    entitlements: list[PlatformEntitlementValueIn] = Field(default_factory=list)
+
+
+class PlatformPlanUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    price_amount: str | None = None
+    clear_price: bool = False
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    entitlements: list[PlatformEntitlementValueIn] | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class PlatformPlanLifecycleRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+# --- Phase 12C: Workspace billing ---
+
+
+class PlatformSubscriptionDetailOut(BaseModel):
+    subscription_id: uuid.UUID
+    status: str
+    plan_id: uuid.UUID
+    plan_code: str
+    plan_name: str
+    plan_status: str
+    starts_at: datetime
+    current_period_start: datetime
+    current_period_end: datetime
+    ends_at: datetime | None = None
+    source: str | None = None
+    created_at: datetime
+
+
+class PlatformSubscriptionHistoryItem(BaseModel):
+    subscription_id: uuid.UUID
+    status: str
+    plan_id: uuid.UUID
+    plan_code: str
+    plan_name: str
+    starts_at: datetime
+    current_period_start: datetime
+    current_period_end: datetime
+    ends_at: datetime | None = None
+    source: str | None = None
+    created_at: datetime
+
+
+class PlatformSubscriptionHistoryResponse(BaseModel):
+    items: list[PlatformSubscriptionHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformSubscriptionAssignRequest(BaseModel):
+    plan_id: uuid.UUID
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class PlatformEntitlementItemOut(BaseModel):
+    key: str
+    value: int | bool | str
+    value_type: str
+
+
+class PlatformWorkspaceEntitlementsOut(BaseModel):
+    workspace_id: uuid.UUID
+    subscription_id: uuid.UUID
+    plan_id: uuid.UUID
+    plan_code: str
+    plan_name: str
+    plan_status: str
+    items: list[PlatformEntitlementItemOut]
+
+
+class PlatformUsageMeterOut(BaseModel):
+    limit: int
+    used: int
+    reserved: int = 0
+    remaining: int = 0
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+
+
+class PlatformWorkspaceUsageOut(BaseModel):
+    ai_tokens_daily: PlatformUsageMeterOut
+    ai_tokens_weekly: PlatformUsageMeterOut
+    ai_tokens_monthly: PlatformUsageMeterOut
+    experts: PlatformUsageMeterOut
+    storage_bytes: PlatformUsageMeterOut
+    credit_balance: int
+
+
+class PlatformCreditLedgerItemOut(BaseModel):
+    id: uuid.UUID
+    entry_type: str
+    amount: int
+    remaining_amount: int | None = None
+    request_id: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    reason: str | None = None
+    created_at: datetime
+
+
+class PlatformWorkspaceCreditsOut(BaseModel):
+    workspace_id: uuid.UUID
+    balance: int
+    recent: list[PlatformCreditLedgerItemOut] = Field(default_factory=list)
+
+
+class PlatformCreditHistoryResponse(BaseModel):
+    items: list[PlatformCreditLedgerItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformCreditGrantRequest(BaseModel):
+    amount: int = Field(..., gt=0)
+    reason: str = Field(..., min_length=1, max_length=500)
+    request_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class PlatformCreditGrantResponse(BaseModel):
+    workspace_id: uuid.UUID
+    balance: int
+    entry: PlatformCreditLedgerItemOut
+    idempotent_replay: bool = False
+
+
+class PlatformEntitlementCatalogItem(BaseModel):
+    key: str
+    value_type: str
+    unit: str
+
+
+class PlatformEntitlementCatalogResponse(BaseModel):
+    items: list[PlatformEntitlementCatalogItem]

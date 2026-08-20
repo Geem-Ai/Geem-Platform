@@ -16,6 +16,9 @@ export type ApiErrorCode =
   | 'platform_admin_host_required'
   | 'system_workspace_protected'
   | 'cannot_disable_self'
+  | 'system_workspace_not_billable'
+  | 'plan_unavailable'
+  | 'entitlement_invalid'
   | 'unknown';
 
 const KNOWN_CODES = new Set<string>([
@@ -34,6 +37,9 @@ const KNOWN_CODES = new Set<string>([
   'platform_admin_host_required',
   'system_workspace_protected',
   'cannot_disable_self',
+  'system_workspace_not_billable',
+  'plan_unavailable',
+  'entitlement_invalid',
 ]);
 
 export class ApiError extends Error {
@@ -103,6 +109,10 @@ export function errorMessageKey(code: string): string {
     platform_admin_host_required: 'errors.platformAdminHostRequired',
     system_workspace_protected: 'errors.systemWorkspaceProtected',
     cannot_disable_self: 'errors.cannotDisableSelf',
+    system_workspace_not_billable: 'errors.systemWorkspaceNotBillable',
+    plan_unavailable: 'errors.planUnavailable',
+    entitlement_invalid: 'errors.entitlementInvalid',
+    conflict: 'errors.conflict',
   };
   return map[code as ApiErrorCode] ?? 'errors.generic';
 }

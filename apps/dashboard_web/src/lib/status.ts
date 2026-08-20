@@ -29,6 +29,11 @@ const KIND: Record<string, StatusBadgeSpec> = {
   system: { labelKey: 'status.kind.system', variant: 'info' },
 };
 
+const PLAN_STATUS: Record<string, StatusBadgeSpec> = {
+  active: { labelKey: 'status.plan.active', variant: 'success' },
+  archived: { labelKey: 'status.plan.archived', variant: 'secondary' },
+};
+
 function lookup(map: Record<string, StatusBadgeSpec>, value: string, fallbackKey: string): StatusBadgeSpec {
   return map[value] ?? { labelKey: fallbackKey, variant: 'secondary' };
 }
@@ -47,4 +52,8 @@ export function platformRoleBadge(role: string): StatusBadgeSpec {
 
 export function workspaceKindBadge(kind: string): StatusBadgeSpec {
   return lookup(KIND, kind, 'status.kind.unknown');
+}
+
+export function planStatusBadge(status: string): StatusBadgeSpec {
+  return lookup(PLAN_STATUS, status, 'status.plan.unknown');
 }

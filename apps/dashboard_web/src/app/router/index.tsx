@@ -4,6 +4,10 @@ import { GuestRoute, RequirePlatformAdmin } from '@/app/router/guards';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
 import { OverviewPage } from '@/features/overview/pages/OverviewPage';
+import { CreditsPage } from '@/features/credits/pages/CreditsPage';
+import { PlansPage } from '@/features/plans/pages/PlansPage';
+import { PlanCreatePage } from '@/features/plans/pages/PlanCreatePage';
+import { PlanDetailPage } from '@/features/plans/pages/PlanDetailPage';
 import { UsersPage } from '@/features/users/pages/UsersPage';
 import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
 import { WorkspacesPage } from '@/features/workspaces/pages/WorkspacesPage';
@@ -28,8 +32,10 @@ export function AppRouter() {
             element={<ComingSoonPage titleKey="nav.platformExperts" phase="12D" />}
           />
           <Route path="usage" element={<ComingSoonPage titleKey="nav.usage" phase="12G" />} />
-          <Route path="plans" element={<ComingSoonPage titleKey="nav.plans" phase="12C" />} />
-          <Route path="credits" element={<ComingSoonPage titleKey="nav.credits" phase="12C" />} />
+          <Route path="plans" element={<PlansPage />} />
+          <Route path="plans/new" element={<PlanCreatePage />} />
+          <Route path="plans/:planId" element={<PlanDetailPage />} />
+          <Route path="credits" element={<CreditsPage />} />
           <Route
             path="app-store"
             element={<ComingSoonPage titleKey="nav.appStore" phase="12E" />}

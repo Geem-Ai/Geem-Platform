@@ -77,6 +77,21 @@ class CreditRepository:
             )
         )
 
+    def count_ledger(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        entry_types: list[str] | None = None,
+    ) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(CreditLedgerEntry)
+            .where(CreditLedgerEntry.workspace_id == workspace_id)
+        )
+        if entry_types:
+            stmt = stmt.where(CreditLedgerEntry.entry_type.in_(entry_types))
+        return int(self.db.scalar(stmt) or 0)
+
     def append_ledger(self, entry: CreditLedgerEntry) -> CreditLedgerEntry:
         self.db.add(entry)
         self.db.flush()

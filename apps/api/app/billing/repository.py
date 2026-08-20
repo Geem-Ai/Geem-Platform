@@ -80,6 +80,93 @@ class PlanRepository:
             )
         )
 
+    def _admin_filters(
+        self,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        currency: str | None = None,
+    ):
+        clauses: list = []
+        if search:
+            term = f"%{search.strip()}%"
+            clauses.append(
+                (Plan.code.ilike(term)) | (Plan.name.ilike(term)) | (Plan.description.ilike(term))
+            )
+        if status:
+            clauses.append(Plan.status == status.strip().lower())
+        if currency:
+            clauses.append(Plan.currency == currency.strip().upper())
+        return clauses
+
+    def count_admin(
+        self,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        currency: str | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Plan)
+        for clause in self._admin_filters(search=search, status=status, currency=currency):
+            stmt = stmt.where(clause)
+        return int(self.db.scalar(stmt) or 0)
+
+    def list_admin(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        search: str | None = None,
+        status: str | None = None,
+        currency: str | None = None,
+    ) -> list[Plan]:
+        stmt = select(Plan).options(selectinload(Plan.entitlements))
+        for clause in self._admin_filters(search=search, status=status, currency=currency):
+            stmt = stmt.where(clause)
+        return list(
+            self.db.scalars(
+                stmt.order_by(Plan.created_at.desc(), Plan.code.asc())
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+    def count_active_subscribers(self, plan_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(Subscription)
+                .where(
+                    Subscription.plan_id == plan_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                )
+            )
+            or 0
+        )
+
+    def count_active_subscribers_batch(self, plan_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        if not plan_ids:
+            return {}
+        rows = self.db.execute(
+            select(Subscription.plan_id, func.count())
+            .where(
+                Subscription.plan_id.in_(plan_ids),
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+            .group_by(Subscription.plan_id)
+        ).all()
+        return {plan_id: int(count) for plan_id, count in rows}
+
+    def list_active_subscriber_workspace_ids(self, plan_id: uuid.UUID) -> list[uuid.UUID]:
+        return list(
+            self.db.scalars(
+                select(Subscription.workspace_id).where(
+                    Subscription.plan_id == plan_id,
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                )
+            )
+        )
+
 
 class SubscriptionRepository:
     def __init__(self, db: Session) -> None:
@@ -127,9 +214,38 @@ class SubscriptionRepository:
         return list(
             self.db.scalars(
                 select(Subscription)
+                .options(selectinload(Subscription.plan))
                 .where(Subscription.workspace_id == workspace_id)
                 .order_by(Subscription.created_at.desc())
             )
+        )
+
+    def list_for_workspace_paginated(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Subscription]:
+        return list(
+            self.db.scalars(
+                select(Subscription)
+                .options(selectinload(Subscription.plan))
+                .where(Subscription.workspace_id == workspace_id)
+                .order_by(Subscription.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+    def count_for_workspace(self, workspace_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(Subscription)
+                .where(Subscription.workspace_id == workspace_id)
+            )
+            or 0
         )
 
     def create(self, subscription: Subscription) -> Subscription:
