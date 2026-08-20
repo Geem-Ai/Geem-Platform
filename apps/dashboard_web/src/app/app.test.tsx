@@ -446,6 +446,323 @@ describe('Platform Admin app', () => {
     expect(screen.queryByTestId('coming-soon-page')).not.toBeInTheDocument();
   });
 
+  it('creates a plan from the enriched direct create route', async () => {
+    window.history.pushState({}, '', '/plans/new');
+    const entitlementCatalog = {
+      items: [
+        { key: 'ai_tokens_daily', value_type: 'integer', unit: 'tokens' },
+        { key: 'ai_tokens_weekly', value_type: 'integer', unit: 'tokens' },
+        { key: 'ai_tokens_monthly', value_type: 'integer', unit: 'tokens' },
+        { key: 'experts_limit', value_type: 'integer', unit: 'experts' },
+        { key: 'storage_bytes', value_type: 'integer', unit: 'bytes' },
+        {
+          key: 'api_requests_per_minute',
+          value_type: 'integer',
+          unit: 'requests_per_minute',
+        },
+      ],
+    };
+    const createdPlan = {
+      id: 'plan-created',
+      code: 'team',
+      name: 'Team',
+      description: 'For growing Workspace teams.',
+      status: 'active',
+      price_amount: '149.25',
+      currency: 'SAR',
+      is_bootstrap: false,
+      is_commercial: true,
+      subscriber_count: 0,
+      entitlements: [
+        { key: 'ai_tokens_daily', value: 1000, value_type: 'integer' },
+        { key: 'ai_tokens_weekly', value: 5000, value_type: 'integer' },
+        { key: 'ai_tokens_monthly', value: 20000, value_type: 'integer' },
+        { key: 'experts_limit', value: 10, value_type: 'integer' },
+        { key: 'storage_bytes', value: 2147483648, value_type: 'integer' },
+        { key: 'api_requests_per_minute', value: 120, value_type: 'integer' },
+      ],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const createRequests: unknown[] = [];
+
+    installFetch(async (url, init) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.endsWith('/api/platform/entitlement-catalog')) {
+        return json(entitlementCatalog);
+      }
+      if (url.endsWith('/api/platform/plans') && init?.method === 'POST') {
+        createRequests.push(JSON.parse(String(init.body)));
+        return json(createdPlan, 201);
+      }
+      if (url.endsWith('/api/platform/plans/plan-created')) {
+        return json(createdPlan);
+      }
+      if (url.includes('/api/auth/logout') && init?.method === 'POST') {
+        return empty(204);
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+
+    expect(await screen.findByTestId('plan-create-page')).toBeInTheDocument();
+    expect(screen.getByText('Plan configuration')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-create-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-entitlements')).toBeInTheDocument();
+
+    await user.type(screen.getByTestId('plan-code-input'), ' team ');
+    await user.type(screen.getByTestId('plan-name-input'), ' Team ');
+    await user.type(
+      screen.getByTestId('plan-description-input'),
+      ' For growing Workspace teams. ',
+    );
+    await user.type(screen.getByTestId('plan-price-input'), '149.25');
+    await user.type(screen.getByTestId('plan-entitlements-ai_tokens_daily'), '1000');
+    await user.type(screen.getByTestId('plan-entitlements-ai_tokens_weekly'), '5000');
+    await user.type(screen.getByTestId('plan-entitlements-ai_tokens_monthly'), '20000');
+    await user.type(screen.getByTestId('plan-entitlements-experts_limit'), '10');
+    await user.type(screen.getByTestId('plan-entitlements-storage_bytes'), '2');
+    await user.type(screen.getByTestId('plan-entitlements-api_requests_per_minute'), '120');
+    await user.click(screen.getByTestId('plan-create-submit'));
+
+    await waitFor(() => {
+      expect(createRequests).toEqual([
+        {
+          code: 'team',
+          name: 'Team',
+          description: 'For growing Workspace teams.',
+          price_amount: '149.25',
+          currency: 'SAR',
+          entitlements: [
+            { key: 'ai_tokens_daily', value: 1000 },
+            { key: 'ai_tokens_weekly', value: 5000 },
+            { key: 'ai_tokens_monthly', value: 20000 },
+            { key: 'experts_limit', value: 10 },
+            { key: 'storage_bytes', value: 2147483648 },
+            { key: 'api_requests_per_minute', value: 120 },
+          ],
+        },
+      ]);
+      expect(window.location.pathname).toBe('/plans/plan-created');
+    });
+
+    // The application QueryClient is shared across AppProviders instances, so end this
+    // direct-route flow through the real logout path to preserve test isolation.
+    await user.click(screen.getAllByTestId('account-menu-trigger')[0]);
+    await user.click(await screen.findByTestId('logout-menu-item'));
+    await user.click(await screen.findByTestId('logout-confirm'));
+    expect(await screen.findByTestId('login-form')).toBeInTheDocument();
+  });
+
+  it('keeps plan details editable through catalog recovery and safeguards entitlement updates', async () => {
+    window.history.pushState({}, '', '/plans/plan-safety');
+    const entitlementCatalog = {
+      items: [
+        { key: 'ai_tokens_daily', value_type: 'integer', unit: 'tokens' },
+        { key: 'ai_tokens_weekly', value_type: 'integer', unit: 'tokens' },
+        { key: 'ai_tokens_monthly', value_type: 'integer', unit: 'tokens' },
+        { key: 'experts_limit', value_type: 'integer', unit: 'experts' },
+        { key: 'storage_bytes', value_type: 'integer', unit: 'bytes' },
+        {
+          key: 'api_requests_per_minute',
+          value_type: 'integer',
+          unit: 'requests_per_minute',
+        },
+      ],
+    };
+    let catalogAvailable = false;
+    let serverPlan = {
+      id: 'plan-safety',
+      code: 'pro',
+      name: 'Pro',
+      description: 'Commercial plan for growing teams.',
+      status: 'active',
+      price_amount: '99.25',
+      currency: 'SAR',
+      is_bootstrap: false,
+      is_commercial: true,
+      subscriber_count: 4,
+      entitlements: [
+        { key: 'ai_tokens_daily', value: 10000, value_type: 'integer' },
+        { key: 'ai_tokens_weekly', value: 50000, value_type: 'integer' },
+        { key: 'ai_tokens_monthly', value: 200000, value_type: 'integer' },
+        { key: 'experts_limit', value: 20, value_type: 'integer' },
+        { key: 'storage_bytes', value: 1073741824, value_type: 'integer' },
+        { key: 'api_requests_per_minute', value: 120, value_type: 'integer' },
+      ],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-02T00:00:00Z',
+    };
+    type PlanUpdateRequest = {
+      name?: string;
+      description?: string | null;
+      price_amount?: string | null;
+      clear_price?: boolean;
+      currency?: string;
+      entitlements?: Array<{ key: string; value: number }>;
+      reason?: string | null;
+    };
+    const updateRequests: PlanUpdateRequest[] = [];
+
+    installFetch(async (url, init) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.endsWith('/api/platform/entitlement-catalog')) {
+        return catalogAvailable
+          ? json(entitlementCatalog)
+          : json({ code: 'service_unavailable', message: 'Catalog unavailable' }, 503);
+      }
+      if (url.endsWith('/api/platform/plans/plan-safety') && init?.method === 'PATCH') {
+        const request = JSON.parse(String(init.body)) as PlanUpdateRequest;
+        updateRequests.push(request);
+        serverPlan = {
+          ...serverPlan,
+          name: request.name ?? serverPlan.name,
+          description:
+            request.description === undefined ? serverPlan.description : request.description ?? '',
+          price_amount: request.clear_price
+            ? ''
+            : request.price_amount === undefined
+              ? serverPlan.price_amount
+              : request.price_amount ?? '',
+          entitlements: request.entitlements
+            ? request.entitlements.map((item) => ({ ...item, value_type: 'integer' }))
+            : serverPlan.entitlements,
+          updated_at: '2026-01-03T00:00:00Z',
+        };
+        return json(serverPlan);
+      }
+      if (url.endsWith('/api/platform/plans/plan-safety')) {
+        return json(serverPlan);
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AppProviders />);
+
+    expect(await screen.findByTestId('plan-detail-page')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('plan-detail-catalog-error', {}, { timeout: 3000 }),
+    ).toHaveTextContent('Entitlement catalog could not be loaded');
+    expect(screen.getByTestId('plan-resource-summary')).toHaveTextContent('4');
+    expect(screen.getByTestId('plan-entitlements-readonly')).toHaveTextContent('20');
+    expect(screen.getByTestId('plan-deactivate-button')).toBeEnabled();
+    expect(screen.getByTestId('plan-name-input')).toHaveValue('Pro');
+    expect(screen.getByTestId('plan-save-button')).toBeEnabled();
+
+    await user.clear(screen.getByTestId('plan-name-input'));
+    await user.type(screen.getByTestId('plan-name-input'), 'Pro Plus');
+    await user.click(screen.getByTestId('plan-save-button'));
+
+    await waitFor(() => {
+      expect(updateRequests).toEqual([
+        {
+          name: 'Pro Plus',
+          description: 'Commercial plan for growing teams.',
+          price_amount: '99.25',
+          clear_price: false,
+          currency: 'SAR',
+          reason: null,
+        },
+      ]);
+    });
+
+    catalogAvailable = true;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('plan-entitlements')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-entitlements-experts_limit')).toHaveValue(20);
+    expect(screen.getByTestId('plan-edit-reason')).toBeInTheDocument();
+
+    await user.clear(screen.getByTestId('plan-entitlements-experts_limit'));
+    await user.type(screen.getByTestId('plan-entitlements-experts_limit'), '25');
+    await user.click(screen.getByTestId('plan-save-button'));
+    expect(
+      await screen.findByText(
+        'A reason is required when changing entitlements on an in-use plan.',
+      ),
+    ).toBeInTheDocument();
+    expect(updateRequests).toHaveLength(1);
+
+    await user.type(screen.getByTestId('plan-edit-reason'), 'Expand expert capacity');
+    await user.click(screen.getByTestId('plan-save-button'));
+
+    await waitFor(() => {
+      expect(updateRequests).toEqual([
+        {
+          name: 'Pro Plus',
+          description: 'Commercial plan for growing teams.',
+          price_amount: '99.25',
+          clear_price: false,
+          currency: 'SAR',
+          reason: null,
+        },
+        {
+          name: 'Pro Plus',
+          description: 'Commercial plan for growing teams.',
+          price_amount: '99.25',
+          clear_price: false,
+          currency: 'SAR',
+          entitlements: [
+            { key: 'ai_tokens_daily', value: 10000 },
+            { key: 'ai_tokens_weekly', value: 50000 },
+            { key: 'ai_tokens_monthly', value: 200000 },
+            { key: 'experts_limit', value: 25 },
+            { key: 'storage_bytes', value: 1073741824 },
+            { key: 'api_requests_per_minute', value: 120 },
+          ],
+          reason: 'Expand expert capacity',
+        },
+      ]);
+      expect(screen.getByTestId('plan-edit-reason')).toHaveValue('');
+    });
+
+    serverPlan = {
+      ...serverPlan,
+      name: 'Server-synced Pro',
+      description: 'Updated outside this session.',
+      updated_at: '2026-01-04T00:00:00Z',
+    };
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('plan-name-input')).toHaveValue('Server-synced Pro');
+      expect(screen.getByTestId('plan-description-input')).toHaveValue(
+        'Updated outside this session.',
+      );
+    });
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
   it('renders Credits page and loads balance for selected workspace', async () => {
     const grantRequests: Array<{ amount: number; reason: string; request_id: string }> = [];
     const consumeEntry = {
@@ -611,6 +928,109 @@ describe('Platform Admin app', () => {
     });
     expect(grantRequests[0]?.request_id).toMatch(/^platform-credit-grant:/);
     expect(screen.queryByTestId('grant-credits-dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens a Workspace credit account directly with context, summary, and signed ledger', async () => {
+    window.history.pushState({}, '', '/credits/ws-direct');
+    const consumeEntry = {
+      id: 'credit-direct-consume',
+      entry_type: 'consume',
+      amount: 75,
+      remaining_amount: null,
+      request_id: 'usage:direct-request',
+      source_type: 'ai_usage',
+      source_id: 'usage-direct',
+      reason: 'Direct AI usage',
+      created_at: '2026-01-02T12:00:00Z',
+    };
+
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/workspaces/ws-direct/credits/history')) {
+        return json({ items: [consumeEntry], total: 1, limit: 20, offset: 0 });
+      }
+      if (url.endsWith('/api/platform/workspaces/ws-direct/credits')) {
+        return json({
+          workspace_id: 'ws-direct',
+          balance: 1500,
+          recent: [consumeEntry],
+        });
+      }
+      if (url.endsWith('/api/platform/workspaces/ws-direct')) {
+        return json({
+          id: 'ws-direct',
+          name: 'Direct Acme',
+          slug: 'direct-acme',
+          kind: 'tenant',
+          status: 'active',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          members_count: 4,
+          owners: [],
+          subscription: {
+            subscription_id: 'sub-direct',
+            status: 'active',
+            plan_id: 'plan-pro',
+            plan_code: 'pro',
+            plan_name: 'Pro',
+            starts_at: '2026-01-01T00:00:00Z',
+            current_period_start: '2026-01-01T00:00:00Z',
+            current_period_end: '2026-02-01T00:00:00Z',
+            ends_at: null,
+          },
+          resources: {
+            members_count: 4,
+            experts_count: 2,
+            api_keys_count: 1,
+            app_installations_count: 1,
+            storage_used_bytes: 0,
+            storage_limit_bytes: 10737418240,
+          },
+        });
+      }
+      return json({}, 404);
+    });
+
+    render(<AppProviders />);
+
+    const detailPage = await screen.findByTestId('credit-detail-page');
+    expect(detailPage).toHaveTextContent('Direct Acme');
+    expect(detailPage).toHaveTextContent('direct-acme');
+    expect(detailPage).toHaveTextContent('Active');
+    expect(detailPage).toHaveTextContent('Tenant');
+
+    const summary = screen.getByTestId('credit-detail-summary');
+    expect(summary).toHaveTextContent('Credit balance');
+    expect(summary).toHaveTextContent(/1[,.]?500|1500/);
+    expect(summary).toHaveTextContent('Ledger entries');
+    expect(summary).toHaveTextContent('Latest movement');
+    expect(summary).toHaveTextContent('−75');
+    expect(summary).toHaveTextContent('Current plan');
+    expect(summary).toHaveTextContent('Pro');
+
+    const ledgerRow = await screen.findByTestId('credits-history-row');
+    expect(ledgerRow).toHaveTextContent('Consumed');
+    expect(ledgerRow).toHaveTextContent('Direct AI usage');
+    expect(screen.getByTestId('credits-entry-amount')).toHaveTextContent('−75');
+    expect(screen.getByTestId('credit-detail-grant')).toBeEnabled();
+    expect(screen.getByRole('link', { name: 'Open Workspace detail' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws-direct',
+    );
   });
 
   it('blocks credit grants until the selected balance is verified', async () => {

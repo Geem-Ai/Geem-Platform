@@ -5,6 +5,7 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
 import { OverviewPage } from '@/features/overview/pages/OverviewPage';
 import { CreditsPage } from '@/features/credits/pages/CreditsPage';
+import { CreditDetailPage } from '@/features/credits/pages/CreditDetailPage';
 import { PlansPage } from '@/features/plans/pages/PlansPage';
 import { PlanCreatePage } from '@/features/plans/pages/PlanCreatePage';
 import { PlanDetailPage } from '@/features/plans/pages/PlanDetailPage';
@@ -36,6 +37,7 @@ export function AppRouter() {
           <Route path="plans/new" element={<PlanCreatePage />} />
           <Route path="plans/:planId" element={<PlanDetailPage />} />
           <Route path="credits" element={<CreditsPage />} />
+          <Route path="credits/:workspaceId" element={<CreditDetailPage />} />
           <Route
             path="app-store"
             element={<ComingSoonPage titleKey="nav.appStore" phase="12E" />}
