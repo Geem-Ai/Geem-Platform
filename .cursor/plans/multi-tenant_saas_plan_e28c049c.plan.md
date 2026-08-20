@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS (Workspace/User admin + lifecycle). 12C–12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS (plans/credits/billing admin). 12D–12G not started."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS**. 12C–12G not started. Do not start 12C until requested.
+**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS**. 12D–12G not started. Do not start 12D until requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1408,7 +1408,20 @@ Delivered:
 
 **Deferred in 12B (intentional):** Platform Admin Workspace create; membership mutations (invite path remains authoritative); slug edits; billing mutations (12C); full Audit Logs UI (12G).
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — 12A+12B PASS; commerce/ops slices remain.
+#### Phase 12C — Plans, entitlements, credits (PASS)
+
+Delivered:
+
+- Platform Admin plan CRUD + activate/deactivate (`/api/platform/plans*`); typed entitlement editor from `EntitlementKey` catalog; bootstrap plan protected from deactivate
+- Workspace billing ops: subscription inspect/history/assign, effective entitlements, usage snapshot, credits balance/history, manual AI credit GRANT (append-only ledger, idempotent `request_id`)
+- Reuses `PlanService` / `SubscriptionService.assign_plan` / `CreditService.append` / `EntitlementService` / `QuotaService` — no App Store tables; no ClickPay/gateway redesign
+- Cache invalidation on plan entitlement updates (per-subscriber) and on subscription assign
+- Audit: `plan.create|update|activate|deactivate|entitlements_update`, `workspace.subscription_assign|subscription_change|credit_grant`
+- `dashboard_web`: `/plans`, `/plans/new`, `/plans/:planId`, `/credits`; Workspace Billing section; EN/AR + RTL
+- Tests: backend integration 12C + Phase 5B/6A regression; dashboard vitest + Playwright admin smoke
+- Deferred in 12C: credit-pack CRUD; credit `expires_at` (ledger has no expiry column); purchase/gateway admin; negative credit adjust UI
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — 12A+12B+12C PASS; experts/app-store/gateways/ops slices remain.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

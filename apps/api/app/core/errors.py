@@ -44,6 +44,7 @@ class ErrorCategory(StrEnum):
     MEMBERSHIP_NOT_FOUND = "membership_not_found"
     WORKSPACE_ACCESS_DENIED = "workspace_access_denied"
     SYSTEM_WORKSPACE_PROTECTED = "system_workspace_protected"
+    SYSTEM_WORKSPACE_NOT_BILLABLE = "system_workspace_not_billable"
     INSUFFICIENT_WORKSPACE_ROLE = "insufficient_workspace_role"
     LAST_WORKSPACE_OWNER = "last_workspace_owner"
     UNKNOWN_PERMISSION = "unknown_permission"
@@ -251,6 +252,7 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "membership_not_found": 404,
     "workspace_access_denied": 403,
     "system_workspace_protected": 409,
+    "system_workspace_not_billable": 409,
     "cannot_disable_self": 409,
     "insufficient_workspace_role": 403,
     "last_workspace_owner": 409,

@@ -43,6 +43,16 @@ class AuditAction(StrEnum):
     BILLING_PURCHASE_PAID = "billing.purchase_paid"
     BILLING_PURCHASE_FAILED = "billing.purchase_failed"
 
+    PLAN_CREATED = "plan.create"
+    PLAN_UPDATED = "plan.update"
+    PLAN_ACTIVATED = "plan.activate"
+    PLAN_DEACTIVATED = "plan.deactivate"
+    PLAN_ENTITLEMENTS_UPDATED = "plan.entitlements_update"
+
+    WORKSPACE_SUBSCRIPTION_ASSIGNED = "workspace.subscription_assign"
+    WORKSPACE_SUBSCRIPTION_CHANGED = "workspace.subscription_change"
+    WORKSPACE_CREDIT_GRANTED = "workspace.credit_grant"
+
     APP_INSTALLED = "app.installed"
     APP_UNINSTALLED = "app.uninstalled"
     APP_PURCHASED = "app.purchased"
@@ -65,6 +75,9 @@ class AuditEntityType(StrEnum):
     EXPERT = "expert"
     API_KEY = "api_key"
     PURCHASE = "purchase"
+    PLAN = "plan"
+    SUBSCRIPTION = "subscription"
+    CREDIT_LEDGER_ENTRY = "credit_ledger_entry"
     APP_INSTALLATION = "app_installation"
     APP_CONNECTION = "app_connection"
     CONVERSATION = "conversation"

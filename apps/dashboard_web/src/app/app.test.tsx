@@ -287,6 +287,7 @@ describe('Platform Admin app', () => {
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
           email_verified_at: '2026-01-01T00:00:00Z',
+          last_login_at: '2026-01-03T12:00:00Z',
           active_session_count: 1,
           memberships: [
             {
@@ -304,28 +305,45 @@ describe('Platform Admin app', () => {
         });
       }
       if (url.includes('/api/platform/users')) {
+        const requestUrl = new URL(url);
+        const items = [
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            status: 'active',
+            platform_role: 'admin',
+            created_at: '2026-01-01T00:00:00Z',
+            email_verified_at: '2026-01-01T00:00:00Z',
+            last_login_at: '2026-01-03T12:00:00Z',
+            workspace_memberships_count: 0,
+          },
+          {
+            id: 'user-2',
+            email: 'owner@example.com',
+            status: 'active',
+            platform_role: 'none',
+            created_at: '2026-01-02T00:00:00Z',
+            email_verified_at: null,
+            last_login_at: '2026-01-03T10:00:00Z',
+            workspace_memberships_count: 1,
+          },
+        ];
+        const status = requestUrl.searchParams.get('status');
+        const role = requestUrl.searchParams.get('platform_role');
+        const search = requestUrl.searchParams.get('search')?.toLowerCase();
+        const filtered = items.filter((item) => {
+          if (status && item.status !== status) return false;
+          if (role && item.platform_role !== role) return false;
+          if (search && !item.email.toLowerCase().includes(search)) return false;
+          return true;
+        });
+        const limit = Number(requestUrl.searchParams.get('limit') ?? 25);
+        const offset = Number(requestUrl.searchParams.get('offset') ?? 0);
         return json({
-          items: [
-            {
-              id: 'admin-1',
-              email: 'admin@example.com',
-              status: 'active',
-              platform_role: 'admin',
-              created_at: '2026-01-01T00:00:00Z',
-              workspace_memberships_count: 0,
-            },
-            {
-              id: 'user-2',
-              email: 'owner@example.com',
-              status: 'active',
-              platform_role: 'none',
-              created_at: '2026-01-02T00:00:00Z',
-              workspace_memberships_count: 1,
-            },
-          ],
-          total: 2,
-          limit: 25,
-          offset: 0,
+          items: filtered.slice(offset, offset + limit),
+          total: filtered.length,
+          limit,
+          offset,
         });
       }
       return json({}, 404);
@@ -336,12 +354,284 @@ describe('Platform Admin app', () => {
     await screen.findByTestId('overview-page');
     await user.click(screen.getByTestId('nav-users'));
     expect(await screen.findByTestId('users-page')).toBeInTheDocument();
+    expect(screen.getByTestId('user-inventory-summary')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('user-stat-total')).toHaveTextContent('2');
+      expect(screen.getByTestId('user-stat-active')).toHaveTextContent('2');
+      expect(screen.getByTestId('user-stat-disabled')).toHaveTextContent('0');
+      expect(screen.getByTestId('user-stat-admins')).toHaveTextContent('1');
+    });
+    expect(screen.getByTestId('user-results-count')).toHaveTextContent('2 matching');
+    expect(screen.getByTestId('users-list')).toHaveTextContent('Verified');
+    expect(screen.getByTestId('users-list')).toHaveTextContent('Unverified');
     expect(screen.getByText('owner@example.com')).toBeInTheDocument();
 
     await user.click(screen.getByText('admin@example.com'));
     expect(await screen.findByTestId('user-detail-page')).toBeInTheDocument();
+    expect(screen.getByTestId('user-resource-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('user-account-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('user-lifecycle-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('user-memberships-card')).toHaveTextContent('Acme');
     expect(screen.getByTestId('user-self-protected')).toBeInTheDocument();
     expect(screen.queryByTestId('user-disable-button')).not.toBeInTheDocument();
+  });
+
+  it('renders Plans list from Platform Admin API', async () => {
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/plans') && !url.includes('/plans/')) {
+        return json({
+          items: [
+            {
+              id: 'plan-1',
+              code: 'free',
+              name: 'Free',
+              description: null,
+              status: 'active',
+              price_amount: null,
+              currency: 'SAR',
+              is_bootstrap: true,
+              is_commercial: false,
+              subscriber_count: 3,
+              entitlements: [
+                { key: 'experts_limit', value: 3, value_type: 'integer' },
+                { key: 'storage_bytes', value: 1073741824, value_type: 'integer' },
+              ],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+    await screen.findByTestId('overview-page');
+    await user.click(screen.getByTestId('nav-plans'));
+    expect(await screen.findByTestId('plans-page')).toBeInTheDocument();
+    expect(screen.getByTestId('plans-list')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-bootstrap-badge')).toBeInTheDocument();
+    expect(screen.queryByTestId('coming-soon-page')).not.toBeInTheDocument();
+  });
+
+  it('renders Credits page and loads balance for selected workspace', async () => {
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/workspaces') && url.includes('credits/history')) {
+        return json({ items: [], total: 0, limit: 20, offset: 0 });
+      }
+      if (url.includes('/api/platform/workspaces/') && url.includes('/credits')) {
+        return json({
+          workspace_id: 'ws-1',
+          balance: 1500,
+          recent: [],
+        });
+      }
+      if (url.includes('/api/platform/workspaces')) {
+        return json({
+          items: [
+            {
+              id: 'ws-1',
+              name: 'Acme',
+              slug: 'acme',
+              kind: 'tenant',
+              status: 'active',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+              members_count: 2,
+              experts_count: 1,
+              current_plan_code: 'free',
+              current_plan_name: 'Free',
+              subscription_status: 'active',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+    await screen.findByTestId('overview-page');
+    await user.click(screen.getByTestId('nav-credits'));
+    expect(await screen.findByTestId('credits-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('credits-workspace-list')).toBeInTheDocument();
+    await user.click(screen.getByText('Acme'));
+    expect(await screen.findByTestId('credits-balance')).toHaveTextContent(/1[,.]?500|1500/);
+  });
+
+  it('shows billing section on workspace detail', async () => {
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/members')) {
+        return json({ items: [], total: 0, limit: 50, offset: 0 });
+      }
+      if (url.includes('/subscription') && !url.includes('/subscriptions')) {
+        return json({
+          subscription_id: 'sub-1',
+          status: 'active',
+          plan_id: 'plan-1',
+          plan_code: 'free',
+          plan_name: 'Free',
+          plan_status: 'active',
+          starts_at: '2026-01-01T00:00:00Z',
+          current_period_start: '2026-01-01T00:00:00Z',
+          current_period_end: '2026-02-01T00:00:00Z',
+          ends_at: null,
+          source: 'bootstrap',
+          created_at: '2026-01-01T00:00:00Z',
+        });
+      }
+      if (url.includes('/entitlements')) {
+        return json({
+          workspace_id: 'ws-1',
+          subscription_id: 'sub-1',
+          plan_id: 'plan-1',
+          plan_code: 'free',
+          plan_name: 'Free',
+          plan_status: 'active',
+          items: [{ key: 'experts_limit', value: 3, value_type: 'integer' }],
+        });
+      }
+      if (url.includes('/usage')) {
+        return json({
+          ai_tokens_daily: { limit: 1000, used: 10, reserved: 0, remaining: 990 },
+          ai_tokens_weekly: { limit: 5000, used: 10, reserved: 0, remaining: 4990 },
+          ai_tokens_monthly: { limit: 20000, used: 10, reserved: 0, remaining: 19990 },
+          experts: { limit: 3, used: 1, reserved: 0, remaining: 2 },
+          storage_bytes: { limit: 1073741824, used: 0, reserved: 0, remaining: 1073741824 },
+          credit_balance: 100,
+        });
+      }
+      if (url.includes('/credits')) {
+        return json({ workspace_id: 'ws-1', balance: 100, recent: [] });
+      }
+      if (url.includes('/api/platform/workspaces/') && !url.includes('/workspaces?')) {
+        return json({
+          id: 'ws-1',
+          name: 'Acme',
+          slug: 'acme',
+          kind: 'tenant',
+          status: 'active',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          members_count: 1,
+          owners: [],
+          subscription: {
+            subscription_id: 'sub-1',
+            status: 'active',
+            plan_id: 'plan-1',
+            plan_code: 'free',
+            plan_name: 'Free',
+            starts_at: '2026-01-01T00:00:00Z',
+            current_period_start: '2026-01-01T00:00:00Z',
+            current_period_end: '2026-02-01T00:00:00Z',
+            ends_at: null,
+          },
+          resources: {
+            members_count: 1,
+            experts_count: 0,
+            api_keys_count: 0,
+            app_installations_count: 0,
+            storage_used_bytes: 0,
+            storage_limit_bytes: 1073741824,
+          },
+        });
+      }
+      if (url.includes('/api/platform/workspaces')) {
+        return json({
+          items: [
+            {
+              id: 'ws-1',
+              name: 'Acme',
+              slug: 'acme',
+              kind: 'tenant',
+              status: 'active',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+              members_count: 1,
+              experts_count: 0,
+              current_plan_code: 'free',
+              current_plan_name: 'Free',
+              subscription_status: 'active',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+    await screen.findByTestId('overview-page');
+    await user.click(screen.getByTestId('nav-workspaces'));
+    await screen.findByTestId('workspaces-page');
+    await user.click(screen.getByText('Acme'));
+    expect(await screen.findByTestId('workspace-detail-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('workspace-billing-section')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-change-plan-button')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-grant-credits-button')).toBeInTheDocument();
+    expect(await screen.findByTestId('workspace-entitlements-card')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-entitlements-plan')).toHaveTextContent('Free');
+    expect(
+      screen
+        .getByTestId('workspace-entitlements-list')
+        .querySelector('[data-entitlement-key="experts_limit"]'),
+    ).toBeInTheDocument();
   });
 
   it('opens mobile navigation', async () => {

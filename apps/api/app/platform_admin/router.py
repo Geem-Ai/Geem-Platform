@@ -32,21 +32,37 @@ from app.experts.schemas import (
 )
 from app.experts.service import ExpertService
 from app.identity.models import User
+from app.platform_admin.billing import PlatformAdminBillingService
 from app.platform_admin.dependencies import (
     require_platform_admin,
     require_platform_admin_host,
 )
 from app.platform_admin.schemas import (
+    PlatformCreditGrantRequest,
+    PlatformCreditGrantResponse,
+    PlatformCreditHistoryResponse,
+    PlatformEntitlementCatalogResponse,
     PlatformMeResponse,
+    PlatformPlanCreateRequest,
+    PlatformPlanDetailOut,
+    PlatformPlanLifecycleRequest,
+    PlatformPlanListResponse,
+    PlatformPlanUpdateRequest,
+    PlatformSubscriptionAssignRequest,
+    PlatformSubscriptionDetailOut,
+    PlatformSubscriptionHistoryResponse,
     PlatformUserDetailOut,
     PlatformUserDisableRequest,
     PlatformUserLifecycleRequest,
     PlatformUserListResponse,
+    PlatformWorkspaceCreditsOut,
     PlatformWorkspaceDetailOut,
     PlatformWorkspaceEnableRequest,
+    PlatformWorkspaceEntitlementsOut,
     PlatformWorkspaceLifecycleRequest,
     PlatformWorkspaceListResponse,
     PlatformWorkspaceMembersResponse,
+    PlatformWorkspaceUsageOut,
 )
 from app.platform_admin.service import PlatformAdminService
 from app.worker.tasks import enqueue_ingest
@@ -205,6 +221,209 @@ def enable_platform_user(
 ) -> PlatformUserDetailOut:
     return PlatformAdminService(db).enable_user(
         actor=user, user_id=user_id, reason=body.reason
+    )
+
+
+# --- Phase 12C: Plans / Workspace billing / Credits ---
+
+
+@router.get("/entitlement-catalog", response_model=PlatformEntitlementCatalogResponse)
+def platform_entitlement_catalog(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformEntitlementCatalogResponse:
+    return PlatformAdminBillingService(db).entitlement_catalog(actor=user)
+
+
+@router.get("/plans", response_model=PlatformPlanListResponse)
+def list_platform_plans(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    status: str | None = Query(default=None, max_length=32),
+    currency: str | None = Query(default=None, max_length=3),
+) -> PlatformPlanListResponse:
+    return PlatformAdminBillingService(db).list_plans(
+        actor=user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        status=status,
+        currency=currency,
+    )
+
+
+@router.post("/plans", response_model=PlatformPlanDetailOut, status_code=201)
+def create_platform_plan(
+    body: PlatformPlanCreateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPlanDetailOut:
+    return PlatformAdminBillingService(db).create_plan(actor=user, body=body)
+
+
+@router.get("/plans/{plan_id}", response_model=PlatformPlanDetailOut)
+def get_platform_plan(
+    plan_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPlanDetailOut:
+    return PlatformAdminBillingService(db).get_plan(actor=user, plan_id=plan_id)
+
+
+@router.patch("/plans/{plan_id}", response_model=PlatformPlanDetailOut)
+def update_platform_plan(
+    plan_id: uuid.UUID,
+    body: PlatformPlanUpdateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPlanDetailOut:
+    return PlatformAdminBillingService(db).update_plan(
+        actor=user, plan_id=plan_id, body=body
+    )
+
+
+@router.post("/plans/{plan_id}/activate", response_model=PlatformPlanDetailOut)
+def activate_platform_plan(
+    plan_id: uuid.UUID,
+    body: PlatformPlanLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPlanDetailOut:
+    return PlatformAdminBillingService(db).activate_plan(
+        actor=user, plan_id=plan_id, body=body
+    )
+
+
+@router.post("/plans/{plan_id}/deactivate", response_model=PlatformPlanDetailOut)
+def deactivate_platform_plan(
+    plan_id: uuid.UUID,
+    body: PlatformPlanLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPlanDetailOut:
+    return PlatformAdminBillingService(db).deactivate_plan(
+        actor=user, plan_id=plan_id, body=body
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/subscription",
+    response_model=PlatformSubscriptionDetailOut | None,
+)
+def get_platform_workspace_subscription(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformSubscriptionDetailOut | None:
+    return PlatformAdminBillingService(db).get_workspace_subscription(
+        actor=user, workspace_id=workspace_id
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/subscriptions",
+    response_model=PlatformSubscriptionHistoryResponse,
+)
+def list_platform_workspace_subscriptions(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PlatformSubscriptionHistoryResponse:
+    return PlatformAdminBillingService(db).list_workspace_subscriptions(
+        actor=user, workspace_id=workspace_id, limit=limit, offset=offset
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/subscription/assign",
+    response_model=PlatformSubscriptionDetailOut,
+)
+def assign_platform_workspace_subscription(
+    workspace_id: uuid.UUID,
+    body: PlatformSubscriptionAssignRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformSubscriptionDetailOut:
+    return PlatformAdminBillingService(db).assign_workspace_subscription(
+        actor=user, workspace_id=workspace_id, body=body
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/entitlements",
+    response_model=PlatformWorkspaceEntitlementsOut,
+)
+def get_platform_workspace_entitlements(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceEntitlementsOut:
+    return PlatformAdminBillingService(db).get_workspace_entitlements(
+        actor=user, workspace_id=workspace_id
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/usage",
+    response_model=PlatformWorkspaceUsageOut,
+)
+def get_platform_workspace_usage(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceUsageOut:
+    return PlatformAdminBillingService(db).get_workspace_usage(
+        actor=user, workspace_id=workspace_id
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/credits",
+    response_model=PlatformWorkspaceCreditsOut,
+)
+def get_platform_workspace_credits(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceCreditsOut:
+    return PlatformAdminBillingService(db).get_workspace_credits(
+        actor=user, workspace_id=workspace_id
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/credits/history",
+    response_model=PlatformCreditHistoryResponse,
+)
+def list_platform_workspace_credit_history(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PlatformCreditHistoryResponse:
+    return PlatformAdminBillingService(db).list_workspace_credit_history(
+        actor=user, workspace_id=workspace_id, limit=limit, offset=offset
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/credits/grant",
+    response_model=PlatformCreditGrantResponse,
+)
+def grant_platform_workspace_credits(
+    workspace_id: uuid.UUID,
+    body: PlatformCreditGrantRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformCreditGrantResponse:
+    return PlatformAdminBillingService(db).grant_workspace_credits(
+        actor=user, workspace_id=workspace_id, body=body
     )
 
 

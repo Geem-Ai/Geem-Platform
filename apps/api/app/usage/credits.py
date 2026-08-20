@@ -124,6 +124,14 @@ class CreditService:
             workspace_id, limit=limit, offset=offset, entry_types=entry_types
         )
 
+    def count_ledger(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        entry_types: list[str] | None = None,
+    ) -> int:
+        return self.repo.count_ledger(workspace_id, entry_types=entry_types)
+
 
 def _signed_delta(entry_type: CreditLedgerEntryType, amount: int) -> int:
     if entry_type in {CreditLedgerEntryType.GRANT, CreditLedgerEntryType.RELEASE}:

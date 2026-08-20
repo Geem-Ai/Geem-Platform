@@ -20,7 +20,7 @@ from app.billing.models import (
     Subscription,
     SubscriptionStatus,
 )
-from app.billing.money import normalize_currency, quantize_money
+from app.billing.money import normalize_currency, parse_decimal_money, quantize_money
 from app.billing.repository import CreditPackRepository, PlanRepository, SubscriptionRepository
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -130,13 +130,19 @@ class PlanService:
         price_amount: Decimal | int | float | str | None = None,
         currency: str = "SAR",
     ) -> Plan:
-        """Manual catalog insert (tests / later platform admin)."""
+        """Manual catalog insert (tests / platform admin)."""
         clean = code.strip().lower()
         if not clean or len(clean) > 64:
             raise AppError(ErrorCategory.VALIDATION, "Plan code is required (max 64).")
         if self.plans.get_by_code(clean) is not None:
-            raise AppError(ErrorCategory.CONFLICT, "Plan code already exists.")
-        price = quantize_money(price_amount) if price_amount is not None else None
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Plan code already exists.",
+                details={"code": clean},
+            )
+        price = parse_decimal_money(price_amount) if price_amount is not None else None
+        if price is not None and price < 0:
+            raise AppError(ErrorCategory.VALIDATION, "Plan price must be non-negative.")
         plan = Plan(
             code=clean,
             name=name.strip(),
@@ -152,6 +158,60 @@ class PlanService:
         self.db.flush()
         return self.plans.get_by_id(plan.id) or plan
 
+    def update_plan(
+        self,
+        plan_id: uuid.UUID,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        price_amount: Decimal | int | float | str | None = None,
+        clear_price: bool = False,
+        currency: str | None = None,
+        entitlements: dict[str, int | bool | str] | None = None,
+        update_price: bool = False,
+    ) -> Plan:
+        """Update plan metadata and/or entitlement values."""
+        plan = self.plans.get_by_id(plan_id)
+        if plan is None:
+            raise AppError(ErrorCategory.NOT_FOUND, "Plan not found.")
+        if name is not None:
+            clean_name = name.strip()
+            if not clean_name or len(clean_name) > 200:
+                raise AppError(ErrorCategory.VALIDATION, "Plan name is required (max 200).")
+            plan.name = clean_name
+        if description is not None:
+            plan.description = description.strip() or None
+        if clear_price:
+            plan.price_amount = None
+        elif update_price:
+            price = parse_decimal_money(price_amount) if price_amount is not None else None
+            if price is not None and price < 0:
+                raise AppError(ErrorCategory.VALIDATION, "Plan price must be non-negative.")
+            plan.price_amount = price
+        if currency is not None:
+            plan.currency = normalize_currency(currency)
+        if entitlements is not None:
+            for key, value in entitlements.items():
+                self.set_entitlement(plan.id, key, value)
+            self._invalidate_subscriber_entitlement_caches(plan.id)
+        self.db.flush()
+        return self.plans.get_by_id(plan.id) or plan
+
+    def set_plan_status(self, plan_id: uuid.UUID, status: PlanStatus | str) -> Plan:
+        plan = self.plans.get_by_id(plan_id)
+        if plan is None:
+            raise AppError(ErrorCategory.NOT_FOUND, "Plan not found.")
+        parsed = status if isinstance(status, PlanStatus) else PlanStatus(status)
+        plan.status = parsed.value
+        self.db.flush()
+        return self.plans.get_by_id(plan.id) or plan
+
+    def archive_plan(self, plan_id: uuid.UUID) -> Plan:
+        return self.set_plan_status(plan_id, PlanStatus.ARCHIVED)
+
+    def activate_plan(self, plan_id: uuid.UUID) -> Plan:
+        return self.set_plan_status(plan_id, PlanStatus.ACTIVE)
+
     def set_entitlement(
         self,
         plan_id: uuid.UUID,
@@ -160,19 +220,35 @@ class PlanService:
         *,
         value_type: EntitlementValueType | None = None,
     ) -> PlanEntitlement:
+        from app.entitlements.keys import parse_entitlement_key
+
+        try:
+            parsed_key = parse_entitlement_key(key)
+        except ValueError as exc:
+            raise AppError(
+                ErrorCategory.ENTITLEMENT_INVALID,
+                f"Unknown entitlement key: {key}",
+                details={"key": key},
+            ) from exc
         if isinstance(value, bool):
             vtype = value_type or EntitlementValueType.BOOLEAN
         elif isinstance(value, int):
             vtype = value_type or EntitlementValueType.INTEGER
+            if value < 0:
+                raise AppError(
+                    ErrorCategory.ENTITLEMENT_INVALID,
+                    f"Entitlement '{parsed_key.value}' must be non-negative.",
+                    details={"key": parsed_key.value},
+                )
         else:
             vtype = value_type or EntitlementValueType.STRING
         raw = serialize_entitlement_value(value, vtype)
-        existing = self.plans.get_entitlement(plan_id, key)
+        existing = self.plans.get_entitlement(plan_id, parsed_key.value)
         if existing is None:
             return self.plans.create_entitlement(
                 PlanEntitlement(
                     plan_id=plan_id,
-                    key=key,
+                    key=parsed_key.value,
                     value=raw,
                     value_type=vtype.value,
                 )
@@ -181,6 +257,12 @@ class PlanService:
         existing.value_type = vtype.value
         self.db.flush()
         return existing
+
+    def _invalidate_subscriber_entitlement_caches(self, plan_id: uuid.UUID) -> None:
+        from app.entitlements.cache import invalidate_entitlements
+
+        for workspace_id in self.plans.list_active_subscriber_workspace_ids(plan_id):
+            invalidate_entitlements(workspace_id, settings=self.settings)
 
 
 class SubscriptionService:

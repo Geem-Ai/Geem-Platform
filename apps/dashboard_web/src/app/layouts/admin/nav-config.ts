@@ -81,14 +81,12 @@ export const adminNav: AdminNavItem[] = [
         labelKey: 'nav.plans',
         to: '/plans',
         icon: Wallet,
-        phase: '12C',
       },
       {
         id: 'credits',
         labelKey: 'nav.credits',
         to: '/credits',
         icon: Coins,
-        phase: '12C',
       },
       {
         id: 'app-store',
