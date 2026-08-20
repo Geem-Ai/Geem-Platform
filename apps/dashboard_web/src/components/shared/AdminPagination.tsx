@@ -38,19 +38,19 @@ export function AdminPagination({
           total: total.toLocaleString(i18n.language),
         })}
       </p>
-      <div className="flex flex-nowrap items-center gap-2">
+      <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-nowrap">
         <Button
           variant="outline"
           size="sm"
           disabled={!hasPrev}
           onClick={() => onPageChange(Math.max(0, offset - limit))}
           data-testid={`${testId}-prev`}
-          className="inline-flex items-center gap-1.5"
+          className="w-full sm:w-auto"
         >
           <ChevronLeft className="size-3.5 rtl:rotate-180" aria-hidden />
           <span>{t('common.previous')}</span>
         </Button>
-        <span className="text-xs text-muted-foreground tabular-nums px-1 whitespace-nowrap">
+        <span className="order-first col-span-2 px-1 text-center text-xs tabular-nums whitespace-nowrap text-muted-foreground sm:order-none sm:col-span-1">
           {t('common.page', { page, pages: totalPages })}
         </span>
         <Button
@@ -59,7 +59,7 @@ export function AdminPagination({
           disabled={!hasNext}
           onClick={() => onPageChange(offset + limit)}
           data-testid={`${testId}-next`}
-          className="inline-flex items-center gap-1.5"
+          className="w-full sm:w-auto"
         >
           <span>{t('common.next')}</span>
           <ChevronRight className="size-3.5 rtl:rotate-180" aria-hidden />

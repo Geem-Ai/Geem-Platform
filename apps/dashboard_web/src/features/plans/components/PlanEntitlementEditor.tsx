@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { Gauge, HardDrive, Sparkles, UsersRound, type LucideIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { bytesToGbInput, entitlementValueAsNumber, gbInputToBytes } from '@/lib/format';
 import type { PlatformEntitlementCatalogItem } from '@/services/api/types';
 
@@ -67,28 +69,66 @@ export function PlanEntitlementEditor({
 }: PlanEntitlementEditorProps) {
   const { t } = useTranslation();
 
+  if (catalog.length === 0) {
+    return (
+      <div
+        className="flex min-h-28 items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-5 py-8 text-center text-sm text-muted-foreground"
+        data-testid={testIdPrefix}
+      >
+        {t('plans.noEntitlements')}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3" data-testid={testIdPrefix}>
+    <div className="grid gap-3 sm:grid-cols-2" data-testid={testIdPrefix}>
       {catalog.map((item) => {
         const isStorage = item.key === 'storage_bytes';
         const label = t(`entitlements.${item.key}`, { defaultValue: item.key });
         const unitHint = isStorage
           ? t('entitlements.storageInputHint')
           : t(`entitlements.units.${item.unit}`, { defaultValue: item.unit });
+        const Icon = entitlementIcon(item.key);
+        const hintId = `${testIdPrefix}-${item.key}-hint`;
         return (
-          <div key={item.key} className="space-y-1.5">
-            <Label htmlFor={`${testIdPrefix}-${item.key}`} className="text-sm">
-              {label}
-              <span className="ms-2 text-xs font-normal text-muted-foreground">{unitHint}</span>
-            </Label>
+          <div
+            key={item.key}
+            className={cn(
+              'rounded-xl border border-border bg-muted/15 p-4 transition-colors',
+              'focus-within:border-primary/40 focus-within:bg-primary/[0.025] focus-within:ring-3 focus-within:ring-primary/8',
+              disabled && 'opacity-65',
+            )}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0 grow">
+                <Label
+                  htmlFor={`${testIdPrefix}-${item.key}`}
+                  className="block truncate text-sm font-medium"
+                >
+                  {label}
+                </Label>
+                <p id={hintId} className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {unitHint}
+                </p>
+              </div>
+            </div>
             <Input
               id={`${testIdPrefix}-${item.key}`}
+              name={item.key}
               type="number"
+              inputMode={isStorage ? 'decimal' : 'numeric'}
               min={0}
               step={isStorage ? 'any' : 1}
+              required
+              dir="ltr"
+              aria-describedby={hintId}
               value={values[item.key] ?? ''}
               disabled={disabled}
               onChange={(e) => onChange({ ...values, [item.key]: e.target.value })}
+              className="mt-4 bg-background font-mono tabular-nums"
               data-testid={`${testIdPrefix}-${item.key}`}
             />
           </div>
@@ -96,4 +136,11 @@ export function PlanEntitlementEditor({
       })}
     </div>
   );
+}
+
+function entitlementIcon(key: string): LucideIcon {
+  if (key === 'storage_bytes') return HardDrive;
+  if (key === 'experts_limit') return UsersRound;
+  if (key.startsWith('ai_tokens_')) return Sparkles;
+  return Gauge;
 }

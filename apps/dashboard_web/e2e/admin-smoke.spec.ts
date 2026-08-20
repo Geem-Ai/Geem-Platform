@@ -515,6 +515,15 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
       element.scrollWidth <= element.clientWidth
     )),
   ).toBe(true);
+  await page.getByTestId('credits-open-account').click();
+  await expect(page.getByTestId('credit-detail-page')).toBeVisible();
+  await expect(page.getByTestId('credit-detail-summary')).toBeVisible();
+  await expect(page.getByTestId('credit-detail-history-list')).toBeVisible();
+  expect(
+    await page.getByTestId('credit-detail-history-list').evaluate((element) => (
+      element.scrollWidth <= element.clientWidth
+    )),
+  ).toBe(true);
 
   // Users smoke
   await page.getByTestId('nav-users').click();
