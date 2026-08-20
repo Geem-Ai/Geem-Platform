@@ -40,7 +40,7 @@ def test_seed_demo_catalog_is_idempotent(db) -> None:
     first_plans, first_packs = seed_demo_catalog(db)
     assert {plan.code for plan in first_plans} == {spec.code for spec in DEMO_PLANS}
     assert {pack.code for pack in first_packs} == {spec.code for spec in DEMO_CREDIT_PACKS}
-    starter = next(plan for plan in first_plans if plan.code == "demo_starter")
+    starter = next(plan for plan in first_plans if plan.code == "starter")
     assert starter.price_amount == Decimal("49.00")
     assert starter.currency == "SAR"
     keys = {row.key for row in starter.entitlements}
@@ -55,14 +55,14 @@ def test_seed_demo_catalog_is_idempotent(db) -> None:
 
 def test_seed_demo_catalog_does_not_overwrite_tuned_values(db) -> None:
     plans, packs = seed_demo_catalog(db)
-    starter = next(plan for plan in plans if plan.code == "demo_starter")
+    starter = next(plan for plan in plans if plan.code == "starter")
     starter.price_amount = Decimal("12.00")
     starter.name = "Tuned starter"
     packs[0].credits = 42
     db.flush()
 
     again, packs_again = seed_demo_catalog(db)
-    reloaded = next(plan for plan in again if plan.code == "demo_starter")
+    reloaded = next(plan for plan in again if plan.code == "starter")
     assert reloaded.price_amount == Decimal("12.00")
     assert reloaded.name == "Tuned starter"
     assert packs_again[0].credits == 42
@@ -73,7 +73,7 @@ def test_demo_plans_are_purchasable_and_bootstrap_is_not(db) -> None:
     seed_demo_catalog(db)
     listed = BillingService(db).list_purchasable_plans()
     codes = [plan.code for plan in listed]
-    assert codes == ["demo_starter", "demo_pro", "demo_business"]
+    assert codes == ["starter", "pro", "business"]
     packs = BillingService(db).list_active_credit_packs()
     assert [pack.code for pack in packs] == [
         "demo_credits_1k",
@@ -169,7 +169,7 @@ def test_demo_catalog_http_list(client, register_user, db) -> None:
     plans = client.get("/api/billing/plans", headers=headers)
     assert plans.status_code == 200, plans.text
     codes = [row["code"] for row in plans.json()]
-    assert codes == ["demo_starter", "demo_pro", "demo_business"]
+    assert codes == ["starter", "pro", "business"]
     assert "bootstrap_dev" not in codes
     packs = client.get("/api/billing/credit-packs", headers=headers)
     assert packs.status_code == 200, packs.text

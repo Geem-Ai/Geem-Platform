@@ -48,9 +48,16 @@ class DemoPackSpec:
     price_amount: str
 
 
+# Legacy codes → current codes (rename in place so re-seed does not duplicate rows).
+DEMO_PLAN_CODE_ALIASES: dict[str, str] = {
+    "demo_starter": "starter",
+    "demo_pro": "pro",
+    "demo_business": "business",
+}
+
 DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
     DemoPlanSpec(
-        code="demo_starter",
+        code="starter",
         name="Starter (demo)",
         description="Small demo workspace: a few Experts and modest AI token limits.",
         price_amount="49.00",
@@ -64,7 +71,7 @@ DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
         },
     ),
     DemoPlanSpec(
-        code="demo_pro",
+        code="pro",
         name="Pro (demo)",
         description="Larger demo workspace for everyday billing and quota testing.",
         price_amount="149.00",
@@ -78,7 +85,7 @@ DEMO_PLANS: tuple[DemoPlanSpec, ...] = (
         },
     ),
     DemoPlanSpec(
-        code="demo_business",
+        code="business",
         name="Business (demo)",
         description="Highest demo limits so you can compare plan switches after checkout.",
         price_amount="399.00",
@@ -151,6 +158,17 @@ def ensure_local_demo_catalog(
 def _ensure_demo_plan(db: Session, settings: Settings, spec: DemoPlanSpec) -> Plan:
     svc = PlanService(db, settings)
     plan = svc.plans.get_by_code(spec.code)
+    if plan is None:
+        for legacy_code, current_code in DEMO_PLAN_CODE_ALIASES.items():
+            if current_code != spec.code:
+                continue
+            legacy = svc.plans.get_by_code(legacy_code)
+            if legacy is None:
+                continue
+            legacy.code = spec.code
+            db.flush()
+            plan = legacy
+            break
     if plan is None:
         try:
             with db.begin_nested():
