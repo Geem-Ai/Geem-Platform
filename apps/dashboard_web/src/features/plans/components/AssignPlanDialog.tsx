@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
@@ -42,6 +42,7 @@ export function AssignPlanDialog({
   onAssigned,
 }: AssignPlanDialogProps) {
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const [planId, setPlanId] = useState('');
   const [reason, setReason] = useState('');
 
@@ -78,11 +79,12 @@ export function AssignPlanDialog({
   const mutation = useMutation({
     mutationFn: () =>
       assignWorkspaceSubscription(workspaceId, { plan_id: planId, reason: reason.trim() }),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('billing.assignSuccess'));
       setPlanId('');
       setReason('');
       onOpenChange(false);
+      await queryClient.invalidateQueries({ queryKey: ['platform', 'plans'] });
       onAssigned();
     },
     onError: (err) => toast.error(getErrorMessage(err, t)),

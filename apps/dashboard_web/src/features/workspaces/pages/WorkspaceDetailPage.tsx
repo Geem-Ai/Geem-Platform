@@ -460,7 +460,11 @@ export function WorkspaceDetailPage() {
         </aside>
       </div>
 
-      <WorkspaceBillingSection workspaceId={workspaceId} isSystem={isSystem} />
+      <WorkspaceBillingSection
+        workspaceId={workspaceId}
+        workspaceName={workspace.name}
+        isSystem={isSystem}
+      />
 
       <LifecycleDialog
         open={dialog === 'disable'}

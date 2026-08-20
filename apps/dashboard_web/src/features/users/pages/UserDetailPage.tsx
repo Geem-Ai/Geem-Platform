@@ -537,11 +537,8 @@ function UserDetailSkeleton() {
           <div key={index} className="h-28 animate-pulse rounded-xl bg-muted" />
         ))}
       </div>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
-        <div className="space-y-5">
-          <div className="h-56 animate-pulse rounded-xl bg-muted" />
-          <div className="h-64 animate-pulse rounded-xl bg-muted" />
-        </div>
+      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+        <div className="h-64 animate-pulse rounded-xl bg-muted" />
         <div className="h-64 animate-pulse rounded-xl bg-muted" />
       </div>
       <div className="h-64 animate-pulse rounded-xl bg-muted" />

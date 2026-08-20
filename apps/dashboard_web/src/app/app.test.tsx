@@ -377,6 +377,25 @@ describe('Platform Admin app', () => {
   });
 
   it('renders Plans list from Platform Admin API', async () => {
+    const plans = Array.from({ length: 101 }, (_, index) => ({
+      id: `plan-${index + 1}`,
+      code: index === 0 ? 'free' : `plan-${index + 1}`,
+      name: index === 0 ? 'Free' : `Plan ${index + 1}`,
+      description: null,
+      status: index === 100 ? 'archived' : 'active',
+      price_amount: null,
+      currency: 'SAR',
+      is_bootstrap: index === 0,
+      is_commercial: false,
+      subscriber_count: index === 0 ? 3 : 1,
+      entitlements: [
+        { key: 'experts_limit', value: 3, value_type: 'integer' },
+        { key: 'storage_bytes', value: 1073741824, value_type: 'integer' },
+      ],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }));
+
     installFetch(async (url) => {
       if (url.includes('/api/auth/refresh')) {
         return json({
@@ -394,30 +413,14 @@ describe('Platform Admin app', () => {
         });
       }
       if (url.includes('/api/platform/plans') && !url.includes('/plans/')) {
+        const requestUrl = new URL(url);
+        const limit = Number(requestUrl.searchParams.get('limit') ?? 25);
+        const offset = Number(requestUrl.searchParams.get('offset') ?? 0);
         return json({
-          items: [
-            {
-              id: 'plan-1',
-              code: 'free',
-              name: 'Free',
-              description: null,
-              status: 'active',
-              price_amount: null,
-              currency: 'SAR',
-              is_bootstrap: true,
-              is_commercial: false,
-              subscriber_count: 3,
-              entitlements: [
-                { key: 'experts_limit', value: 3, value_type: 'integer' },
-                { key: 'storage_bytes', value: 1073741824, value_type: 'integer' },
-              ],
-              created_at: '2026-01-01T00:00:00Z',
-              updated_at: '2026-01-01T00:00:00Z',
-            },
-          ],
-          total: 1,
-          limit: 25,
-          offset: 0,
+          items: plans.slice(offset, offset + limit),
+          total: plans.length,
+          limit,
+          offset,
         });
       }
       return json({}, 404);
@@ -428,6 +431,15 @@ describe('Platform Admin app', () => {
     await screen.findByTestId('overview-page');
     await user.click(screen.getByTestId('nav-plans'));
     expect(await screen.findByTestId('plans-page')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-inventory-summary')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('plan-stat-total')).toHaveTextContent('101');
+      expect(screen.getByTestId('plan-stat-active')).toHaveTextContent('100');
+      expect(screen.getByTestId('plan-stat-archived')).toHaveTextContent('1');
+      expect(screen.getByTestId('plan-stat-subscribers')).toHaveTextContent('103');
+    });
+    expect(screen.getByTestId('plan-results-count')).toHaveTextContent('101 matching');
+    expect(screen.getByText('Showing the full plan catalog.')).toBeInTheDocument();
     expect(screen.getByTestId('plans-list')).toBeInTheDocument();
     expect(screen.getByText('Free')).toBeInTheDocument();
     expect(screen.getByTestId('plan-bootstrap-badge')).toBeInTheDocument();
@@ -435,7 +447,34 @@ describe('Platform Admin app', () => {
   });
 
   it('renders Credits page and loads balance for selected workspace', async () => {
-    installFetch(async (url) => {
+    const grantRequests: Array<{ amount: number; reason: string; request_id: string }> = [];
+    const consumeEntry = {
+      id: 'credit-consume-1',
+      entry_type: 'consume',
+      amount: 75,
+      remaining_amount: null,
+      request_id: 'usage:request-1',
+      source_type: 'ai_usage',
+      source_id: 'usage-1',
+      reason: 'AI token usage',
+      created_at: '2026-01-02T12:00:00Z',
+    };
+    const firstPageWorkspaces = Array.from({ length: 25 }, (_, index) => ({
+      id: index === 0 ? 'ws-1' : `ws-${index + 1}`,
+      name: index === 0 ? 'Acme' : `Tenant ${index + 1}`,
+      slug: index === 0 ? 'acme' : `tenant-${index + 1}`,
+      kind: 'tenant',
+      status: 'active',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      members_count: 2,
+      experts_count: 1,
+      current_plan_code: 'free',
+      current_plan_name: 'Free',
+      subscription_status: 'active',
+    }));
+
+    installFetch(async (url, init) => {
       if (url.includes('/api/auth/refresh')) {
         return json({
           access_token: 'access',
@@ -452,22 +491,158 @@ describe('Platform Admin app', () => {
         });
       }
       if (url.includes('/api/platform/workspaces') && url.includes('credits/history')) {
-        return json({ items: [], total: 0, limit: 20, offset: 0 });
+        return json({ items: [consumeEntry], total: 1, limit: 20, offset: 0 });
+      }
+      if (url.endsWith('/api/platform/workspaces/ws-1/credits/grant') && init?.method === 'POST') {
+        const grantRequest = JSON.parse(String(init.body)) as {
+          amount: number;
+          reason: string;
+          request_id: string;
+        };
+        grantRequests.push(grantRequest);
+        return json({
+          workspace_id: 'ws-1',
+          balance: 1750,
+          entry: {
+            id: 'credit-grant-1',
+            entry_type: 'grant',
+            amount: 250,
+            remaining_amount: 250,
+            request_id: grantRequest.request_id,
+            source_type: 'platform_admin',
+            source_id: 'admin-1',
+            reason: 'Service recovery adjustment',
+            created_at: '2026-01-03T12:00:00Z',
+          },
+          idempotent_replay: false,
+        });
       }
       if (url.includes('/api/platform/workspaces/') && url.includes('/credits')) {
         return json({
           workspace_id: 'ws-1',
           balance: 1500,
-          recent: [],
+          recent: [consumeEntry],
         });
+      }
+      if (url.includes('/api/platform/workspaces')) {
+        const offset = Number(new URL(url).searchParams.get('offset') ?? 0);
+        return json({
+          items:
+            offset === 25
+              ? [
+                  {
+                    ...firstPageWorkspaces[0],
+                    id: 'ws-26',
+                    name: 'Beta',
+                    slug: 'beta',
+                  },
+                ]
+              : firstPageWorkspaces,
+          total: 26,
+          limit: 25,
+          offset,
+        });
+      }
+      return json({}, 404);
+    });
+
+    const user = userEvent.setup();
+    render(<AppProviders />);
+    await screen.findByTestId('overview-page');
+    await user.click(screen.getByTestId('nav-credits'));
+    expect(await screen.findByTestId('credits-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('credits-workspace-list')).toBeInTheDocument();
+    await user.selectOptions(screen.getByTestId('credits-workspaces-status'), 'active');
+    await waitFor(() => {
+      expect(screen.getByTestId('credits-workspace-count')).toHaveTextContent('26 matching');
+    });
+    expect(screen.getByText('Results reflect your search and status filters.')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('credits-workspaces-pagination-next'));
+    expect(await screen.findByText('Beta')).toBeInTheDocument();
+    await user.click(screen.getByTestId('credits-workspaces-pagination-prev'));
+    expect(await screen.findByText('Acme')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Acme'));
+    expect(await screen.findByTestId('credits-balance')).toHaveTextContent(/1[,.]?500|1500/);
+    const accountSummary = screen.getByTestId('credits-account-summary');
+    expect(accountSummary).toHaveTextContent('Credit balance');
+    expect(accountSummary).toHaveTextContent('Ledger entries');
+    expect(accountSummary).toHaveTextContent('Latest movement');
+    expect(accountSummary).toHaveTextContent('−75');
+    expect(accountSummary).toHaveTextContent('Current plan');
+    expect(accountSummary).toHaveTextContent('Free');
+
+    const ledgerRow = await screen.findByTestId('credits-history-row');
+    expect(ledgerRow).toHaveTextContent('Consumed');
+    expect(screen.getByTestId('credits-entry-amount')).toHaveTextContent('−75');
+    expect(ledgerRow).toHaveTextContent('AI token usage');
+
+    await user.click(screen.getByTestId('credits-grant-button'));
+    const grantDialog = await screen.findByTestId('grant-credits-dialog');
+    expect(grantDialog).toHaveTextContent('Acme');
+    expect(grantDialog).toHaveTextContent(/Current balance: 1[,.]?500 credits/);
+    await user.type(screen.getByTestId('grant-credits-amount'), '250');
+    await user.type(screen.getByTestId('grant-credits-reason'), 'Service recovery adjustment');
+    await user.click(screen.getByTestId('grant-credits-continue'));
+
+    const grantSummary = screen.getByTestId('grant-credits-summary');
+    expect(grantSummary).toHaveTextContent('+250');
+    expect(grantSummary).toHaveTextContent(/1[,.]?500|1500/);
+    expect(grantSummary).toHaveTextContent(/1[,.]?750|1750/);
+    expect(grantSummary).toHaveTextContent('Service recovery adjustment');
+    expect(screen.getByTestId('grant-credits-confirm')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('grant-credits-back'));
+    expect(screen.queryByTestId('grant-credits-summary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('grant-credits-amount')).toHaveValue(250);
+    expect(screen.getByTestId('grant-credits-reason')).toHaveValue(
+      'Service recovery adjustment',
+    );
+    expect(screen.queryByTestId('grant-credits-confirm')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('grant-credits-continue'));
+    await user.click(screen.getByTestId('grant-credits-confirm'));
+    await waitFor(() => {
+      expect(grantRequests[0]).toMatchObject({
+        amount: 250,
+        reason: 'Service recovery adjustment',
+      });
+    });
+    expect(grantRequests[0]?.request_id).toMatch(/^platform-credit-grant:/);
+    expect(screen.queryByTestId('grant-credits-dialog')).not.toBeInTheDocument();
+  });
+
+  it('blocks credit grants until the selected balance is verified', async () => {
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/credits/history')) {
+        return json({ items: [], total: 0, limit: 20, offset: 0 });
+      }
+      if (url.endsWith('/api/platform/workspaces/ws-balance-error/credits')) {
+        return json({ code: 'service_unavailable', message: 'Balance service unavailable' }, 503);
       }
       if (url.includes('/api/platform/workspaces')) {
         return json({
           items: [
             {
-              id: 'ws-1',
-              name: 'Acme',
-              slug: 'acme',
+              id: 'ws-balance-error',
+              name: 'Balance Error Workspace',
+              slug: 'balance-error',
               kind: 'tenant',
               status: 'active',
               created_at: '2026-01-01T00:00:00Z',
@@ -491,10 +666,14 @@ describe('Platform Admin app', () => {
     render(<AppProviders />);
     await screen.findByTestId('overview-page');
     await user.click(screen.getByTestId('nav-credits'));
-    expect(await screen.findByTestId('credits-page')).toBeInTheDocument();
-    expect(await screen.findByTestId('credits-workspace-list')).toBeInTheDocument();
-    await user.click(screen.getByText('Acme'));
-    expect(await screen.findByTestId('credits-balance')).toHaveTextContent(/1[,.]?500|1500/);
+    await user.type(screen.getByTestId('credits-workspaces-search'), 'balance error');
+    await user.click(await screen.findByText('Balance Error Workspace'));
+
+    expect(
+      await screen.findByTestId('credits-balance-error', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('credits-grant-button')).toBeDisabled();
+    expect(screen.queryByTestId('grant-credits-dialog')).not.toBeInTheDocument();
   });
 
   it('shows billing section on workspace detail', async () => {
