@@ -1,0 +1,53 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import ar from '@/locales/ar.json';
+import en from '@/locales/en.json';
+
+export const LOCALE_STORAGE_KEY = 'geem-admin-locale';
+export type AppLocale = 'en' | 'ar';
+export const DEFAULT_LOCALE: AppLocale = 'ar';
+
+export function getStoredLocale(): AppLocale {
+  if (typeof localStorage === 'undefined') return DEFAULT_LOCALE;
+  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+  return stored === 'en' ? 'en' : DEFAULT_LOCALE;
+}
+
+export function applyDocumentLocale(locale: AppLocale): void {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  }
+}
+
+void i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: en },
+    ar: { translation: ar },
+  },
+  lng: getStoredLocale(),
+  fallbackLng: DEFAULT_LOCALE,
+  interpolation: { escapeValue: false },
+});
+
+applyDocumentLocale(getStoredLocale());
+
+i18n.on('languageChanged', (lng) => {
+  applyDocumentLocale(lng === 'en' ? 'en' : DEFAULT_LOCALE);
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept('../locales/en.json', (mod) => {
+    if (mod?.default) {
+      i18n.addResourceBundle('en', 'translation', mod.default, true, true);
+    }
+  });
+  import.meta.hot.accept('../locales/ar.json', (mod) => {
+    if (mod?.default) {
+      i18n.addResourceBundle('ar', 'translation', mod.default, true, true);
+    }
+  });
+}
+
+export default i18n;

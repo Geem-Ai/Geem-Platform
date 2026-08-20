@@ -8,6 +8,7 @@
 #   cloudflared tunnel route dns geem-uat app-uat.geem.ai
 #   cloudflared tunnel route dns geem-uat api-uat.geem.ai
 #   cloudflared tunnel route dns geem-uat landpage-uat.geem.ai
+#   cloudflared tunnel route dns geem-uat admin-uat.geem.ai
 #
 # Do not route *.geem.ai here — production keeps tenant hosts.
 
@@ -30,4 +31,8 @@ ingress:
     service: http://landpage_web:4321
     originRequest:
       httpHostHeader: landpage-uat.geem.ai
+  - hostname: admin-uat.geem.ai
+    service: http://dashboard_web:5175
+    originRequest:
+      httpHostHeader: admin-uat.geem.ai
   - service: http_status:404

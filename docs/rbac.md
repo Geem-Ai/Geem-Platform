@@ -122,4 +122,4 @@ Membership PATCH body is `{ "role_id": "..." }`. Invitation create body is `{ "e
 
 ## Out of scope
 
-No ABAC, document ACLs, permission DSLs, deny rules, org hierarchy, SSO/SCIM, or Platform Admin RBAC. Phase 11 Hardening is separate.
+No ABAC, document ACLs, permission DSLs, deny rules, org hierarchy, SSO/SCIM, or Platform Admin RBAC. Workspace roles never grant Platform Admin access — that is `users.platform_role` only (`dashboard_web`, [platform-admin.md](./platform-admin.md)).

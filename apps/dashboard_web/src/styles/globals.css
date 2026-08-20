@@ -1,0 +1,822 @@
+/* Tailwind Core */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/** Dark Mode Variant **/
+@custom-variant dark (&:is(.dark *));
+@custom-variant light (&:not(.dark *));
+
+/** Colors — brand tokens from geem.ai (`--brand`, `--brand-2`) **/
+:root {
+  --brand: #0e2f44;
+  --brand-2: #214b68;
+  --brand-accent: #367d9e;
+  --background: var(--color-white);
+  --foreground: var(--color-zinc-950);
+  --card: var(--color-white);
+  --card-foreground: var(--color-zinc-950);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-zinc-950);
+  --primary: var(--brand);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-zinc-100);
+  --secondary-foreground: var(--color-zinc-900);
+  --muted: var(--color-zinc-100);
+  --muted-foreground: var(--color-zinc-500);
+  --accent: var(--color-zinc-100);
+  --accent-foreground: var(--color-zinc-900);
+  --destructive: var(--color-red-600);
+  --destructive-foreground: var(--color-white);
+  --chart-1: var(--brand);
+  --chart-2: var(--color-green-500);
+  --chart-3: var(--color-yellow-500);
+  --chart-4: var(--color-red-500);
+  --chart-5: var(--brand-accent);
+  --border: oklch(94% 0.004 286.32);
+  --input: var(--color-zinc-200);
+  --ring: var(--brand);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --brand: #367d9e;
+  --brand-2: #214b68;
+  --brand-accent: #6ab6d8;
+  --background: var(--color-zinc-950);
+  --foreground: var(--color-zinc-50);
+  --card: var(--color-zinc-950);
+  --card-foreground: var(--color-zinc-50);
+  --popover: var(--color-zinc-950);
+  --popover-foreground: var(--color-zinc-50);
+  --primary: var(--brand);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-zinc-800);
+  --secondary-foreground: var(--color-zinc-50);
+  --muted: var(--color-zinc-900);
+  --muted-foreground: var(--color-zinc-500);
+  --accent: var(--color-zinc-900);
+  --accent-foreground: var(--color-zinc-50);
+  --destructive: var(--color-red-600);
+  --destructive-foreground: var(--color-white);
+  --chart-1: var(--brand);
+  --chart-2: var(--color-green-500);
+  --chart-3: var(--color-yellow-500);
+  --chart-4: var(--color-red-500);
+  --chart-5: var(--brand-accent);
+  --border: var(--color-zinc-800);
+  --input: var(--color-zinc-800);
+  --ring: var(--brand);
+}
+
+@theme inline {
+  --font-sans:
+    'IBM Plex Sans Arabic', 'IBM Plex Sans', ui-sans-serif, system-ui,
+    sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-brand-accent: var(--brand-accent);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --text-2sm: 0.8125rem;
+  --text-2sm--line-height: calc(1.075 / 0.8125);
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(0.825 / 0.6875);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  *:focus-visible {
+    @apply outline-ring rounded-xs shadow-none outline-2 outline-offset-3 transition-none!;
+  }
+}
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--input);
+    border-radius: 5px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Arabic reads better with relaxed leading; tight tracking hurts glyphs */
+html[lang='ar'] {
+  line-height: 1.7;
+}
+
+html[lang='ar'] .tracking-tight,
+html[lang='ar'] .tracking-tighter {
+  letter-spacing: 0;
+}
+
+@utility container {
+  @apply mx-auto max-w-none px-4 lg:px-5;
+
+  @media (width >= --theme(--breakpoint-xl)) {
+    @apply max-w-(--breakpoint-xl);
+  }
+}
+
+@utility container-fluid {
+  @apply mx-auto w-full px-4 lg:px-5;
+}
+
+[data-slot='card-title'] {
+  @apply font-medium;
+}
+
+/* Expert card — moving AI stars (restrained orbits) */
+@keyframes ai-star-orbit-a {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(18%, -10%) rotate(8deg);
+  }
+  50% {
+    transform: translate(8%, 16%) rotate(-4deg);
+  }
+  75% {
+    transform: translate(-12%, 6%) rotate(6deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes ai-star-orbit-b {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(-22%, 18%) rotate(-12deg) scale(0.92);
+  }
+  66% {
+    transform: translate(10%, -16%) rotate(10deg) scale(1.05);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes ai-star-orbit-c {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  40% {
+    transform: translate(-16%, -20%) rotate(14deg);
+  }
+  70% {
+    transform: translate(20%, -4%) rotate(-8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+.ai-star {
+  transform-origin: center;
+  will-change: transform;
+}
+
+.ai-star-orbit-a {
+  animation: ai-star-orbit-a 5.5s ease-in-out infinite;
+}
+
+.ai-star-orbit-b {
+  animation: ai-star-orbit-b 4.2s ease-in-out infinite;
+}
+
+.ai-star-orbit-c {
+  animation: ai-star-orbit-c 6.2s ease-in-out infinite;
+}
+
+/* Generate-instructions sparkles — gentle pulse / soft glow */
+@keyframes ai-sparkle-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 4px color-mix(in oklab, var(--primary) 55%, transparent));
+  }
+}
+
+.ai-sparkle-pulse {
+  transform-origin: center;
+  will-change: transform, opacity, filter;
+  animation: ai-sparkle-pulse 2.4s ease-in-out infinite;
+}
+
+/* New Chat — Geem brand navy/teal gradient with slow shift */
+@keyframes new-chat-gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.new-chat-gradient {
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    90deg,
+    var(--brand),
+    var(--brand-2),
+    var(--brand-accent),
+    var(--brand-2),
+    var(--brand)
+  );
+  background-size: 200% 200%;
+  animation: new-chat-gradient-shift 5s ease-in-out infinite;
+  box-shadow: 0 12px 28px -14px var(--brand-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-star {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .ai-sparkle-pulse {
+    animation: none !important;
+    will-change: auto;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .new-chat-gradient {
+    animation: none;
+    background-position: 0% 50%;
+  }
+
+  .auth-brand-orb,
+  .auth-brand-light,
+  .auth-brand-panel,
+  .auth-brand-star,
+  .auth-form-card-glow,
+  .auth-form-icon,
+  .auth-form-icon::after,
+  .auth-mobile-aurora,
+  .auth-submit-button {
+    animation: none !important;
+  }
+
+  .auth-highlight-icon,
+  .auth-mobile-brand-mark,
+  .auth-submit-button {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Auth workspace — inset shell with the Geem glow kept as the visual signature */
+.auth-page-canvas {
+  background-image:
+    radial-gradient(
+      circle at 12% 12%,
+      color-mix(in oklab, var(--brand-accent) 12%, transparent) 0%,
+      transparent 26rem
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in oklab, var(--muted) 70%, var(--background)) 0%,
+      var(--background) 52%,
+      color-mix(in oklab, var(--brand) 5%, var(--background)) 100%
+    );
+}
+
+.dark .auth-page-canvas {
+  background-image:
+    radial-gradient(
+      circle at 12% 12%,
+      color-mix(in oklab, var(--brand-accent) 12%, transparent) 0%,
+      transparent 28rem
+    ),
+    linear-gradient(145deg, #09090b 0%, #111318 52%, #0c151b 100%);
+}
+
+.auth-workspace-window {
+  box-shadow:
+    0 30px 80px -34px rgb(14 47 68 / 0.28),
+    0 12px 28px -20px rgb(0 0 0 / 0.16);
+}
+
+.auth-form-pane {
+  isolation: isolate;
+  background-image: radial-gradient(
+    circle at 50% 44%,
+    color-mix(in oklab, var(--brand-accent) 5%, transparent) 0%,
+    transparent 25rem
+  );
+}
+
+.auth-form-pane::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--brand) 18%, transparent) 0.7px,
+    transparent 0.7px
+  );
+  background-size: 22px 22px;
+  opacity: 0.22;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 4%,
+    black 26%,
+    transparent 82%
+  );
+  mask-image: linear-gradient(to bottom, transparent 4%, black 26%, transparent 82%);
+}
+
+.auth-mobile-aurora {
+  position: fixed;
+  z-index: 0;
+  top: -9rem;
+  inset-inline-end: -8rem;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--brand-accent) 22%, transparent) 0%,
+    color-mix(in oklab, var(--brand) 10%, transparent) 42%,
+    transparent 70%
+  );
+  filter: blur(4px);
+  animation: auth-mobile-glow-drift 12s ease-in-out infinite;
+}
+
+@media (width >= 64rem) {
+  .auth-mobile-aurora {
+    display: none;
+  }
+}
+
+.auth-mobile-brand-mark {
+  box-shadow:
+    0 10px 30px -18px color-mix(in oklab, var(--brand) 65%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
+.auth-form-card {
+  box-shadow:
+    0 28px 70px -38px color-mix(in oklab, var(--brand) 48%, transparent),
+    0 18px 38px -28px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.7);
+}
+
+.dark .auth-form-card {
+  box-shadow:
+    0 34px 80px -38px rgb(54 125 158 / 0.28),
+    0 18px 38px -24px rgb(0 0 0 / 0.65),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.auth-form-card::after {
+  position: absolute;
+  top: 0;
+  inset-inline: 12%;
+  height: 1px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--brand-accent) 55%, transparent),
+    transparent
+  );
+}
+
+.auth-form-card-glow {
+  position: absolute;
+  top: -8rem;
+  inset-inline-end: -8rem;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--brand-accent) 13%, transparent) 0%,
+    transparent 68%
+  );
+  animation: auth-card-glow-drift 10s ease-in-out infinite;
+}
+
+.auth-form-icon {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 14px 32px -18px color-mix(in oklab, var(--brand) 70%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.45);
+  animation: auth-icon-breathe 5s ease-in-out infinite;
+}
+
+.auth-form-icon::after {
+  position: absolute;
+  inset: -55%;
+  content: '';
+  pointer-events: none;
+  background: conic-gradient(
+    from 90deg,
+    transparent,
+    color-mix(in oklab, var(--brand-accent) 20%, transparent),
+    transparent 34%
+  );
+  animation: auth-icon-turn 10s linear infinite;
+}
+
+.auth-form-icon > svg {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-input-wrapper {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-input-wrapper:hover {
+  border-color: color-mix(in oklab, var(--brand) 35%, var(--input));
+}
+
+.auth-submit-button {
+  height: 3rem;
+  border-radius: 0.75rem;
+  background-color: transparent !important;
+  background-image: linear-gradient(
+    105deg,
+    var(--brand),
+    var(--brand-2),
+    var(--brand-accent),
+    var(--brand-2),
+    var(--brand)
+  );
+  background-size: 220% 100%;
+  box-shadow: 0 14px 30px -16px color-mix(in oklab, var(--brand) 70%, transparent);
+  animation: auth-submit-shift 8s ease-in-out infinite;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.auth-submit-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px -16px color-mix(in oklab, var(--brand) 80%, transparent);
+}
+
+.dark .auth-submit-button {
+  background-image: linear-gradient(
+    105deg,
+    #0e2f44,
+    #214b68,
+    #2f6c8a,
+    #214b68,
+    #0e2f44
+  );
+}
+
+/* The navy wall remains theme-independent so Geem's identity stays consistent. */
+.auth-brand-panel {
+  background-color: #0e2f44;
+  background-image:
+    radial-gradient(circle at 12% 88%, rgb(106 182 216 / 0.16), transparent 34%),
+    linear-gradient(
+      125deg,
+      #0e2f44 0%,
+      #214b68 42%,
+      #367d9e 78%,
+      #214b68 100%
+    );
+  background-size: 140% 140%, 180% 180%;
+  animation: auth-brand-wash 18s ease-in-out infinite;
+}
+
+.auth-brand-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size: 54px 54px;
+  -webkit-mask-image: radial-gradient(circle at 55% 56%, black, transparent 72%);
+  mask-image: radial-gradient(circle at 55% 56%, black, transparent 72%);
+  opacity: 0.65;
+}
+
+.auth-brand-light,
+.auth-brand-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.auth-brand-light {
+  top: -8rem;
+  inset-inline-end: -6rem;
+  width: 28rem;
+  height: 28rem;
+  background: radial-gradient(
+    circle,
+    rgb(106 182 216 / 0.7) 0%,
+    rgb(54 125 158 / 0.35) 42%,
+    transparent 70%
+  );
+  filter: blur(8px);
+  opacity: 0.85;
+  animation: auth-light-drift 12s ease-in-out infinite;
+}
+
+.auth-brand-orb {
+  filter: blur(48px);
+}
+
+.auth-brand-orb-a {
+  top: 18%;
+  inset-inline-end: -3rem;
+  width: 16rem;
+  height: 16rem;
+  background: #6ab6d8;
+  opacity: 0.45;
+  animation: auth-orb-drift 14s ease-in-out infinite;
+}
+
+.auth-brand-orb-b {
+  bottom: 6%;
+  inset-inline-start: -5rem;
+  width: 18rem;
+  height: 18rem;
+  background: color-mix(in srgb, white 35%, #214b68);
+  opacity: 0.35;
+  animation: auth-orb-drift 18s ease-in-out infinite reverse;
+}
+
+.auth-brand-mark {
+  box-shadow:
+    0 16px 36px -20px rgb(106 182 216 / 0.8),
+    inset 0 1px 0 rgb(255 255 255 / 0.22);
+}
+
+.auth-brand-preview {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 26px 70px -32px rgb(0 0 0 / 0.58),
+    inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+
+.auth-brand-preview::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.12),
+    transparent 32%,
+    transparent 70%,
+    rgb(106 182 216 / 0.1)
+  );
+}
+
+.auth-brand-preview > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand-star {
+  position: absolute;
+  z-index: 1;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: white;
+  box-shadow:
+    0 0 8px rgb(255 255 255 / 0.9),
+    0 0 20px rgb(106 182 216 / 0.75);
+  animation: auth-star-twinkle 3.8s ease-in-out infinite;
+}
+
+.auth-brand-star-a {
+  top: 15%;
+  inset-inline-end: 14%;
+}
+
+.auth-brand-star-b {
+  top: 43%;
+  inset-inline-start: 8%;
+  width: 3px;
+  height: 3px;
+  animation-delay: -1.3s;
+}
+
+.auth-brand-star-c {
+  bottom: 18%;
+  inset-inline-end: 10%;
+  width: 5px;
+  height: 5px;
+  animation-delay: -2.4s;
+}
+
+@keyframes auth-brand-wash {
+  0%,
+  100% {
+    background-position: 0% 40%;
+  }
+  50% {
+    background-position: 80% 60%;
+  }
+}
+
+@keyframes auth-mobile-glow-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-8%, 10%) scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes auth-card-glow-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-14%, 18%) scale(1.14);
+  }
+}
+
+@keyframes auth-icon-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 14px 32px -18px color-mix(in oklab, var(--brand) 70%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.45);
+  }
+  50% {
+    box-shadow:
+      0 18px 38px -16px color-mix(in oklab, var(--brand-accent) 75%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.45);
+  }
+}
+
+@keyframes auth-icon-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes auth-submit-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes auth-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes auth-light-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.72;
+  }
+  35% {
+    transform: translate(-22%, 28%) scale(1.18);
+    opacity: 1;
+  }
+  65% {
+    transform: translate(10%, 46%) scale(0.9);
+    opacity: 0.6;
+  }
+}
+
+@keyframes auth-orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(14%, -18%) scale(1.12);
+  }
+}
+
+@media (width >= 64rem) and (height < 58rem) {
+  .auth-brand-panel {
+    padding-block: 1.75rem;
+  }
+
+  .auth-brand-story {
+    padding-block: 1.75rem;
+  }
+
+  .auth-brand-story h2 {
+    font-size: 2rem;
+  }
+
+  .auth-brand-preview {
+    margin-top: 1.25rem;
+    padding: 1rem;
+  }
+
+  .auth-brand-story > ul {
+    display: none;
+  }
+}
+
+/* Chat voice recording — waveform bars */
+@keyframes voice-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-voice-bar {
+  transform-origin: center;
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-voice-bar {
+    animation: none;
+    opacity: 0.7;
+  }
+}

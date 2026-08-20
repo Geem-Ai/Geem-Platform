@@ -36,7 +36,7 @@ Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.curso
 | `apps/api` | FastAPI + Celery |
 | `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
 | `apps/web` | Legacy MVP UI (port **5173**) — keep runnable; not the product |
-| `apps/dashboard_web` | Platform Admin — placeholder only |
+| `apps/dashboard_web` | Platform Admin SPA (port **5175**; UAT `admin-uat.geem.ai`) |
 | `apps/landpage_web` | Marketing — placeholder only |
 | `infra/docker-compose.yml` | Local full stack |
 
@@ -73,7 +73,7 @@ docker compose exec api python -m app.identity.bootstrap
 
 Local billing checkout uses the **Noop** gateway when `APP_ENV=local` / `test`. ClickPay credentials are optional until a ClickPay config is enabled.
 
-Tenant-subdomain DX (`*.geem.dm`), Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai` / `landpage-uat.geem.ai`), and host-run API/UI are documented in [development.md](docs/development.md).
+Tenant-subdomain DX (`*.geem.dm`), Cloudflare Tunnel UAT (`app-uat.geem.ai` / `api-uat.geem.ai` / `landpage-uat.geem.ai` / `admin-uat.geem.ai`), and host-run API/UI are documented in [development.md](docs/development.md).
 
 ## Product flow
 
