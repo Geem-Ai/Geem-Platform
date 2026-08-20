@@ -57,7 +57,7 @@ isProject: false
 | Public site / brand domain | [geem.ai](https://geem.ai) |
 | Official avatar | [https://geem.ai/assets/geem-avatar.webp](https://geem.ai/assets/geem-avatar.webp) |
 | Avatar character | Chibi-style figure in ghutra/agal + thobe with stacked **Ge** / **em** chest mark; friendly Arabic-first assistant persona |
-| Repo | [Mohamkh93/Geem](https://github.com/Mohamkh93/Geem); product-facing strings, titles, and packages use **Geem** |
+| Repo | [Geem-Ai/Geem-Platform](https://github.com/Geem-Ai/Geem-Platform); product-facing strings, titles, and packages use **Geem** |
 
 **Branding rules for UI:**
 - Replace Metronic demo logos (`logo-34.svg`, mini-logo, fake avatars) with Geem brand assets in `apps/workspace_web`.

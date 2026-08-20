@@ -2,7 +2,7 @@
 
 Arabic-first AI workspace. Tenants create **Experts**, attach knowledge (PDF / TXT / Markdown), and chat with grounded answers and citations.
 
-Product-facing names, OpenAPI title, and UI strings use **Geem**. Brand: [geem.ai](https://geem.ai). GitHub: [Mohamkh93/Geem](https://github.com/Mohamkh93/Geem).
+Product-facing names, OpenAPI title, and UI strings use **Geem**. Brand: [geem.ai](https://geem.ai). GitHub: [Geem-Ai/Geem-Platform](https://github.com/Geem-Ai/Geem-Platform).
 
 Stack: FastAPI, Celery, PostgreSQL, Redis, Qdrant, MinIO, React. OpenRouter provides OCR (`mistral-ocr`), embeddings, reranking, and chat.
 
