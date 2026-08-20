@@ -541,7 +541,18 @@ class WorkspaceService:
 
     def ensure_migration_workspace(self, *, created_by: uuid.UUID | None = None) -> Workspace:
         """Create or resolve the default migration workspace (Phase 2 attaches documents)."""
-        slug = validate_workspace_slug(self.settings.default_workspace_slug, settings=self.settings)
+        # Bypass validate_workspace_slug reserved check — DEFAULT_WORKSPACE_SLUG
+        # (typically "default") is intentionally reserved from tenant registration.
+        from app.workspaces.slug import _SLUG_RE, normalize_slug
+
+        slug = normalize_slug(self.settings.default_workspace_slug)
+        if not slug or not _SLUG_RE.match(slug):
+            raise AppError(
+                ErrorCategory.WORKSPACE_SLUG_INVALID,
+                "Default workspace slug must be 3–63 characters, lowercase alphanumeric, "
+                "hyphens allowed only between characters.",
+                details={"slug": slug},
+            )
         existing = self.workspaces.get_by_slug(slug)
         if existing is not None:
             if existing.kind != WorkspaceKind.TENANT.value:

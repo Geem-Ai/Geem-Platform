@@ -121,7 +121,7 @@ Vite already allows Host headers for `.geem.dm` and `.geem.ai`. The API allows C
 
 | Overlay | Host | Compose files | Public names | App servers |
 |---------|------|---------------|--------------|-------------|
-| **Production** | production server | `docker-compose.yml` + `docker-compose.tunnel.yml` | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `*.geem.ai` | baked nginx (`Dockerfile.prod`) |
+| **Production** | production server | `docker-compose.yml` + `docker-compose.tunnel.yml` | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `mtfm.geem.ai`, `*.geem.ai` | baked nginx (`Dockerfile.prod`) |
 | **UAT / this Mac** | development machine | `docker-compose.yml` + `docker-compose.uat.yml` | `app-uat.geem.ai`, `api-uat.geem.ai`, `landpage-uat.geem.ai`, `admin-uat.geem.ai` | Vite / Astro / Uvicorn `--reload` |
 
 Do **not** start `docker-compose.tunnel.yml` on the UAT Mac (it would steal production DNS). UAT does **not** route `*.geem.ai`; workspace context is `https://app-uat.geem.ai` plus `X-Workspace-Id` (and `X-Workspace-Slug` while `APP_ENV` is local/dev). Prefer Cloudflare Access in front of both.
@@ -140,6 +140,7 @@ cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
 cloudflared tunnel route dns geem-dalseen hub.geem.ai
 cloudflared tunnel route dns geem-dalseen api.geem.ai
 cloudflared tunnel route dns geem-dalseen geem.ai
+cloudflared tunnel route dns geem-dalseen mtfm.geem.ai
 cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 ```
 
@@ -148,13 +149,14 @@ cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 | `hub.geem.ai` | `http://workspace_web:80` (production nginx) |
 | `api.geem.ai` | `http://api:8000` |
 | `geem.ai` / `www.geem.ai` | `http://landpage_web:80` (production nginx) |
+| `mtfm.geem.ai` | `http://dashboard_web:80` (Platform Admin nginx; `/api` proxied) |
 | `{slug}.geem.ai` | `http://workspace_web:80` (reserved labels stay on the rows above) |
 
-`.env` `CORS_ORIGINS` must include `https://hub.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai`. The overlay rebuilds `workspace_web` and `landpage_web` as production nginx images with `VITE_*` / `PUBLIC_*` baked in, and sets `APP_URL` / `WORKSPACE_WEB_URL` plus `TRUST_PROXY_HEADERS=true`.
+`.env` `CORS_ORIGINS` must include `https://hub.geem.ai` and `https://mtfm.geem.ai`. Set `APP_ADMIN_HOST=mtfm.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai`. The overlay rebuilds `workspace_web`, `landpage_web`, and `dashboard_web` as production nginx images with `VITE_*` / `PUBLIC_*` baked in, and sets `APP_URL` / `WORKSPACE_WEB_URL` plus `TRUST_PROXY_HEADERS=true`.
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web cloudflared
+docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web dashboard_web cloudflared
 docker compose -f docker-compose.yml -f docker-compose.tunnel.yml logs -f cloudflared
 ```
 
@@ -417,4 +419,4 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
 | Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
 | Tunnel 1033 / cloudflared exits | Production: `credentials.json` + `-f docker-compose.tunnel.yml`. UAT: `credentials-uat.json` + `-f docker-compose.uat.yml`. Origins: prod nginx `:80` vs UAT Vite `:5174` / `:5175` / Astro `:4321` |
-| Tunnel CORS / login refresh fails | Production: `CORS_ORIGINS` includes `https://hub.geem.ai`; browser calls `https://api.geem.ai`. UAT: `https://app-uat.geem.ai` (Workspace) and `https://admin-uat.geem.ai` (Platform Admin) in `CORS_ORIGINS`; browser calls `https://api-uat.geem.ai`. Recreate `workspace_web` / `dashboard_web` after switching overlays |
+| Tunnel CORS / login refresh fails | Production: `CORS_ORIGINS` includes `https://hub.geem.ai` (Workspace) and `https://mtfm.geem.ai` (Platform Admin); Workspace browser calls `https://api.geem.ai`; Platform Admin is same-origin on `mtfm.geem.ai` (`/api` proxied). UAT: `https://app-uat.geem.ai` (Workspace) and `https://admin-uat.geem.ai` (Platform Admin) in `CORS_ORIGINS`; browser calls `https://api-uat.geem.ai`. Recreate `workspace_web` / `dashboard_web` after switching overlays |

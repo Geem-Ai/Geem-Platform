@@ -96,6 +96,7 @@ const RESERVED_HOST_SLUGS = new Set([
   'media',
   'uploads',
   'storage',
+  'mtfm',
   'platform-knowledge',
 ]);
 

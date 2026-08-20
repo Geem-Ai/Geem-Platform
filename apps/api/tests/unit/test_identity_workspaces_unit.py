@@ -39,6 +39,7 @@ def test_extract_subdomain_slug() -> None:
     assert extract_subdomain_slug("landpage-uat.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("admin.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("admins.geem.ai", "geem.ai", reserved_slugs=reserved) is None
+    assert extract_subdomain_slug("mtfm.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("www.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("mcp.geem.ai", "geem.ai", reserved_slugs=reserved) is None
     assert extract_subdomain_slug("staging.geem.ai", "geem.ai", reserved_slugs=reserved) is None

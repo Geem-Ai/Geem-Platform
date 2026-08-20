@@ -12,10 +12,10 @@ A Workspace Owner, Administrator, or custom role with every `WorkspacePermission
 | Surface | App | Host (example) |
 |---------|-----|----------------|
 | Tenant Workspace | `apps/workspace_web` | `{slug}.geem.ai` / `hub.geem.ai` |
-| Platform Admin | `apps/dashboard_web` | `APP_ADMIN_HOST` (example production value: `admin.geem.ai`) |
+| Platform Admin | `apps/dashboard_web` | `APP_ADMIN_HOST` (production: `mtfm.geem.ai`) |
 | Marketing | `apps/landpage_web` | `www.geem.ai` / `geem.ai` |
 
-Do not hardcode `admin.geem.ai` in domain logic. Use `Settings.app_admin_host` (`APP_ADMIN_HOST`).
+Do not hardcode `mtfm.geem.ai` in domain logic. Use `Settings.app_admin_host` (`APP_ADMIN_HOST`).
 
 ## Authorization
 
@@ -51,8 +51,8 @@ Frontend `RequirePlatformAdmin` is UX only. `/api/platform/*` remains authoritat
 Intended production layout:
 
 ```text
-admin.geem.ai  →  dashboard_web
-               →  /api/platform/*  (FastAPI, Host = APP_ADMIN_HOST)
+mtfm.geem.ai  →  dashboard_web (nginx; /api proxied to FastAPI)
+               →  /api/platform/*  (Host = APP_ADMIN_HOST)
 ```
 
 Login stays on Identity: `POST /api/auth/login` then `GET /api/platform/me`.
