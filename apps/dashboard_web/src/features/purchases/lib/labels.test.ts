@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TFunction } from 'i18next';
 import {
   isAppPurchaseKind,
   purchaseAppHref,
@@ -8,13 +9,11 @@ import {
 } from '@/features/purchases/lib/labels';
 
 describe('purchase labels', () => {
-  const t = (key: string) => {
-    const map: Record<string, string> = {
-      'purchases.status.paid': 'Paid',
-      'purchases.kinds.credit_pack': 'Credit pack',
-    };
-    return map[key] ?? key;
+  const translations: Record<string, string> = {
+    'purchases.status.paid': 'Paid',
+    'purchases.kinds.credit_pack': 'Credit pack',
   };
+  const t = ((key: string) => translations[key] ?? key) as unknown as TFunction;
 
   it('maps known purchase status', () => {
     expect(purchaseStatusLabel(t, 'paid')).toBe('Paid');

@@ -248,8 +248,8 @@ export function PurchasesPage() {
         offset={offset}
         limit={PAGE_SIZE}
         total={total}
-        onOffsetChange={setOffset}
-        testIdPrefix="purchases"
+        onPageChange={setOffset}
+        testId="purchases-pagination"
       />
     </div>
   );

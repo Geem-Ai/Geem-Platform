@@ -16,7 +16,6 @@ import {
 import { toast } from 'sonner';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { LifecycleDialog } from '@/components/shared/LifecycleDialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { GatewayCard } from '@/features/payment-gateways/components/GatewayCard';
