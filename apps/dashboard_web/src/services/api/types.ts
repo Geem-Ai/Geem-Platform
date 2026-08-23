@@ -34,6 +34,10 @@ export type PlatformPageParams = {
   kind?: string;
   platform_role?: string;
   currency?: string;
+  gateway?: string;
+  workspace_id?: string;
+  created_from?: string;
+  created_to?: string;
 };
 
 /** Canonical Workspace Geem entitlement keys (catalog-driven; do not hardcode by plan name). */
@@ -886,4 +890,193 @@ export type PlatformPurchasePageParams = PlatformPageParams & {
   created_from?: string;
   created_to?: string;
   workspace_id?: string;
+};
+
+// --- Phase 12G: Dashboard / Usage / Audit ---
+
+export type PlatformAuditActor = {
+  user_id?: string | null;
+  api_key_id?: string | null;
+  email?: string | null;
+};
+
+export type PlatformAuditWorkspace = {
+  workspace_id: string;
+  name: string;
+  slug: string;
+};
+
+export type PlatformAuditResource = {
+  entity_type: string;
+  entity_id?: string | null;
+};
+
+export type PlatformAuditListItem = {
+  id: string;
+  created_at: string;
+  actor?: PlatformAuditActor | null;
+  workspace?: PlatformAuditWorkspace | null;
+  action: string;
+  resource: PlatformAuditResource;
+  request_id?: string | null;
+  summary?: string | null;
+};
+
+export type PlatformAuditListResponse = {
+  items: PlatformAuditListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformAuditLogDetail = PlatformAuditListItem & {
+  metadata: Record<string, unknown>;
+};
+
+export type PlatformDashboardSummary = {
+  workspaces: { total: number; active: number; disabled: number };
+  users: { total: number; active: number; disabled: number };
+  experts: { published: number; draft: number };
+  usage: {
+    billed_tokens_24h: number;
+    billed_tokens_7d: number;
+    billed_tokens_30d: number;
+    active_workspaces_30d: number;
+    outstanding_credit_balance: number;
+  };
+  billing: {
+    active_subscriptions: number;
+    pending_purchases: number;
+    failed_purchases_30d: number;
+    paid_purchase_count_30d: number;
+    paid_purchase_volume_30d: string;
+  };
+  apps: {
+    published: number;
+    active_subscriptions: number;
+    active_licenses: number;
+    installations: number;
+  };
+  gateway?: {
+    gateway_config_id: string;
+    code: string;
+    enabled: boolean;
+    test_mode: boolean;
+  } | null;
+  recent_activity: PlatformAuditListItem[];
+};
+
+export type PlatformUsageDateParams = {
+  from?: string;
+  to?: string;
+};
+
+export type PlatformUsageSummary = {
+  from_day: string;
+  to_day: string;
+  total_billed_tokens: number;
+  active_workspaces: number;
+  average_daily_billed_tokens: number;
+  peak_day?: { day: string; billed_tokens: number } | null;
+  families: { family: string; billed_tokens: number; percentage: number }[];
+  sources: { source: string; billed_tokens: number; percentage: number }[];
+};
+
+export type PlatformUsageTrendPoint = {
+  date: string;
+  billed_tokens: number;
+  active_workspaces: number;
+};
+
+export type PlatformUsageTrendResponse = {
+  from_day: string;
+  to_day: string;
+  points: PlatformUsageTrendPoint[];
+};
+
+export type PlatformUsageWorkspaceItem = {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  workspace_status: string;
+  billed_tokens: number;
+  percentage_of_platform_usage: number;
+  active_days: number;
+  current_plan_code?: string | null;
+  current_plan_name?: string | null;
+};
+
+export type PlatformUsageWorkspacesResponse = {
+  items: PlatformUsageWorkspaceItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  from_day: string;
+  to_day: string;
+  platform_total_billed_tokens: number;
+};
+
+export type PlatformUsageEventItem = {
+  id: string;
+  created_at: string;
+  workspace_id?: string | null;
+  workspace_name?: string | null;
+  workspace_slug?: string | null;
+  user_id?: string | null;
+  expert_id?: string | null;
+  api_key_id?: string | null;
+  family: string;
+  operation_type: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  billed_tokens: number;
+  cost_metadata: Record<string, unknown>;
+};
+
+export type PlatformUsageEventsResponse = {
+  items: PlatformUsageEventItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  from_day: string;
+  to_day: string;
+};
+
+export type PlatformWorkspaceUsageSummary = {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  workspace_status: string;
+  workspace_kind: string;
+  from_day: string;
+  to_day: string;
+  total_billed_tokens: number;
+  families: PlatformUsageSummary['families'];
+  sources: PlatformUsageSummary['sources'];
+};
+
+export type PlatformWorkspaceUsageTrendResponse = {
+  workspace_id: string;
+  from_day: string;
+  to_day: string;
+  points: PlatformUsageTrendPoint[];
+};
+
+export type PlatformUsagePageParams = PlatformUsageDateParams &
+  PlatformPageParams & {
+    family?: string;
+    operation_type?: string;
+    api_key_id?: string;
+    sort?: string;
+  };
+
+export type PlatformAuditPageParams = PlatformPageParams & {
+  actor_user_id?: string;
+  workspace_id?: string;
+  action?: string;
+  entity_type?: string;
+  entity_id?: string;
+  from?: string;
+  to?: string;
+  scope?: string;
 };

@@ -58,11 +58,119 @@
     "title": "Overview",
     "welcome": "Welcome to Geem Admin",
     "context": "You are in Platform Admin. This surface is independent of Workspace membership and tenant RBAC.",
+    "dashboardTitle": "Platform operations",
+    "dashboardContext": "Live platform footprint, AI usage, commerce operations, and recent admin activity.",
     "signedInAs": "Signed in as",
     "roleLabel": "Platform role",
     "roleAdmin": "Platform Admin",
     "quickLinks": "Sections",
-    "comingPhase": "Coming in {{phase}}"
+    "comingPhase": "Coming in {{phase}}",
+    "metrics": {
+      "workspaces": "Tenant Workspaces",
+      "workspacesHint": "{{active}} active · {{disabled}} non-active",
+      "users": "Users",
+      "usersHint": "{{active}} active · {{disabled}} disabled",
+      "experts": "Published Platform Experts",
+      "expertsHint": "{{draft}} draft/unpublished",
+      "usage30d": "AI billed tokens (30d)",
+      "usage30dHint": "{{active}} Workspaces with usage"
+    },
+    "sections": {
+      "billing": "Commerce snapshot",
+      "billingHint": "Operational purchase metrics — not recognized revenue.",
+      "apps": "App Store snapshot",
+      "gateway": "Active payment gateway",
+      "activity": "Recent Platform Admin activity",
+      "activityHint": "Latest audited admin mutations."
+    },
+    "billing": {
+      "activeSubscriptions": "Active Workspace subscriptions",
+      "pendingPurchases": "Pending / redirected purchases",
+      "paidVolume30d": "Paid purchase volume (30d)",
+      "failed30d": "Failed purchases (30d)"
+    },
+    "apps": {
+      "published": "Published Apps",
+      "installations": "Installed Apps",
+      "activeSubscriptions": "Active App subscriptions",
+      "activeLicenses": "Active one-time licenses"
+    },
+    "gateway": {
+      "testMode": "Test mode",
+      "manage": "Manage gateways",
+      "none": "No gateway is currently enabled."
+    },
+    "activity": {
+      "empty": "No recent Platform Admin activity yet.",
+      "systemActor": "System",
+      "platformScope": "Platform",
+      "viewAll": "View all audit logs"
+    }
+  },
+  "usage": {
+    "title": "AI Usage",
+    "eyebrow": "AI",
+    "subtitle": "Platform-wide billed token analytics for tenant Workspaces.",
+    "presets": {
+      "days": "Last {{count}} days"
+    },
+    "summary": {
+      "total": "Total billed tokens",
+      "activeWorkspaces": "Active Workspaces",
+      "averageDaily": "Average daily billed tokens",
+      "range": "Selected range"
+    },
+    "trendTitle": "Daily billed token trend",
+    "trendEmpty": "No usage recorded for this range.",
+    "topWorkspaces": "Top Workspaces",
+    "topWorkspacesHint": "Ranked by billed tokens in the selected range.",
+    "topWorkspacesEmpty": "No tenant usage in this range.",
+    "viewWorkspace": "Open Workspace",
+    "workspaceSectionTitle": "Historical usage",
+    "workspaceSectionHint": "Last 30 days of billed tokens for this Workspace.",
+    "workspaceSectionRange": "{{from}} – {{to}}",
+    "table": {
+      "workspace": "Workspace",
+      "plan": "Current plan",
+      "billedTokens": "Billed tokens",
+      "share": "Share"
+    }
+  },
+  "audit": {
+    "title": "Audit Logs",
+    "eyebrow": "Operations",
+    "subtitle": "Immutable record of Platform Admin and Workspace-scoped mutations.",
+    "searchPlaceholder": "Search action, actor, or Workspace…",
+    "actionFilter": "Action",
+    "listTitle": "Global audit log",
+    "empty": "No audit entries match these filters.",
+    "viewDetails": "Details",
+    "detailTitle": "Audit entry",
+    "summary": "Summary",
+    "metadata": "Metadata",
+    "openResource": "Open related record",
+    "systemActor": "System",
+    "platformScope": "Platform",
+    "columns": {
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "workspace": "Workspace",
+      "resource": "Resource"
+    },
+    "actions": {
+      "workspace.credit_grant": "Credit grant",
+      "workspace.disabled": "Workspace disabled",
+      "workspace.enabled": "Workspace enabled",
+      "user.disabled": "User disabled",
+      "user.enabled": "User enabled",
+      "plan.create": "Plan created",
+      "plan.update": "Plan updated",
+      "platform_expert.publish": "Platform Expert published",
+      "payment_gateway.activate": "Payment gateway activated",
+      "purchase.reconcile": "Purchase reconciled",
+      "app_license.grant": "App license granted"
+    }
   },
   "placeholder": {
     "title": "{{section}}",

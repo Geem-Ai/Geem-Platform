@@ -58,6 +58,18 @@ import type {
   PlatformPurchaseListResponse,
   PlatformPurchasePageParams,
   PlatformPurchaseReconcileResponse,
+  PlatformAuditListResponse,
+  PlatformAuditLogDetail,
+  PlatformAuditPageParams,
+  PlatformDashboardSummary,
+  PlatformUsageDateParams,
+  PlatformUsageEventsResponse,
+  PlatformUsagePageParams,
+  PlatformUsageSummary,
+  PlatformUsageTrendResponse,
+  PlatformUsageWorkspacesResponse,
+  PlatformWorkspaceUsageSummary,
+  PlatformWorkspaceUsageTrendResponse,
 } from './types';
 
 function toQuery(params: PlatformPageParams = {}): string {
@@ -335,6 +347,18 @@ export const platformQueryKeys = {
   paymentGateway: (id: string) => ['platform', 'payment-gateway', id] as const,
   purchases: (filters: PlatformPurchasePageParams) => ['platform', 'purchases', filters] as const,
   purchase: (id: string) => ['platform', 'purchase', id] as const,
+  dashboardSummary: ['platform', 'dashboard', 'summary'] as const,
+  usageSummary: (filters: PlatformUsageDateParams) => ['platform', 'usage', 'summary', filters] as const,
+  usageTrend: (filters: PlatformUsageDateParams) => ['platform', 'usage', 'trend', filters] as const,
+  usageWorkspaces: (filters: PlatformUsagePageParams) =>
+    ['platform', 'usage', 'workspaces', filters] as const,
+  usageEvents: (filters: PlatformUsagePageParams) => ['platform', 'usage', 'events', filters] as const,
+  workspaceUsageSummary: (id: string, filters: PlatformUsageDateParams) =>
+    ['platform', 'workspace', id, 'usage', 'summary', filters] as const,
+  workspaceUsageTrend: (id: string, filters: PlatformUsageDateParams) =>
+    ['platform', 'workspace', id, 'usage', 'trend', filters] as const,
+  auditLogs: (filters: PlatformAuditPageParams) => ['platform', 'audit-logs', filters] as const,
+  auditLog: (id: string) => ['platform', 'audit-log', id] as const,
 };
 
 // --- Phase 12D: Platform Experts ---
@@ -758,4 +782,106 @@ export async function reconcilePlatformPurchase(
 
 export async function downloadPlatformPurchaseInvoice(purchaseId: string): Promise<Blob> {
   return apiRequestBlob(`/api/platform/purchases/${purchaseId}/invoice`);
+}
+
+function toUsageQuery(params: PlatformUsagePageParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.limit != null) q.set('limit', String(params.limit));
+  if (params.offset != null) q.set('offset', String(params.offset));
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  if (params.sort) q.set('sort', params.sort);
+  if (params.family) q.set('family', params.family);
+  if (params.operation_type) q.set('operation_type', params.operation_type);
+  if (params.api_key_id) q.set('api_key_id', params.api_key_id);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+function toAuditQuery(params: PlatformAuditPageParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set('limit', String(params.limit));
+  if (params.offset != null) q.set('offset', String(params.offset));
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  if (params.actor_user_id) q.set('actor_user_id', params.actor_user_id);
+  if (params.workspace_id) q.set('workspace_id', params.workspace_id);
+  if (params.action) q.set('action', params.action);
+  if (params.entity_type) q.set('entity_type', params.entity_type);
+  if (params.entity_id) q.set('entity_id', params.entity_id);
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.scope) q.set('scope', params.scope);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function fetchPlatformDashboardSummary(): Promise<PlatformDashboardSummary> {
+  return apiRequest<PlatformDashboardSummary>('/api/platform/dashboard/summary');
+}
+
+export async function fetchPlatformUsageSummary(
+  params: PlatformUsageDateParams = {},
+): Promise<PlatformUsageSummary> {
+  return apiRequest<PlatformUsageSummary>(`/api/platform/usage/summary${toUsageQuery(params)}`);
+}
+
+export async function fetchPlatformUsageTrend(
+  params: PlatformUsageDateParams = {},
+): Promise<PlatformUsageTrendResponse> {
+  return apiRequest<PlatformUsageTrendResponse>(`/api/platform/usage/trend${toUsageQuery(params)}`);
+}
+
+export async function fetchPlatformUsageWorkspaces(
+  params: PlatformUsagePageParams = {},
+): Promise<PlatformUsageWorkspacesResponse> {
+  return apiRequest<PlatformUsageWorkspacesResponse>(
+    `/api/platform/usage/workspaces${toUsageQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformUsageEvents(
+  params: PlatformUsagePageParams & { from: string; to: string },
+): Promise<PlatformUsageEventsResponse> {
+  return apiRequest<PlatformUsageEventsResponse>(
+    `/api/platform/usage/events${toUsageQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformWorkspaceUsageSummary(
+  workspaceId: string,
+  params: PlatformUsageDateParams = {},
+): Promise<PlatformWorkspaceUsageSummary> {
+  return apiRequest<PlatformWorkspaceUsageSummary>(
+    `/api/platform/workspaces/${workspaceId}/usage/summary${toUsageQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformWorkspaceUsageTrend(
+  workspaceId: string,
+  params: PlatformUsageDateParams = {},
+): Promise<PlatformWorkspaceUsageTrendResponse> {
+  return apiRequest<PlatformWorkspaceUsageTrendResponse>(
+    `/api/platform/workspaces/${workspaceId}/usage/trend${toUsageQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformAuditLogs(
+  params: PlatformAuditPageParams = {},
+): Promise<PlatformAuditListResponse> {
+  return apiRequest<PlatformAuditListResponse>(`/api/platform/audit-logs${toAuditQuery(params)}`);
+}
+
+export async function fetchPlatformAuditLog(auditId: string): Promise<PlatformAuditLogDetail> {
+  return apiRequest<PlatformAuditLogDetail>(`/api/platform/audit-logs/${auditId}`);
+}
+
+export function usageDatePreset(days: number): PlatformUsageDateParams {
+  const to = new Date();
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - (days - 1));
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
 }

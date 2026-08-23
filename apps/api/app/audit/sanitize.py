@@ -69,6 +69,60 @@ _MAX_STRING_LEN = 500
 _MAX_LIST_LEN = 50
 _MAX_DEPTH = 4
 
+# Safe keys for Platform Admin audit read views (unknown top-level keys are dropped).
+READ_TIME_AUDIT_METADATA_ALLOWLIST = frozenset(
+    {
+        "action",
+        "after",
+        "after_status",
+        "already_member",
+        "amount",
+        "app_id",
+        "app_slug",
+        "before",
+        "before_status",
+        "billing_type",
+        "category_id",
+        "code",
+        "connector_key",
+        "document_id",
+        "expert_id",
+        "failure",
+        "gateway_config_id",
+        "installation_id",
+        "job_id",
+        "kind",
+        "knowledge_mode",
+        "license_id",
+        "message",
+        "mode",
+        "name",
+        "new_status",
+        "new_visibility",
+        "old_status",
+        "old_visibility",
+        "permission_keys",
+        "permissions_changed",
+        "plan_id",
+        "prefix",
+        "price_amount",
+        "reason",
+        "reinstall",
+        "reused",
+        "role_id",
+        "scopes",
+        "slug",
+        "status",
+        "subscription_id",
+        "summary",
+        "system_key",
+        "target_user_id",
+        "test_mode",
+        "workspace_id",
+        "workspace_slug",
+    }
+)
+
 
 def _norm_key(key: str) -> str:
     return key.lower().replace("-", "_")
@@ -89,6 +143,14 @@ def sanitize_audit_metadata(
         return _scrub(metadata, depth=0, allowlist=allowlist)
     except Exception:  # noqa: BLE001 — never fail a mutation on metadata parsing
         return {}
+
+
+def redact_audit_metadata_for_read(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Defensive read-time redaction for historical audit rows."""
+    return sanitize_audit_metadata(
+        metadata,
+        allowlist=READ_TIME_AUDIT_METADATA_ALLOWLIST,
+    )
 
 
 def _scrub(value: Any, *, depth: int, allowlist: frozenset[str] | None) -> Any:

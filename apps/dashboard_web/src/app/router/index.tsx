@@ -5,7 +5,8 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { ExpertCreatePage } from '@/features/experts/pages/ExpertCreatePage';
 import { ExpertDetailPage } from '@/features/experts/pages/ExpertDetailPage';
-import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
+import { AuditLogsPage } from '@/features/audit-logs/pages/AuditLogsPage';
+import { UsagePage } from '@/features/usage/pages/UsagePage';
 import { PaymentGatewaysPage } from '@/features/payment-gateways/pages/PaymentGatewaysPage';
 import { PurchasesPage } from '@/features/purchases/pages/PurchasesPage';
 import { PurchaseDetailPage } from '@/features/purchases/pages/PurchaseDetailPage';
@@ -40,7 +41,7 @@ export function AppRouter() {
           <Route path="experts" element={<ExpertsPage />} />
           <Route path="experts/new" element={<ExpertCreatePage />} />
           <Route path="experts/:expertId" element={<ExpertDetailPage />} />
-          <Route path="usage" element={<ComingSoonPage titleKey="nav.usage" phase="12G" />} />
+          <Route path="usage" element={<UsagePage />} />
           <Route path="plans" element={<PlansPage />} />
           <Route path="plans/new" element={<PlanCreatePage />} />
           <Route path="plans/:planId" element={<PlanDetailPage />} />
@@ -52,10 +53,7 @@ export function AppRouter() {
           <Route path="purchases" element={<PurchasesPage />} />
           <Route path="purchases/:purchaseId" element={<PurchaseDetailPage />} />
           <Route path="payment-gateways" element={<PaymentGatewaysPage />} />
-          <Route
-            path="audit-logs"
-            element={<ComingSoonPage titleKey="nav.auditLogs" phase="12G" />}
-          />
+          <Route path="audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>
 

@@ -92,6 +92,35 @@ describe('Platform Admin app', () => {
           authorized: true,
         });
       }
+      if (url.includes('/api/platform/dashboard/summary')) {
+        return json({
+          workspaces: { total: 1, active: 1, disabled: 0 },
+          users: { total: 1, active: 1, disabled: 0 },
+          experts: { published: 0, draft: 0 },
+          usage: {
+            billed_tokens_24h: 0,
+            billed_tokens_7d: 0,
+            billed_tokens_30d: 0,
+            active_workspaces_30d: 0,
+            outstanding_credit_balance: 0,
+          },
+          billing: {
+            active_subscriptions: 0,
+            pending_purchases: 0,
+            failed_purchases_30d: 0,
+            paid_purchase_count_30d: 0,
+            paid_purchase_volume_30d: '0',
+          },
+          apps: {
+            published: 0,
+            active_subscriptions: 0,
+            active_licenses: 0,
+            installations: 0,
+          },
+          gateway: null,
+          recent_activity: [],
+        });
+      }
       return json({ code: 'not_found' }, 404);
     });
 
@@ -105,8 +134,7 @@ describe('Platform Admin app', () => {
 
     expect(await screen.findByTestId('overview-page')).toBeInTheDocument();
     expect(screen.getByTestId('admin-layout')).toBeInTheDocument();
-    expect(screen.getByTestId('admin-identity-card')).toHaveTextContent('admin@example.com');
-    expect(screen.getByTestId('platform-role-badge')).toHaveTextContent(/مدير منصة|Platform Admin/);
+    expect(await screen.findByTestId('overview-billing-card')).toBeInTheDocument();
     expect(screen.getByTestId('admin-nav')).toBeInTheDocument();
   });
 
@@ -1143,6 +1171,28 @@ describe('Platform Admin app', () => {
           items: [{ key: 'experts_limit', value: 3, value_type: 'integer' }],
         });
       }
+      if (url.includes('/usage/summary')) {
+        return json({
+          workspace_id: 'ws-1',
+          workspace_name: 'Acme',
+          workspace_slug: 'acme',
+          workspace_status: 'active',
+          workspace_kind: 'tenant',
+          from_day: '2026-01-01',
+          to_day: '2026-01-30',
+          total_billed_tokens: 1000,
+          families: [],
+          sources: [],
+        });
+      }
+      if (url.includes('/usage/trend')) {
+        return json({
+          workspace_id: 'ws-1',
+          from_day: '2026-01-01',
+          to_day: '2026-01-30',
+          points: [{ date: '2026-01-01', billed_tokens: 1000, active_workspaces: 1 }],
+        });
+      }
       if (url.includes('/usage')) {
         return json({
           ai_tokens_daily: { limit: 1000, used: 10, reserved: 0, remaining: 990 },
@@ -1383,5 +1433,123 @@ describe('Platform Admin app', () => {
       const stored = localStorage.getItem(THEME_STORAGE_KEY);
       expect(stored === 'dark' || stored === 'system' || stored === 'light').toBe(true);
     });
+  });
+
+  it('renders Usage analytics page from Platform Admin API', async () => {
+    window.history.pushState({}, '', '/usage');
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/usage/summary')) {
+        return json({
+          from_day: '2026-01-01',
+          to_day: '2026-01-30',
+          total_billed_tokens: 42000,
+          active_workspaces: 2,
+          average_daily_billed_tokens: 1400,
+          peak_day: { day: '2026-01-15', billed_tokens: 5000 },
+          families: [{ family: 'chat', billed_tokens: 42000, percentage: 100 }],
+          sources: [
+            { source: 'api', billed_tokens: 30000, percentage: 71.43 },
+            { source: 'interactive', billed_tokens: 12000, percentage: 28.57 },
+          ],
+        });
+      }
+      if (url.includes('/api/platform/usage/trend')) {
+        return json({
+          from_day: '2026-01-01',
+          to_day: '2026-01-30',
+          points: [{ date: '2026-01-15', billed_tokens: 5000, active_workspaces: 2 }],
+        });
+      }
+      if (url.includes('/api/platform/usage/workspaces')) {
+        return json({
+          items: [
+            {
+              workspace_id: 'ws-1',
+              workspace_name: 'Acme',
+              workspace_slug: 'acme',
+              workspace_status: 'active',
+              billed_tokens: 42000,
+              percentage_of_platform_usage: 100,
+              active_days: 10,
+              current_plan_code: 'pro',
+              current_plan_name: 'Pro',
+            },
+          ],
+          total: 1,
+          limit: 10,
+          offset: 0,
+          from_day: '2026-01-01',
+          to_day: '2026-01-30',
+          platform_total_billed_tokens: 42000,
+        });
+      }
+      return json({}, 404);
+    });
+
+    render(<AppProviders />);
+    expect(await screen.findByTestId('usage-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('usage-preset-30')).toBeInTheDocument();
+    expect(await screen.findByText('Acme')).toBeInTheDocument();
+  });
+
+  it('renders Audit Logs page from Platform Admin API', async () => {
+    window.history.pushState({}, '', '/audit-logs');
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/audit-logs')) {
+        return json({
+          items: [
+            {
+              id: 'audit-1',
+              created_at: '2026-01-15T12:00:00Z',
+              actor: { user_id: 'admin-1', api_key_id: null, email: 'admin@example.com' },
+              workspace: null,
+              action: 'payment_gateway.update',
+              resource: { entity_type: 'payment_gateway', entity_id: 'gw-1' },
+              request_id: 'req-1',
+              summary: 'Gateway updated',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    render(<AppProviders />);
+    expect(await screen.findByTestId('audit-logs-page')).toBeInTheDocument();
+    expect(await screen.findByText('admin@example.com')).toBeInTheDocument();
+    expect(await screen.findByText('payment_gateway.update')).toBeInTheDocument();
   });
 });

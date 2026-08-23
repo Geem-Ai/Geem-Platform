@@ -12,7 +12,7 @@ Workspace membership / X-Workspace-* headers are ignored as grants.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
@@ -32,7 +32,9 @@ from app.experts.schemas import (
 from app.experts.service import ExpertService
 from app.identity.models import User
 from app.platform_admin.apps import PlatformAdminAppsService
+from app.platform_admin.audit_logs import PlatformAuditLogsService
 from app.platform_admin.billing import PlatformAdminBillingService
+from app.platform_admin.dashboard import PlatformDashboardService
 from app.platform_admin.dependencies import (
     require_platform_admin,
     require_platform_admin_host,
@@ -61,9 +63,12 @@ from app.platform_admin.schemas import (
     PlatformAppSubscriptionRevokeRequest,
     PlatformAppUpdateRequest,
     PlatformAppWorkspaceEntitlementListResponse,
+    PlatformAuditListResponse,
+    PlatformAuditLogDetailOut,
     PlatformCreditGrantRequest,
     PlatformCreditGrantResponse,
     PlatformCreditHistoryResponse,
+    PlatformDashboardSummaryOut,
     PlatformEntitlementCatalogResponse,
     PlatformExpertDetailOut,
     PlatformExpertGrantListResponse,
@@ -84,6 +89,12 @@ from app.platform_admin.schemas import (
     PlatformPurchaseDetailOut,
     PlatformPurchaseListResponse,
     PlatformPurchaseReconcileResponse,
+    PlatformUsageEventsResponse,
+    PlatformUsageSummaryOut,
+    PlatformUsageTrendResponse,
+    PlatformUsageWorkspacesResponse,
+    PlatformWorkspaceUsageSummaryOut,
+    PlatformWorkspaceUsageTrendResponse,
     PlatformSubscriptionAssignRequest,
     PlatformSubscriptionDetailOut,
     PlatformSubscriptionHistoryResponse,
@@ -103,6 +114,7 @@ from app.platform_admin.schemas import (
     PlatformWorkspaceAppOut,
 )
 from app.platform_admin.service import PlatformAdminService
+from app.platform_admin.usage_analytics import PlatformUsageAnalyticsService, parse_usage_sort_field
 from app.worker.tasks import enqueue_ingest
 
 router = APIRouter(
@@ -119,6 +131,158 @@ def platform_me(
 ) -> PlatformMeResponse:
     """Authoritative Platform Admin identity bootstrap. No tenant Workspace."""
     return PlatformAdminService(db).get_me(actor=user)
+
+
+# --- Phase 12G: Dashboard / Usage / Audit ---
+
+
+@router.get("/dashboard/summary", response_model=PlatformDashboardSummaryOut)
+def platform_dashboard_summary(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformDashboardSummaryOut:
+    return PlatformDashboardService(db).summary(user)
+
+
+@router.get("/usage/summary", response_model=PlatformUsageSummaryOut)
+def platform_usage_summary(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    from_day: date | None = Query(default=None, alias="from"),
+    to_day: date | None = Query(default=None, alias="to"),
+) -> PlatformUsageSummaryOut:
+    return PlatformUsageAnalyticsService(db).summary(user, from_day=from_day, to_day=to_day)
+
+
+@router.get("/usage/trend", response_model=PlatformUsageTrendResponse)
+def platform_usage_trend(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    from_day: date | None = Query(default=None, alias="from"),
+    to_day: date | None = Query(default=None, alias="to"),
+) -> PlatformUsageTrendResponse:
+    return PlatformUsageAnalyticsService(db).trend(user, from_day=from_day, to_day=to_day)
+
+
+@router.get("/usage/workspaces", response_model=PlatformUsageWorkspacesResponse)
+def platform_usage_workspaces(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    sort: str = Query(default="billed_tokens", max_length=32),
+    from_day: date | None = Query(default=None, alias="from"),
+    to_day: date | None = Query(default=None, alias="to"),
+) -> PlatformUsageWorkspacesResponse:
+    return PlatformUsageAnalyticsService(db).top_workspaces(
+        user,
+        from_day=from_day,
+        to_day=to_day,
+        limit=limit,
+        offset=offset,
+        search=search,
+        sort=parse_usage_sort_field(sort),
+    )
+
+
+@router.get("/usage/events", response_model=PlatformUsageEventsResponse)
+def platform_usage_events(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    from_day: date = Query(alias="from"),
+    to_day: date = Query(alias="to"),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    workspace_id: uuid.UUID | None = Query(default=None),
+    family: str | None = Query(default=None, max_length=32),
+    operation_type: str | None = Query(default=None, max_length=64),
+    api_key_id: uuid.UUID | None = Query(default=None),
+) -> PlatformUsageEventsResponse:
+    return PlatformUsageAnalyticsService(db).list_events(
+        user,
+        from_day=from_day,
+        to_day=to_day,
+        limit=limit,
+        offset=offset,
+        workspace_id=workspace_id,
+        family=family,
+        operation_type=operation_type,
+        api_key_id=api_key_id,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/usage/summary",
+    response_model=PlatformWorkspaceUsageSummaryOut,
+)
+def platform_workspace_usage_summary(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    from_day: date | None = Query(default=None, alias="from"),
+    to_day: date | None = Query(default=None, alias="to"),
+) -> PlatformWorkspaceUsageSummaryOut:
+    return PlatformUsageAnalyticsService(db).workspace_summary(
+        user, workspace_id, from_day=from_day, to_day=to_day
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/usage/trend",
+    response_model=PlatformWorkspaceUsageTrendResponse,
+)
+def platform_workspace_usage_trend(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    from_day: date | None = Query(default=None, alias="from"),
+    to_day: date | None = Query(default=None, alias="to"),
+) -> PlatformWorkspaceUsageTrendResponse:
+    return PlatformUsageAnalyticsService(db).workspace_trend(
+        user, workspace_id, from_day=from_day, to_day=to_day
+    )
+
+
+@router.get("/audit-logs", response_model=PlatformAuditListResponse)
+def list_platform_audit_logs(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    actor_user_id: uuid.UUID | None = Query(default=None),
+    workspace_id: uuid.UUID | None = Query(default=None),
+    action: str | None = Query(default=None, max_length=128),
+    entity_type: str | None = Query(default=None, max_length=64),
+    entity_id: uuid.UUID | None = Query(default=None),
+    from_at: datetime | None = Query(default=None, alias="from"),
+    to_at: datetime | None = Query(default=None, alias="to"),
+    scope: str | None = Query(default=None, max_length=32),
+) -> PlatformAuditListResponse:
+    return PlatformAuditLogsService(db).list_logs(
+        user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        actor_user_id=actor_user_id,
+        workspace_id=workspace_id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        from_at=from_at,
+        to_at=to_at,
+        scope=scope,
+    )
+
+
+@router.get("/audit-logs/{audit_id}", response_model=PlatformAuditLogDetailOut)
+def get_platform_audit_log(
+    audit_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAuditLogDetailOut:
+    return PlatformAuditLogsService(db).get_log(user, audit_id)
 
 
 # --- Phase 12B: Workspaces ---

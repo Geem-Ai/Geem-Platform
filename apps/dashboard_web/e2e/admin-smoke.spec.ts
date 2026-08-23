@@ -126,6 +126,112 @@ const entitlementCatalog = {
   ],
 };
 
+const fixtureDashboardSummary = {
+  workspaces: { total: 1, active: 1, disabled: 0 },
+  users: { total: 2, active: 2, disabled: 0 },
+  experts: { published: 1, draft: 0 },
+  usage: {
+    billed_tokens_24h: 1200,
+    billed_tokens_7d: 8400,
+    billed_tokens_30d: 42000,
+    active_workspaces_30d: 1,
+    outstanding_credit_balance: 250,
+  },
+  billing: {
+    active_subscriptions: 1,
+    pending_purchases: 0,
+    failed_purchases_30d: 0,
+    paid_purchase_count_30d: 1,
+    paid_purchase_volume_30d: '99.00',
+  },
+  apps: {
+    published: 1,
+    active_subscriptions: 0,
+    active_licenses: 0,
+    installations: 0,
+  },
+  gateway: {
+    gateway_config_id: 'gw-1',
+    code: 'clickpay',
+    enabled: true,
+    test_mode: true,
+  },
+  recent_activity: [
+    {
+      id: 'audit-1',
+      created_at: '2026-01-02T10:00:00Z',
+      actor: { user_id: 'admin-1', email: 'admin@example.com' },
+      workspace: { workspace_id: fixtureWorkspace.id, name: fixtureWorkspace.name, slug: fixtureWorkspace.slug },
+      action: 'workspace.credit_grant',
+      resource: { entity_type: 'credit_ledger_entry', entity_id: 'credit-1' },
+      summary: 'E2E grant',
+    },
+  ],
+};
+
+const fixtureUsageSummary = {
+  from_day: '2026-01-01',
+  to_day: '2026-01-30',
+  total_billed_tokens: 42000,
+  active_workspaces: 1,
+  average_daily_billed_tokens: 1400,
+  peak_day: { day: '2026-01-15', billed_tokens: 3000 },
+  families: [{ family: 'chat', billed_tokens: 42000, percentage: 100 }],
+  sources: [
+    { source: 'interactive', billed_tokens: 30000, percentage: 71.43 },
+    { source: 'api', billed_tokens: 12000, percentage: 28.57 },
+  ],
+};
+
+const fixtureUsageTrend = {
+  from_day: '2026-01-01',
+  to_day: '2026-01-30',
+  points: [
+    { date: '2026-01-01', billed_tokens: 1000, active_workspaces: 1 },
+    { date: '2026-01-15', billed_tokens: 3000, active_workspaces: 1 },
+    { date: '2026-01-30', billed_tokens: 1200, active_workspaces: 1 },
+  ],
+};
+
+const fixtureUsageWorkspaces = {
+  items: [
+    {
+      workspace_id: fixtureWorkspace.id,
+      workspace_name: fixtureWorkspace.name,
+      workspace_slug: fixtureWorkspace.slug,
+      workspace_status: 'active',
+      billed_tokens: 42000,
+      percentage_of_platform_usage: 100,
+      active_days: 20,
+      current_plan_code: 'free',
+      current_plan_name: 'Free',
+    },
+  ],
+  total: 1,
+  limit: 10,
+  offset: 0,
+  from_day: '2026-01-01',
+  to_day: '2026-01-30',
+  platform_total_billed_tokens: 42000,
+};
+
+const fixtureAuditLogs = {
+  items: [
+    {
+      id: 'audit-1',
+      created_at: '2026-01-02T10:00:00Z',
+      actor: { user_id: 'admin-1', email: 'admin@example.com' },
+      workspace: { workspace_id: fixtureWorkspace.id, name: fixtureWorkspace.name, slug: fixtureWorkspace.slug },
+      action: 'workspace.credit_grant',
+      resource: { entity_type: 'credit_ledger_entry', entity_id: 'credit-1' },
+      summary: 'E2E grant',
+    },
+  ],
+  total: 1,
+  limit: 25,
+  offset: 0,
+};
+
 const fixturePlatformExpert = {
   id: 'expert-fixture-1',
   type: 'platform',
@@ -215,6 +321,49 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
         user: adminUser,
         platform_role: 'admin',
         authorized: true,
+      });
+    }
+    if (path.endsWith('/platform/dashboard/summary') && method === 'GET') {
+      return fulfillJson(route, fixtureDashboardSummary);
+    }
+    if (path.endsWith('/platform/usage/summary') && method === 'GET') {
+      return fulfillJson(route, fixtureUsageSummary);
+    }
+    if (path.endsWith('/platform/usage/trend') && method === 'GET') {
+      return fulfillJson(route, fixtureUsageTrend);
+    }
+    if (path.endsWith('/platform/usage/workspaces') && method === 'GET') {
+      return fulfillJson(route, fixtureUsageWorkspaces);
+    }
+    if (path.includes('/platform/workspaces/') && path.endsWith('/usage/summary') && method === 'GET') {
+      return fulfillJson(route, {
+        workspace_id: fixtureWorkspace.id,
+        workspace_name: fixtureWorkspace.name,
+        workspace_slug: fixtureWorkspace.slug,
+        workspace_status: workspaceStatus,
+        workspace_kind: 'tenant',
+        from_day: '2026-01-01',
+        to_day: '2026-01-30',
+        total_billed_tokens: 42000,
+        families: fixtureUsageSummary.families,
+        sources: fixtureUsageSummary.sources,
+      });
+    }
+    if (path.includes('/platform/workspaces/') && path.endsWith('/usage/trend') && method === 'GET') {
+      return fulfillJson(route, {
+        workspace_id: fixtureWorkspace.id,
+        from_day: '2026-01-01',
+        to_day: '2026-01-30',
+        points: fixtureUsageTrend.points,
+      });
+    }
+    if (path.endsWith('/platform/audit-logs') && method === 'GET') {
+      return fulfillJson(route, fixtureAuditLogs);
+    }
+    if (path.includes('/platform/audit-logs/') && method === 'GET') {
+      return fulfillJson(route, {
+        ...fixtureAuditLogs.items[0],
+        metadata: { reason: 'E2E grant', amount: 1000 },
       });
     }
     if (path.endsWith('/auth/logout') && method === 'POST') {
@@ -651,6 +800,18 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await page.locator('#password').fill('password123');
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('overview-page')).toBeVisible();
+  await expect(page.getByTestId('overview-billing-card')).toBeVisible();
+  await expect(page.getByText('42,000')).toBeVisible();
+
+  await page.getByTestId('nav-usage').click();
+  await expect(page.getByTestId('usage-page')).toBeVisible();
+  await page.getByTestId('usage-preset-30').click();
+  await expect(page.getByText('Fixture Acme')).toBeVisible();
+
+  await page.getByTestId('nav-audit-logs').click();
+  await expect(page.getByTestId('audit-logs-page')).toBeVisible();
+  await page.getByRole('button', { name: 'Details' }).click();
+  await expect(page.getByText('E2E grant')).toBeVisible();
 
   await page.getByTestId('nav-workspaces').click();
   await expect(page.getByTestId('workspaces-page')).toBeVisible();
@@ -660,6 +821,7 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await expect(page.getByTestId('workspace-detail-page')).toBeVisible();
   await expect(page.getByTestId('workspace-disable-button')).toBeVisible();
   await expect(page.getByTestId('workspace-billing-section')).toBeVisible();
+  await expect(page.getByTestId('workspace-usage-section')).toBeVisible();
   await expect(page.getByTestId('workspace-change-plan-button')).toBeVisible();
 
   await page.getByTestId('workspace-grant-credits-button').click();

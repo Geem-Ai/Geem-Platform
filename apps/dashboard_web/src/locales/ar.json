@@ -58,11 +58,119 @@
     "title": "نظرة عامة",
     "welcome": "مرحبًا بك في إدارة Geem",
     "context": "أنت في إدارة المنصة. هذه الواجهة مستقلة عن عضوية مساحة العمل وصلاحياتها.",
+    "dashboardTitle": "عمليات المنصة",
+    "dashboardContext": "مؤشرات حية للبنية التحتية، واستخدام الذكاء الاصطناعي، والعمليات التجارية، وآخر نشاط إداري.",
     "signedInAs": "مسجّل الدخول باسم",
     "roleLabel": "دور المنصة",
     "roleAdmin": "مدير منصة",
     "quickLinks": "الأقسام",
-    "comingPhase": "قادم في {{phase}}"
+    "comingPhase": "قادم في {{phase}}",
+    "metrics": {
+      "workspaces": "مساحات عمل المستأجرين",
+      "workspacesHint": "{{active}} نشطة · {{disabled}} غير نشطة",
+      "users": "المستخدمون",
+      "usersHint": "{{active}} نشط · {{disabled}} معطّل",
+      "experts": "خبراء المنصة المنشورون",
+      "expertsHint": "{{draft}} مسودة/غير منشور",
+      "usage30d": "رموز AI المفوترة (30 يومًا)",
+      "usage30dHint": "{{active}} مساحة عمل بها استخدام"
+    },
+    "sections": {
+      "billing": "لمحة تجارية",
+      "billingHint": "مؤشرات تشغيلية للمشتريات — وليست إيرادًا معترفًا به.",
+      "apps": "لمحة متجر التطبيقات",
+      "gateway": "بوابة الدفع النشطة",
+      "activity": "آخر نشاط إداري للمنصة",
+      "activityHint": "أحدث عمليات الإدارة المسجّلة في التدقيق."
+    },
+    "billing": {
+      "activeSubscriptions": "اشتراكات مساحات العمل النشطة",
+      "pendingPurchases": "مشتريات قيد الانتظار / إعادة التوجيه",
+      "paidVolume30d": "حجم المشتريات المدفوعة (30 يومًا)",
+      "failed30d": "مشتريات فاشلة (30 يومًا)"
+    },
+    "apps": {
+      "published": "التطبيقات المنشورة",
+      "installations": "التطبيقات المثبتة",
+      "activeSubscriptions": "اشتراكات التطبيقات النشطة",
+      "activeLicenses": "تراخيص لمرة واحدة نشطة"
+    },
+    "gateway": {
+      "testMode": "وضع الاختبار",
+      "manage": "إدارة البوابات",
+      "none": "لا توجد بوابة دفع مفعّلة حاليًا."
+    },
+    "activity": {
+      "empty": "لا يوجد نشاط إداري حديث بعد.",
+      "systemActor": "النظام",
+      "platformScope": "المنصة",
+      "viewAll": "عرض كل سجلات التدقيق"
+    }
+  },
+  "usage": {
+    "title": "استخدام الذكاء الاصطناعي",
+    "eyebrow": "الذكاء الاصطناعي",
+    "subtitle": "تحليلات الرموز المفوترة على مستوى المنصة لمساحات عمل المستأجرين.",
+    "presets": {
+      "days": "آخر {{count}} أيام"
+    },
+    "summary": {
+      "total": "إجمالي الرموز المفوترة",
+      "activeWorkspaces": "مساحات العمل النشطة",
+      "averageDaily": "متوسط الرموز المفوترة يوميًا",
+      "range": "النطاق المحدد"
+    },
+    "trendTitle": "اتجاه الرموز المفوترة يوميًا",
+    "trendEmpty": "لا يوجد استخدام في هذا النطاق.",
+    "topWorkspaces": "أعلى مساحات العمل",
+    "topWorkspacesHint": "مرتبة حسب الرموز المفوترة ضمن النطاق المحدد.",
+    "topWorkspacesEmpty": "لا يوجد استخدام للمستأجرين في هذا النطاق.",
+    "viewWorkspace": "فتح مساحة العمل",
+    "workspaceSectionTitle": "الاستخدام التاريخي",
+    "workspaceSectionHint": "آخر 30 يومًا من الرموز المفوترة لهذه المساحة.",
+    "workspaceSectionRange": "{{from}} – {{to}}",
+    "table": {
+      "workspace": "مساحة العمل",
+      "plan": "الخطة الحالية",
+      "billedTokens": "الرموز المفوترة",
+      "share": "الحصة"
+    }
+  },
+  "audit": {
+    "title": "سجلات التدقيق",
+    "eyebrow": "العمليات",
+    "subtitle": "سجل غير قابل للتعديل لعمليات إدارة المنصة ومساحات العمل.",
+    "searchPlaceholder": "ابحث في الإجراء أو المستخدم أو مساحة العمل…",
+    "actionFilter": "الإجراء",
+    "listTitle": "سجل التدقيق العام",
+    "empty": "لا توجد سجلات مطابقة لهذه المرشحات.",
+    "viewDetails": "التفاصيل",
+    "detailTitle": "سجل تدقيق",
+    "summary": "الملخص",
+    "metadata": "البيانات الوصفية",
+    "openResource": "فتح السجل المرتبط",
+    "systemActor": "النظام",
+    "platformScope": "المنصة",
+    "columns": {
+      "time": "الوقت",
+      "actor": "الفاعل",
+      "action": "الإجراء",
+      "workspace": "مساحة العمل",
+      "resource": "المورد"
+    },
+    "actions": {
+      "workspace.credit_grant": "منح رصيد",
+      "workspace.disabled": "تعطيل مساحة العمل",
+      "workspace.enabled": "تفعيل مساحة العمل",
+      "user.disabled": "تعطيل مستخدم",
+      "user.enabled": "تفعيل مستخدم",
+      "plan.create": "إنشاء خطة",
+      "plan.update": "تحديث خطة",
+      "platform_expert.publish": "نشر خبير المنصة",
+      "payment_gateway.activate": "تفعيل بوابة الدفع",
+      "purchase.reconcile": "مطابقة عملية شراء",
+      "app_license.grant": "منح ترخيص تطبيق"
+    }
   },
   "placeholder": {
     "title": "{{section}}",

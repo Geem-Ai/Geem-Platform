@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS (payment gateways & purchases). 12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS + 12G PASS (dashboard, usage analytics, audit logs)."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS** + **12F PASS**. 12G not started.
+**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS** + **12F PASS** + **12G PASS**. 12H not started.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1467,7 +1467,18 @@ Delivered:
 - Tests: `test_platform_admin_phase12f.py` (13 cases); Phase 6A/6B + Phase 9B + 12C/12E regression; dashboard vitest (30 pass); Playwright admin smoke extended
 - **No schema migration** — `payment_gateway_config_id` pinning and one-enabled constraint already existed from Phase 6A
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements, configure payment gateways, and operate on global purchases; Workspace app remains tenant-only. **Partially met** — 12A–12F PASS; global audit logs / usage analytics remain (12G).
+#### Phase 12G — Platform usage analytics, operations dashboard & audit logs (PASS)
+
+Delivered:
+
+- `PlatformDashboardService` + `GET /api/platform/dashboard/summary` — compact operational snapshot (footprint, hybrid AI usage 24h/7d/30d, commerce, App Store, gateway, recent audit)
+- `PlatformUsageAnalyticsService` + usage APIs (`/api/platform/usage/*`, workspace drill-down) — **billed tokens** primary; hybrid `usage_daily_workspace` (API complete UTC days) + bounded `usage_events` (interactive chat + partial-day edges); family/source breakdown from normalized events; bounded event history
+- `PlatformAuditLogsService` + `/api/platform/audit-logs*` — paginated filters, detail, read-time recursive redaction via `redact_audit_metadata_for_read`
+- Migration `0035_audit_logs_created_at_index.py` for global audit ordering
+- `dashboard_web`: real Overview, `/usage`, `/audit-logs`, Workspace usage section; SVG trend chart; EN/AR + RTL
+- Tests: `test_platform_admin_phase12g.py` (13 cases); 12F regression; dashboard vitest (33 pass); Playwright admin smoke extended with 12G mocks
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements, configure payment gateways, operate on global purchases, and monitor platform usage plus global audit logs; Workspace app remains tenant-only. **Partially met** — 12A–12G PASS; remaining Phase 12 slices (12H+) not started.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

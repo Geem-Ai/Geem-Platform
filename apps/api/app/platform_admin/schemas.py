@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -881,3 +881,219 @@ class PlatformPurchaseReconcileResponse(BaseModel):
     fulfillment_applied: bool
     provider_status: str | None = None
     idempotent_replay: bool = False
+
+
+# --- Phase 12G: Dashboard / Usage analytics / Audit logs ---
+
+
+class PlatformDashboardWorkspacesOut(BaseModel):
+    total: int
+    active: int
+    disabled: int
+
+
+class PlatformDashboardUsersOut(BaseModel):
+    total: int
+    active: int
+    disabled: int
+
+
+class PlatformDashboardExpertsOut(BaseModel):
+    published: int
+    draft: int
+
+
+class PlatformDashboardUsageOut(BaseModel):
+    billed_tokens_24h: int
+    billed_tokens_7d: int
+    billed_tokens_30d: int
+    active_workspaces_30d: int
+    outstanding_credit_balance: int
+
+
+class PlatformDashboardBillingOut(BaseModel):
+    active_subscriptions: int
+    pending_purchases: int
+    failed_purchases_30d: int
+    paid_purchase_count_30d: int
+    paid_purchase_volume_30d: str
+
+
+class PlatformDashboardAppsOut(BaseModel):
+    published: int
+    active_subscriptions: int
+    active_licenses: int
+    installations: int
+
+
+class PlatformDashboardGatewayOut(BaseModel):
+    gateway_config_id: uuid.UUID
+    code: str
+    enabled: bool
+    test_mode: bool
+
+
+class PlatformAuditActorOut(BaseModel):
+    user_id: uuid.UUID | None = None
+    api_key_id: uuid.UUID | None = None
+    email: str | None = None
+
+
+class PlatformAuditWorkspaceOut(BaseModel):
+    workspace_id: uuid.UUID
+    name: str
+    slug: str
+
+
+class PlatformAuditResourceOut(BaseModel):
+    entity_type: str
+    entity_id: uuid.UUID | None = None
+
+
+class PlatformAuditListItemOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    actor: PlatformAuditActorOut | None = None
+    workspace: PlatformAuditWorkspaceOut | None = None
+    action: str
+    resource: PlatformAuditResourceOut
+    request_id: str | None = None
+    summary: str | None = None
+
+
+class PlatformDashboardSummaryOut(BaseModel):
+    workspaces: PlatformDashboardWorkspacesOut
+    users: PlatformDashboardUsersOut
+    experts: PlatformDashboardExpertsOut
+    usage: PlatformDashboardUsageOut
+    billing: PlatformDashboardBillingOut
+    apps: PlatformDashboardAppsOut
+    gateway: PlatformDashboardGatewayOut | None = None
+    recent_activity: list[PlatformAuditListItemOut] = Field(default_factory=list)
+
+
+class PlatformUsagePeakDayOut(BaseModel):
+    day: date
+    billed_tokens: int
+
+
+class PlatformUsageFamilyBreakdownOut(BaseModel):
+    family: str
+    billed_tokens: int
+    percentage: float
+
+
+class PlatformUsageSourceBreakdownOut(BaseModel):
+    source: str
+    billed_tokens: int
+    percentage: float
+
+
+class PlatformUsageSummaryOut(BaseModel):
+    from_day: date
+    to_day: date
+    total_billed_tokens: int
+    active_workspaces: int
+    average_daily_billed_tokens: int
+    peak_day: PlatformUsagePeakDayOut | None = None
+    families: list[PlatformUsageFamilyBreakdownOut] = Field(default_factory=list)
+    sources: list[PlatformUsageSourceBreakdownOut] = Field(default_factory=list)
+
+
+class PlatformUsageTrendPointOut(BaseModel):
+    date: date
+    billed_tokens: int
+    active_workspaces: int
+
+
+class PlatformUsageTrendResponse(BaseModel):
+    from_day: date
+    to_day: date
+    points: list[PlatformUsageTrendPointOut]
+
+
+class PlatformUsageWorkspaceItemOut(BaseModel):
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    workspace_status: str
+    billed_tokens: int
+    percentage_of_platform_usage: float
+    active_days: int
+    current_plan_code: str | None = None
+    current_plan_name: str | None = None
+
+
+class PlatformUsageWorkspacesResponse(BaseModel):
+    items: list[PlatformUsageWorkspaceItemOut]
+    total: int
+    limit: int
+    offset: int
+    from_day: date
+    to_day: date
+    platform_total_billed_tokens: int
+
+
+class PlatformUsageEventItemOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    workspace_id: uuid.UUID | None = None
+    workspace_name: str | None = None
+    workspace_slug: str | None = None
+    user_id: uuid.UUID | None = None
+    expert_id: uuid.UUID | None = None
+    api_key_id: uuid.UUID | None = None
+    family: str
+    operation_type: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    billed_tokens: int
+    cost_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlatformUsageEventsResponse(BaseModel):
+    items: list[PlatformUsageEventItemOut]
+    total: int
+    limit: int
+    offset: int
+    from_day: date
+    to_day: date
+
+
+class PlatformWorkspaceUsageSummaryOut(BaseModel):
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    workspace_status: str
+    workspace_kind: str
+    from_day: date
+    to_day: date
+    total_billed_tokens: int
+    families: list[PlatformUsageFamilyBreakdownOut] = Field(default_factory=list)
+    sources: list[PlatformUsageSourceBreakdownOut] = Field(default_factory=list)
+
+
+class PlatformWorkspaceUsageTrendResponse(BaseModel):
+    workspace_id: uuid.UUID
+    from_day: date
+    to_day: date
+    points: list[PlatformUsageTrendPointOut]
+
+
+class PlatformAuditListResponse(BaseModel):
+    items: list[PlatformAuditListItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformAuditLogDetailOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    actor: PlatformAuditActorOut | None = None
+    workspace: PlatformAuditWorkspaceOut | None = None
+    action: str
+    resource: PlatformAuditResourceOut
+    request_id: str | None = None
+    summary: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
