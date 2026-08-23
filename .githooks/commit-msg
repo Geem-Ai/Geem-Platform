@@ -1,0 +1,25 @@
+#!/bin/sh
+# Strip Cursor co-author attribution from commit messages.
+#
+# One-time setup (per clone):
+#   git config core.hooksPath .githooks
+#
+# This hook removes lines like:
+#   Co-authored-by: Cursor <cursoragent@cursor.com>
+#   Made-with: Cursor
+
+commit_msg_file="$1"
+
+if [ ! -f "$commit_msg_file" ]; then
+  exit 0
+fi
+
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+grep -viE '^(co-authored-by:.*cursor|made-with:.*cursor|co-authored-by:.*cursoragent@cursor\.com)' "$commit_msg_file" > "$tmp_file" || true
+
+# Collapse trailing blank lines.
+awk 'NF{p=1} p{print}' "$tmp_file" > "$commit_msg_file"
+
+exit 0
