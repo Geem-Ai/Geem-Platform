@@ -16,6 +16,9 @@ import { UsersPage } from '@/features/users/pages/UsersPage';
 import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
 import { WorkspacesPage } from '@/features/workspaces/pages/WorkspacesPage';
 import { WorkspaceDetailPage } from '@/features/workspaces/pages/WorkspaceDetailPage';
+import { AppStorePage } from '@/features/app-store/pages/AppStorePage';
+import { AppCreatePage } from '@/features/app-store/pages/AppCreatePage';
+import { AppDetailPage } from '@/features/app-store/pages/AppDetailPage';
 
 export function AppRouter() {
   return (
@@ -40,10 +43,9 @@ export function AppRouter() {
           <Route path="plans/:planId" element={<PlanDetailPage />} />
           <Route path="credits" element={<CreditsPage />} />
           <Route path="credits/:workspaceId" element={<CreditDetailPage />} />
-          <Route
-            path="app-store"
-            element={<ComingSoonPage titleKey="nav.appStore" phase="12E" />}
-          />
+          <Route path="app-store" element={<AppStorePage />} />
+          <Route path="app-store/new" element={<AppCreatePage />} />
+          <Route path="app-store/:appId" element={<AppDetailPage />} />
           <Route
             path="purchases"
             element={<ComingSoonPage titleKey="nav.purchases" phase="12F" />}

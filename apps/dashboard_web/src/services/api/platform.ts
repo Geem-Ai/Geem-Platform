@@ -13,6 +13,26 @@ import type {
   PlatformExpertUpdateBody,
   PlatformExpertUploadResponse,
   PlatformExpertWorkspaceGrant,
+  PlatformAppCategoryListResponse,
+  PlatformAppCommercialGrantResponse,
+  PlatformAppCreateBody,
+  PlatformAppDetail,
+  PlatformAppEntitlementCatalogResponse,
+  PlatformAppLicenseGrantBody,
+  PlatformAppLicenseRevokeBody,
+  PlatformAppLifecycleBody,
+  PlatformAppListResponse,
+  PlatformAppPageParams,
+  PlatformAppPlanCreateBody,
+  PlatformAppPlanDetail,
+  PlatformAppPlanListResponse,
+  PlatformAppPlanUpdateBody,
+  PlatformAppSubscriptionExtendBody,
+  PlatformAppSubscriptionGrantBody,
+  PlatformAppSubscriptionRevokeBody,
+  PlatformAppUpdateBody,
+  PlatformAppWorkspaceEntitlementListResponse,
+  PlatformWorkspaceAppsResponse,
   PlatformMeResponse,
   PlatformPageParams,
   PlatformPlanCreateBody,
@@ -55,6 +75,19 @@ function toExpertQuery(params: PlatformExpertPageParams = {}): string {
   if (params.knowledge_mode) q.set('knowledge_mode', params.knowledge_mode);
   if (params.availability_mode) q.set('availability_mode', params.availability_mode);
   if (params.published != null) q.set('published', String(params.published));
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+function toAppQuery(params: PlatformAppPageParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set('limit', String(params.limit));
+  if (params.offset != null) q.set('offset', String(params.offset));
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  if (params.status) q.set('status', params.status);
+  if (params.billing_type) q.set('billing_type', params.billing_type);
+  if (params.category) q.set('category', params.category);
+  if (params.connector_kind) q.set('connector_kind', params.connector_kind);
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -277,6 +310,15 @@ export const platformQueryKeys = {
   expertGrants: (id: string, filters: PlatformPageParams = {}) =>
     ['platform', 'expert', id, 'grants', filters] as const,
   expertKnowledge: (id: string) => ['platform', 'expert', id, 'knowledge'] as const,
+  appCategories: ['platform', 'app-categories'] as const,
+  apps: (filters: PlatformAppPageParams) => ['platform', 'apps', filters] as const,
+  app: (id: string) => ['platform', 'app', id] as const,
+  appEntitlementCatalog: (id: string) => ['platform', 'app', id, 'entitlement-catalog'] as const,
+  appPlans: (id: string, filters: PlatformPageParams = {}) =>
+    ['platform', 'app', id, 'plans', filters] as const,
+  appWorkspaces: (id: string, filters: PlatformPageParams = {}) =>
+    ['platform', 'app', id, 'workspaces', filters] as const,
+  workspaceApps: (workspaceId: string) => ['platform', 'workspace', workspaceId, 'apps'] as const,
 };
 
 // --- Phase 12D: Platform Experts ---
@@ -418,4 +460,212 @@ export async function removePlatformExpertKnowledge(
   return apiRequest<void>(`/api/platform/experts/${expertId}/knowledge/${documentId}`, {
     method: 'DELETE',
   });
+}
+
+// --- Phase 12E: Platform App Store ---
+
+export async function fetchPlatformAppCategories(): Promise<PlatformAppCategoryListResponse> {
+  return apiRequest<PlatformAppCategoryListResponse>('/api/platform/app-categories');
+}
+
+export async function fetchPlatformApps(
+  params: PlatformAppPageParams = {},
+): Promise<PlatformAppListResponse> {
+  return apiRequest<PlatformAppListResponse>(`/api/platform/apps${toAppQuery(params)}`);
+}
+
+export async function fetchPlatformApp(appId: string): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}`);
+}
+
+export async function createPlatformApp(body: PlatformAppCreateBody): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>('/api/platform/apps', {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function updatePlatformApp(
+  appId: string,
+  body: PlatformAppUpdateBody,
+): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}`, {
+    method: 'PATCH',
+    json: body,
+  });
+}
+
+export async function publishPlatformApp(
+  appId: string,
+  body: PlatformAppLifecycleBody,
+): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}/publish`, {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function unpublishPlatformApp(
+  appId: string,
+  body: PlatformAppLifecycleBody,
+): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}/unpublish`, {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function setPlatformAppComingSoon(
+  appId: string,
+  body: PlatformAppLifecycleBody,
+): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}/set-coming-soon`, {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function disablePlatformApp(
+  appId: string,
+  body: PlatformAppLifecycleBody,
+): Promise<PlatformAppDetail> {
+  return apiRequest<PlatformAppDetail>(`/api/platform/apps/${appId}/disable`, {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function fetchPlatformAppEntitlementCatalog(
+  appId: string,
+): Promise<PlatformAppEntitlementCatalogResponse> {
+  return apiRequest<PlatformAppEntitlementCatalogResponse>(
+    `/api/platform/apps/${appId}/entitlement-catalog`,
+  );
+}
+
+export async function fetchPlatformAppPlans(
+  appId: string,
+  params: PlatformPageParams = {},
+): Promise<PlatformAppPlanListResponse> {
+  return apiRequest<PlatformAppPlanListResponse>(
+    `/api/platform/apps/${appId}/plans${toQuery(params)}`,
+  );
+}
+
+export async function createPlatformAppPlan(
+  appId: string,
+  body: PlatformAppPlanCreateBody,
+): Promise<PlatformAppPlanDetail> {
+  return apiRequest<PlatformAppPlanDetail>(`/api/platform/apps/${appId}/plans`, {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function updatePlatformAppPlan(
+  appId: string,
+  planId: string,
+  body: PlatformAppPlanUpdateBody,
+): Promise<PlatformAppPlanDetail> {
+  return apiRequest<PlatformAppPlanDetail>(`/api/platform/apps/${appId}/plans/${planId}`, {
+    method: 'PATCH',
+    json: body,
+  });
+}
+
+export async function activatePlatformAppPlan(
+  appId: string,
+  planId: string,
+): Promise<PlatformAppPlanDetail> {
+  return apiRequest<PlatformAppPlanDetail>(
+    `/api/platform/apps/${appId}/plans/${planId}/activate`,
+    { method: 'POST', json: {} },
+  );
+}
+
+export async function deactivatePlatformAppPlan(
+  appId: string,
+  planId: string,
+  body: PlatformAppLifecycleBody,
+): Promise<PlatformAppPlanDetail> {
+  return apiRequest<PlatformAppPlanDetail>(
+    `/api/platform/apps/${appId}/plans/${planId}/deactivate`,
+    { method: 'POST', json: body },
+  );
+}
+
+export async function fetchPlatformAppWorkspaces(
+  appId: string,
+  params: PlatformPageParams = {},
+): Promise<PlatformAppWorkspaceEntitlementListResponse> {
+  return apiRequest<PlatformAppWorkspaceEntitlementListResponse>(
+    `/api/platform/apps/${appId}/workspaces${toQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformWorkspaceApps(
+  workspaceId: string,
+): Promise<PlatformWorkspaceAppsResponse> {
+  return apiRequest<PlatformWorkspaceAppsResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps`,
+  );
+}
+
+export async function grantPlatformAppLicense(
+  workspaceId: string,
+  appId: string,
+  body: PlatformAppLicenseGrantBody,
+): Promise<PlatformAppCommercialGrantResponse> {
+  return apiRequest<PlatformAppCommercialGrantResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps/${appId}/license/grant`,
+    { method: 'POST', json: body },
+  );
+}
+
+export async function revokePlatformAppLicense(
+  workspaceId: string,
+  appId: string,
+  body: PlatformAppLicenseRevokeBody,
+): Promise<PlatformAppCommercialGrantResponse> {
+  return apiRequest<PlatformAppCommercialGrantResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps/${appId}/license/revoke`,
+    { method: 'POST', json: body },
+  );
+}
+
+export async function grantPlatformAppSubscription(
+  workspaceId: string,
+  appId: string,
+  body: PlatformAppSubscriptionGrantBody,
+): Promise<PlatformAppCommercialGrantResponse> {
+  return apiRequest<PlatformAppCommercialGrantResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps/${appId}/subscription/grant`,
+    { method: 'POST', json: body },
+  );
+}
+
+export async function extendPlatformAppSubscription(
+  workspaceId: string,
+  appId: string,
+  body: PlatformAppSubscriptionExtendBody,
+): Promise<PlatformAppCommercialGrantResponse> {
+  return apiRequest<PlatformAppCommercialGrantResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps/${appId}/subscription/extend`,
+    { method: 'POST', json: body },
+  );
+}
+
+export async function revokePlatformAppSubscription(
+  workspaceId: string,
+  appId: string,
+  body: PlatformAppSubscriptionRevokeBody,
+): Promise<PlatformAppCommercialGrantResponse> {
+  return apiRequest<PlatformAppCommercialGrantResponse>(
+    `/api/platform/workspaces/${workspaceId}/apps/${appId}/subscription/revoke`,
+    { method: 'POST', json: body },
+  );
+}
+
+export function newAppGrantIdempotencyKey(): string {
+  return `platform-app-grant:${crypto.randomUUID()}`;
 }

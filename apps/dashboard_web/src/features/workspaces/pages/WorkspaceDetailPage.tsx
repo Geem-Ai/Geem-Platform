@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { WorkspaceBillingSection } from '@/features/workspaces/components/WorkspaceBillingSection';
+import { WorkspaceAppsSection } from '@/features/app-store/components/WorkspaceAppsSection';
 import { formatAdminDate, formatAdminDateTime, formatBytes } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/services/api/errors';
@@ -461,6 +462,12 @@ export function WorkspaceDetailPage() {
       </div>
 
       <WorkspaceBillingSection
+        workspaceId={workspaceId}
+        workspaceName={workspace.name}
+        isSystem={isSystem}
+      />
+
+      <WorkspaceAppsSection
         workspaceId={workspaceId}
         workspaceName={workspace.name}
         isSystem={isSystem}

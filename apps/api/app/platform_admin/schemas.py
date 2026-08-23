@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -460,3 +461,272 @@ class PlatformExpertKnowledgeListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# --- Phase 12E: App Store ---
+
+
+class PlatformAppCategoryOut(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name_key: str
+    description_key: str | None = None
+    icon: str | None = None
+    sort_order: int
+    is_active: bool
+
+
+class PlatformAppCategoryListResponse(BaseModel):
+    items: list[PlatformAppCategoryOut]
+
+
+class PlatformAppCategoryUpdateRequest(BaseModel):
+    is_active: bool | None = None
+    sort_order: int | None = None
+
+
+class PlatformAppEntitlementCatalogItem(BaseModel):
+    key: str
+    value_type: str
+    unit: str
+
+
+class PlatformAppEntitlementCatalogResponse(BaseModel):
+    items: list[PlatformAppEntitlementCatalogItem]
+
+
+class PlatformAppPlanEntitlementOut(BaseModel):
+    key: str
+    value: int | bool | str
+
+
+class PlatformAppPlanEntitlementIn(BaseModel):
+    key: str = Field(..., min_length=1, max_length=128)
+    value: int = Field(..., ge=0)
+
+
+class PlatformAppPlanListItem(BaseModel):
+    id: uuid.UUID
+    app_id: uuid.UUID
+    code: str
+    name: str
+    description: str | None = None
+    billing_interval: str
+    price_amount: str
+    currency: str
+    is_default: bool
+    is_active: bool
+    active_entitlement_count: int = 0
+    entitlements: list[PlatformAppPlanEntitlementOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformAppPlanListResponse(BaseModel):
+    items: list[PlatformAppPlanListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformAppPlanDetailOut(PlatformAppPlanListItem):
+    pass
+
+
+class PlatformAppPlanCreateRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    price_amount: str = Field(default="0.00")
+    currency: str = Field(default="SAR", min_length=3, max_length=3)
+    billing_interval: str = Field(default="none")
+    is_default: bool = False
+    entitlements: list[PlatformAppPlanEntitlementIn] = Field(default_factory=list)
+
+
+class PlatformAppPlanUpdateRequest(BaseModel):
+    code: str | None = Field(default=None, min_length=1, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    price_amount: str | None = None
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    is_default: bool | None = None
+    is_active: bool | None = None
+    billing_interval: str | None = None
+    entitlements: list[PlatformAppPlanEntitlementIn] | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class PlatformAppListItem(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    short_description: str
+    category_slug: str
+    category_name_key: str
+    billing_type: str
+    status: str
+    icon_url: str | None = None
+    connector_key: str | None = None
+    connector_kind: str | None = None
+    plans_count: int = 0
+    installations_count: int = 0
+    active_entitlements_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformAppListResponse(BaseModel):
+    items: list[PlatformAppListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformAppDetailOut(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    short_description: str
+    description: str | None = None
+    category_id: uuid.UUID
+    category_slug: str
+    category_name_key: str
+    billing_type: str
+    status: str
+    is_featured: bool
+    icon_url: str | None = None
+    connector_key: str | None = None
+    connector_kind: str | None = None
+    sort_order: int
+    slug_locked: bool = False
+    billing_type_locked: bool = False
+    connector_locked: bool = False
+    is_seeded: bool = False
+    disable_allowed: bool = True
+    plans: list[PlatformAppPlanListItem] = Field(default_factory=list)
+    installations_count: int = 0
+    active_licenses_count: int = 0
+    active_subscriptions_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformAppCreateRequest(BaseModel):
+    slug: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    name: str = Field(..., min_length=1, max_length=200)
+    short_description: str = Field(..., min_length=1, max_length=500)
+    description: str | None = Field(default=None, max_length=5000)
+    category_id: uuid.UUID
+    billing_type: str = Field(default="free")
+    icon_url: str | None = Field(default=None, max_length=1024)
+    connector_key: str | None = Field(default=None, max_length=64)
+    connector_kind: str | None = Field(default=None, max_length=32)
+    is_featured: bool = False
+    sort_order: int = 0
+
+
+class PlatformAppUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    slug: str | None = Field(default=None, min_length=1, max_length=64)
+    short_description: str | None = Field(default=None, min_length=1, max_length=500)
+    description: str | None = Field(default=None, max_length=5000)
+    category_id: uuid.UUID | None = None
+    billing_type: str | None = None
+    icon_url: str | None = Field(default=None, max_length=1024)
+    connector_key: str | None = Field(default=None, max_length=64)
+    connector_kind: str | None = Field(default=None, max_length=32)
+    is_featured: bool | None = None
+    sort_order: int | None = None
+
+
+class PlatformAppLifecycleRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class PlatformAppWorkspaceEntitlementOut(BaseModel):
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    access_status: str
+    installed: bool
+    plan_id: uuid.UUID | None = None
+    plan_code: str | None = None
+    plan_name: str | None = None
+    license_status: str | None = None
+    license_source: str | None = None
+    subscription_status: str | None = None
+    subscription_source: str | None = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    entitlements: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlatformAppWorkspaceEntitlementListResponse(BaseModel):
+    items: list[PlatformAppWorkspaceEntitlementOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformWorkspaceAppOut(BaseModel):
+    app_id: uuid.UUID
+    app_slug: str
+    app_name: str
+    billing_type: str
+    catalog_status: str
+    access_status: str
+    installed: bool
+    installation_status: str | None = None
+    plan_id: uuid.UUID | None = None
+    plan_code: str | None = None
+    plan_name: str | None = None
+    license_status: str | None = None
+    license_source: str | None = None
+    subscription_status: str | None = None
+    subscription_source: str | None = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    entitlements: dict[str, Any] = Field(default_factory=dict)
+    connections_used: int | None = None
+    connections_limit: int | None = None
+    widgets_used: int | None = None
+    widgets_limit: int | None = None
+
+
+class PlatformWorkspaceAppsResponse(BaseModel):
+    items: list[PlatformWorkspaceAppOut]
+
+
+class PlatformAppLicenseGrantRequest(BaseModel):
+    app_plan_id: uuid.UUID
+    reason: str = Field(..., min_length=1, max_length=500)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class PlatformAppLicenseRevokeRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class PlatformAppSubscriptionGrantRequest(BaseModel):
+    app_plan_id: uuid.UUID
+    reason: str = Field(..., min_length=1, max_length=500)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class PlatformAppSubscriptionExtendRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class PlatformAppSubscriptionRevokeRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class PlatformAppCommercialGrantResponse(BaseModel):
+    workspace_id: uuid.UUID
+    app_id: uuid.UUID
+    license_id: uuid.UUID | None = None
+    subscription_id: uuid.UUID | None = None
+    access_status: str
+    idempotent_replay: bool = False

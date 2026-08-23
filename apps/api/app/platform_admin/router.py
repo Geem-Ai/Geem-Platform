@@ -29,6 +29,7 @@ from app.experts.schemas import (
 )
 from app.experts.service import ExpertService
 from app.identity.models import User
+from app.platform_admin.apps import PlatformAdminAppsService
 from app.platform_admin.billing import PlatformAdminBillingService
 from app.platform_admin.dependencies import (
     require_platform_admin,
@@ -36,6 +37,26 @@ from app.platform_admin.dependencies import (
 )
 from app.platform_admin.experts import PlatformAdminExpertsService
 from app.platform_admin.schemas import (
+    PlatformAppCategoryListResponse,
+    PlatformAppCategoryOut,
+    PlatformAppCategoryUpdateRequest,
+    PlatformAppCommercialGrantResponse,
+    PlatformAppCreateRequest,
+    PlatformAppDetailOut,
+    PlatformAppEntitlementCatalogResponse,
+    PlatformAppLicenseGrantRequest,
+    PlatformAppLicenseRevokeRequest,
+    PlatformAppLifecycleRequest,
+    PlatformAppListResponse,
+    PlatformAppPlanCreateRequest,
+    PlatformAppPlanDetailOut,
+    PlatformAppPlanListResponse,
+    PlatformAppPlanUpdateRequest,
+    PlatformAppSubscriptionExtendRequest,
+    PlatformAppSubscriptionGrantRequest,
+    PlatformAppSubscriptionRevokeRequest,
+    PlatformAppUpdateRequest,
+    PlatformAppWorkspaceEntitlementListResponse,
     PlatformCreditGrantRequest,
     PlatformCreditGrantResponse,
     PlatformCreditHistoryResponse,
@@ -66,6 +87,8 @@ from app.platform_admin.schemas import (
     PlatformWorkspaceListResponse,
     PlatformWorkspaceMembersResponse,
     PlatformWorkspaceUsageOut,
+    PlatformWorkspaceAppsResponse,
+    PlatformWorkspaceAppOut,
 )
 from app.platform_admin.service import PlatformAdminService
 from app.worker.tasks import enqueue_ingest
@@ -754,3 +777,303 @@ async def upload_platform_expert_document(
         page_count=result.document.page_count,
         reused=result.reused,
     )
+
+
+# --- Phase 12E: App Store ---
+
+
+@router.get("/app-categories", response_model=PlatformAppCategoryListResponse)
+def list_platform_app_categories(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCategoryListResponse:
+    return PlatformAdminAppsService(db).list_categories(user)
+
+
+@router.patch("/app-categories/{category_id}", response_model=PlatformAppCategoryOut)
+def update_platform_app_category(
+    category_id: uuid.UUID,
+    body: PlatformAppCategoryUpdateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCategoryOut:
+    return PlatformAdminAppsService(db).update_category(user, category_id, body)
+
+
+@router.get("/apps", response_model=PlatformAppListResponse)
+def list_platform_apps(
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    status: str | None = Query(default=None, max_length=32),
+    billing_type: str | None = Query(default=None, max_length=32),
+    category: str | None = Query(default=None, max_length=64),
+    connector_kind: str | None = Query(default=None, max_length=32),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppListResponse:
+    return PlatformAdminAppsService(db).list_apps(
+        user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        status=status,
+        billing_type=billing_type,
+        category=category,
+        connector_kind=connector_kind,
+    )
+
+
+@router.post("/apps", response_model=PlatformAppDetailOut, status_code=201)
+def create_platform_app(
+    body: PlatformAppCreateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).create_app(user, body)
+
+
+@router.get("/apps/{app_id}", response_model=PlatformAppDetailOut)
+def get_platform_app(
+    app_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).get_app(user, app_id)
+
+
+@router.patch("/apps/{app_id}", response_model=PlatformAppDetailOut)
+def update_platform_app(
+    app_id: uuid.UUID,
+    body: PlatformAppUpdateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).update_app(user, app_id, body)
+
+
+@router.post("/apps/{app_id}/publish", response_model=PlatformAppDetailOut)
+def publish_platform_app(
+    app_id: uuid.UUID,
+    body: PlatformAppLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).publish_app(user, app_id, body)
+
+
+@router.post("/apps/{app_id}/unpublish", response_model=PlatformAppDetailOut)
+def unpublish_platform_app(
+    app_id: uuid.UUID,
+    body: PlatformAppLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).unpublish_app(user, app_id, body)
+
+
+@router.post("/apps/{app_id}/set-coming-soon", response_model=PlatformAppDetailOut)
+def set_platform_app_coming_soon(
+    app_id: uuid.UUID,
+    body: PlatformAppLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).set_coming_soon(user, app_id, body)
+
+
+@router.post("/apps/{app_id}/disable", response_model=PlatformAppDetailOut)
+def disable_platform_app(
+    app_id: uuid.UUID,
+    body: PlatformAppLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppDetailOut:
+    return PlatformAdminAppsService(db).disable_app(user, app_id, body)
+
+
+@router.get(
+    "/apps/{app_id}/entitlement-catalog",
+    response_model=PlatformAppEntitlementCatalogResponse,
+)
+def get_platform_app_entitlement_catalog(
+    app_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppEntitlementCatalogResponse:
+    return PlatformAdminAppsService(db).app_entitlement_catalog(user, app_id)
+
+
+@router.get("/apps/{app_id}/plans", response_model=PlatformAppPlanListResponse)
+def list_platform_app_plans(
+    app_id: uuid.UUID,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppPlanListResponse:
+    return PlatformAdminAppsService(db).list_plans(
+        user, app_id, limit=limit, offset=offset
+    )
+
+
+@router.post("/apps/{app_id}/plans", response_model=PlatformAppPlanDetailOut, status_code=201)
+def create_platform_app_plan(
+    app_id: uuid.UUID,
+    body: PlatformAppPlanCreateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppPlanDetailOut:
+    return PlatformAdminAppsService(db).create_plan(user, app_id, body)
+
+
+@router.patch("/apps/{app_id}/plans/{plan_id}", response_model=PlatformAppPlanDetailOut)
+def update_platform_app_plan(
+    app_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    body: PlatformAppPlanUpdateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppPlanDetailOut:
+    return PlatformAdminAppsService(db).update_plan(user, app_id, plan_id, body)
+
+
+@router.post("/apps/{app_id}/plans/{plan_id}/activate", response_model=PlatformAppPlanDetailOut)
+def activate_platform_app_plan(
+    app_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppPlanDetailOut:
+    return PlatformAdminAppsService(db).activate_plan(user, app_id, plan_id)
+
+
+@router.post(
+    "/apps/{app_id}/plans/{plan_id}/deactivate",
+    response_model=PlatformAppPlanDetailOut,
+)
+def deactivate_platform_app_plan(
+    app_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    body: PlatformAppLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppPlanDetailOut:
+    return PlatformAdminAppsService(db).deactivate_plan(user, app_id, plan_id, body)
+
+
+@router.get(
+    "/apps/{app_id}/workspaces",
+    response_model=PlatformAppWorkspaceEntitlementListResponse,
+)
+def list_platform_app_workspaces(
+    app_id: uuid.UUID,
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppWorkspaceEntitlementListResponse:
+    return PlatformAdminAppsService(db).list_app_workspaces(
+        user, app_id, limit=limit, offset=offset
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/apps",
+    response_model=PlatformWorkspaceAppsResponse,
+)
+def list_platform_workspace_apps(
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceAppsResponse:
+    return PlatformAdminAppsService(db).list_workspace_apps(user, workspace_id)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/license/grant",
+    response_model=PlatformAppCommercialGrantResponse,
+)
+def grant_platform_app_license(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    body: PlatformAppLicenseGrantRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCommercialGrantResponse:
+    return PlatformAdminAppsService(db).grant_license(user, workspace_id, app_id, body)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/license/revoke",
+    response_model=PlatformAppCommercialGrantResponse,
+)
+def revoke_platform_app_license(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    body: PlatformAppLicenseRevokeRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCommercialGrantResponse:
+    return PlatformAdminAppsService(db).revoke_license(user, workspace_id, app_id, body)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/subscription/grant",
+    response_model=PlatformAppCommercialGrantResponse,
+)
+def grant_platform_app_subscription(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    body: PlatformAppSubscriptionGrantRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCommercialGrantResponse:
+    return PlatformAdminAppsService(db).grant_subscription(
+        user, workspace_id, app_id, body
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/subscription/extend",
+    response_model=PlatformAppCommercialGrantResponse,
+)
+def extend_platform_app_subscription(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    body: PlatformAppSubscriptionExtendRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCommercialGrantResponse:
+    return PlatformAdminAppsService(db).extend_subscription(
+        user, workspace_id, app_id, body
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/subscription/revoke",
+    response_model=PlatformAppCommercialGrantResponse,
+)
+def revoke_platform_app_subscription(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    body: PlatformAppSubscriptionRevokeRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformAppCommercialGrantResponse:
+    return PlatformAdminAppsService(db).revoke_subscription(
+        user, workspace_id, app_id, body
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/apps/{app_id}/install",
+    response_model=PlatformWorkspaceAppOut,
+)
+def admin_install_platform_app(
+    workspace_id: uuid.UUID,
+    app_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceAppOut:
+    return PlatformAdminAppsService(db).admin_install_app(user, workspace_id, app_id)

@@ -472,3 +472,275 @@ export type PlatformExpertPageParams = PlatformPageParams & {
   availability_mode?: string;
   published?: boolean;
 };
+
+// --- Phase 12E: Platform App Store ---
+
+export type PlatformAppCategory = {
+  id: string;
+  slug: string;
+  name_key: string;
+  description_key?: string | null;
+  icon?: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type PlatformAppCategoryListResponse = {
+  items: PlatformAppCategory[];
+};
+
+export type PlatformAppCategoryUpdateBody = {
+  is_active?: boolean | null;
+  sort_order?: number | null;
+};
+
+export type PlatformAppEntitlementCatalogItem = {
+  key: string;
+  value_type: string;
+  unit: string;
+};
+
+export type PlatformAppEntitlementCatalogResponse = {
+  items: PlatformAppEntitlementCatalogItem[];
+};
+
+export type PlatformAppPlanEntitlement = {
+  key: string;
+  value: number | boolean | string;
+};
+
+export type PlatformAppPlanEntitlementInput = {
+  key: string;
+  value: number;
+};
+
+export type PlatformAppPlanListItem = {
+  id: string;
+  app_id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  billing_interval: string;
+  price_amount: string;
+  currency: string;
+  is_default: boolean;
+  is_active: boolean;
+  active_entitlement_count: number;
+  entitlements: PlatformAppPlanEntitlement[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlatformAppPlanListResponse = {
+  items: PlatformAppPlanListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformAppPlanDetail = PlatformAppPlanListItem;
+
+export type PlatformAppPlanCreateBody = {
+  code: string;
+  name: string;
+  description?: string | null;
+  price_amount?: string;
+  currency?: string;
+  billing_interval?: string;
+  is_default?: boolean;
+  entitlements?: PlatformAppPlanEntitlementInput[];
+};
+
+export type PlatformAppPlanUpdateBody = {
+  code?: string;
+  name?: string;
+  description?: string | null;
+  price_amount?: string;
+  currency?: string;
+  billing_interval?: string;
+  is_default?: boolean;
+  is_active?: boolean;
+  entitlements?: PlatformAppPlanEntitlementInput[];
+  reason?: string | null;
+};
+
+export type PlatformAppListItem = {
+  id: string;
+  slug: string;
+  name: string;
+  short_description: string;
+  category_slug: string;
+  category_name_key: string;
+  billing_type: string;
+  status: string;
+  icon_url?: string | null;
+  connector_key?: string | null;
+  connector_kind?: string | null;
+  plans_count: number;
+  installations_count: number;
+  active_entitlements_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlatformAppListResponse = {
+  items: PlatformAppListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformAppDetail = {
+  id: string;
+  slug: string;
+  name: string;
+  short_description: string;
+  description?: string | null;
+  category_id: string;
+  category_slug: string;
+  category_name_key: string;
+  billing_type: string;
+  status: string;
+  is_featured: boolean;
+  icon_url?: string | null;
+  connector_key?: string | null;
+  connector_kind?: string | null;
+  sort_order: number;
+  slug_locked: boolean;
+  billing_type_locked: boolean;
+  connector_locked: boolean;
+  is_seeded: boolean;
+  disable_allowed: boolean;
+  plans: PlatformAppPlanListItem[];
+  installations_count: number;
+  active_licenses_count: number;
+  active_subscriptions_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlatformAppCreateBody = {
+  slug: string;
+  name: string;
+  short_description: string;
+  description?: string | null;
+  category_id: string;
+  billing_type?: string;
+  icon_url?: string | null;
+  connector_key?: string | null;
+  connector_kind?: string | null;
+  is_featured?: boolean;
+  sort_order?: number;
+};
+
+export type PlatformAppUpdateBody = {
+  name?: string;
+  slug?: string;
+  short_description?: string;
+  description?: string | null;
+  category_id?: string;
+  billing_type?: string;
+  icon_url?: string | null;
+  connector_key?: string | null;
+  connector_kind?: string | null;
+  is_featured?: boolean;
+  sort_order?: number;
+};
+
+export type PlatformAppLifecycleBody = {
+  reason: string;
+};
+
+export type PlatformAppWorkspaceEntitlement = {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  access_status: string;
+  installed: boolean;
+  plan_id?: string | null;
+  plan_code?: string | null;
+  plan_name?: string | null;
+  license_status?: string | null;
+  license_source?: string | null;
+  subscription_status?: string | null;
+  subscription_source?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  entitlements: Record<string, unknown>;
+};
+
+export type PlatformAppWorkspaceEntitlementListResponse = {
+  items: PlatformAppWorkspaceEntitlement[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformWorkspaceApp = {
+  app_id: string;
+  app_slug: string;
+  app_name: string;
+  billing_type: string;
+  catalog_status: string;
+  access_status: string;
+  installed: boolean;
+  installation_status?: string | null;
+  plan_id?: string | null;
+  plan_code?: string | null;
+  plan_name?: string | null;
+  license_status?: string | null;
+  license_source?: string | null;
+  subscription_status?: string | null;
+  subscription_source?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  entitlements: Record<string, unknown>;
+  connections_used?: number | null;
+  connections_limit?: number | null;
+  widgets_used?: number | null;
+  widgets_limit?: number | null;
+};
+
+export type PlatformWorkspaceAppsResponse = {
+  items: PlatformWorkspaceApp[];
+};
+
+export type PlatformAppLicenseGrantBody = {
+  app_plan_id: string;
+  reason: string;
+  idempotency_key?: string;
+};
+
+export type PlatformAppLicenseRevokeBody = {
+  reason: string;
+};
+
+export type PlatformAppSubscriptionGrantBody = {
+  app_plan_id: string;
+  reason: string;
+  idempotency_key?: string;
+};
+
+export type PlatformAppSubscriptionExtendBody = {
+  reason: string;
+  idempotency_key?: string;
+};
+
+export type PlatformAppSubscriptionRevokeBody = {
+  reason: string;
+};
+
+export type PlatformAppCommercialGrantResponse = {
+  workspace_id: string;
+  app_id: string;
+  license_id?: string | null;
+  subscription_id?: string | null;
+  access_status: string;
+  idempotent_replay: boolean;
+};
+
+export type PlatformAppPageParams = PlatformPageParams & {
+  billing_type?: string;
+  category?: string;
+  connector_kind?: string;
+};

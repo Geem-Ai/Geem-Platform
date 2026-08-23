@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS (platform experts/knowledge). 12E–12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS (App Store admin). 12F–12G not started."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS**. 12E–12G not started. Do not start 12E until requested.
+**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS**. 12F–12G not started.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1437,7 +1437,23 @@ Delivered:
 - Tests: `test_platform_admin_phase12d.py` (11 cases); dashboard vitest; Playwright smoke extended (mocked experts flow)
 - **No schema migration** — Phase 3/4 Expert domain schema was already sufficient
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Partially met** — 12A+12B+12C+12D PASS; app-store/gateways/ops slices remain.
+#### Phase 12E — App Store administration (PASS)
+
+Delivered:
+
+- `PlatformAdminAppsService` orchestrating existing `AppCatalogRepository`, `AppAccessService`, `AppAdminGrantService`, `AppInstallationService` (no second App Store)
+- Platform Admin catalog: list (all statuses), detail, create, update, lifecycle (`publish`/`unpublish`/`set-coming-soon`/`disable`); slug/billing/connector immutability when seeded or commercially used
+- App categories: read + safe `is_active`/`sort_order` patch (seed-controlled slugs)
+- App Plan CRUD + activate/deactivate; typed entitlement editor from per-app catalog (`connections`, `widgets`); SAR/monthly/none billing rules preserved
+- Manual commercial grants without fake purchases: `AppLicense` / `AppSubscription` with `source=platform_admin`, nullable `purchase_id`, idempotency keys; grant/revoke/extend subscription
+- Workspace Apps admin view: `GET /api/platform/workspaces/{id}/apps`; per-app workspace entitlements list
+- Optional Platform Admin install via existing `AppInstallationService`
+- Audit: `app.create|update|publish|unpublish|disable|set_coming_soon`, `app_plan.*`, `app_license.grant|revoke`, `app_subscription.grant|extend|revoke`, `app_installation.admin_install`
+- Migration `0034_app_commercial_provenance` — `source`, `grant_idempotency_key`, `granted_by_user_id`; nullable `app_licenses.purchase_id`
+- `dashboard_web`: `/app-store`, `/app-store/new`, `/app-store/:appId`; Workspace detail Apps section; EN/AR + RTL
+- Tests: `test_platform_admin_phase12e.py` (9 cases); Phase 9B + 12D regression; dashboard vitest (27 pass)
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements; Workspace app remains tenant-only. **Partially met** — 12A+12B+12C+12D+12E PASS; purchases/gateways/ops slices remain.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

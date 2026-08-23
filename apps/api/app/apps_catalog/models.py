@@ -66,6 +66,11 @@ class AppSubscriptionStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class AppCommercialSource(str, enum.Enum):
+    PURCHASE = "purchase"
+    PLATFORM_ADMIN = "platform_admin"
+
+
 class AppCategory(Base):
     __tablename__ = "app_categories"
 
@@ -287,10 +292,22 @@ class AppLicense(Base):
         ForeignKey("app_plans.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    purchase_id: Mapped[uuid.UUID] = mapped_column(
+    purchase_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("purchases.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    source: Mapped[str] = mapped_column(
+        String(32),
         nullable=False,
+        default=AppCommercialSource.PURCHASE.value,
+        server_default="purchase",
+    )
+    grant_idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    granted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=AppLicenseStatus.ACTIVE.value
@@ -351,6 +368,18 @@ class AppSubscription(Base):
     latest_purchase_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("purchases.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=AppCommercialSource.PURCHASE.value,
+        server_default="purchase",
+    )
+    grant_idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    granted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

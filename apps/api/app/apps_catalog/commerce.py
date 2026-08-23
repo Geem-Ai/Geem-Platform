@@ -22,6 +22,7 @@ from app.apps_catalog.calendar import (
 )
 from app.apps_catalog.models import (
     AppBillingType,
+    AppCommercialSource,
     AppInstallation,
     AppInstallationStatus,
     AppLicense,
@@ -36,7 +37,7 @@ from app.apps_catalog.models import (
 from app.apps_catalog.repository import AppCatalogRepository
 from app.billing.checkout import BillingService
 from app.billing.models import Purchase, PurchaseKind
-from app.billing.money import normalize_currency, quantize_money
+from app.billing.money import normalize_currency, parse_decimal_money, quantize_money
 from app.billing.repository import PurchaseRepository
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
@@ -315,6 +316,7 @@ class AppCommerceService:
             app_id=app_id,
             app_plan_id=plan_id,
             purchase_id=purchase.id,
+            source=AppCommercialSource.PURCHASE.value,
             status=AppLicenseStatus.ACTIVE.value,
             granted_at=datetime.now(timezone.utc),
         )
@@ -385,6 +387,7 @@ class AppCommerceService:
                 current_period_start=start,
                 current_period_end=end,
                 latest_purchase_id=purchase.id,
+                source=AppCommercialSource.PURCHASE.value,
             )
             try:
                 with self.db.begin_nested():
@@ -572,7 +575,7 @@ class AppCommerceService:
         return app
 
     def _validate_plan_matches_billing(self, app: CatalogApp, plan: AppPlan) -> None:
-        amount = quantize_money(plan.price_amount)
+        amount = parse_decimal_money(plan.price_amount)
         if app.billing_type == AppBillingType.FREE.value:
             if amount != Decimal("0.00") or plan.billing_interval != AppPlanBillingInterval.NONE.value:
                 raise AppError(

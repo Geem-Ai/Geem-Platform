@@ -1156,6 +1156,9 @@ describe('Platform Admin app', () => {
       if (url.includes('/credits')) {
         return json({ workspace_id: 'ws-1', balance: 100, recent: [] });
       }
+      if (url.includes('/api/platform/workspaces/') && url.endsWith('/apps')) {
+        return json({ items: [] });
+      }
       if (url.includes('/api/platform/workspaces/') && !url.includes('/workspaces?')) {
         return json({
           id: 'ws-1',
@@ -1292,6 +1295,75 @@ describe('Platform Admin app', () => {
       expect(document.documentElement.dir).toBe('rtl');
     });
     expect(screen.getByText(/دخول إدارة المنصة/)).toBeInTheDocument();
+  });
+
+  it('renders App Store list from Platform Admin API', async () => {
+    window.history.pushState({}, '', '/app-store');
+    installFetch(async (url) => {
+      if (url.includes('/api/auth/refresh')) {
+        return json({
+          access_token: 'access',
+          token_type: 'bearer',
+          expires_at: '2099-01-01T00:00:00Z',
+          user: adminUser,
+        });
+      }
+      if (url.includes('/api/platform/me')) {
+        return json({
+          user: adminUser,
+          platform_role: 'admin',
+          authorized: true,
+        });
+      }
+      if (url.includes('/api/platform/app-categories')) {
+        return json({
+          items: [
+            {
+              id: 'cat-1',
+              slug: 'productivity',
+              name_key: 'apps.categories.productivity',
+              description_key: null,
+              icon: null,
+              sort_order: 1,
+              is_active: true,
+            },
+          ],
+        });
+      }
+      if (new URL(url, 'http://localhost').pathname === '/api/platform/apps') {
+        return json({
+          items: [
+            {
+              id: 'app-1',
+              slug: 'whatsapp',
+              name: 'WhatsApp',
+              short_description: 'WhatsApp connector',
+              category_slug: 'communication',
+              category_name_key: 'apps.categories.communication',
+              billing_type: 'subscription',
+              status: 'published',
+              icon_url: null,
+              connector_key: 'openwa',
+              connector_kind: 'connector',
+              plans_count: 2,
+              installations_count: 5,
+              active_entitlements_count: 3,
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-02T00:00:00Z',
+            },
+          ],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        });
+      }
+      return json({}, 404);
+    });
+
+    render(<AppProviders />);
+    expect(await screen.findByTestId('app-store-page')).toBeInTheDocument();
+    expect(await screen.findByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.queryByTestId('coming-soon-page')).not.toBeInTheDocument();
   });
 
   it('toggles dark theme from login chrome', async () => {
