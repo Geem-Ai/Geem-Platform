@@ -66,6 +66,7 @@
     "quickLinks": "Sections",
     "comingPhase": "Coming in {{phase}}",
     "metrics": {
+      "sectionLabel": "Platform footprint",
       "workspaces": "Tenant Workspaces",
       "workspacesHint": "{{active}} active · {{disabled}} non-active",
       "users": "Users",
@@ -98,7 +99,8 @@
     "gateway": {
       "testMode": "Test mode",
       "manage": "Manage gateways",
-      "none": "No gateway is currently enabled."
+      "none": "No gateway is currently enabled.",
+      "activeHint": "Enabled gateway: {{code}}"
     },
     "activity": {
       "empty": "No recent Platform Admin activity yet.",
@@ -115,13 +117,29 @@
       "days": "Last {{count}} days"
     },
     "summary": {
+      "sectionLabel": "Usage summary",
       "total": "Total billed tokens",
+      "totalHint": "Peak {{day}} · {{tokens}}",
+      "totalHintEmpty": "No peak day in this range",
       "activeWorkspaces": "Active Workspaces",
+      "activeWorkspacesHint": "Tenant Workspaces with billed usage",
       "averageDaily": "Average daily billed tokens",
-      "range": "Selected range"
+      "averageDailyHint": "Mean across {{days}} days",
+      "range": "Selected range",
+      "rangeHint": "Last {{count}} days preset"
     },
     "trendTitle": "Daily billed token trend",
     "trendEmpty": "No usage recorded for this range.",
+    "chartZoomIn": "Zoom in",
+    "chartZoomOut": "Zoom out",
+    "chartResetZoom": "Reset zoom",
+    "chartZoomDrag": "Drag to select range",
+    "chartZoomScroll": "Scroll to zoom",
+    "chartZoomRange": "Viewing {{range}}",
+    "chartZoomHelpTitle": "Chart zoom",
+    "chartZoomHelpDrag": "Drag horizontally across the chart to focus a date range.",
+    "chartZoomHelpScroll": "Scroll to zoom in or out at the cursor position.",
+    "chartZoomHelpButtons": "Use + / − for step zoom, or Reset zoom for the full range.",
     "topWorkspaces": "Top Workspaces",
     "topWorkspacesHint": "Ranked by billed tokens in the selected range.",
     "topWorkspacesEmpty": "No tenant usage in this range.",

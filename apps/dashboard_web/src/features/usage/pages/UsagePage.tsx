@@ -2,14 +2,24 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Activity, ChevronRight, RefreshCw } from 'lucide-react';
+import {
+  Activity,
+  Building2,
+  CalendarRange,
+  ChevronRight,
+  RefreshCw,
+  TrendingUp,
+  Zap,
+} from 'lucide-react';
 import { SimpleLineChart } from '@/components/charts/SimpleLineChart';
+import { AdminMetricCard } from '@/components/shared/AdminMetricCard';
 import { AdminPagination } from '@/components/shared/AdminPagination';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatAdminDate } from '@/lib/dates';
 import { formatInteger, formatTokens } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/services/api/errors';
 import {
   fetchPlatformUsageSummary,
@@ -47,6 +57,15 @@ export function UsagePage() {
   const chartPoints =
     trendQuery.data?.points.map((point) => ({ date: point.date, value: point.billed_tokens })) ?? [];
 
+  const summary = summaryQuery.data;
+  const rangeDayCount = useMemo(() => {
+    if (!summary) return presetDays;
+    const from = new Date(summary.from_day);
+    const to = new Date(summary.to_day);
+    const diff = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+    return diff + 1;
+  }, [presetDays, summary]);
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 md:p-8" data-testid="usage-page">
       <DocumentTitle title={t('usage.title')} />
@@ -79,59 +98,77 @@ export function UsagePage() {
               void trendQuery.refetch();
               void workspacesQuery.refetch();
             }}
+            disabled={summaryQuery.isFetching || trendQuery.isFetching}
           >
-            <RefreshCw className="size-4" aria-hidden />
+            <RefreshCw
+              className={cn('size-4', (summaryQuery.isFetching || trendQuery.isFetching) && 'animate-spin')}
+              aria-hidden
+            />
             {t('common.refresh')}
           </Button>
         </div>
       </header>
 
-      {(summaryQuery.isLoading || trendQuery.isLoading) && (
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-      )}
       {(summaryQuery.isError || trendQuery.isError) && (
         <p className="text-sm text-destructive">
           {getErrorMessage(summaryQuery.error ?? trendQuery.error, t)}
         </p>
       )}
 
-      {summaryQuery.data ? (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>{t('usage.summary.total')}</CardDescription>
-              <CardTitle className="text-2xl">
-                {formatTokens(summaryQuery.data.total_billed_tokens, i18n.language)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>{t('usage.summary.activeWorkspaces')}</CardDescription>
-              <CardTitle className="text-2xl">
-                {formatInteger(summaryQuery.data.active_workspaces, i18n.language)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>{t('usage.summary.averageDaily')}</CardDescription>
-              <CardTitle className="text-2xl">
-                {formatTokens(summaryQuery.data.average_daily_billed_tokens, i18n.language)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>{t('usage.summary.range')}</CardDescription>
-              <CardTitle className="text-base font-medium">
-                {formatAdminDate(summaryQuery.data.from_day, i18n.language)} –{' '}
-                {formatAdminDate(summaryQuery.data.to_day, i18n.language)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </section>
-      ) : null}
+      <section
+        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        aria-label={t('usage.summary.sectionLabel')}
+        data-testid="usage-summary-metrics"
+      >
+        <AdminMetricCard
+          icon={Zap}
+          tone="primary"
+          label={t('usage.summary.total')}
+          value={summary ? formatTokens(summary.total_billed_tokens, i18n.language) : '—'}
+          hint={
+            summary?.peak_day
+              ? t('usage.summary.totalHint', {
+                  day: formatAdminDate(summary.peak_day.day, i18n.language),
+                  tokens: formatTokens(summary.peak_day.billed_tokens, i18n.language),
+                })
+              : t('usage.summary.totalHintEmpty')
+          }
+          loading={summaryQuery.isLoading}
+          testId="usage-metric-total"
+        />
+        <AdminMetricCard
+          icon={Building2}
+          tone="info"
+          label={t('usage.summary.activeWorkspaces')}
+          value={summary ? formatInteger(summary.active_workspaces, i18n.language) : '—'}
+          hint={t('usage.summary.activeWorkspacesHint')}
+          loading={summaryQuery.isLoading}
+          testId="usage-metric-workspaces"
+        />
+        <AdminMetricCard
+          icon={TrendingUp}
+          tone="success"
+          label={t('usage.summary.averageDaily')}
+          value={summary ? formatTokens(summary.average_daily_billed_tokens, i18n.language) : '—'}
+          hint={t('usage.summary.averageDailyHint', { days: rangeDayCount })}
+          loading={summaryQuery.isLoading}
+          testId="usage-metric-average"
+        />
+        <AdminMetricCard
+          icon={CalendarRange}
+          tone="neutral"
+          label={t('usage.summary.range')}
+          value={
+            summary
+              ? `${formatAdminDate(summary.from_day, i18n.language)} – ${formatAdminDate(summary.to_day, i18n.language)}`
+              : '—'
+          }
+          hint={t('usage.summary.rangeHint', { count: presetDays })}
+          loading={summaryQuery.isLoading}
+          testId="usage-metric-range"
+          compactValue
+        />
+      </section>
 
       <Card>
         <CardHeader>

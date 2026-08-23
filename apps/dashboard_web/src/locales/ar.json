@@ -66,6 +66,7 @@
     "quickLinks": "الأقسام",
     "comingPhase": "قادم في {{phase}}",
     "metrics": {
+      "sectionLabel": "نظرة عامة على المنصة",
       "workspaces": "مساحات عمل المستأجرين",
       "workspacesHint": "{{active}} نشطة · {{disabled}} غير نشطة",
       "users": "المستخدمون",
@@ -98,7 +99,8 @@
     "gateway": {
       "testMode": "وضع الاختبار",
       "manage": "إدارة البوابات",
-      "none": "لا توجد بوابة دفع مفعّلة حاليًا."
+      "none": "لا توجد بوابة دفع مفعّلة حاليًا.",
+      "activeHint": "البوابة المفعّلة: {{code}}"
     },
     "activity": {
       "empty": "لا يوجد نشاط إداري حديث بعد.",
@@ -115,13 +117,29 @@
       "days": "آخر {{count}} أيام"
     },
     "summary": {
+      "sectionLabel": "ملخص الاستخدام",
       "total": "إجمالي الرموز المفوترة",
+      "totalHint": "الذروة {{day}} · {{tokens}}",
+      "totalHintEmpty": "لا يوجد يوم ذروة في هذا النطاق",
       "activeWorkspaces": "مساحات العمل النشطة",
+      "activeWorkspacesHint": "مساحات المستأجرين ذات استخدام مفوتر",
       "averageDaily": "متوسط الرموز المفوترة يوميًا",
-      "range": "النطاق المحدد"
+      "averageDailyHint": "المتوسط على {{days}} يومًا",
+      "range": "النطاق المحدد",
+      "rangeHint": "إعداد مسبق لآخر {{count}} يومًا"
     },
     "trendTitle": "اتجاه الرموز المفوترة يوميًا",
     "trendEmpty": "لا يوجد استخدام في هذا النطاق.",
+    "chartZoomIn": "تكبير",
+    "chartZoomOut": "تصغير",
+    "chartResetZoom": "إعادة التكبير",
+    "chartZoomDrag": "اسحب لتحديد نطاق",
+    "chartZoomScroll": "مرّر للتكبير",
+    "chartZoomRange": "عرض {{range}}",
+    "chartZoomHelpTitle": "تكبير الرسم",
+    "chartZoomHelpDrag": "اسحب أفقيًا على الرسم لتركيز نطاق زمني.",
+    "chartZoomHelpScroll": "مرّر للتكبير أو التصغير عند موضع المؤشر.",
+    "chartZoomHelpButtons": "استخدم + / − للتكبير التدريجي، أو إعادة التكبير للنطاق الكامل.",
     "topWorkspaces": "أعلى مساحات العمل",
     "topWorkspacesHint": "مرتبة حسب الرموز المفوترة ضمن النطاق المحدد.",
     "topWorkspacesEmpty": "لا يوجد استخدام للمستأجرين في هذا النطاق.",
