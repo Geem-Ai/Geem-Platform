@@ -6,6 +6,9 @@ import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { ExpertCreatePage } from '@/features/experts/pages/ExpertCreatePage';
 import { ExpertDetailPage } from '@/features/experts/pages/ExpertDetailPage';
 import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
+import { PaymentGatewaysPage } from '@/features/payment-gateways/pages/PaymentGatewaysPage';
+import { PurchasesPage } from '@/features/purchases/pages/PurchasesPage';
+import { PurchaseDetailPage } from '@/features/purchases/pages/PurchaseDetailPage';
 import { OverviewPage } from '@/features/overview/pages/OverviewPage';
 import { CreditsPage } from '@/features/credits/pages/CreditsPage';
 import { CreditDetailPage } from '@/features/credits/pages/CreditDetailPage';
@@ -46,14 +49,9 @@ export function AppRouter() {
           <Route path="app-store" element={<AppStorePage />} />
           <Route path="app-store/new" element={<AppCreatePage />} />
           <Route path="app-store/:appId" element={<AppDetailPage />} />
-          <Route
-            path="purchases"
-            element={<ComingSoonPage titleKey="nav.purchases" phase="12F" />}
-          />
-          <Route
-            path="payment-gateways"
-            element={<ComingSoonPage titleKey="nav.paymentGateways" phase="12F" />}
-          />
+          <Route path="purchases" element={<PurchasesPage />} />
+          <Route path="purchases/:purchaseId" element={<PurchaseDetailPage />} />
+          <Route path="payment-gateways" element={<PaymentGatewaysPage />} />
           <Route
             path="audit-logs"
             element={<ComingSoonPage titleKey="nav.auditLogs" phase="12G" />}

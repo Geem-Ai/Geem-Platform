@@ -529,6 +529,120 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
       });
     }
 
+    if (path.endsWith('/platform/payment-gateways') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [
+          {
+            id: 'gw-clickpay',
+            code: 'clickpay',
+            display_name: 'ClickPay',
+            enabled: true,
+            test_mode: true,
+            configured: true,
+            credential_field_status: {
+              profile_id_configured: true,
+              server_key_configured: true,
+              profile_id: '59020',
+            },
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+            referenced_purchases_count: 2,
+            in_flight_purchases_count: 0,
+          },
+          {
+            id: null,
+            code: 'noop',
+            display_name: 'Manual / Noop (local)',
+            enabled: false,
+            test_mode: null,
+            configured: false,
+            credential_field_status: {},
+            created_at: null,
+            updated_at: null,
+            referenced_purchases_count: 0,
+            in_flight_purchases_count: 0,
+          },
+        ],
+        active_gateway_id: 'gw-clickpay',
+      });
+    }
+
+    if (path.endsWith('/platform/purchases') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [
+          {
+            id: 'purchase-1',
+            workspace: {
+              id: fixtureWorkspace.id,
+              name: fixtureWorkspace.name,
+              slug: fixtureWorkspace.slug,
+            },
+            actor: { id: 'user-1', email: 'owner@example.com' },
+            kind: 'credit_pack',
+            status: 'paid',
+            amount: '25.00',
+            currency: 'SAR',
+            gateway_code: 'noop',
+            gateway_config_id: 'gw-noop',
+            cart_id: 'cart-1',
+            tran_ref: 'noop_ref',
+            target: {
+              kind: 'credit_pack',
+              item_name: 'Starter Pack',
+              item_code: 'starter',
+              credits: 1000,
+            },
+            paid_at: '2026-01-02T00:00:00Z',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-02T00:00:00Z',
+            reconcile_eligible: false,
+            invoice_available: true,
+          },
+        ],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      });
+    }
+
+    if (path.includes('/platform/purchases/') && method === 'GET') {
+      return fulfillJson(route, {
+        id: 'purchase-1',
+        workspace: {
+          id: fixtureWorkspace.id,
+          name: fixtureWorkspace.name,
+          slug: fixtureWorkspace.slug,
+        },
+        actor: { id: 'user-1', email: 'owner@example.com' },
+        kind: 'credit_pack',
+        status: 'paid',
+        amount: '25.00',
+        currency: 'SAR',
+        target: {
+          kind: 'credit_pack',
+          item_name: 'Starter Pack',
+          item_code: 'starter',
+          credits: 1000,
+        },
+        gateway: {
+          code: 'noop',
+          display_name: 'Manual / Noop (local)',
+          gateway_config_id: 'gw-noop',
+          cart_id: 'cart-1',
+          tran_ref: 'noop_ref',
+        },
+        fulfillment: {
+          fulfilled: true,
+          invoice_available: true,
+          invoice_number: 'GEEM-000001',
+        },
+        paid_at: '2026-01-02T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-02T00:00:00Z',
+        reconcile_eligible: false,
+      });
+    }
+
     return fulfillJson(route, { code: 'not_found' }, 404);
   });
 
@@ -619,6 +733,21 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
       element.scrollWidth <= element.clientWidth
     )),
   ).toBe(true);
+
+  // Payment gateways + purchases smoke (12F)
+  await page.getByTestId('nav-payment-gateways').click();
+  await expect(page.getByTestId('payment-gateways-page')).toBeVisible();
+  await expect(page.getByTestId('gateway-summary')).toBeVisible();
+  await expect(page.getByTestId('gateway-info-banner')).toBeVisible();
+  await expect(page.getByTestId('gateway-card-clickpay')).toBeVisible();
+  await expect(page.getByTestId('gateway-card-noop')).toBeVisible();
+
+  await page.getByTestId('nav-purchases').click();
+  await expect(page.getByTestId('purchases-page')).toBeVisible();
+  await expect(page.getByTestId('purchases-list')).toBeVisible();
+  await page.getByTestId('purchase-row-purchase-1').getByRole('link').click();
+  await expect(page.getByTestId('purchase-detail-page')).toBeVisible();
+  await expect(page.getByTestId('purchase-download-invoice')).toBeVisible();
 
   // Users smoke
   await page.getByTestId('nav-users').click();

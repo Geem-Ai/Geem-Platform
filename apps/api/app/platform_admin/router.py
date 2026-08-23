@@ -15,9 +15,11 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.schemas import DocumentCreateResponse
+from app.common.http import content_disposition
 from app.db.session import get_db
 from app.experts.schemas import (
     ExpertDocumentLinkOut,
@@ -36,6 +38,8 @@ from app.platform_admin.dependencies import (
     require_platform_admin_host,
 )
 from app.platform_admin.experts import PlatformAdminExpertsService
+from app.platform_admin.gateways import PlatformAdminGatewaysService
+from app.platform_admin.purchases import PlatformAdminPurchasesService
 from app.platform_admin.schemas import (
     PlatformAppCategoryListResponse,
     PlatformAppCategoryOut,
@@ -72,6 +76,14 @@ from app.platform_admin.schemas import (
     PlatformPlanLifecycleRequest,
     PlatformPlanListResponse,
     PlatformPlanUpdateRequest,
+    PlatformPaymentGatewayActivateRequest,
+    PlatformPaymentGatewayCreateRequest,
+    PlatformPaymentGatewayDetailOut,
+    PlatformPaymentGatewayListResponse,
+    PlatformPaymentGatewayUpdateRequest,
+    PlatformPurchaseDetailOut,
+    PlatformPurchaseListResponse,
+    PlatformPurchaseReconcileResponse,
     PlatformSubscriptionAssignRequest,
     PlatformSubscriptionDetailOut,
     PlatformSubscriptionHistoryResponse,
@@ -1077,3 +1089,127 @@ def admin_install_platform_app(
     db: Session = Depends(get_db),
 ) -> PlatformWorkspaceAppOut:
     return PlatformAdminAppsService(db).admin_install_app(user, workspace_id, app_id)
+
+
+# --- Phase 12F: Payment gateways ---
+
+
+@router.get("/payment-gateways", response_model=PlatformPaymentGatewayListResponse)
+def list_platform_payment_gateways(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPaymentGatewayListResponse:
+    return PlatformAdminGatewaysService(db).list_gateways(user)
+
+
+@router.post("/payment-gateways", response_model=PlatformPaymentGatewayDetailOut, status_code=201)
+def create_platform_payment_gateway(
+    body: PlatformPaymentGatewayCreateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPaymentGatewayDetailOut:
+    return PlatformAdminGatewaysService(db).create_gateway(user, body)
+
+
+@router.get(
+    "/payment-gateways/{gateway_config_id}",
+    response_model=PlatformPaymentGatewayDetailOut,
+)
+def get_platform_payment_gateway(
+    gateway_config_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPaymentGatewayDetailOut:
+    return PlatformAdminGatewaysService(db).get_gateway(user, gateway_config_id)
+
+
+@router.patch(
+    "/payment-gateways/{gateway_config_id}",
+    response_model=PlatformPaymentGatewayDetailOut,
+)
+def update_platform_payment_gateway(
+    gateway_config_id: uuid.UUID,
+    body: PlatformPaymentGatewayUpdateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPaymentGatewayDetailOut:
+    return PlatformAdminGatewaysService(db).update_gateway(user, gateway_config_id, body)
+
+
+@router.post(
+    "/payment-gateways/{gateway_config_id}/activate",
+    response_model=PlatformPaymentGatewayDetailOut,
+)
+def activate_platform_payment_gateway(
+    gateway_config_id: uuid.UUID,
+    body: PlatformPaymentGatewayActivateRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPaymentGatewayDetailOut:
+    return PlatformAdminGatewaysService(db).activate_gateway(user, gateway_config_id, body)
+
+
+# --- Phase 12F: Purchases ---
+
+
+@router.get("/purchases", response_model=PlatformPurchaseListResponse)
+def list_platform_purchases(
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    workspace_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None, max_length=32),
+    kind: str | None = Query(default=None, max_length=32),
+    gateway: str | None = Query(default=None, max_length=64),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+) -> PlatformPurchaseListResponse:
+    return PlatformAdminPurchasesService(db).list_purchases(
+        user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        workspace_id=workspace_id,
+        status=status,
+        kind=kind,
+        gateway=gateway,
+        created_from=created_from,
+        created_to=created_to,
+    )
+
+
+@router.get("/purchases/{purchase_id}", response_model=PlatformPurchaseDetailOut)
+def get_platform_purchase(
+    purchase_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPurchaseDetailOut:
+    return PlatformAdminPurchasesService(db).get_purchase(user, purchase_id)
+
+
+@router.post(
+    "/purchases/{purchase_id}/reconcile",
+    response_model=PlatformPurchaseReconcileResponse,
+)
+def reconcile_platform_purchase(
+    purchase_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformPurchaseReconcileResponse:
+    return PlatformAdminPurchasesService(db).reconcile_purchase(user, purchase_id)
+
+
+@router.get("/purchases/{purchase_id}/invoice")
+def download_platform_purchase_invoice(
+    purchase_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    pdf, filename = PlatformAdminPurchasesService(db).purchase_invoice(user, purchase_id)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": content_disposition(filename)},
+    )

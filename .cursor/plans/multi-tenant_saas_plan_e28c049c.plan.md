@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS (App Store admin). 12F–12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS (payment gateways & purchases). 12G not started."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS**. 12F–12G not started.
+**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS** + **12F PASS**. 12G not started.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1453,7 +1453,21 @@ Delivered:
 - `dashboard_web`: `/app-store`, `/app-store/new`, `/app-store/:appId`; Workspace detail Apps section; EN/AR + RTL
 - Tests: `test_platform_admin_phase12e.py` (9 cases); Phase 9B + 12D regression; dashboard vitest (27 pass)
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements; Workspace app remains tenant-only. **Partially met** — 12A+12B+12C+12D+12E PASS; purchases/gateways/ops slices remain.
+#### Phase 12F — Payment gateways & purchase operations (PASS)
+
+Delivered:
+
+- `PlatformAdminGatewaysService` + `PlatformAdminPurchasesService` orchestrating existing `BillingGateway` registry, encrypted `payment_gateway_configs`, and `Purchase` model (no parallel purchase tables)
+- Gateway APIs: list/detail/create/patch/activate (`/api/platform/payment-gateways*`); registered adapters only (`clickpay`, `noop`); write-only credential rotation; Noop blocked outside `is_local` on activate
+- Atomic activation with row locks + disable-then-enable flush (PostgreSQL partial unique index `uq_payment_gateway_configs_one_enabled` preserved)
+- Purchase APIs: global paginated list/detail, provider-backed `POST .../reconcile`, Platform Admin invoice download delegating to `InvoiceService`
+- `BillingService.reconcile_purchase` + shared `_complete_from_provider` used by browser return and Platform Admin reconcile; purchases pinned via `payment_gateway_config_id`
+- Audit: `payment_gateway.create|update|credentials_rotate|activate`, `purchase.reconcile`
+- `dashboard_web`: `/payment-gateways`, `/purchases`, `/purchases/:purchaseId`; configure/activate/reconcile flows; EN/AR + RTL
+- Tests: `test_platform_admin_phase12f.py` (13 cases); Phase 6A/6B + Phase 9B + 12C/12E regression; dashboard vitest (30 pass); Playwright admin smoke extended
+- **No schema migration** — `payment_gateway_config_id` pinning and one-enabled constraint already existed from Phase 6A
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements, configure payment gateways, and operate on global purchases; Workspace app remains tenant-only. **Partially met** — 12A–12F PASS; global audit logs / usage analytics remain (12G).
 ---
 
 ## Cross-cutting defaults (locked for this plan)

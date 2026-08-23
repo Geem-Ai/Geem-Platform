@@ -13,6 +13,7 @@ class PurchaseCatalogFields:
     item_name: str | None
     item_code: str | None
     credits: int | None
+    app_id: str | None
     app_slug: str | None
     app_name: str | None
     commercial_action: str | None
@@ -35,6 +36,7 @@ def purchase_catalog_fields(purchase: Purchase) -> PurchaseCatalogFields:
     credits: int | None = None
     app_slug: str | None = None
     app_name: str | None = None
+    app_id: str | None = None
     commercial_action: str | None = None
     billing_interval: str | None = None
     if purchase.kind == "subscription":
@@ -57,6 +59,8 @@ def purchase_catalog_fields(purchase: Purchase) -> PurchaseCatalogFields:
         "app_subscription",
         "app_subscription_renewal",
     }:
+        app_id_raw = payload.get("app_id")
+        app_id = str(app_id_raw).strip() if app_id_raw else None
         app_slug = payload.get("app_slug") if isinstance(payload.get("app_slug"), str) else None
         app_name = payload.get("app_name") if isinstance(payload.get("app_name"), str) else None
         plan_code = payload.get("plan_code") if isinstance(payload.get("plan_code"), str) else None
@@ -80,6 +84,7 @@ def purchase_catalog_fields(purchase: Purchase) -> PurchaseCatalogFields:
         item_name=item_name,
         item_code=item_code,
         credits=credits,
+        app_id=app_id,
         app_slug=app_slug,
         app_name=app_name,
         commercial_action=commercial_action,

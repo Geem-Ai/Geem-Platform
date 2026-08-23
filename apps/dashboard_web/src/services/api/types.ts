@@ -744,3 +744,146 @@ export type PlatformAppPageParams = PlatformPageParams & {
   category?: string;
   connector_kind?: string;
 };
+
+// --- Phase 12F: Payment gateways ---
+
+export type PlatformGatewayCredentialStatus = {
+  profile_id_configured?: boolean | null;
+  server_key_configured?: boolean | null;
+  profile_id?: string | null;
+};
+
+export type PlatformPaymentGatewayListItem = {
+  id: string | null;
+  code: string;
+  display_name: string;
+  enabled: boolean;
+  test_mode: boolean | null;
+  configured: boolean;
+  credential_field_status: PlatformGatewayCredentialStatus;
+  created_at: string | null;
+  updated_at: string | null;
+  referenced_purchases_count: number;
+  in_flight_purchases_count: number;
+};
+
+export type PlatformPaymentGatewayListResponse = {
+  items: PlatformPaymentGatewayListItem[];
+  active_gateway_id: string | null;
+};
+
+export type PlatformPaymentGatewayDetail = PlatformPaymentGatewayListItem & {
+  id: string;
+  credentials: PlatformGatewayCredentialStatus;
+};
+
+export type PlatformPaymentGatewayCreateBody = {
+  code: string;
+  test_mode?: boolean;
+  credentials?: Record<string, string>;
+};
+
+export type PlatformPaymentGatewayUpdateBody = {
+  test_mode?: boolean;
+  credentials?: Record<string, string>;
+  profile_id?: string;
+};
+
+// --- Phase 12F: Purchases ---
+
+export type PlatformPurchaseWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type PlatformPurchaseActor = {
+  id: string;
+  email: string;
+};
+
+export type PlatformPurchaseTarget = {
+  kind: string;
+  item_name?: string | null;
+  item_code?: string | null;
+  credits?: number | null;
+  app_id?: string | null;
+  app_slug?: string | null;
+  app_name?: string | null;
+};
+
+export type PlatformPurchaseListItem = {
+  id: string;
+  workspace: PlatformPurchaseWorkspace;
+  actor: PlatformPurchaseActor;
+  kind: string;
+  status: string;
+  amount: string;
+  currency: string;
+  gateway_code: string;
+  gateway_config_id: string;
+  cart_id: string;
+  tran_ref?: string | null;
+  target: PlatformPurchaseTarget;
+  paid_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  reconcile_eligible: boolean;
+  invoice_available: boolean;
+};
+
+export type PlatformPurchaseListResponse = {
+  items: PlatformPurchaseListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformPurchaseFulfillment = {
+  fulfilled: boolean;
+  invoice_available: boolean;
+  invoice_number?: string | null;
+};
+
+export type PlatformPurchaseGateway = {
+  code: string;
+  display_name: string;
+  gateway_config_id: string;
+  cart_id: string;
+  tran_ref?: string | null;
+  provider_status?: string | null;
+  last_query_status?: string | null;
+};
+
+export type PlatformPurchaseDetail = {
+  id: string;
+  workspace: PlatformPurchaseWorkspace;
+  actor: PlatformPurchaseActor;
+  kind: string;
+  status: string;
+  amount: string;
+  currency: string;
+  target: PlatformPurchaseTarget;
+  gateway: PlatformPurchaseGateway;
+  fulfillment: PlatformPurchaseFulfillment;
+  paid_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  reconcile_eligible: boolean;
+};
+
+export type PlatformPurchaseReconcileResponse = {
+  purchase: PlatformPurchaseDetail;
+  prior_status: string;
+  resulting_status: string;
+  fulfillment_applied: boolean;
+  provider_status?: string | null;
+  idempotent_replay: boolean;
+};
+
+export type PlatformPurchasePageParams = PlatformPageParams & {
+  gateway?: string;
+  created_from?: string;
+  created_to?: string;
+  workspace_id?: string;
+};

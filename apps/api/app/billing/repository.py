@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import String, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.billing.models import (
@@ -19,6 +19,7 @@ from app.billing.models import (
     Subscription,
     SubscriptionStatus,
 )
+from app.workspaces.models import Workspace
 
 
 class PlanRepository:
@@ -276,6 +277,48 @@ class PaymentGatewayConfigRepository:
     def list_all(self) -> list[PaymentGatewayConfig]:
         return list(self.db.scalars(select(PaymentGatewayConfig).order_by(PaymentGatewayConfig.code)))
 
+    def list_all_for_update(self) -> list[PaymentGatewayConfig]:
+        return list(
+            self.db.scalars(
+                select(PaymentGatewayConfig).order_by(PaymentGatewayConfig.code).with_for_update()
+            )
+        )
+
+    def get_by_id_for_update(self, config_id: uuid.UUID) -> PaymentGatewayConfig | None:
+        return self.db.scalar(
+            select(PaymentGatewayConfig)
+            .where(PaymentGatewayConfig.id == config_id)
+            .with_for_update()
+        )
+
+    def count_purchases(self, config_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(Purchase)
+                .where(Purchase.payment_gateway_config_id == config_id)
+            )
+            or 0
+        )
+
+    def count_in_flight_purchases(self, config_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(Purchase)
+                .where(
+                    Purchase.payment_gateway_config_id == config_id,
+                    Purchase.status.in_(
+                        [
+                            PurchaseStatus.PENDING.value,
+                            PurchaseStatus.REDIRECTED.value,
+                        ]
+                    ),
+                )
+            )
+            or 0
+        )
+
     def create(self, row: PaymentGatewayConfig) -> PaymentGatewayConfig:
         self.db.add(row)
         self.db.flush()
@@ -376,6 +419,125 @@ class PurchaseRepository:
             )
         )
         return rows, total
+
+    def _platform_filters(
+        self,
+        *,
+        search: str | None = None,
+        workspace_id: uuid.UUID | None = None,
+        status: str | None = None,
+        kind: str | None = None,
+        gateway_code: str | None = None,
+        gateway_config_id: uuid.UUID | None = None,
+        created_from=None,
+        created_to=None,
+    ):
+        filters: list = []
+        if workspace_id is not None:
+            filters.append(Purchase.workspace_id == workspace_id)
+        if status:
+            filters.append(Purchase.status == status.strip().lower())
+        if kind:
+            filters.append(Purchase.kind == kind.strip().lower())
+        if gateway_config_id is not None:
+            filters.append(Purchase.payment_gateway_config_id == gateway_config_id)
+        elif gateway_code:
+            filters.append(
+                Purchase.payment_gateway_config_id.in_(
+                    select(PaymentGatewayConfig.id).where(
+                        PaymentGatewayConfig.code == gateway_code.strip().lower()
+                    )
+                )
+            )
+        if created_from is not None:
+            filters.append(Purchase.created_at >= created_from)
+        if created_to is not None:
+            filters.append(Purchase.created_at <= created_to)
+        if search:
+            cleaned = search.strip()
+            term = f"%{cleaned}%"
+            search_clauses = [
+                Purchase.cart_id.ilike(term),
+                Purchase.provider_transaction_ref.ilike(term),
+                Purchase.workspace_id.in_(
+                    select(Workspace.id).where(
+                        or_(
+                            Workspace.name.ilike(term),
+                            Workspace.slug.ilike(term),
+                        )
+                    )
+                ),
+            ]
+            try:
+                search_clauses.append(Purchase.id == uuid.UUID(cleaned))
+            except ValueError:
+                search_clauses.append(func.cast(Purchase.id, String).ilike(term))
+            filters.append(or_(*search_clauses))
+        return filters
+
+    def count_platform(
+        self,
+        *,
+        search: str | None = None,
+        workspace_id: uuid.UUID | None = None,
+        status: str | None = None,
+        kind: str | None = None,
+        gateway_code: str | None = None,
+        gateway_config_id: uuid.UUID | None = None,
+        created_from=None,
+        created_to=None,
+    ) -> int:
+        filters = self._platform_filters(
+            search=search,
+            workspace_id=workspace_id,
+            status=status,
+            kind=kind,
+            gateway_code=gateway_code,
+            gateway_config_id=gateway_config_id,
+            created_from=created_from,
+            created_to=created_to,
+        )
+        stmt = select(func.count()).select_from(Purchase)
+        for clause in filters:
+            stmt = stmt.where(clause)
+        return int(self.db.scalar(stmt) or 0)
+
+    def list_platform(
+        self,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        search: str | None = None,
+        workspace_id: uuid.UUID | None = None,
+        status: str | None = None,
+        kind: str | None = None,
+        gateway_code: str | None = None,
+        gateway_config_id: uuid.UUID | None = None,
+        created_from=None,
+        created_to=None,
+    ) -> list[Purchase]:
+        filters = self._platform_filters(
+            search=search,
+            workspace_id=workspace_id,
+            status=status,
+            kind=kind,
+            gateway_code=gateway_code,
+            gateway_config_id=gateway_config_id,
+            created_from=created_from,
+            created_to=created_to,
+        )
+        stmt = (
+            select(Purchase)
+            .options(
+                selectinload(Purchase.gateway_config),
+            )
+            .order_by(Purchase.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        for clause in filters:
+            stmt = stmt.where(clause)
+        return list(self.db.scalars(stmt))
 
     def find_open_app_checkout(
         self,

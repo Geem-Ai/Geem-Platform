@@ -231,4 +231,12 @@ export async function apiRequest<T>(
   return (await res.json()) as T;
 }
 
+export async function apiRequestBlob(
+  path: string,
+  options: RequestOptions = {},
+): Promise<Blob> {
+  const res = await authorizedFetch(path, options);
+  return res.blob();
+}
+
 export { buildHeaders, parseError, rawFetch };

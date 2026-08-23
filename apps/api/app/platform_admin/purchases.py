@@ -260,6 +260,7 @@ class PlatformAdminPurchasesService:
             item_name=fields.item_name,
             item_code=fields.item_code,
             credits=fields.credits,
+            app_id=fields.app_id,
             app_slug=fields.app_slug,
             app_name=fields.app_name,
         )

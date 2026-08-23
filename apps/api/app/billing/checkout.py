@@ -6,6 +6,7 @@ import hashlib
 import logging
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -45,6 +46,21 @@ from app.workspaces.models import Workspace, WorkspaceKind
 logger = logging.getLogger(__name__)
 
 DEFAULT_PHONE = "0500000000"
+
+_RECONCILE_ELIGIBLE = frozenset(
+    {
+        PurchaseStatus.PENDING.value,
+        PurchaseStatus.REDIRECTED.value,
+    }
+)
+
+
+@dataclass(frozen=True)
+class PurchaseCompletionResult:
+    purchase: Purchase
+    prior_status: str
+    fulfillment_applied: bool
+    provider_status: str | None = None
 
 
 def hash_return_token(raw: str) -> str:
@@ -221,8 +237,49 @@ class BillingService:
         if gateway_code and gateway_code != config.code:
             raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
 
+        return self._complete_from_provider(purchase).purchase
+
+    def reconcile_purchase(self, purchase_id: uuid.UUID) -> PurchaseCompletionResult:
+        """Platform Admin recovery: query the purchase's pinned gateway and fulfill."""
+        purchase = self.purchases.get_by_id_for_update(purchase_id)
+        if purchase is None:
+            raise AppError(ErrorCategory.PURCHASE_NOT_FOUND, "Purchase not found.")
         if purchase.status == PurchaseStatus.PAID.value:
-            return purchase
+            return PurchaseCompletionResult(
+                purchase=purchase,
+                prior_status=purchase.status,
+                fulfillment_applied=False,
+                provider_status=(purchase.extra or {}).get("provider_status"),
+            )
+        if purchase.status not in _RECONCILE_ELIGIBLE:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "Purchase cannot be reconciled in its current status.",
+                details={"status": purchase.status},
+            )
+        if not purchase.provider_transaction_ref:
+            raise AppError(
+                ErrorCategory.PAYMENT_VERIFICATION_FAILED,
+                "Purchase has no provider transaction to verify.",
+            )
+        return self._complete_from_provider(purchase)
+
+    def _complete_from_provider(self, purchase: Purchase) -> PurchaseCompletionResult:
+        prior_status = purchase.status
+        if purchase.status == PurchaseStatus.PAID.value:
+            return PurchaseCompletionResult(
+                purchase=purchase,
+                prior_status=prior_status,
+                fulfillment_applied=False,
+                provider_status=(purchase.extra or {}).get("provider_status"),
+            )
+
+        config = self.gateways.get_by_id(purchase.payment_gateway_config_id)
+        if config is None:
+            raise AppError(
+                ErrorCategory.PAYMENT_VERIFICATION_FAILED,
+                "Purchase payment gateway is no longer available.",
+            )
 
         if not purchase.provider_transaction_ref:
             raise AppError(
@@ -238,29 +295,48 @@ class BillingService:
             )
         credentials = self.registry.credentials_for(adapter, config)
         result = adapter.query_transaction(purchase.provider_transaction_ref, credentials)
+        provider_status = (result.extra or {}).get("provider_status")
 
         if result.status != GatewayTransactionStatus.PAID:
             purchase.status = _purchase_status_for_gateway(result.status)
             purchase.extra = {
                 **(purchase.extra or {}),
                 "last_query_status": result.status.value,
-                "provider_status": (result.extra or {}).get("provider_status"),
+                "provider_status": provider_status,
             }
             self.db.flush()
-            return purchase
+            return PurchaseCompletionResult(
+                purchase=purchase,
+                prior_status=prior_status,
+                fulfillment_applied=False,
+                provider_status=provider_status,
+            )
 
         if result.amount is not None and not money_equal(result.amount, purchase.amount):
-            return self._mark_failed(purchase, failure="amount_mismatch")
+            failed = self._mark_failed(purchase, failure="amount_mismatch")
+            return PurchaseCompletionResult(
+                purchase=failed,
+                prior_status=prior_status,
+                fulfillment_applied=False,
+                provider_status=provider_status,
+            )
         if result.currency is not None and result.currency.upper() != purchase.currency.upper():
-            return self._mark_failed(purchase, failure="currency_mismatch")
+            failed = self._mark_failed(purchase, failure="currency_mismatch")
+            return PurchaseCompletionResult(
+                purchase=failed,
+                prior_status=prior_status,
+                fulfillment_applied=False,
+                provider_status=provider_status,
+            )
 
+        # Already-paid purchases return above; fulfillment always runs on this path.
         self._fulfill(purchase)
         purchase.status = PurchaseStatus.PAID.value
         purchase.paid_at = datetime.now(timezone.utc)
         purchase.extra = {
             **(purchase.extra or {}),
             "last_query_status": result.status.value,
-            "provider_status": (result.extra or {}).get("provider_status"),
+            "provider_status": provider_status,
         }
         self.db.flush()
         self._issue_invoice(purchase)
@@ -282,7 +358,12 @@ class BillingService:
                 "kind": purchase.kind,
             },
         )
-        return purchase
+        return PurchaseCompletionResult(
+            purchase=purchase,
+            prior_status=prior_status,
+            fulfillment_applied=True,
+            provider_status=provider_status,
+        )
 
     def start_external_checkout(
         self,

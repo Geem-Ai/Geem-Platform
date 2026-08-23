@@ -47,6 +47,15 @@ const EXPERT_VISIBILITY: Record<string, StatusBadgeSpec> = {
   platform_published: { labelKey: 'experts.visibility.published', variant: 'success' },
 };
 
+const PURCHASE_STATUS: Record<string, StatusBadgeSpec> = {
+  pending: { labelKey: 'purchases.status.pending', variant: 'warning' },
+  redirected: { labelKey: 'purchases.status.redirected', variant: 'info' },
+  paid: { labelKey: 'purchases.status.paid', variant: 'success' },
+  failed: { labelKey: 'purchases.status.failed', variant: 'destructive' },
+  cancelled: { labelKey: 'purchases.status.cancelled', variant: 'secondary' },
+  expired: { labelKey: 'purchases.status.expired', variant: 'secondary' },
+};
+
 function lookup(map: Record<string, StatusBadgeSpec>, value: string, fallbackKey: string): StatusBadgeSpec {
   return map[value] ?? { labelKey: fallbackKey, variant: 'secondary' };
 }
@@ -77,4 +86,8 @@ export function expertStatusBadge(status: string): StatusBadgeSpec {
 
 export function expertVisibilityBadge(visibility: string): StatusBadgeSpec {
   return lookup(EXPERT_VISIBILITY, visibility, 'experts.visibility.unknown');
+}
+
+export function purchaseStatusBadge(status: string): StatusBadgeSpec {
+  return lookup(PURCHASE_STATUS, status, 'purchases.status.pending');
 }

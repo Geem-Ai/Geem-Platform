@@ -56,6 +56,13 @@ class AuditAction(StrEnum):
     BILLING_PURCHASE_PAID = "billing.purchase_paid"
     BILLING_PURCHASE_FAILED = "billing.purchase_failed"
 
+    PAYMENT_GATEWAY_CREATED = "payment_gateway.create"
+    PAYMENT_GATEWAY_UPDATED = "payment_gateway.update"
+    PAYMENT_GATEWAY_CREDENTIALS_ROTATED = "payment_gateway.credentials_rotate"
+    PAYMENT_GATEWAY_ACTIVATED = "payment_gateway.activate"
+
+    PURCHASE_RECONCILED = "purchase.reconcile"
+
     PLAN_CREATED = "plan.create"
     PLAN_UPDATED = "plan.update"
     PLAN_ACTIVATED = "plan.activate"
@@ -106,6 +113,7 @@ class AuditEntityType(StrEnum):
     EXPERT = "expert"
     API_KEY = "api_key"
     PURCHASE = "purchase"
+    PAYMENT_GATEWAY = "payment_gateway"
     PLAN = "plan"
     SUBSCRIPTION = "subscription"
     CREDIT_LEDGER_ENTRY = "credit_ledger_entry"

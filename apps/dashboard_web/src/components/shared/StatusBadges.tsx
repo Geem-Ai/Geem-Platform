@@ -5,6 +5,7 @@ import {
   expertVisibilityBadge,
   planStatusBadge,
   platformRoleBadge,
+  purchaseStatusBadge,
   userStatusBadge,
   workspaceKindBadge,
   workspaceStatusBadge,
@@ -84,6 +85,16 @@ export function ExpertVisibilityBadge({
 }) {
   const { t } = useTranslation();
   const spec = expertVisibilityBadge(visibility);
+  return (
+    <Badge variant={spec.variant} appearance="light" size="sm" className={className}>
+      {t(spec.labelKey)}
+    </Badge>
+  );
+}
+
+export function PurchaseStatusBadge({ status, className }: Props) {
+  const { t } = useTranslation();
+  const spec = purchaseStatusBadge(status);
   return (
     <Badge variant={spec.variant} appearance="light" size="sm" className={className}>
       {t(spec.labelKey)}

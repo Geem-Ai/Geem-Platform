@@ -27,6 +27,10 @@ _ADAPTERS: dict[str, AdapterFactory] = {
 }
 
 
+def registered_adapter_codes() -> frozenset[str]:
+    return frozenset(_ADAPTERS.keys())
+
+
 class EnabledGateway:
     def __init__(
         self,

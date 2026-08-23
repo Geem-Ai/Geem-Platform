@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, CircleAlert, KeyRound } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -9,9 +10,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import type { PlatformPaymentGatewayListItem } from '@/services/api/types';
 
 type GatewayConfigDialogProps = {
@@ -57,17 +61,44 @@ export function GatewayConfigDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent data-testid="gateway-config-dialog">
+      <AlertDialogContent
+        className="max-w-lg"
+        data-testid="gateway-config-dialog"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {isCreate ? t('paymentGateways.addConfiguration') : t('paymentGateways.configure')}
             {gateway ? ` — ${gateway.display_name}` : ''}
           </AlertDialogTitle>
-          <AlertDialogDescription>{t('paymentGateways.subtitle')}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {gateway?.code === 'noop'
+              ? t('paymentGateways.dialog.noopHelp')
+              : t('paymentGateways.dialog.clickpayHelp')}
+          </AlertDialogDescription>
         </AlertDialogHeader>
 
         {gateway?.code === 'clickpay' ? (
-          <div className="space-y-4 py-1">
+          <div className="space-y-5 py-1">
+            {!isCreate ? (
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  {t('paymentGateways.card.credentials')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <StatusChip
+                    label={t('paymentGateways.profileId')}
+                    configured={Boolean(gateway.credential_field_status.profile_id_configured)}
+                  />
+                  <StatusChip
+                    label={t('paymentGateways.serverKey')}
+                    configured={Boolean(gateway.credential_field_status.server_key_configured)}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <Separator />
+
             <div className="space-y-2">
               <Label htmlFor="gateway-profile-id">{t('paymentGateways.profileId')}</Label>
               <Input
@@ -75,9 +106,11 @@ export function GatewayConfigDialog({
                 value={profileId}
                 onChange={(e) => setProfileId(e.target.value)}
                 autoComplete="off"
+                placeholder={t('paymentGateways.dialog.profileIdPlaceholder')}
                 data-testid="gateway-profile-id"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="gateway-server-key">{t('paymentGateways.serverKey')}</Label>
               {gateway.credential_field_status.server_key_configured ? (
@@ -95,20 +128,32 @@ export function GatewayConfigDialog({
                 data-testid="gateway-server-key"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={testMode}
-                onChange={(e) => setTestMode(e.target.checked)}
-                data-testid="gateway-test-mode"
-              />
-              {t('paymentGateways.testMode')}
-            </label>
+
+            <div className="rounded-lg border border-border p-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={testMode}
+                  onChange={(e) => setTestMode(e.target.checked)}
+                  data-testid="gateway-test-mode"
+                />
+                <span>
+                  <span className="block text-sm font-medium">{t('paymentGateways.testMode')}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t('paymentGateways.dialog.testModeDescription')}
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
         ) : gateway?.code === 'noop' ? (
-          <p className="text-sm text-muted-foreground py-2">
-            {t('paymentGateways.notConfigured')}
-          </p>
+          <div className="space-y-3 py-2">
+            <Badge variant="warning" appearance="light">
+              {t('paymentGateways.card.noopDescription')}
+            </Badge>
+            <p className="text-sm text-muted-foreground">{t('paymentGateways.dialog.noopHelp')}</p>
+          </div>
         ) : null}
 
         <AlertDialogFooter>
@@ -129,5 +174,34 @@ export function GatewayConfigDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function StatusChip({ label, configured }: { label: string; configured: boolean }) {
+  const { t } = useTranslation();
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
+        configured
+          ? 'border-success/30 bg-success/5 text-success-accent dark:text-success'
+          : 'border-border bg-background text-muted-foreground',
+      )}
+    >
+      <KeyRound className="size-3" aria-hidden />
+      {label}
+      {configured ? (
+        <>
+          <CheckCircle2 className="size-3" aria-hidden />
+          <span className="sr-only">{t('paymentGateways.configured')}</span>
+        </>
+      ) : (
+        <>
+          <CircleAlert className="size-3" aria-hidden />
+          <span>{t('paymentGateways.card.credentialMissing')}</span>
+        </>
+      )}
+    </span>
   );
 }

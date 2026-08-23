@@ -730,3 +730,154 @@ class PlatformAppCommercialGrantResponse(BaseModel):
     subscription_id: uuid.UUID | None = None
     access_status: str
     idempotent_replay: bool = False
+
+
+# --- Phase 12F: Payment gateways ---
+
+
+class PlatformGatewayCredentialStatusOut(BaseModel):
+    profile_id_configured: bool | None = None
+    server_key_configured: bool | None = None
+    profile_id: str | None = None
+
+
+class PlatformPaymentGatewayListItem(BaseModel):
+    id: uuid.UUID | None = None
+    code: str
+    display_name: str
+    enabled: bool
+    test_mode: bool | None = None
+    configured: bool
+    credential_field_status: PlatformGatewayCredentialStatusOut
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    referenced_purchases_count: int = 0
+    in_flight_purchases_count: int = 0
+
+
+class PlatformPaymentGatewayListResponse(BaseModel):
+    items: list[PlatformPaymentGatewayListItem]
+    active_gateway_id: uuid.UUID | None = None
+
+
+class PlatformPaymentGatewayDetailOut(BaseModel):
+    id: uuid.UUID
+    code: str
+    display_name: str
+    enabled: bool
+    test_mode: bool
+    configured: bool
+    credentials: PlatformGatewayCredentialStatusOut
+    created_at: datetime
+    updated_at: datetime
+    referenced_purchases_count: int
+    in_flight_purchases_count: int
+
+
+class PlatformPaymentGatewayCreateRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=64)
+    test_mode: bool = True
+    credentials: dict[str, str] | None = None
+
+
+class PlatformPaymentGatewayUpdateRequest(BaseModel):
+    test_mode: bool | None = None
+    credentials: dict[str, str] | None = None
+    profile_id: str | None = Field(default=None, max_length=128)
+
+
+class PlatformPaymentGatewayActivateRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+# --- Phase 12F: Purchases ---
+
+
+class PlatformPurchaseWorkspaceOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+
+
+class PlatformPurchaseActorOut(BaseModel):
+    id: uuid.UUID
+    email: str
+
+
+class PlatformPurchaseTargetOut(BaseModel):
+    kind: str
+    item_name: str | None = None
+    item_code: str | None = None
+    credits: int | None = None
+    app_id: str | None = None
+    app_slug: str | None = None
+    app_name: str | None = None
+
+
+class PlatformPurchaseListItem(BaseModel):
+    id: uuid.UUID
+    workspace: PlatformPurchaseWorkspaceOut
+    actor: PlatformPurchaseActorOut
+    kind: str
+    status: str
+    amount: str
+    currency: str
+    gateway_code: str
+    gateway_config_id: uuid.UUID
+    cart_id: str
+    tran_ref: str | None = None
+    target: PlatformPurchaseTargetOut
+    paid_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    reconcile_eligible: bool = False
+    invoice_available: bool = False
+
+
+class PlatformPurchaseListResponse(BaseModel):
+    items: list[PlatformPurchaseListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformPurchaseFulfillmentOut(BaseModel):
+    fulfilled: bool
+    invoice_available: bool
+    invoice_number: str | None = None
+
+
+class PlatformPurchaseGatewayOut(BaseModel):
+    code: str
+    display_name: str
+    gateway_config_id: uuid.UUID
+    cart_id: str
+    tran_ref: str | None = None
+    provider_status: str | None = None
+    last_query_status: str | None = None
+
+
+class PlatformPurchaseDetailOut(BaseModel):
+    id: uuid.UUID
+    workspace: PlatformPurchaseWorkspaceOut
+    actor: PlatformPurchaseActorOut
+    kind: str
+    status: str
+    amount: str
+    currency: str
+    target: PlatformPurchaseTargetOut
+    gateway: PlatformPurchaseGatewayOut
+    fulfillment: PlatformPurchaseFulfillmentOut
+    paid_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    reconcile_eligible: bool = False
+
+
+class PlatformPurchaseReconcileResponse(BaseModel):
+    purchase: PlatformPurchaseDetailOut
+    prior_status: str
+    resulting_status: str
+    fulfillment_applied: bool
+    provider_status: str | None = None
+    idempotent_replay: bool = False

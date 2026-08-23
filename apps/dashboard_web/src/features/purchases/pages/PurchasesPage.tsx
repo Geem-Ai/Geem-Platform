@@ -6,12 +6,18 @@ import { ChevronRight, Receipt, RefreshCw, SearchX } from 'lucide-react';
 import { AdminListFilters } from '@/components/shared/AdminListFilters';
 import { AdminPagination } from '@/components/shared/AdminPagination';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { PurchaseStatusBadge } from '@/components/shared/StatusBadges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { purchaseKindLabel, purchaseStatusLabel } from '@/features/purchases/lib/labels';
+import {
+  PurchaseProductCell,
+  PurchaseWorkspaceCell,
+} from '@/features/purchases/components/PurchaseTableCells';
+import { purchaseKindLabel } from '@/features/purchases/lib/labels';
 import { formatAdminDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/services/api/errors';
 import { fetchPlatformPurchases, platformQueryKeys } from '@/services/api/platform';
 
@@ -80,7 +86,7 @@ export function PurchasesPage() {
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('purchases.subtitle')}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
-          <RefreshCw className="size-4" aria-hidden />
+          <RefreshCw className={cn('size-4', query.isFetching && 'animate-spin')} aria-hidden />
           {t('common.refresh')}
         </Button>
       </section>
@@ -141,6 +147,11 @@ export function PurchasesPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Receipt className="size-4" aria-hidden />
             {t('purchases.title')}
+            {query.data ? (
+              <Badge variant="secondary" appearance="light" size="sm">
+                {total.toLocaleString(i18n.language)}
+              </Badge>
+            ) : null}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -158,7 +169,7 @@ export function PurchasesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto" data-testid="purchases-list">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead className="border-b bg-muted/40 text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 text-start font-medium">{t('purchases.detailTitle')}</th>
@@ -176,28 +187,50 @@ export function PurchasesPage() {
                   {items.map((purchase) => (
                     <tr
                       key={purchase.id}
-                      className="border-b last:border-0 hover:bg-muted/20"
+                      className="group border-b last:border-0 hover:bg-muted/25"
                       data-testid={`purchase-row-${purchase.id}`}
                     >
-                      <td className="px-4 py-3 font-mono text-xs">{purchase.id.slice(0, 8)}…</td>
-                      <td className="px-4 py-3">{purchase.workspace.name}</td>
-                      <td className="px-4 py-3">{purchase.target.item_name ?? '—'}</td>
-                      <td className="px-4 py-3">{purchaseKindLabel(t, purchase.kind)}</td>
                       <td className="px-4 py-3">
-                        {formatMoney(purchase.amount, purchase.currency)}
+                        <Link
+                          to={`/purchases/${purchase.id}`}
+                          className="font-mono text-xs text-primary hover:underline"
+                        >
+                          {purchase.id.slice(0, 8)}…
+                        </Link>
                       </td>
-                      <td className="px-4 py-3">{purchase.gateway_code}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={purchase.status === 'paid' ? 'default' : 'outline'}>
-                          {purchaseStatusLabel(t, purchase.status)}
+                        <PurchaseWorkspaceCell workspace={purchase.workspace} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <PurchaseProductCell kind={purchase.kind} target={purchase.target} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" appearance="light" size="sm">
+                          {purchaseKindLabel(t, purchase.kind)}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 font-medium tabular-nums">
+                        {formatMoney(purchase.amount, purchase.currency)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" appearance="outline" size="sm" className="font-mono">
+                          {purchase.gateway_code}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <PurchaseStatusBadge status={purchase.status} />
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">
                         {formatAdminDate(purchase.created_at, i18n.language)}
                       </td>
                       <td className="px-4 py-3 text-end">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/purchases/${purchase.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          className="opacity-70 group-hover:opacity-100"
+                        >
+                          <Link to={`/purchases/${purchase.id}`} aria-label={t('purchases.viewPurchase', { id: purchase.id.slice(0, 8) })}>
                             <ChevronRight className="size-4" aria-hidden />
                           </Link>
                         </Button>

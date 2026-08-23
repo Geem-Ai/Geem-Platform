@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
+import { PurchaseStatusBadge } from '@/components/shared/StatusBadges';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -14,10 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { purchaseKindLabel, purchaseStatusLabel } from '@/features/purchases/lib/labels';
+import {
+  PurchaseProductCell,
+  PurchaseWorkspaceCell,
+} from '@/features/purchases/components/PurchaseTableCells';
+import { purchaseKindLabel } from '@/features/purchases/lib/labels';
 import { formatAdminDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/format';
 import { getErrorMessage } from '@/services/api/errors';
@@ -111,9 +115,7 @@ export function PurchaseDetailPage() {
           <section className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">{t('purchases.detailTitle')}</h1>
-              <Badge variant={purchase.status === 'paid' ? 'default' : 'outline'}>
-                {purchaseStatusLabel(t, purchase.status)}
-              </Badge>
+              <PurchaseStatusBadge status={purchase.status} />
             </div>
             <p className="font-mono text-xs text-muted-foreground break-all">{purchase.id}</p>
           </section>
@@ -125,8 +127,7 @@ export function PurchaseDetailPage() {
             <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-muted-foreground">{t('purchases.workspace')}</p>
-                <p>{purchase.workspace.name}</p>
-                <p className="text-xs text-muted-foreground">{purchase.workspace.slug}</p>
+                <PurchaseWorkspaceCell workspace={purchase.workspace} />
               </div>
               <div>
                 <p className="text-muted-foreground">{t('nav.users')}</p>
@@ -147,8 +148,8 @@ export function PurchaseDetailPage() {
             <CardHeader>
               <CardTitle className="text-base">{t('purchases.product')}</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-1">
-              <p>{purchase.target.item_name ?? '—'}</p>
+            <CardContent className="text-sm space-y-2">
+              <PurchaseProductCell kind={purchase.kind} target={purchase.target} />
               <p className="text-muted-foreground">{purchaseKindLabel(t, purchase.kind)}</p>
             </CardContent>
           </Card>

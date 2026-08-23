@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, apiRequestBlob } from './client';
 import type {
   PlatformCreditGrantBody,
   PlatformCreditGrantResponse,
@@ -50,6 +50,14 @@ import type {
   PlatformWorkspaceListResponse,
   PlatformWorkspaceMembersResponse,
   PlatformWorkspaceUsage,
+  PlatformPaymentGatewayCreateBody,
+  PlatformPaymentGatewayDetail,
+  PlatformPaymentGatewayListResponse,
+  PlatformPaymentGatewayUpdateBody,
+  PlatformPurchaseDetail,
+  PlatformPurchaseListResponse,
+  PlatformPurchasePageParams,
+  PlatformPurchaseReconcileResponse,
 } from './types';
 
 function toQuery(params: PlatformPageParams = {}): string {
@@ -61,6 +69,10 @@ function toQuery(params: PlatformPageParams = {}): string {
   if (params.kind) q.set('kind', params.kind);
   if (params.platform_role) q.set('platform_role', params.platform_role);
   if (params.currency) q.set('currency', params.currency);
+  if (params.gateway) q.set('gateway', params.gateway);
+  if (params.workspace_id) q.set('workspace_id', params.workspace_id);
+  if (params.created_from) q.set('created_from', params.created_from);
+  if (params.created_to) q.set('created_to', params.created_to);
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -319,6 +331,10 @@ export const platformQueryKeys = {
   appWorkspaces: (id: string, filters: PlatformPageParams = {}) =>
     ['platform', 'app', id, 'workspaces', filters] as const,
   workspaceApps: (workspaceId: string) => ['platform', 'workspace', workspaceId, 'apps'] as const,
+  paymentGateways: ['platform', 'payment-gateways'] as const,
+  paymentGateway: (id: string) => ['platform', 'payment-gateway', id] as const,
+  purchases: (filters: PlatformPurchasePageParams) => ['platform', 'purchases', filters] as const,
+  purchase: (id: string) => ['platform', 'purchase', id] as const,
 };
 
 // --- Phase 12D: Platform Experts ---
@@ -668,4 +684,78 @@ export async function revokePlatformAppSubscription(
 
 export function newAppGrantIdempotencyKey(): string {
   return `platform-app-grant:${crypto.randomUUID()}`;
+}
+
+// --- Phase 12F: Payment gateways ---
+
+export async function fetchPlatformPaymentGateways(): Promise<PlatformPaymentGatewayListResponse> {
+  return apiRequest<PlatformPaymentGatewayListResponse>('/api/platform/payment-gateways');
+}
+
+export async function fetchPlatformPaymentGateway(
+  gatewayConfigId: string,
+): Promise<PlatformPaymentGatewayDetail> {
+  return apiRequest<PlatformPaymentGatewayDetail>(
+    `/api/platform/payment-gateways/${gatewayConfigId}`,
+  );
+}
+
+export async function createPlatformPaymentGateway(
+  body: PlatformPaymentGatewayCreateBody,
+): Promise<PlatformPaymentGatewayDetail> {
+  return apiRequest<PlatformPaymentGatewayDetail>('/api/platform/payment-gateways', {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function updatePlatformPaymentGateway(
+  gatewayConfigId: string,
+  body: PlatformPaymentGatewayUpdateBody,
+): Promise<PlatformPaymentGatewayDetail> {
+  return apiRequest<PlatformPaymentGatewayDetail>(
+    `/api/platform/payment-gateways/${gatewayConfigId}`,
+    { method: 'PATCH', json: body },
+  );
+}
+
+export async function activatePlatformPaymentGateway(
+  gatewayConfigId: string,
+  reason: string,
+): Promise<PlatformPaymentGatewayDetail> {
+  return apiRequest<PlatformPaymentGatewayDetail>(
+    `/api/platform/payment-gateways/${gatewayConfigId}/activate`,
+    { method: 'POST', json: { reason } },
+  );
+}
+
+// --- Phase 12F: Purchases ---
+
+function toPurchaseQuery(params: PlatformPurchasePageParams = {}): string {
+  return toQuery(params);
+}
+
+export async function fetchPlatformPurchases(
+  params: PlatformPurchasePageParams = {},
+): Promise<PlatformPurchaseListResponse> {
+  return apiRequest<PlatformPurchaseListResponse>(
+    `/api/platform/purchases${toPurchaseQuery(params)}`,
+  );
+}
+
+export async function fetchPlatformPurchase(purchaseId: string): Promise<PlatformPurchaseDetail> {
+  return apiRequest<PlatformPurchaseDetail>(`/api/platform/purchases/${purchaseId}`);
+}
+
+export async function reconcilePlatformPurchase(
+  purchaseId: string,
+): Promise<PlatformPurchaseReconcileResponse> {
+  return apiRequest<PlatformPurchaseReconcileResponse>(
+    `/api/platform/purchases/${purchaseId}/reconcile`,
+    { method: 'POST', json: {} },
+  );
+}
+
+export async function downloadPlatformPurchaseInvoice(purchaseId: string): Promise<Blob> {
+  return apiRequestBlob(`/api/platform/purchases/${purchaseId}/invoice`);
 }
