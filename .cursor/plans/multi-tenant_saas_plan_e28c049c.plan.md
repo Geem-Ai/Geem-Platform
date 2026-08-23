@@ -1,6 +1,6 @@
 ---
 name: Multi-Tenant SaaS Plan
-overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; future siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp."
+overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp. **Transformation status: COMPLETE (Phases 0–12, incl. Platform Admin 12H release gate).**"
 todos:
   - id: phase-0
     content: "Phase 0: Create apps/workspace_web (keep apps/web); Geem branding assets; backend foundations + Metronic prep"
@@ -42,8 +42,8 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS + 12G PASS (dashboard, usage analytics, audit logs)."
-    status: in_progress
+    content: "Phase 12: COMPLETE — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS + 12G PASS + 12H PASS (Platform Admin security/E2E/RTL release gate)."
+    status: completed
 isProject: false
 ---
 
@@ -1261,7 +1261,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9H Acceptance:** Subscribe → install → configure Expert/appearance/origins → public bootstrap respects allowlist; expired subscription fails closed; docs in `docs/apps/chat-widget.md`. **PASS.**
 
-**Next:** Phase 12 when explicitly requested. Phase 11 COMPLETE — **11A PASS** + **11B PASS** + **11C PASS** + **11D PASS** + **11E PASS**.
+**Next:** Multi-Tenant SaaS Transformation Plan **COMPLETE** (Phases 0–12). Phase 12 **COMPLETE** — **12A–12H PASS**. Future work (MCP, SSO, etc.) remains documented as deferred/non-goals — not Phase 13.
 
 ---
 
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS** + **12F PASS** + **12G PASS**. 12H not started.
+**Status:** **COMPLETE** — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS** + **12E PASS** + **12F PASS** + **12G PASS** + **12H PASS**.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1478,7 +1478,17 @@ Delivered:
 - `dashboard_web`: real Overview, `/usage`, `/audit-logs`, Workspace usage section; SVG trend chart; EN/AR + RTL
 - Tests: `test_platform_admin_phase12g.py` (13 cases); 12F regression; dashboard vitest (33 pass); Playwright admin smoke extended with 12G mocks
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces, manage App Store catalog and manual App entitlements, configure payment gateways, operate on global purchases, and monitor platform usage plus global audit logs; Workspace app remains tenant-only. **Partially met** — 12A–12G PASS; remaining Phase 12 slices (12H+) not started.
+#### Phase 12H — Security, isolation, E2E, RTL & release gate (PASS)
+
+Delivered:
+
+- Consolidated release-gate integration tests: `test_platform_admin_phase12h.py` — API-key rejection matrix across all Platform route categories; zero-membership admin surface smoke; audit log immutability; cross-Workspace credit isolation; credit idempotency; system Workspace protection matrix; happy-path orchestration (plan assign + credit grant + audit)
+- Playwright: full admin smoke (all Phase 12 nav areas), non-Platform user denial, **RTL** (`dir=rtl`) overview + workspaces
+- Production gates: `dashboard_web` typecheck/lint/unit/build PASS; backend full suite PASS (933+); no `samples/` runtime imports; no cross-app `workspace_web` ↔ `dashboard_web` imports
+- Regression fixes: suspended Workspace invitation list/revoke fail-closed aligned with 12B; stale entitlement boolean test updated for canonical key catalog; flaky `caplog` secure-settings test scoped to config logger
+- Documentation: [`docs/platform-admin.md`](../../docs/platform-admin.md) — security boundary, data access, billing safety, deployment variables, testing
+
+**Acceptance (full Phase 12):** Platform Admin is production-ready on separate `dashboard_web` / `APP_ADMIN_HOST` with global Workspaces/Users/Plans/Credits/Platform Experts/App Store/Payment Gateways/Purchases/Usage/Audit Logs; host + `platform_role=admin` enforced; Workspace/API-key isolation verified; EN/AR + RTL + responsive; E2E smoke PASS. **Met** — Phase 12 **COMPLETE**.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

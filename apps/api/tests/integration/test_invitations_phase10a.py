@@ -631,14 +631,15 @@ def test_invite_create_and_resend_require_active_workspace(
         f"/api/workspaces/{ws['id']}/invitations",
         headers=_auth(owner["access_token"]),
     )
-    assert listed.status_code == 200, listed.text
-    assert listed.json()["total"] == 1
+    assert listed.status_code == 403, listed.text
+    assert listed.json()["code"] == "workspace_access_denied"
 
     revoked = client.delete(
         f"/api/workspaces/{ws['id']}/invitations/{invitation_id}",
         headers=_auth(owner["access_token"]),
     )
-    assert revoked.status_code == 204, revoked.text
+    assert revoked.status_code == 403, revoked.text
+    assert revoked.json()["code"] == "workspace_access_denied"
 
 
 def test_accept_requires_auth(client, register_user, inbox) -> None:

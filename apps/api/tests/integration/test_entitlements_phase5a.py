@@ -177,17 +177,16 @@ def test_invalid_integer_entitlement_rejected_on_read(client, register_user, db)
     assert exc.value.category == ErrorCategory.ENTITLEMENT_INVALID
 
 
-def test_boolean_entitlement_get_bool(client, register_user, db) -> None:
+def test_boolean_entitlement_get_bool_rejects_unknown_keys(client, register_user, db) -> None:
     user = register_user(email="ent-bool@example.com")
     ws = _create_workspace(client, user["access_token"], "Bool", "ent-bool-ws")
-    plan = PlanService(db).create_plan(
-        code="bool_plan",
-        name="Bool plan",
-        entitlements={"feature_flag_example": True},
-    )
-    SubscriptionService(db).assign_plan(uuid.UUID(ws["id"]), plan.id)
-    db.commit()
-    assert EntitlementService(db).get_bool(uuid.UUID(ws["id"]), "feature_flag_example") is True
+    with pytest.raises(AppError) as exc:
+        PlanService(db).create_plan(
+            code="bool_plan",
+            name="Bool plan",
+            entitlements={"feature_flag_example": True},
+        )
+    assert exc.value.category == ErrorCategory.ENTITLEMENT_INVALID
 
 
 # ---------------------------------------------------------------------------

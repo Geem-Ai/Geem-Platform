@@ -177,6 +177,6 @@ def test_assert_secure_settings_allows_smtp_without_cert_verify(caplog) -> None:
         smtp_use_tls=True,
         smtp_tls_verify=False,
     )
-    with caplog.at_level("WARNING"):
+    with caplog.at_level("WARNING", logger="app.core.config"):
         assert_secure_settings(settings)
     assert "SMTP_TLS_VERIFY is false" in caplog.text

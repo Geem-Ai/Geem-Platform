@@ -811,7 +811,8 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await page.getByTestId('nav-audit-logs').click();
   await expect(page.getByTestId('audit-logs-page')).toBeVisible();
   await page.getByRole('button', { name: 'Details' }).click();
-  await expect(page.getByText('E2E grant')).toBeVisible();
+  await expect(page.getByText('E2E grant', { exact: true }).first()).toBeVisible();
+  await page.keyboard.press('Escape');
 
   await page.getByTestId('nav-workspaces').click();
   await expect(page.getByTestId('workspaces-page')).toBeVisible();
@@ -907,7 +908,7 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await page.getByTestId('nav-purchases').click();
   await expect(page.getByTestId('purchases-page')).toBeVisible();
   await expect(page.getByTestId('purchases-list')).toBeVisible();
-  await page.getByTestId('purchase-row-purchase-1').getByRole('link').click();
+  await page.getByTestId('purchase-row-purchase-1').getByRole('link').first().click();
   await expect(page.getByTestId('purchase-detail-page')).toBeVisible();
   await expect(page.getByTestId('purchase-download-invoice')).toBeVisible();
 
@@ -957,4 +958,73 @@ test('workspace user cannot enter the Platform Admin dashboard', async ({ page }
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('platform-access-required')).toBeVisible();
   await expect(page.getByTestId('overview-page')).toHaveCount(0);
+});
+
+test('RTL overview and workspaces render with dir=rtl', async ({ page }) => {
+  let loggedIn = false;
+
+  await page.addInitScript(() => {
+    localStorage.setItem('geem-admin-locale', 'ar');
+    localStorage.setItem('geem-admin-theme', 'light');
+  });
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
+
+    if (path.endsWith('/auth/refresh') && method === 'POST') {
+      if (!loggedIn) return fulfillJson(route, { code: 'unauthorized' }, 401);
+      return fulfillJson(route, {
+        access_token: 'e2e-access',
+        token_type: 'bearer',
+        user: adminUser,
+      });
+    }
+    if (path.endsWith('/auth/login') && method === 'POST') {
+      loggedIn = true;
+      return fulfillJson(route, {
+        access_token: 'e2e-access',
+        token_type: 'bearer',
+        expires_at: '2099-01-01T00:00:00Z',
+        user: adminUser,
+      });
+    }
+    if (path.endsWith('/platform/me') && method === 'GET') {
+      return fulfillJson(route, {
+        user: adminUser,
+        platform_role: 'admin',
+        authorized: true,
+      });
+    }
+    if (path.endsWith('/platform/dashboard/summary') && method === 'GET') {
+      return fulfillJson(route, fixtureDashboardSummary);
+    }
+    if (path.endsWith('/platform/workspaces') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [fixtureWorkspace],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      });
+    }
+    if (path.endsWith('/auth/logout') && method === 'POST') {
+      loggedIn = false;
+      return route.fulfill({ status: 204, body: '' });
+    }
+    return fulfillJson(route, { code: 'not_found' }, 404);
+  });
+
+  await page.goto('/login');
+  await page.locator('#email').fill('admin@example.com');
+  await page.locator('#password').fill('password123');
+  await page.getByTestId('login-submit').click();
+
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.getByTestId('overview-page')).toBeVisible();
+  await expect(page.getByTestId('overview-metrics')).toBeVisible();
+
+  await page.getByTestId('nav-workspaces').click();
+  await expect(page.getByTestId('workspaces-page')).toBeVisible();
+  await expect(page.getByText('Fixture Acme')).toBeVisible();
 });

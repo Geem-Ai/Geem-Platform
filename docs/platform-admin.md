@@ -133,7 +133,64 @@ Existing `/api/platform/experts*` scaffolding from Phase 3A uses the same host +
 
 ## Later slices
 
-12D–12G should orchestrate existing services (ExpertService, app catalog, gateways, analytics) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
+12D–12G orchestrate existing services (ExpertService, app catalog, gateways, analytics) from `app.platform_admin`. Do not duplicate those domains. Mutations must write `audit_logs` (see [audit.md](./audit.md)).
+
+## Phase 12H — Security boundary & release gate
+
+### Authorization (independent domains)
+
+| Authority | Grant |
+|-----------|-------|
+| Platform Admin | `users.platform_role == admin` + human session JWT |
+| Workspace | Dynamic workspace roles / `WorkspacePermission` |
+| Machine API | Workspace API key (`geem_sk_…`) scoped to one Workspace |
+
+**Workspace Owner ≠ Platform Admin.** Workspace API key ≠ Platform Admin.
+
+### Data access
+
+Platform Admin exposes platform metadata and administration data. It does **not** grant arbitrary access to tenant conversation messages, prompts, document content, or WhatsApp message bodies unless another explicitly authorized feature owns that behavior.
+
+### Billing safety
+
+- Exactly one enabled gateway for new checkouts
+- Purchases pinned to original `payment_gateway_config_id`
+- Fulfillment requires provider query (`reconcile` / return path) — no manual mark-paid
+- Administrative App/license/subscription grants are not payments
+- No card data collected; no recurring provider charges in Phase 6/12F design
+
+### Host & proxy
+
+See **Host boundary** above. Production reverse proxies must rewrite `Host` to `APP_ADMIN_HOST`. `X-Forwarded-Host` is never preferred over `Host`.
+
+### Secret handling
+
+- Gateway credentials encrypted at rest (`credentials_encrypted`); Platform DTOs expose `*_configured` flags only
+- Audit log metadata redacted recursively on read (`redact_audit_metadata_for_read`)
+- `dashboard_web` API client forbids `X-Workspace-Slug` / `X-Workspace-Id`
+
+### Testing
+
+| Suite | Command |
+|-------|---------|
+| Platform Admin integration | `pytest tests/integration/test_platform_admin_phase12*.py` |
+| Release gate (12H) | `pytest tests/integration/test_platform_admin_phase12h.py` |
+| Dashboard unit | `cd apps/dashboard_web && npm test` |
+| Dashboard E2E (mocked API) | `cd apps/dashboard_web && npm run test:e2e` |
+| Production build | `cd apps/dashboard_web && npm run build` |
+
+### Environment variables (representative)
+
+| Variable | Role |
+|----------|------|
+| `APP_ADMIN_HOST` | Production Platform Admin API host (e.g. `admin.geem.ai`) |
+| `TRUST_PROXY_HEADERS` | When true, `X-Forwarded-Host` used only if `Host` absent |
+| `VITE_API_URL` | `dashboard_web` API origin |
+| `CORS_ORIGINS` | Must include admin SPA origin in production |
+| `SECRETS_ENCRYPTION_KEY` | Gateway credential encryption |
+| `APP_ENV` | `local`/`test` relaxes admin-host enforcement for DX |
+
+See [deployment.md](./deployment.md) and [development.md](./development.md) for stack-specific values.
 
 ## Local `dashboard_web`
 

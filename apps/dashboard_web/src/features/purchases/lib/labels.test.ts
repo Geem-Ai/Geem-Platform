@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { TFunction } from 'i18next';
+import { describe, expect, it } from 'vitest';
 import {
   isAppPurchaseKind,
   purchaseAppHref,
