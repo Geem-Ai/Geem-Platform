@@ -19,16 +19,13 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import DocumentCreateResponse
 from app.db.session import get_db
-from app.experts.models import Expert
 from app.experts.schemas import (
     ExpertDocumentLinkOut,
     ExpertDocumentLinkRequest,
-    ExpertOut,
     ExpertUpdateRequest,
     ExpertUploadResponse,
     PlatformExpertCreateRequest,
     PlatformExpertGrantRequest,
-    WorkspaceExpertGrantOut,
 )
 from app.experts.service import ExpertService
 from app.identity.models import User
@@ -37,11 +34,17 @@ from app.platform_admin.dependencies import (
     require_platform_admin,
     require_platform_admin_host,
 )
+from app.platform_admin.experts import PlatformAdminExpertsService
 from app.platform_admin.schemas import (
     PlatformCreditGrantRequest,
     PlatformCreditGrantResponse,
     PlatformCreditHistoryResponse,
     PlatformEntitlementCatalogResponse,
+    PlatformExpertDetailOut,
+    PlatformExpertGrantListResponse,
+    PlatformExpertKnowledgeListResponse,
+    PlatformExpertListResponse,
+    PlatformExpertWorkspaceGrantOut,
     PlatformMeResponse,
     PlatformPlanCreateRequest,
     PlatformPlanDetailOut,
@@ -427,77 +430,79 @@ def grant_platform_workspace_credits(
     )
 
 
-def _platform_out(expert: Expert) -> ExpertOut:
-    return ExpertOut(
-        id=expert.id,
-        type=expert.type,
-        ownership="platform",
-        workspace_id=expert.workspace_id,
-        name=expert.name,
-        description=expert.description,
-        icon_url=expert.icon_url,
-        system_instructions=expert.system_instructions,
-        rag_config=expert.rag_config or {},
-        status=expert.status,
-        visibility=expert.visibility,
-        availability_mode=expert.availability_mode,
-        knowledge_mode=getattr(expert, "knowledge_mode", None) or "rag",
-        created_by=expert.created_by,
-        created_at=expert.created_at,
-        updated_at=expert.updated_at,
-        knowledge_document_count=0,
-    )
+# --- Phase 12D: Platform Experts ---
 
 
-@router.get("/experts", response_model=list[ExpertOut])
+@router.get("/experts", response_model=PlatformExpertListResponse)
 def list_platform_experts(
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
-) -> list[ExpertOut]:
-    experts = ExpertService(db).list_platform_experts(actor=user)
-    return [_platform_out(e) for e in experts]
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    status: str | None = Query(default=None, max_length=32),
+    visibility: str | None = Query(default=None, max_length=32),
+    knowledge_mode: str | None = Query(default=None, max_length=32),
+    availability_mode: str | None = Query(default=None, max_length=32),
+    published: bool | None = Query(default=None),
+) -> PlatformExpertListResponse:
+    return PlatformAdminExpertsService(db).list_experts(
+        user,
+        limit=limit,
+        offset=offset,
+        search=search,
+        status=status,
+        visibility=visibility,
+        knowledge_mode=knowledge_mode,
+        availability_mode=availability_mode,
+        published=published,
+    )
 
 
-@router.post("/experts", response_model=ExpertOut, status_code=201)
+@router.post("/experts", response_model=PlatformExpertDetailOut, status_code=201)
 def create_platform_expert(
     body: PlatformExpertCreateRequest,
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
-) -> ExpertOut:
-    expert = ExpertService(db).create_platform_expert(
-        actor=user,
-        name=body.name,
-        description=body.description,
-        system_instructions=body.system_instructions,
-        rag_config=body.rag_config,
-        visibility=body.visibility,
-        status=body.status,
-        availability_mode=body.availability_mode,
-        icon_url=body.icon_url,
-    )
-    return _platform_out(expert)
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).create_expert(user, body)
 
 
-@router.patch("/experts/{expert_id}", response_model=ExpertOut)
+@router.get("/experts/{expert_id}", response_model=PlatformExpertDetailOut)
+def get_platform_expert(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).get_expert(user, expert_id)
+
+
+@router.patch("/experts/{expert_id}", response_model=PlatformExpertDetailOut)
 def update_platform_expert(
     expert_id: uuid.UUID,
     body: ExpertUpdateRequest,
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
-) -> ExpertOut:
-    expert = ExpertService(db).update_platform_expert(
-        actor=user,
-        expert_id=expert_id,
-        name=body.name,
-        description=body.description,
-        system_instructions=body.system_instructions,
-        rag_config=body.rag_config,
-        visibility=body.visibility,
-        status=body.status,
-        availability_mode=body.availability_mode,
-        icon_url=body.icon_url,
-    )
-    return _platform_out(expert)
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).update_expert(user, expert_id, body)
+
+
+@router.post("/experts/{expert_id}/publish", response_model=PlatformExpertDetailOut)
+def publish_platform_expert(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).publish_expert(user, expert_id)
+
+
+@router.post("/experts/{expert_id}/unpublish", response_model=PlatformExpertDetailOut)
+def unpublish_platform_expert(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).unpublish_expert(user, expert_id)
 
 
 @router.delete("/experts/{expert_id}", status_code=204)
@@ -506,12 +511,56 @@ def delete_platform_expert(
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    ExpertService(db).delete_platform_expert(actor=user, expert_id=expert_id)
+    PlatformAdminExpertsService(db).delete_expert(user, expert_id)
+
+
+@router.get(
+    "/experts/{expert_id}/workspace-grants",
+    response_model=PlatformExpertGrantListResponse,
+)
+def list_platform_expert_workspace_grants(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+) -> PlatformExpertGrantListResponse:
+    return PlatformAdminExpertsService(db).list_workspace_grants(
+        user, expert_id, limit=limit, offset=offset, search=search
+    )
+
+
+@router.post(
+    "/experts/{expert_id}/workspace-grants",
+    response_model=PlatformExpertWorkspaceGrantOut,
+    status_code=201,
+)
+def grant_platform_expert_workspace(
+    expert_id: uuid.UUID,
+    body: PlatformExpertGrantRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertWorkspaceGrantOut:
+    return PlatformAdminExpertsService(db).grant_workspace(user, expert_id, body)
+
+
+@router.delete(
+    "/experts/{expert_id}/workspace-grants/{workspace_id}",
+    status_code=204,
+)
+def revoke_platform_expert_workspace(
+    expert_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    PlatformAdminExpertsService(db).revoke_workspace(user, expert_id, workspace_id)
 
 
 @router.post(
     "/experts/{expert_id}/grants",
-    response_model=WorkspaceExpertGrantOut,
+    response_model=PlatformExpertWorkspaceGrantOut,
     status_code=201,
 )
 def grant_platform_expert(
@@ -519,13 +568,8 @@ def grant_platform_expert(
     body: PlatformExpertGrantRequest,
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
-) -> WorkspaceExpertGrantOut:
-    grant = ExpertService(db).grant_platform_expert(
-        actor=user,
-        expert_id=expert_id,
-        workspace_id=body.workspace_id,
-    )
-    return WorkspaceExpertGrantOut.model_validate(grant)
+) -> PlatformExpertWorkspaceGrantOut:
+    return PlatformAdminExpertsService(db).grant_workspace(user, expert_id, body)
 
 
 @router.delete("/experts/{expert_id}/grants/{workspace_id}", status_code=204)
@@ -535,10 +579,40 @@ def revoke_platform_expert(
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> None:
-    ExpertService(db).revoke_platform_expert(
-        actor=user,
-        expert_id=expert_id,
-        workspace_id=workspace_id,
+    PlatformAdminExpertsService(db).revoke_workspace(user, expert_id, workspace_id)
+
+
+@router.post("/experts/{expert_id}/access/all", response_model=PlatformExpertDetailOut)
+def enable_platform_expert_all_workspaces(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).enable_all_workspaces(user, expert_id)
+
+
+@router.delete("/experts/{expert_id}/access/all", response_model=PlatformExpertDetailOut)
+def disable_platform_expert_all_workspaces(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformExpertDetailOut:
+    return PlatformAdminExpertsService(db).disable_all_workspaces(user, expert_id)
+
+
+@router.get(
+    "/experts/{expert_id}/knowledge",
+    response_model=PlatformExpertKnowledgeListResponse,
+)
+def list_platform_expert_knowledge(
+    expert_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PlatformExpertKnowledgeListResponse:
+    return PlatformAdminExpertsService(db).list_knowledge(
+        user, expert_id, limit=limit, offset=offset
     )
 
 
@@ -553,13 +627,67 @@ def link_platform_expert_document(
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertDocumentLinkOut:
-    link = ExpertService(db).link_platform_document(
-        actor=user,
-        expert_id=expert_id,
-        document_id=body.document_id,
-        source_id=body.source_id,
-    )
+    link = PlatformAdminExpertsService(db).link_document(user, expert_id, body)
     return ExpertDocumentLinkOut.model_validate(link)
+
+
+@router.post(
+    "/experts/{expert_id}/knowledge",
+    response_model=ExpertUploadResponse,
+    status_code=201,
+)
+async def upload_platform_expert_knowledge(
+    expert_id: uuid.UUID,
+    file: UploadFile = File(...),
+    title: str | None = Form(default=None),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> ExpertUploadResponse:
+    data = await file.read()
+    result = PlatformAdminExpertsService(db).upload_knowledge(
+        user,
+        expert_id,
+        file_bytes=data,
+        filename=file.filename or "document",
+        title=title,
+        declared_mime_type=file.content_type,
+    )
+    return ExpertUploadResponse(
+        expert_id=result.expert_id,
+        source_id=result.source_id,
+        document_id=result.document.id,
+        status=result.document.status,
+        mime_type=result.document.mime_type,
+        page_count=result.document.page_count,
+        reused=result.reused,
+    )
+
+
+@router.post(
+    "/experts/{expert_id}/knowledge/{document_id}/reprocess",
+    status_code=202,
+)
+def reprocess_platform_expert_knowledge(
+    expert_id: uuid.UUID,
+    document_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    mode: str = Query(default="full", max_length=32),
+) -> dict[str, str]:
+    job = PlatformAdminExpertsService(db).reprocess_knowledge(
+        user, expert_id, document_id, mode=mode
+    )
+    return {"job_id": str(job.id), "status": job.status}
+
+
+@router.delete("/experts/{expert_id}/knowledge/{document_id}", status_code=204)
+def remove_platform_expert_knowledge(
+    expert_id: uuid.UUID,
+    document_id: uuid.UUID,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    PlatformAdminExpertsService(db).remove_knowledge(user, expert_id, document_id)
 
 
 @router.post("/knowledge/documents", response_model=DocumentCreateResponse, status_code=201)
@@ -607,15 +735,11 @@ async def upload_platform_expert_document(
     user: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ) -> ExpertUploadResponse:
-    """Privileged upload for a Platform Expert (Phase 3B).
-
-    Requires platform admin. Uploads into the Platform Knowledge Workspace,
-    dedupes on sha256, and links the (new or reused) Document to the Expert.
-    """
+    """Privileged upload for a Platform Expert (Phase 3B legacy path)."""
     data = await file.read()
-    result = ExpertService(db).upload_document_for_platform_expert(
-        actor=user,
-        expert_id=expert_id,
+    result = PlatformAdminExpertsService(db).upload_knowledge(
+        user,
+        expert_id,
         file_bytes=data,
         filename=file.filename or "document",
         title=title,

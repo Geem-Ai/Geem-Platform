@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '@/app/layouts/admin';
 import { GuestRoute, RequirePlatformAdmin } from '@/app/router/guards';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
+import { ExpertCreatePage } from '@/features/experts/pages/ExpertCreatePage';
+import { ExpertDetailPage } from '@/features/experts/pages/ExpertDetailPage';
 import { ComingSoonPage } from '@/features/overview/pages/ComingSoonPage';
 import { OverviewPage } from '@/features/overview/pages/OverviewPage';
 import { CreditsPage } from '@/features/credits/pages/CreditsPage';
@@ -28,10 +31,9 @@ export function AppRouter() {
           <Route path="workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:userId" element={<UserDetailPage />} />
-          <Route
-            path="experts"
-            element={<ComingSoonPage titleKey="nav.platformExperts" phase="12D" />}
-          />
+          <Route path="experts" element={<ExpertsPage />} />
+          <Route path="experts/new" element={<ExpertCreatePage />} />
+          <Route path="experts/:expertId" element={<ExpertDetailPage />} />
           <Route path="usage" element={<ComingSoonPage titleKey="nav.usage" phase="12G" />} />
           <Route path="plans" element={<PlansPage />} />
           <Route path="plans/new" element={<PlanCreatePage />} />

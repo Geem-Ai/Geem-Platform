@@ -126,6 +126,28 @@ const entitlementCatalog = {
   ],
 };
 
+const fixturePlatformExpert = {
+  id: 'expert-fixture-1',
+  type: 'platform',
+  ownership: 'platform',
+  workspace_id: null,
+  name: 'Fixture Platform Expert',
+  description: 'E2E expert',
+  icon_url: null,
+  status: 'ready',
+  visibility: 'platform_published',
+  availability_mode: 'selected_workspaces',
+  knowledge_mode: 'rag',
+  created_by: 'admin-1',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  knowledge_document_count: 1,
+  explicit_workspace_grant_count: 1,
+  is_protected: false,
+  system_instructions: 'You are a fixture expert.',
+  rag_config: { top_k: 10, rerank_top_n: 5, similarity_threshold: 0.5 },
+};
+
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   const origin = route.request().headers()['origin'] || '*';
   const cors = {
@@ -393,6 +415,68 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
       return fulfillJson(route, fixturePlan);
     }
 
+    if (path.endsWith('/platform/experts') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [fixturePlatformExpert],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      });
+    }
+
+    if (path.includes('/platform/experts/') && path.endsWith('/workspace-grants') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [
+          {
+            id: 'grant-1',
+            workspace_id: fixtureWorkspace.id,
+            workspace_name: fixtureWorkspace.name,
+            workspace_slug: fixtureWorkspace.slug,
+            workspace_status: fixtureWorkspace.status,
+            expert_id: fixturePlatformExpert.id,
+            created_by: 'admin-1',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      });
+    }
+
+    if (path.includes('/platform/experts/') && path.endsWith('/knowledge') && method === 'GET') {
+      return fulfillJson(route, {
+        items: [
+          {
+            id: 'link-1',
+            expert_id: fixturePlatformExpert.id,
+            document_id: 'doc-1',
+            source_id: 'src-1',
+            created_at: '2026-01-01T00:00:00Z',
+            title: 'Fixture notes',
+            original_filename: 'notes.txt',
+            status: 'ready',
+            mime_type: 'text/plain',
+            byte_size: 42,
+            page_count: 1,
+            failure_reason: null,
+            source_type: 'upload',
+            processed_pages: 1,
+            failed_pages: 0,
+            current_stage: null,
+            progress: 1,
+          },
+        ],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
+    }
+
+    if (path.includes('/platform/experts/') && method === 'GET') {
+      return fulfillJson(route, fixturePlatformExpert);
+    }
+
     if (path.includes('/platform/workspaces/') && method === 'GET') {
       const id = path.split('/').pop();
       if (id === systemWorkspace.id) {
@@ -503,6 +587,17 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await expect(page.getByTestId('plan-detail-page')).toBeVisible();
   await expect(page.getByTestId('plan-bootstrap-protected')).toBeVisible();
   await expect(page.getByTestId('plan-deactivate-button')).toHaveCount(0);
+
+  // Platform Experts smoke (12D)
+  await page.getByTestId('nav-platform-experts').click();
+  await expect(page.getByTestId('experts-page')).toBeVisible();
+  await expect(page.getByText('Fixture Platform Expert')).toBeVisible();
+  await page.getByTestId(`expert-row-${fixturePlatformExpert.id}`).click();
+  await expect(page.getByTestId('expert-detail-page')).toBeVisible();
+  await expect(page.getByTestId('expert-detail-instructions')).toHaveValue(
+    'You are a fixture expert.',
+  );
+  await expect(page.getByTestId('knowledge-item-doc-1')).toBeVisible();
 
   // Credits smoke
   await page.getByTestId('nav-credits').click();

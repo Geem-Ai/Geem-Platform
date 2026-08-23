@@ -42,7 +42,7 @@ todos:
     content: "Phase 11: COMPLETE — 11A + 11B + 11C + 11D + 11E PASS"
     status: completed
   - id: phase-12
-    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS (plans/credits/billing admin). 12D–12G not started."
+    content: "Phase 12: in_progress — 12A PASS + 12B PASS + 12C PASS + 12D PASS (platform experts/knowledge). 12E–12G not started."
     status: in_progress
 isProject: false
 ---
@@ -1374,7 +1374,7 @@ Soft-delete purges for **other entities** (workspaces/experts/conversations), au
 
 ### Phase 12 — Platform Admin (separate `dashboard_web`)
 
-**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS**. 12D–12G not started. Do not start 12D until requested.
+**Status:** in_progress — **12A PASS** + **12B PASS** + **12C PASS** + **12D PASS**. 12E–12G not started. Do not start 12E until requested.
 
 **Goal:** Admin host APIs/UI for workspaces, plans, platform experts, usage, credits, gateways.
 
@@ -1421,7 +1421,23 @@ Delivered:
 - Tests: backend integration 12C + Phase 5B/6A regression; dashboard vitest + Playwright admin smoke
 - Deferred in 12C: credit-pack CRUD; credit `expires_at` (ledger has no expiry column); purchase/gateway admin; negative credit adjust UI
 
-**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Not met yet** — 12A+12B+12C PASS; experts/app-store/gateways/ops slices remain.
+#### Phase 12D — Platform Experts + Platform Knowledge (PASS)
+
+Delivered:
+
+- `PlatformAdminExpertsService` orchestrating existing `ExpertService` / `ExpertAccessService` (no duplicate Platform Expert model)
+- Paginated `GET /api/platform/experts` with filters + aggregate knowledge/grant counts; full Admin detail DTO (`GET /api/platform/experts/{id}`)
+- Create/update; explicit `publish` / `unpublish`; `all_workspaces` access (`POST|DELETE /access/all`); workspace grants list/grant/revoke
+- Platform Knowledge admin: list, upload (`/knowledge` + legacy `/upload`), reprocess, unlink/remove via existing ingestion pipeline + Platform Knowledge system Workspace
+- Geem General (`knowledge_mode=general`) protected from unpublish/disable-all/access mutations
+- Audit actions: `platform_expert.create|update|publish|unpublish|access_all_*|workspace_grant|workspace_revoke|knowledge_*`
+- Workspace-facing Platform Expert DTO remains redacted (`system_instructions`, `rag_config`, knowledge inventory hidden)
+- AI-assisted instruction generation **not** exposed on Platform Admin (tenant-billing-bound workspace route only)
+- `dashboard_web`: `/experts`, `/experts/new`, `/experts/:expertId` with instructions, knowledge upload/status, access grants, EN/AR + RTL
+- Tests: `test_platform_admin_phase12d.py` (11 cases); dashboard vitest; Playwright smoke extended (mocked experts flow)
+- **No schema migration** — Phase 3/4 Expert domain schema was already sufficient
+
+**Acceptance (full Phase 12):** Platform admin can grant credits, publish platform experts, disable workspaces; Workspace app remains tenant-only. **Partially met** — 12A+12B+12C+12D PASS; app-store/gateways/ops slices remain.
 ---
 
 ## Cross-cutting defaults (locked for this plan)

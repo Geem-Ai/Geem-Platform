@@ -380,3 +380,83 @@ class PlatformEntitlementCatalogItem(BaseModel):
 
 class PlatformEntitlementCatalogResponse(BaseModel):
     items: list[PlatformEntitlementCatalogItem]
+
+
+# --- Phase 12D: Platform Experts ---
+
+
+class PlatformExpertListItem(BaseModel):
+    id: uuid.UUID
+    type: str
+    ownership: str = "platform"
+    workspace_id: uuid.UUID | None = None
+    name: str
+    description: str | None = None
+    icon_url: str | None = None
+    status: str
+    visibility: str
+    availability_mode: str
+    knowledge_mode: str = "rag"
+    created_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+    knowledge_document_count: int = 0
+    explicit_workspace_grant_count: int = 0
+    is_protected: bool = False
+
+
+class PlatformExpertDetailOut(PlatformExpertListItem):
+    system_instructions: str | None = None
+    rag_config: dict | None = None
+
+
+class PlatformExpertListResponse(BaseModel):
+    items: list[PlatformExpertListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformExpertWorkspaceGrantOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    workspace_name: str
+    workspace_slug: str
+    workspace_status: str
+    expert_id: uuid.UUID
+    created_by: uuid.UUID | None = None
+    created_at: datetime
+
+
+class PlatformExpertGrantListResponse(BaseModel):
+    items: list[PlatformExpertWorkspaceGrantOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class PlatformExpertKnowledgeItemOut(BaseModel):
+    id: uuid.UUID
+    expert_id: uuid.UUID
+    document_id: uuid.UUID | None = None
+    source_id: uuid.UUID | None = None
+    created_at: datetime
+    title: str
+    original_filename: str
+    status: str
+    mime_type: str | None = None
+    byte_size: int | None = None
+    page_count: int = 0
+    failure_reason: str | None = None
+    source_type: str = "upload"
+    processed_pages: int = 0
+    failed_pages: int = 0
+    current_stage: str | None = None
+    progress: float = 0.0
+
+
+class PlatformExpertKnowledgeListResponse(BaseModel):
+    items: list[PlatformExpertKnowledgeItemOut]
+    total: int
+    limit: int
+    offset: int

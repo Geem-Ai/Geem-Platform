@@ -4,6 +4,15 @@ import type {
   PlatformCreditGrantResponse,
   PlatformCreditHistoryResponse,
   PlatformEntitlementCatalogResponse,
+  PlatformExpertCreateBody,
+  PlatformExpertDetail,
+  PlatformExpertGrantListResponse,
+  PlatformExpertKnowledgeListResponse,
+  PlatformExpertListResponse,
+  PlatformExpertPageParams,
+  PlatformExpertUpdateBody,
+  PlatformExpertUploadResponse,
+  PlatformExpertWorkspaceGrant,
   PlatformMeResponse,
   PlatformPageParams,
   PlatformPlanCreateBody,
@@ -32,6 +41,20 @@ function toQuery(params: PlatformPageParams = {}): string {
   if (params.kind) q.set('kind', params.kind);
   if (params.platform_role) q.set('platform_role', params.platform_role);
   if (params.currency) q.set('currency', params.currency);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+function toExpertQuery(params: PlatformExpertPageParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set('limit', String(params.limit));
+  if (params.offset != null) q.set('offset', String(params.offset));
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  if (params.status) q.set('status', params.status);
+  if (params.visibility) q.set('visibility', params.visibility);
+  if (params.knowledge_mode) q.set('knowledge_mode', params.knowledge_mode);
+  if (params.availability_mode) q.set('availability_mode', params.availability_mode);
+  if (params.published != null) q.set('published', String(params.published));
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -249,4 +272,150 @@ export const platformQueryKeys = {
   plans: (filters: PlatformPageParams) => ['platform', 'plans', filters] as const,
   plan: (id: string) => ['platform', 'plan', id] as const,
   entitlementCatalog: ['platform', 'entitlement-catalog'] as const,
+  experts: (filters: PlatformExpertPageParams) => ['platform', 'experts', filters] as const,
+  expert: (id: string) => ['platform', 'expert', id] as const,
+  expertGrants: (id: string, filters: PlatformPageParams = {}) =>
+    ['platform', 'expert', id, 'grants', filters] as const,
+  expertKnowledge: (id: string) => ['platform', 'expert', id, 'knowledge'] as const,
 };
+
+// --- Phase 12D: Platform Experts ---
+
+export async function fetchPlatformExperts(
+  params: PlatformExpertPageParams = {},
+): Promise<PlatformExpertListResponse> {
+  return apiRequest<PlatformExpertListResponse>(`/api/platform/experts${toExpertQuery(params)}`);
+}
+
+export async function fetchPlatformExpert(expertId: string): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}`);
+}
+
+export async function createPlatformExpert(
+  body: PlatformExpertCreateBody,
+): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>('/api/platform/experts', {
+    method: 'POST',
+    json: body,
+  });
+}
+
+export async function updatePlatformExpert(
+  expertId: string,
+  body: PlatformExpertUpdateBody,
+): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}`, {
+    method: 'PATCH',
+    json: body,
+  });
+}
+
+export async function publishPlatformExpert(expertId: string): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}/publish`, {
+    method: 'POST',
+    json: {},
+  });
+}
+
+export async function unpublishPlatformExpert(expertId: string): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}/unpublish`, {
+    method: 'POST',
+    json: {},
+  });
+}
+
+export async function deletePlatformExpert(expertId: string): Promise<void> {
+  return apiRequest<void>(`/api/platform/experts/${expertId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function enablePlatformExpertAllWorkspaces(
+  expertId: string,
+): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}/access/all`, {
+    method: 'POST',
+    json: {},
+  });
+}
+
+export async function disablePlatformExpertAllWorkspaces(
+  expertId: string,
+): Promise<PlatformExpertDetail> {
+  return apiRequest<PlatformExpertDetail>(`/api/platform/experts/${expertId}/access/all`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchPlatformExpertGrants(
+  expertId: string,
+  params: PlatformPageParams = {},
+): Promise<PlatformExpertGrantListResponse> {
+  return apiRequest<PlatformExpertGrantListResponse>(
+    `/api/platform/experts/${expertId}/workspace-grants${toQuery(params)}`,
+  );
+}
+
+export async function grantPlatformExpertWorkspace(
+  expertId: string,
+  workspaceId: string,
+): Promise<PlatformExpertWorkspaceGrant> {
+  return apiRequest<PlatformExpertWorkspaceGrant>(
+    `/api/platform/experts/${expertId}/workspace-grants`,
+    {
+      method: 'POST',
+      json: { workspace_id: workspaceId },
+    },
+  );
+}
+
+export async function revokePlatformExpertWorkspace(
+  expertId: string,
+  workspaceId: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/api/platform/experts/${expertId}/workspace-grants/${workspaceId}`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function fetchPlatformExpertKnowledge(
+  expertId: string,
+): Promise<PlatformExpertKnowledgeListResponse> {
+  return apiRequest<PlatformExpertKnowledgeListResponse>(
+    `/api/platform/experts/${expertId}/knowledge`,
+  );
+}
+
+export async function uploadPlatformExpertKnowledge(
+  expertId: string,
+  file: File,
+  title?: string,
+): Promise<PlatformExpertUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  if (title?.trim()) form.append('title', title.trim());
+  return apiRequest<PlatformExpertUploadResponse>(
+    `/api/platform/experts/${expertId}/knowledge`,
+    { method: 'POST', body: form },
+  );
+}
+
+export async function reprocessPlatformExpertKnowledge(
+  expertId: string,
+  documentId: string,
+): Promise<{ job_id: string; status: string }> {
+  return apiRequest<{ job_id: string; status: string }>(
+    `/api/platform/experts/${expertId}/knowledge/${documentId}/reprocess?mode=full`,
+    { method: 'POST', json: {} },
+  );
+}
+
+export async function removePlatformExpertKnowledge(
+  expertId: string,
+  documentId: string,
+): Promise<void> {
+  return apiRequest<void>(`/api/platform/experts/${expertId}/knowledge/${documentId}`, {
+    method: 'DELETE',
+  });
+}

@@ -958,6 +958,12 @@ class ExpertService:
             platform_role=actor.platform_role,
             actor_id=actor.id,
         )
+        self._guard_protected_platform_expert(
+            expert,
+            visibility=visibility,
+            availability_mode=availability_mode,
+            status=status,
+        )
         prev_vis = expert.visibility
         if name is not None:
             expert.name = _normalize_name(name)
@@ -1136,3 +1142,228 @@ class ExpertService:
             action="platform_upload",
         )
         return doc
+
+    @staticmethod
+    def _guard_protected_platform_expert(
+        expert: Expert,
+        *,
+        visibility: str | None = None,
+        availability_mode: str | None = None,
+        status: str | None = None,
+        knowledge_mode: str | None = None,
+    ) -> None:
+        """Block destructive changes to the singleton Geem General Expert."""
+        if expert.knowledge_mode != ExpertKnowledgeMode.GENERAL.value:
+            return
+        if visibility is not None and visibility != ExpertVisibility.PLATFORM_PUBLISHED.value:
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert cannot be unpublished.",
+            )
+        if (
+            availability_mode is not None
+            and availability_mode != ExpertAvailabilityMode.ALL_WORKSPACES.value
+        ):
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert must remain available to all Workspaces.",
+            )
+        if status is not None and status == ExpertStatus.DISABLED.value:
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert cannot be disabled.",
+            )
+        if knowledge_mode is not None and knowledge_mode != ExpertKnowledgeMode.GENERAL.value:
+            raise AppError(
+                ErrorCategory.EXPERT_IMMUTABLE,
+                "Geem General Expert knowledge mode cannot be changed.",
+            )
+
+    def validate_platform_expert_publishable(self, expert: Expert) -> None:
+        if not (expert.name or "").strip():
+            raise AppError(ErrorCategory.VALIDATION, "Expert name is required to publish.")
+        instructions = (expert.system_instructions or "").strip()
+        if not instructions:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "System instructions are required to publish.",
+            )
+        if expert.knowledge_mode == ExpertKnowledgeMode.RAG.value:
+            if expert.status == ExpertStatus.FAILED.value:
+                raise AppError(
+                    ErrorCategory.VALIDATION,
+                    "Expert knowledge is in a failed state; fix or remove knowledge before publishing.",
+                )
+
+    def publish_platform_expert(self, *, actor: User, expert_id: uuid.UUID) -> Expert:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._guard_protected_platform_expert(
+            expert, visibility=ExpertVisibility.PLATFORM_PUBLISHED.value
+        )
+        self.validate_platform_expert_publishable(expert)
+        prev = expert.visibility
+        expert.visibility = ExpertVisibility.PLATFORM_PUBLISHED.value
+        if expert.status == ExpertStatus.DRAFT.value and expert.knowledge_mode == ExpertKnowledgeMode.RAG.value:
+            # Promote draft lifecycle when publishing without blocking on ingestion.
+            if self.repo.count_document_links(expert.id) > 0:
+                self._reconcile_status(expert.id)
+                self.db.refresh(expert)
+            else:
+                expert.status = ExpertStatus.READY.value
+        self.db.commit()
+        security_log(
+            "expert.platform_published",
+            expert_id=str(expert.id),
+            actor_id=str(actor.id),
+            action="publish",
+            previous_visibility=prev,
+        )
+        return expert
+
+    def unpublish_platform_expert(self, *, actor: User, expert_id: uuid.UUID) -> Expert:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._guard_protected_platform_expert(
+            expert, visibility=ExpertVisibility.PLATFORM_DRAFT.value
+        )
+        prev = expert.visibility
+        expert.visibility = ExpertVisibility.PLATFORM_DRAFT.value
+        self.db.commit()
+        security_log(
+            "expert.platform_unpublished",
+            expert_id=str(expert.id),
+            actor_id=str(actor.id),
+            action="unpublish",
+            previous_visibility=prev,
+        )
+        return expert
+
+    def enable_all_workspaces_access(self, *, actor: User, expert_id: uuid.UUID) -> Expert:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._guard_protected_platform_expert(
+            expert, availability_mode=ExpertAvailabilityMode.ALL_WORKSPACES.value
+        )
+        prev = expert.availability_mode
+        expert.availability_mode = ExpertAvailabilityMode.ALL_WORKSPACES.value
+        self.db.commit()
+        security_log(
+            "expert.platform_all_workspaces_enabled",
+            expert_id=str(expert.id),
+            actor_id=str(actor.id),
+            action="access_all_enable",
+            previous_mode=prev,
+        )
+        return expert
+
+    def disable_all_workspaces_access(self, *, actor: User, expert_id: uuid.UUID) -> Expert:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._guard_protected_platform_expert(
+            expert, availability_mode=ExpertAvailabilityMode.SELECTED_WORKSPACES.value
+        )
+        prev = expert.availability_mode
+        expert.availability_mode = ExpertAvailabilityMode.SELECTED_WORKSPACES.value
+        self.db.commit()
+        security_log(
+            "expert.platform_all_workspaces_disabled",
+            expert_id=str(expert.id),
+            actor_id=str(actor.id),
+            action="access_all_disable",
+            previous_mode=prev,
+        )
+        return expert
+
+    def unlink_platform_document(
+        self,
+        *,
+        actor: User,
+        expert_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> None:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._reject_general_knowledge_mutation(expert)
+        link = self.repo.get_document_link(expert.id, document_id)
+        if link is None:
+            raise AppError(ErrorCategory.NOT_FOUND, "Expert document link not found.")
+        self.repo.delete_document_link(link)
+        self.db.commit()
+        security_log(
+            "expert.platform_document_unlinked",
+            expert_id=str(expert_id),
+            document_id=str(document_id),
+            actor_id=str(actor.id),
+            action="unlink",
+        )
+        self._sync_document_membership(document_id)
+        self._reconcile_status(expert.id)
+
+    def reprocess_platform_document(
+        self,
+        *,
+        actor: User,
+        expert_id: uuid.UUID,
+        document_id: uuid.UUID,
+        mode: str = "full",
+    ):
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        self._reject_general_knowledge_mutation(expert)
+        link = self.repo.get_document_link(expert.id, document_id)
+        if link is None:
+            raise AppError(ErrorCategory.NOT_FOUND, "Document is not linked to this Expert.")
+        pk = WorkspaceService(self.db, self.settings).get_platform_knowledge_workspace()
+        docs = DocumentService(self.db, self.settings)
+        job = docs.reprocess_for_workspace(pk, document_id, mode=mode)
+        security_log(
+            "expert.platform_document_reprocess",
+            expert_id=str(expert_id),
+            document_id=str(document_id),
+            actor_id=str(actor.id),
+            action="reprocess",
+            mode=mode,
+        )
+        return job
+
+    def list_platform_knowledge_pairs(
+        self, *, actor: User, expert_id: uuid.UUID
+    ) -> list[tuple[ExpertDocument, Document]]:
+        expert = self.access.require_platform_admin_expert(
+            expert_id=expert_id,
+            platform_role=actor.platform_role,
+            actor_id=actor.id,
+        )
+        links = self.repo.list_document_links(expert.id)
+        if not links:
+            return []
+        doc_ids = [link.document_id for link in links]
+        docs = {
+            d.id: d
+            for d in self.db.scalars(
+                select(Document).where(
+                    Document.id.in_(doc_ids),
+                    Document.deleted_at.is_(None),
+                )
+            ).all()
+        }
+        return [(link, docs[link.document_id]) for link in links if link.document_id in docs]

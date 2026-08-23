@@ -60,7 +60,6 @@ export const adminNav: AdminNavItem[] = [
         labelKey: 'nav.platformExperts',
         to: '/experts',
         icon: Sparkles,
-        phase: '12D',
       },
       {
         id: 'usage',

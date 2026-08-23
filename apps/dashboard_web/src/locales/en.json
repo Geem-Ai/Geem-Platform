@@ -108,6 +108,8 @@
     "search": "Search",
     "status": "Status",
     "filter": "Filter",
+    "filters": "Filters",
+    "activeFilters": "{{count}} active filters",
     "all": "All",
     "none": "None",
     "previous": "Previous",
@@ -122,7 +124,10 @@
     "reasonPlaceholder": "Short operational reason",
     "refresh": "Refresh",
     "retry": "Try again",
-    "resetFilters": "Reset filters"
+    "resetFilters": "Reset filters",
+    "save": "Save",
+    "yes": "Yes",
+    "no": "No"
   },
   "status": {
     "workspace": {
@@ -573,5 +578,112 @@
     "noUsageReset": "Note: assigning a plan does not reset usage meters, credits, or Workspace data.",
     "assignConfirm": "Assign plan",
     "assignSuccess": "Plan assigned."
+  },
+  "experts": {
+    "title": "Platform Experts",
+    "eyebrow": "AI",
+    "subtitle": "Create, publish, and grant centrally managed Geem Platform Experts and their Platform Knowledge.",
+    "inventoryTitle": "Expert inventory",
+    "inventorySubtitle": "Server-paginated list with publication, knowledge mode, and access summaries.",
+    "searchPlaceholder": "Search by name or description",
+    "empty": "No Platform Experts match these filters.",
+    "create": "Create Expert",
+    "createTitle": "New Platform Expert",
+    "createSubtitle": "Experts start as drafts. Publish when instructions and access are ready.",
+    "createSuccess": "Platform Expert created.",
+    "saveSuccess": "Platform Expert updated.",
+    "backToList": "Back to experts",
+    "detailEyebrow": "Platform Expert",
+    "protected": "Protected",
+    "protectedHint": "This is the system Geem General Expert. Publication, access mode, and core behavior cannot be changed here.",
+    "knowledgeCount": "{{count}} knowledge documents",
+    "updatedAt": "Updated {{date}}",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "publishSuccess": "Platform Expert published.",
+    "unpublishSuccess": "Platform Expert unpublished.",
+    "publishConfirmTitle": "Publish Platform Expert?",
+    "publishConfirmBody": "Workspaces with access will be able to use {{name}} for new chat turns.",
+    "unpublishConfirmTitle": "Unpublish Platform Expert?",
+    "unpublishConfirmBody": "Workspaces will no longer be able to start new turns with this Expert. Existing conversation history is preserved.",
+    "delete": "Delete Expert",
+    "deleteSuccess": "Platform Expert deleted.",
+    "deleteConfirmTitle": "Delete Platform Expert?",
+    "deleteConfirmBody": "This soft-deletes {{name}}. Workspaces lose access and linked knowledge is unlinked. This cannot be undone from the admin UI.",
+    "publishedNoAccess": "Published — no Workspaces currently granted access.",
+    "generalModeHint": "General mode answers without RAG knowledge documents.",
+    "uploadKnowledge": "Upload knowledge",
+    "uploadSuccess": "Knowledge uploaded.",
+    "reprocessSuccess": "Reprocess queued.",
+    "removeSuccess": "Knowledge removed from this Expert.",
+    "remove": "Remove",
+    "retry": "Retry",
+    "grant": "Grant",
+    "revoke": "Revoke",
+    "grantSuccess": "Workspace granted access.",
+    "revokeSuccess": "Workspace access revoked.",
+    "accessUpdated": "Access mode updated.",
+    "knowledgeSubtitle": "PDF, TXT, and Markdown files ingest through the Platform Knowledge pipeline.",
+    "knowledgeEmpty": "No knowledge documents linked yet.",
+    "removeConfirmTitle": "Remove knowledge?",
+    "removeConfirmBody": "Remove {{name}} from this Expert. Shared documents remain for other Experts when applicable.",
+    "filters": {
+      "status": "Lifecycle status",
+      "knowledgeMode": "Knowledge mode",
+      "publication": "Publication"
+    },
+    "status": {
+      "draft": "Draft",
+      "ready": "Ready",
+      "processing": "Processing",
+      "failed": "Failed",
+      "disabled": "Disabled",
+      "unknown": "Unknown"
+    },
+    "visibility": {
+      "draft": "Unpublished",
+      "published": "Published",
+      "unknown": "Unknown"
+    },
+    "knowledgeMode": {
+      "rag": "RAG-backed",
+      "general": "General (LLM only)"
+    },
+    "sections": {
+      "instructions": "Instructions & behavior",
+      "knowledge": "Knowledge",
+      "access": "Access"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "iconUrl": "Icon URL",
+      "instructions": "System instructions",
+      "ragConfig": "RAG configuration"
+    },
+    "rag": {
+      "top_k": "Top K",
+      "rerank_top_n": "Rerank top N",
+      "similarity_threshold": "Similarity threshold"
+    },
+    "access": {
+      "allWorkspaces": "All tenant Workspaces",
+      "selectedCount": "{{count}} explicit Workspaces",
+      "allWorkspacesLabel": "Available to all Workspaces",
+      "enableAll": "Enable all Workspaces",
+      "disableAll": "Use explicit grants only",
+      "searchWorkspaces": "Grant to Workspace",
+      "searchPlaceholder": "Search tenant Workspaces by name or slug",
+      "pickerHint": "Recent tenant Workspaces load automatically. Search to narrow the list.",
+      "pickerEmpty": "No tenant Workspaces match this search.",
+      "pickerNoTenants": "No tenant Workspaces are available to grant yet.",
+      "grantedWorkspaces": "Explicit Workspaces",
+      "noGrants": "No explicit Workspace grants."
+    },
+    "accessSubtitle": "Control which tenant Workspaces may use this published Expert.",
+    "errors": {
+      "uploadTypeRejected": "Only PDF, TXT, and Markdown files are supported.",
+      "uploadTooLarge": "File exceeds the maximum upload size."
+    }
   }
 }

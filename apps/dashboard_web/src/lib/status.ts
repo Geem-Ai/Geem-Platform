@@ -34,6 +34,19 @@ const PLAN_STATUS: Record<string, StatusBadgeSpec> = {
   archived: { labelKey: 'status.plan.archived', variant: 'secondary' },
 };
 
+const EXPERT_STATUS: Record<string, StatusBadgeSpec> = {
+  draft: { labelKey: 'experts.status.draft', variant: 'secondary' },
+  ready: { labelKey: 'experts.status.ready', variant: 'success' },
+  processing: { labelKey: 'experts.status.processing', variant: 'info' },
+  failed: { labelKey: 'experts.status.failed', variant: 'destructive' },
+  disabled: { labelKey: 'experts.status.disabled', variant: 'warning' },
+};
+
+const EXPERT_VISIBILITY: Record<string, StatusBadgeSpec> = {
+  platform_draft: { labelKey: 'experts.visibility.draft', variant: 'secondary' },
+  platform_published: { labelKey: 'experts.visibility.published', variant: 'success' },
+};
+
 function lookup(map: Record<string, StatusBadgeSpec>, value: string, fallbackKey: string): StatusBadgeSpec {
   return map[value] ?? { labelKey: fallbackKey, variant: 'secondary' };
 }
@@ -56,4 +69,12 @@ export function workspaceKindBadge(kind: string): StatusBadgeSpec {
 
 export function planStatusBadge(status: string): StatusBadgeSpec {
   return lookup(PLAN_STATUS, status, 'status.plan.unknown');
+}
+
+export function expertStatusBadge(status: string): StatusBadgeSpec {
+  return lookup(EXPERT_STATUS, status, 'experts.status.unknown');
+}
+
+export function expertVisibilityBadge(visibility: string): StatusBadgeSpec {
+  return lookup(EXPERT_VISIBILITY, visibility, 'experts.visibility.unknown');
 }

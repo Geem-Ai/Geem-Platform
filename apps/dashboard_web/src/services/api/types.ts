@@ -357,3 +357,118 @@ export type PlatformCreditGrantResponse = {
   entry: PlatformCreditLedgerItem;
   idempotent_replay: boolean;
 };
+
+// --- Phase 12D: Platform Experts ---
+
+export type ExpertRagConfig = {
+  top_k?: number;
+  rerank_top_n?: number;
+  similarity_threshold?: number;
+};
+
+export type PlatformExpertListItem = {
+  id: string;
+  type: string;
+  ownership: string;
+  workspace_id: string | null;
+  name: string;
+  description: string | null;
+  icon_url: string | null;
+  status: string;
+  visibility: string;
+  availability_mode: string;
+  knowledge_mode: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  knowledge_document_count: number;
+  explicit_workspace_grant_count: number;
+  is_protected: boolean;
+};
+
+export type PlatformExpertDetail = PlatformExpertListItem & {
+  system_instructions: string | null;
+  rag_config: ExpertRagConfig | null;
+};
+
+export type PlatformExpertListResponse = {
+  items: PlatformExpertListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformExpertWorkspaceGrant = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  workspace_status: string;
+  expert_id: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type PlatformExpertGrantListResponse = {
+  items: PlatformExpertWorkspaceGrant[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformExpertKnowledgeItem = {
+  id: string;
+  expert_id: string;
+  document_id: string | null;
+  source_id: string | null;
+  created_at: string;
+  title: string;
+  original_filename: string;
+  status: string;
+  mime_type: string | null;
+  byte_size: number | null;
+  page_count: number;
+  failure_reason: string | null;
+  source_type: string;
+  processed_pages: number;
+  failed_pages: number;
+  current_stage: string | null;
+  progress: number;
+};
+
+export type PlatformExpertKnowledgeListResponse = {
+  items: PlatformExpertKnowledgeItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PlatformExpertCreateBody = {
+  name: string;
+  description?: string | null;
+  system_instructions?: string | null;
+  rag_config?: ExpertRagConfig | null;
+  visibility?: string | null;
+  status?: string | null;
+  availability_mode?: string | null;
+  icon_url?: string | null;
+};
+
+export type PlatformExpertUpdateBody = Partial<PlatformExpertCreateBody>;
+
+export type PlatformExpertUploadResponse = {
+  expert_id: string;
+  source_id: string;
+  document_id: string;
+  status: string;
+  mime_type: string;
+  page_count: number;
+  reused: boolean;
+};
+
+export type PlatformExpertPageParams = PlatformPageParams & {
+  visibility?: string;
+  knowledge_mode?: string;
+  availability_mode?: string;
+  published?: boolean;
+};

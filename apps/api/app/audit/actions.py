@@ -37,6 +37,19 @@ class AuditAction(StrEnum):
     EXPERT_SOFT_DELETED = "expert.soft_deleted"
     EXPERT_PURGED = "expert.purged"
 
+    PLATFORM_EXPERT_CREATED = "platform_expert.create"
+    PLATFORM_EXPERT_UPDATED = "platform_expert.update"
+    PLATFORM_EXPERT_PUBLISHED = "platform_expert.publish"
+    PLATFORM_EXPERT_UNPUBLISHED = "platform_expert.unpublish"
+    PLATFORM_EXPERT_ACCESS_ALL_ENABLE = "platform_expert.access_all_enable"
+    PLATFORM_EXPERT_ACCESS_ALL_DISABLE = "platform_expert.access_all_disable"
+    PLATFORM_EXPERT_WORKSPACE_GRANT = "platform_expert.workspace_grant"
+    PLATFORM_EXPERT_WORKSPACE_REVOKE = "platform_expert.workspace_revoke"
+    PLATFORM_EXPERT_KNOWLEDGE_UPLOAD = "platform_expert.knowledge_upload"
+    PLATFORM_EXPERT_KNOWLEDGE_REPROCESS = "platform_expert.knowledge_reprocess"
+    PLATFORM_EXPERT_KNOWLEDGE_REMOVE = "platform_expert.knowledge_remove"
+    PLATFORM_EXPERT_SOFT_DELETED = "platform_expert.soft_deleted"
+
     API_KEY_CREATED = "api_key.created"
     API_KEY_REVOKED = "api_key.revoked"
 

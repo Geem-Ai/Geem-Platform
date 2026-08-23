@@ -103,6 +103,32 @@ Orchestrates existing Workspace Geem billing (`PlanService`, `SubscriptionServic
 
 System Workspaces cannot receive tenant subscriptions or credit grants (`system_workspace_not_billable`). Credit packs / payment gateway CRUD deferred.
 
+## Phase 12D — Platform Experts & Platform Knowledge
+
+Orchestrates existing `ExpertService` / `ExpertAccessService` (Phase 3A domain). No duplicate Platform Expert model.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/platform/experts` | Paginated `{ items, total, limit, offset }`; filters: search, status, visibility, knowledge_mode, availability_mode, published |
+| POST | `/api/platform/experts` | Create RAG-backed Platform Expert (draft by default) |
+| GET | `/api/platform/experts/{id}` | Full Admin DTO (instructions, rag_config, counts) |
+| PATCH | `/api/platform/experts/{id}` | Update fields; `visibility` / `availability_mode` route through publish/unpublish and access/all semantics with correct audit |
+| POST | `/api/platform/experts/{id}/publish` | Publish |
+| POST | `/api/platform/experts/{id}/unpublish` | Unpublish |
+| DELETE | `/api/platform/experts/{id}` | Soft-delete (Geem General blocked); audited |
+| GET | `/api/platform/experts/{id}/workspace-grants` | Paginated grant list with workspace search |
+| POST | `/api/platform/experts/{id}/workspace-grants` | Grant tenant Workspace (legacy alias: `…/grants`) |
+| DELETE | `/api/platform/experts/{id}/workspace-grants/{workspace_id}` | Revoke grant |
+| POST | `/api/platform/experts/{id}/access/all` | `all_workspaces=true` |
+| DELETE | `/api/platform/experts/{id}/access/all` | `selected_workspaces` only |
+| GET | `/api/platform/experts/{id}/knowledge` | Linked Platform Knowledge documents + ingestion progress |
+| POST | `/api/platform/experts/{id}/knowledge` | Upload PDF/TXT/MD (legacy alias: `…/upload`) |
+| POST | `/api/platform/experts/{id}/knowledge/{document_id}/reprocess` | Re-ingest via existing pipeline |
+| DELETE | `/api/platform/experts/{id}/knowledge/{document_id}` | Unlink from Expert (shared docs preserved) |
+| POST | `/api/platform/knowledge/documents` | Upload to Platform Knowledge pool (unlinkable) |
+
+Geem General (`knowledge_mode=general`) is protected from unpublish, disable-all, delete, and knowledge mutation. Workspace-facing `/api/experts` DTOs remain redacted.
+
 Existing `/api/platform/experts*` scaffolding from Phase 3A uses the same host + `require_platform_admin` dependencies.
 
 ## Later slices

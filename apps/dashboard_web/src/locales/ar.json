@@ -108,6 +108,8 @@
     "search": "بحث",
     "status": "الحالة",
     "filter": "تصفية",
+    "filters": "الفلاتر",
+    "activeFilters": "{{count}} فلاتر نشطة",
     "all": "الكل",
     "none": "لا يوجد",
     "previous": "السابق",
@@ -122,7 +124,10 @@
     "reasonPlaceholder": "سبب تشغيلي مختصر",
     "refresh": "تحديث",
     "retry": "حاول مجددًا",
-    "resetFilters": "إعادة ضبط الفلاتر"
+    "resetFilters": "إعادة ضبط الفلاتر",
+    "save": "حفظ",
+    "yes": "نعم",
+    "no": "لا"
   },
   "status": {
     "workspace": {
@@ -593,5 +598,112 @@
     "noUsageReset": "ملاحظة: تعيين الخطة لا يعيد عدادات الاستخدام أو الأرصدة أو بيانات المساحة.",
     "assignConfirm": "تعيين الخطة",
     "assignSuccess": "تم تعيين الخطة."
+  },
+  "experts": {
+    "title": "خبراء المنصة",
+    "eyebrow": "الذكاء الاصطناعي",
+    "subtitle": "إنشاء خبراء المنصة ونشرهم ومنحهم مع إدارة المعرفة المركزية.",
+    "inventoryTitle": "جرد الخبراء",
+    "inventorySubtitle": "قائمة مُقسّمة من الخادم مع ملخصات النشر ونمط المعرفة والوصول.",
+    "searchPlaceholder": "بحث بالاسم أو الوصف",
+    "empty": "لا يوجد خبراء منصة يطابقون هذه الفلاتر.",
+    "create": "إنشاء خبير",
+    "createTitle": "خبير منصة جديد",
+    "createSubtitle": "يبدأ الخبراء كمسودات. انشر عند جاهزية التعليمات والوصول.",
+    "createSuccess": "تم إنشاء خبير المنصة.",
+    "saveSuccess": "تم تحديث خبير المنصة.",
+    "backToList": "العودة إلى الخبراء",
+    "detailEyebrow": "خبير المنصة",
+    "protected": "محمي",
+    "protectedHint": "هذا خبير Geem General النظامي. لا يمكن تغيير النشر أو نمط الوصول أو السلوك الأساسي من هنا.",
+    "knowledgeCount": "{{count}} مستندات معرفة",
+    "updatedAt": "آخر تحديث {{date}}",
+    "publish": "نشر",
+    "unpublish": "إلغاء النشر",
+    "publishSuccess": "تم نشر خبير المنصة.",
+    "unpublishSuccess": "تم إلغاء نشر خبير المنصة.",
+    "publishConfirmTitle": "نشر خبير المنصة؟",
+    "publishConfirmBody": "ستتمكن المساحات المصرّح لها من استخدام {{name}} في محادثات جديدة.",
+    "unpublishConfirmTitle": "إلغاء نشر خبير المنصة؟",
+    "unpublishConfirmBody": "لن تتمكن المساحات من بدء محادثات جديدة مع هذا الخبير. يبقى سجل المحادثات السابقة.",
+    "delete": "حذف الخبير",
+    "deleteSuccess": "تم حذف خبير المنصة.",
+    "deleteConfirmTitle": "حذف خبير المنصة؟",
+    "deleteConfirmBody": "سيؤدي هذا إلى حذف {{name}} بشكل ناعم. تفقد المساحات الوصول وتُفصل المعرفة المرتبطة. لا يمكن التراجع من واجهة الإدارة.",
+    "publishedNoAccess": "منشور — لا توجد مساحات مصرّح لها بالوصول حاليًا.",
+    "generalModeHint": "الوضع العام يجيب بدون مستندات معرفة RAG.",
+    "uploadKnowledge": "رفع معرفة",
+    "uploadSuccess": "تم رفع المعرفة.",
+    "reprocessSuccess": "تمت جدولة إعادة المعالجة.",
+    "removeSuccess": "تمت إزالة المعرفة من هذا الخبير.",
+    "remove": "إزالة",
+    "retry": "إعادة المحاولة",
+    "grant": "منح",
+    "revoke": "سحب",
+    "grantSuccess": "تم منح الوصول للمساحة.",
+    "revokeSuccess": "تم سحب وصول المساحة.",
+    "accessUpdated": "تم تحديث نمط الوصول.",
+    "knowledgeSubtitle": "ملفات PDF وTXT وMarkdown تمر عبر خط أنابيب معرفة المنصة.",
+    "knowledgeEmpty": "لا توجد مستندات معرفة مرتبطة بعد.",
+    "removeConfirmTitle": "إزالة المعرفة؟",
+    "removeConfirmBody": "إزالة {{name}} من هذا الخبير. تبقى المستندات المشتركة للخبراء الآخرين عند الاقتضاء.",
+    "filters": {
+      "status": "حالة دورة الحياة",
+      "knowledgeMode": "نمط المعرفة",
+      "publication": "النشر"
+    },
+    "status": {
+      "draft": "مسودة",
+      "ready": "جاهز",
+      "processing": "قيد المعالجة",
+      "failed": "فشل",
+      "disabled": "معطّل",
+      "unknown": "غير معروف"
+    },
+    "visibility": {
+      "draft": "غير منشور",
+      "published": "منشور",
+      "unknown": "غير معروف"
+    },
+    "knowledgeMode": {
+      "rag": "مدعوم بـ RAG",
+      "general": "عام (LLM فقط)"
+    },
+    "sections": {
+      "instructions": "التعليمات والسلوك",
+      "knowledge": "المعرفة",
+      "access": "الوصول"
+    },
+    "fields": {
+      "name": "الاسم",
+      "description": "الوصف",
+      "iconUrl": "رابط الأيقونة",
+      "instructions": "تعليمات النظام",
+      "ragConfig": "إعدادات RAG"
+    },
+    "rag": {
+      "top_k": "أعلى K",
+      "rerank_top_n": "أعلى N لإعادة الترتيب",
+      "similarity_threshold": "عتبة التشابه"
+    },
+    "access": {
+      "allWorkspaces": "كل مساحات المستأجرين",
+      "selectedCount": "{{count}} مساحات محددة",
+      "allWorkspacesLabel": "متاح لكل المساحات",
+      "enableAll": "تفعيل كل المساحات",
+      "disableAll": "استخدام المنح الصريحة فقط",
+      "searchWorkspaces": "منح لمساحة",
+      "searchPlaceholder": "ابحث عن مساحات المستأجر بالاسم أو المعرّف",
+      "pickerHint": "تُحمَّل مساحات المستأجر الأخيرة تلقائيًا. ابحث لتضييق القائمة.",
+      "pickerEmpty": "لا توجد مساحات مستأجر تطابق هذا البحث.",
+      "pickerNoTenants": "لا توجد مساحات مستأجر متاحة للمنح بعد.",
+      "grantedWorkspaces": "المساحات المصرّح لها",
+      "noGrants": "لا توجد منح صريحة للمساحات."
+    },
+    "accessSubtitle": "تحكم في مساحات المستأجر التي يمكنها استخدام هذا الخبير المنشور.",
+    "errors": {
+      "uploadTypeRejected": "يُدعم فقط PDF وTXT وMarkdown.",
+      "uploadTooLarge": "الملف يتجاوز الحد الأقصى للرفع."
+    }
   }
 }

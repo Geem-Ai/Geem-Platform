@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.documents.repository import ilike_contains_pattern
 from app.experts.models import (
     Expert,
     ExpertAvailabilityMode,
@@ -17,6 +18,7 @@ from app.experts.models import (
     ExpertVisibility,
     WorkspaceExpertGrant,
 )
+from app.workspaces.models import Workspace
 
 
 class ExpertRepository:
@@ -66,6 +68,116 @@ class ExpertRepository:
         if not include_drafts:
             stmt = stmt.where(Expert.visibility == ExpertVisibility.PLATFORM_PUBLISHED.value)
         return list(self.db.scalars(stmt.order_by(Expert.created_at.asc())))
+
+    def _apply_platform_expert_filters(
+        self,
+        stmt,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        visibility: str | None = None,
+        knowledge_mode: str | None = None,
+        availability_mode: str | None = None,
+        published: bool | None = None,
+    ):
+        stmt = stmt.where(
+            Expert.type == ExpertType.PLATFORM.value,
+            Expert.deleted_at.is_(None),
+        )
+        if search:
+            pattern = ilike_contains_pattern(search.strip())
+            stmt = stmt.where(
+                or_(
+                    Expert.name.ilike(pattern, escape="\\"),
+                    Expert.description.ilike(pattern, escape="\\"),
+                )
+            )
+        if status:
+            stmt = stmt.where(Expert.status == status)
+        if visibility:
+            stmt = stmt.where(Expert.visibility == visibility)
+        if knowledge_mode:
+            stmt = stmt.where(Expert.knowledge_mode == knowledge_mode)
+        if availability_mode:
+            stmt = stmt.where(Expert.availability_mode == availability_mode)
+        if published is True:
+            stmt = stmt.where(Expert.visibility == ExpertVisibility.PLATFORM_PUBLISHED.value)
+        elif published is False:
+            stmt = stmt.where(Expert.visibility == ExpertVisibility.PLATFORM_DRAFT.value)
+        return stmt
+
+    def count_platform_experts(
+        self,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        visibility: str | None = None,
+        knowledge_mode: str | None = None,
+        availability_mode: str | None = None,
+        published: bool | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Expert)
+        stmt = self._apply_platform_expert_filters(
+            stmt,
+            search=search,
+            status=status,
+            visibility=visibility,
+            knowledge_mode=knowledge_mode,
+            availability_mode=availability_mode,
+            published=published,
+        )
+        return int(self.db.scalar(stmt) or 0)
+
+    def list_platform_experts_paginated(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        search: str | None = None,
+        status: str | None = None,
+        visibility: str | None = None,
+        knowledge_mode: str | None = None,
+        availability_mode: str | None = None,
+        published: bool | None = None,
+    ) -> list[Expert]:
+        stmt = select(Expert)
+        stmt = self._apply_platform_expert_filters(
+            stmt,
+            search=search,
+            status=status,
+            visibility=visibility,
+            knowledge_mode=knowledge_mode,
+            availability_mode=availability_mode,
+            published=published,
+        )
+        stmt = (
+            stmt.order_by(Expert.created_at.desc(), Expert.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self.db.scalars(stmt).all())
+
+    def count_grants_for_experts(self, expert_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        if not expert_ids:
+            return {}
+        rows = self.db.execute(
+            select(WorkspaceExpertGrant.expert_id, func.count())
+            .where(WorkspaceExpertGrant.expert_id.in_(expert_ids))
+            .group_by(WorkspaceExpertGrant.expert_id)
+        ).all()
+        return {eid: int(count) for eid, count in rows}
+
+    def count_document_links_for_experts(
+        self, expert_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        if not expert_ids:
+            return {}
+        rows = self.db.execute(
+            select(ExpertDocument.expert_id, func.count())
+            .where(ExpertDocument.expert_id.in_(expert_ids))
+            .group_by(ExpertDocument.expert_id)
+        ).all()
+        return {eid: int(count) for eid, count in rows}
 
     def list_available_platform_for_workspace(self, workspace_id: uuid.UUID) -> list[Expert]:
         """Published Platform Experts available to a tenant Workspace (grant or all_workspaces)."""
@@ -134,6 +246,61 @@ class ExpertRepository:
                 .order_by(WorkspaceExpertGrant.created_at.asc())
             )
         )
+
+    def _workspace_grants_base(
+        self, expert_id: uuid.UUID, *, search: str | None = None
+    ):
+        stmt = (
+            select(WorkspaceExpertGrant, Workspace)
+            .join(Workspace, Workspace.id == WorkspaceExpertGrant.workspace_id)
+            .where(
+                WorkspaceExpertGrant.expert_id == expert_id,
+                Workspace.deleted_at.is_(None),
+            )
+        )
+        if search and search.strip():
+            pattern = ilike_contains_pattern(search.strip())
+            stmt = stmt.where(
+                or_(
+                    Workspace.name.ilike(pattern, escape="\\"),
+                    Workspace.slug.ilike(pattern, escape="\\"),
+                )
+            )
+        return stmt
+
+    def count_workspace_grants_for_expert(
+        self, expert_id: uuid.UUID, *, search: str | None = None
+    ) -> int:
+        stmt = select(func.count()).select_from(WorkspaceExpertGrant).join(
+            Workspace, Workspace.id == WorkspaceExpertGrant.workspace_id
+        ).where(
+            WorkspaceExpertGrant.expert_id == expert_id,
+            Workspace.deleted_at.is_(None),
+        )
+        if search and search.strip():
+            pattern = ilike_contains_pattern(search.strip())
+            stmt = stmt.where(
+                or_(
+                    Workspace.name.ilike(pattern, escape="\\"),
+                    Workspace.slug.ilike(pattern, escape="\\"),
+                )
+            )
+        return int(self.db.scalar(stmt) or 0)
+
+    def list_workspace_grants_for_expert(
+        self,
+        expert_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+        search: str | None = None,
+    ) -> list[tuple[WorkspaceExpertGrant, Workspace]]:
+        stmt = self._workspace_grants_base(expert_id, search=search).order_by(
+            WorkspaceExpertGrant.created_at.desc(),
+            WorkspaceExpertGrant.id.desc(),
+        )
+        stmt = stmt.limit(limit).offset(offset)
+        return list(self.db.execute(stmt).all())
 
     def get_document_link(
         self, expert_id: uuid.UUID, document_id: uuid.UUID
