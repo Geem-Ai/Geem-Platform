@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { AppWindow, ArrowUpRight, CircleAlert, RefreshCw } from 'lucide-react';
+import { AppWindow, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { GrantAppDialog } from '@/features/app-store/components/GrantAppDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

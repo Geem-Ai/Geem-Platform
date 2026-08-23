@@ -62,7 +62,7 @@ const WORKSPACES_PAGE_SIZE = 10;
 
 export function AppDetailPage() {
   const { appId = '' } = useParams();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabId>('overview');
   const [lifecycleDialog, setLifecycleDialog] = useState<
@@ -554,7 +554,7 @@ export function AppDetailPage() {
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {formatMoney(plan.price_amount, plan.currency, i18n.language)} ·{' '}
+                          {formatMoney(plan.price_amount, plan.currency)} ·{' '}
                           {t(`appStore.billingInterval.${plan.billing_interval}`, {
                             defaultValue: plan.billing_interval,
                           })}
