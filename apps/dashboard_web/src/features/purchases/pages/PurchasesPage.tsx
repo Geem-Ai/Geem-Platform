@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, Receipt, RefreshCw, SearchX } from 'lucide-react';
+import { Receipt, RefreshCw, SearchX } from 'lucide-react';
 import { AdminListFilters } from '@/components/shared/AdminListFilters';
 import { AdminPagination } from '@/components/shared/AdminPagination';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
@@ -10,6 +10,8 @@ import { PurchaseStatusBadge } from '@/components/shared/StatusBadges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Sheet, SheetContent, floatingSheetPanel } from '@/components/ui/sheet';
+import { PurchaseDetailContent } from '@/features/purchases/components/PurchaseDetailContent';
 import {
   PurchaseProductCell,
   PurchaseWorkspaceCell,
@@ -42,8 +44,16 @@ const KIND_OPTIONS = [
 
 const GATEWAY_OPTIONS = ['noop', 'clickpay'] as const;
 
+const PURCHASE_DETAIL_PANEL = floatingSheetPanel(
+  'w-[calc(100%-2.5rem)]',
+  'sm:w-[min(100%-2.5rem,38rem)]',
+  'lg:w-[42rem]',
+);
+
 export function PurchasesPage() {
   const { t, i18n } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedPurchaseId = searchParams.get('purchaseId');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [kind, setKind] = useState('');
@@ -69,6 +79,18 @@ export function PurchasesPage() {
 
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
+
+  const openPurchase = (purchaseId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('purchaseId', purchaseId);
+    setSearchParams(next);
+  };
+
+  const closePurchase = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('purchaseId');
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div
@@ -191,12 +213,13 @@ export function PurchasesPage() {
                       data-testid={`purchase-row-${purchase.id}`}
                     >
                       <td className="px-4 py-3">
-                        <Link
-                          to={`/purchases/${purchase.id}`}
+                        <button
+                          type="button"
+                          onClick={() => openPurchase(purchase.id)}
                           className="font-mono text-xs text-primary hover:underline"
                         >
                           {purchase.id.slice(0, 8)}…
-                        </Link>
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <PurchaseWorkspaceCell workspace={purchase.workspace} />
@@ -225,14 +248,11 @@ export function PurchasesPage() {
                       </td>
                       <td className="px-4 py-3 text-end">
                         <Button
-                          variant="ghost"
                           size="sm"
-                          asChild
-                          className="opacity-70 group-hover:opacity-100"
+                          variant="outline"
+                          onClick={() => openPurchase(purchase.id)}
                         >
-                          <Link to={`/purchases/${purchase.id}`} aria-label={t('purchases.viewPurchase', { id: purchase.id.slice(0, 8) })}>
-                            <ChevronRight className="size-4" aria-hidden />
-                          </Link>
+                          {t('purchases.viewDetails')}
                         </Button>
                       </td>
                     </tr>
@@ -251,6 +271,18 @@ export function PurchasesPage() {
         onPageChange={setOffset}
         testId="purchases-pagination"
       />
+
+      <Sheet open={Boolean(selectedPurchaseId)} onOpenChange={(open) => !open && closePurchase()}>
+        <SheetContent
+          side="end"
+          className={PURCHASE_DETAIL_PANEL}
+          data-testid="purchase-detail-sheet"
+        >
+          {selectedPurchaseId ? (
+            <PurchaseDetailContent purchaseId={selectedPurchaseId} onClose={closePurchase} />
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

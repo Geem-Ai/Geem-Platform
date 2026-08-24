@@ -41,7 +41,7 @@ function resourceLink(item: PlatformAuditListItem): string | null {
   if (type === 'plan') return `/plans/${id}`;
   if (type === 'expert') return `/experts/${id}`;
   if (type === 'catalog_app') return `/app-store/${id}`;
-  if (type === 'purchase') return `/purchases/${id}`;
+  if (type === 'purchase') return `/purchases?purchaseId=${encodeURIComponent(id)}`;
   return null;
 }
 

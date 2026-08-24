@@ -908,9 +908,12 @@ test('admin workspaces disable/enable smoke + system protected', async ({ page }
   await page.getByTestId('nav-purchases').click();
   await expect(page.getByTestId('purchases-page')).toBeVisible();
   await expect(page.getByTestId('purchases-list')).toBeVisible();
-  await page.getByTestId('purchase-row-purchase-1').getByRole('link').first().click();
-  await expect(page.getByTestId('purchase-detail-page')).toBeVisible();
+  await page.getByTestId('purchase-row-purchase-1').getByRole('button', { name: 'Details' }).click();
+  await expect(page.getByTestId('purchase-detail-sheet')).toBeVisible();
+  await expect(page.getByTestId('purchase-detail-content')).toContainText('SAR 25.00');
   await expect(page.getByTestId('purchase-download-invoice')).toBeVisible();
+  await page.getByTestId('purchase-detail-close').click();
+  await expect(page.getByTestId('purchase-detail-sheet')).toBeHidden();
 
   // Users smoke
   await page.getByTestId('nav-users').click();
