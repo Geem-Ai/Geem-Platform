@@ -91,13 +91,17 @@ def _publish_isolated_release_candidate(db: Session) -> tuple[uuid.UUID, uuid.UU
     ensure_app_catalog(db)
     app = db.scalar(select(CatalogApp).where(CatalogApp.slug == AGENTS_AI_APP_SLUG))
     assert app is not None
-    assert app.plans == []
     app.status = AppStatus.PUBLISHED.value
     app.extra = {
         **(app.extra or {}),
         "test_fixture": "phase14-paid-e2e",
         "commercial": False,
     }
+
+    if app.plans:
+        default_plan = next(plan for plan in app.plans if plan.is_default)
+        db.commit()
+        return app.id, default_plan.id
 
     selected_plan_id: uuid.UUID | None = None
     for index, code in enumerate(AGENTS_AI_PLAN_CODES):

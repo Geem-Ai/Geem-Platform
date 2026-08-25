@@ -32,6 +32,7 @@ from app.apps_catalog.runtime_locks import (
     begin_runtime_admission_transaction,
 )
 from app.apps_catalog.seed import APP_SPECS, PlanSpec
+from app.billing.money import parse_decimal_money
 from app.core.config import Settings
 from app.core.errors import AppError, ErrorCategory
 from app.platform_admin.apps import PlatformAdminAppsService
@@ -113,12 +114,19 @@ def _signed_agents_seed_spec():
     return replace(base, plans=plans)
 
 
-def test_agents_seed_is_coming_soon_without_invented_plans() -> None:
+def test_agents_seed_is_coming_soon_with_signed_plans() -> None:
     spec = next(item for item in APP_SPECS if item.slug == AGENTS_AI_APP_SLUG)
     assert spec.status == AppStatus.COMING_SOON.value
     assert spec.billing_type == AppBillingType.SUBSCRIPTION.value
     assert spec.connector_key is None and spec.connector_kind is None
-    assert spec.plans == ()
+    assert tuple(plan.code for plan in spec.plans) == AGENTS_AI_PLAN_CODES
+    assert all(
+        parse_decimal_money(plan.price_amount) > Decimal("0.00") for plan in spec.plans
+    )
+    assert all(
+        plan.entitlements.get(AGENT_REQUESTS_DAILY_ENTITLEMENT, 0) > 0
+        for plan in spec.plans
+    )
     assert spec.preserve_status is True
 
 
@@ -173,12 +181,11 @@ def test_signed_agents_seed_fences_before_mutation_and_validates_afterward(
 @pytest.mark.parametrize(
     "spec",
     [
-        next(item for item in APP_SPECS if item.slug == AGENTS_AI_APP_SLUG),
         next(item for item in APP_SPECS if item.slug == "whatsapp"),
     ],
-    ids=["agents-empty-coming-soon", "generic-app-with-plans"],
+    ids=["generic-app-with-plans"],
 )
-def test_empty_agents_and_generic_specs_keep_the_original_seed_path(
+def test_generic_specs_keep_the_original_seed_path(
     monkeypatch: pytest.MonkeyPatch,
     spec,
 ) -> None:

@@ -11,7 +11,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.apps_catalog.agent_product import AGENTS_AI_APP_SLUG
+from app.apps_catalog.agent_product import (
+    AGENT_REQUESTS_DAILY_ENTITLEMENT,
+    AGENTS_AI_APP_SLUG,
+    AGENTS_AI_PLAN_CODES,
+)
 from app.apps_catalog.models import (
     AppBillingType,
     AppCategory,
@@ -167,6 +171,33 @@ CHAT_WIDGET_PLANS: tuple[PlanSpec, ...] = (
     ),
 )
 
+_AGENTS_AI_PLAN_PRICES: tuple[str, ...] = ("99.00", "249.00", "599.00")
+_AGENTS_AI_PLAN_DAILY_LIMITS: tuple[int, ...] = (100, 500, 2000)
+_AGENTS_AI_PLAN_NAMES: tuple[str, ...] = (
+    "Agents Starter",
+    "Agents Team",
+    "Agents Scale",
+)
+_AGENTS_AI_PLAN_DESCRIPTIONS: tuple[str, ...] = (
+    "Entry plan for applications running client-owned agent loops.",
+    "Expanded daily agent capacity for teams and production integrations.",
+    "Highest launch capacity for larger client-owned agent workloads.",
+)
+
+AGENTS_AI_PLANS: tuple[PlanSpec, ...] = tuple(
+    PlanSpec(
+        code=code,
+        name=_AGENTS_AI_PLAN_NAMES[index],
+        description=_AGENTS_AI_PLAN_DESCRIPTIONS[index],
+        billing_interval=AppPlanBillingInterval.MONTHLY.value,
+        price_amount=_AGENTS_AI_PLAN_PRICES[index],
+        is_default=index == 0,
+        sort_order=(index + 1) * 10,
+        entitlements={AGENT_REQUESTS_DAILY_ENTITLEMENT: _AGENTS_AI_PLAN_DAILY_LIMITS[index]},
+    )
+    for index, code in enumerate(AGENTS_AI_PLAN_CODES)
+)
+
 APP_SPECS: tuple[AppSpec, ...] = (
     AppSpec(
         slug="google-drive",
@@ -262,7 +293,7 @@ APP_SPECS: tuple[AppSpec, ...] = (
         sort_order=50,
         connector_key=None,
         connector_kind=None,
-        plans=(),
+        plans=AGENTS_AI_PLANS,
         preserve_status=True,
     ),
 )
@@ -322,12 +353,7 @@ def ensure_app_catalog(
 
 
 def _seeds_agents_ai_commercial_authority(spec: AppSpec) -> bool:
-    """Return true only once signed Agents AI plan specs are populated.
-
-    The current launch-safe ``coming_soon`` entry intentionally has no plans.
-    Routine generic seeding therefore retains its historical behavior and does
-    not acquire a runtime fence or require the operational launch flag.
-    """
+    """Return true when Agents AI plan specs are present in the seed payload."""
 
     return spec.slug == AGENTS_AI_APP_SLUG and bool(spec.plans)
 

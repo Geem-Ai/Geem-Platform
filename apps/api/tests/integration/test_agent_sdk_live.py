@@ -426,6 +426,10 @@ def _publish_fixture(db: Session) -> tuple[uuid.UUID, uuid.UUID]:
     assert app is not None
     app.status = AppStatus.PUBLISHED.value
     app.extra = {"test_fixture": "live-sdk", "commercial": False}
+    if app.plans:
+        default_plan = next(plan for plan in app.plans if plan.is_default)
+        db.commit()
+        return app.id, default_plan.id
     selected: uuid.UUID | None = None
     for index, code in enumerate(AGENTS_AI_PLAN_CODES):
         plan = AppPlan(

@@ -357,7 +357,7 @@ export function AppDetailPage() {
               <RefreshCw className="size-3.5" aria-hidden />
               {t('common.refresh')}
             </Button>
-            {app.status === 'draft' ? (
+            {app.status === 'draft' || app.status === 'coming_soon' ? (
               <Button size="sm" onClick={() => setLifecycleDialog('publish')} data-testid="app-publish-button">
                 {t('appStore.publish')}
               </Button>
