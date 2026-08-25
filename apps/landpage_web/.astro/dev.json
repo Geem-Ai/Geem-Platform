@@ -7,12 +7,12 @@
 			"http://localhost:4321/"
 		],
 		"network": [
-			"http://172.19.0.10:4321/"
+			"http://172.19.0.8:4321/"
 		],
 		"networkInterfaceNames": [
 			"eth0"
 		]
 	},
 	"background": false,
-	"startedAt": "2026-08-25T14:17:44.991Z"
+	"startedAt": "2026-08-25T18:09:07.158Z"
 }
