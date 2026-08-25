@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import app.agent.router as agent_router
+import app.agent.service as agent_service
 from app.agent.retrieval import AgentRetrievalResult, AgentRetrievalService
 from app.agent.schemas import (
     AgentAssistantResponseMessage,
@@ -46,8 +47,16 @@ from app.apps_catalog.models import (
 from app.apps_catalog.seed import ensure_app_catalog
 from app.common.public_model import PUBLIC_MODEL_ID
 from app.core.config import Settings
+from app.core.errors import ErrorCategory
 from app.db.models import Document
-from app.experts.models import ExpertDocument
+from app.experts.models import (
+    Expert,
+    ExpertDocument,
+    ExpertSource,
+    ExpertSourceStatus,
+    ExpertSourceType,
+    ExpertStatus,
+)
 from app.openrouter.chat import OpenRouterChatProvider
 from app.usage.models import UsagePeriodCounter
 from app.workspaces.models import Workspace, WorkspaceStatus
@@ -223,6 +232,33 @@ def _create_enabled_expert(
     )
     assert enabled.status_code == 200, enabled.text
     assert enabled.json()["rag_config"]["client_agent"] == {"enabled": True}
+    return enabled.json()
+
+
+def _create_empty_enabled_expert(
+    client,
+    *,
+    user: dict,
+    workspace: dict,
+) -> dict:
+    headers = _session_headers(user["access_token"], workspace["id"])
+    created = client.post(
+        "/api/experts",
+        headers=headers,
+        json={
+            "name": "Paid Agent without uploaded knowledge",
+            "system_instructions": "Keep the configured concise voice.",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["status"] == ExpertStatus.DRAFT.value
+
+    enabled = client.patch(
+        f"/api/experts/{created.json()['id']}",
+        headers=headers,
+        json={"rag_config": {"client_agent": {"enabled": True}}},
+    )
+    assert enabled.status_code == 200, enabled.text
     return enabled.json()
 
 
@@ -484,6 +520,144 @@ def test_paid_checkout_scoped_key_expert_and_immediate_runtime_denial(
             "The paid Agent route is covered."
         )
         assert calls == {"retrieval": 2, "provider": 2}
+
+
+def test_empty_expert_runs_general_but_source_only_expert_remains_not_ready(
+    client,
+    register_user,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fallback stays behind paid admission and never bypasses a source."""
+
+    settings = Settings(
+        _env_file=None,
+        client_agent_api_enabled=True,
+        openrouter_api_key="test-openrouter-key",
+    )
+    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        agent_service,
+        "load_general_chat_prompt",
+        lambda: "GENERAL AGENT EXECUTION",
+    )
+
+    def unexpected_rag_prompt():  # pragma: no cover - must stay General
+        raise AssertionError("empty Expert loaded the Agent RAG prompt")
+
+    def unexpected_retrieval(self, **kwargs):  # pragma: no cover - must skip
+        raise AssertionError("empty Expert reached retrieval")
+
+    calls = {"provider": 0}
+
+    def fake_provider_complete(self, messages, **kwargs) -> AgentProviderResult:
+        calls["provider"] += 1
+        assert messages == [{"role": "user", "content": "Say hello"}]
+        assert "GENERAL AGENT EXECUTION" in kwargs["system_prompt"]
+        assert "Keep the configured concise voice." in kwargs["system_prompt"]
+        assert "GEEM_RAG_CONTEXT" not in kwargs["system_prompt"]
+        return AgentProviderResult(
+            message=AgentAssistantResponseMessage(content="Hello."),
+            finish_reason="stop",
+            usage=AgentUsage(
+                prompt_tokens=4,
+                completion_tokens=1,
+                total_tokens=5,
+            ),
+            provider_model=settings.openrouter_chat_model,
+            provider_request_id="provider-request-general-fallback",
+            provider_completion_id="provider-completion-general-fallback",
+        )
+
+    monkeypatch.setattr(agent_service, "load_agent_rag_prompt", unexpected_rag_prompt)
+    monkeypatch.setattr(AgentRetrievalService, "prepare", unexpected_retrieval)
+    monkeypatch.setattr(
+        OpenRouterChatProvider,
+        "complete_for_agent",
+        fake_provider_complete,
+    )
+
+    user, workspace = _create_workspace(client, register_user)
+    workspace_id = uuid.UUID(workspace["id"])
+    _app_id, plan_id = _publish_isolated_release_candidate(db)
+    _subscribe(client, user=user, workspace=workspace, plan_id=plan_id)
+    key = _create_agent_key(client, user=user, workspace=workspace)
+    expert = _create_empty_enabled_expert(
+        client,
+        user=user,
+        workspace=workspace,
+    )
+
+    completion = client.post(
+        AGENT_CHAT,
+        headers=_api_key_headers(key["key"], expert["id"]),
+        json={
+            "model": PUBLIC_MODEL_ID,
+            "messages": [{"role": "user", "content": "Say hello"}],
+        },
+    )
+
+    assert completion.status_code == 200, completion.text
+    assert completion.json()["choices"][0]["message"]["content"] == "Hello."
+    assert completion.json()["geem"] == {
+        "retrieval": "skipped_general",
+        "citations": [],
+        "insufficient_context": None,
+        "billed_tokens": 5,
+    }
+    assert calls == {"provider": 1}
+
+    db.expire_all()
+    assert (
+        db.scalar(
+            select(UsagePeriodCounter.used).where(
+                UsagePeriodCounter.workspace_id == workspace_id,
+                UsagePeriodCounter.metric == AGENT_REQUESTS_USAGE_METRIC,
+            )
+        )
+        == 1
+    )
+    db.rollback()
+
+    # Connector/upload sources can precede their first Document. This is
+    # expected knowledge, so the next request must fail before provider work
+    # and before consuming another paid request unit.
+    expert_row = db.get(Expert, uuid.UUID(expert["id"]))
+    assert expert_row is not None
+    expert_row.status = ExpertStatus.DRAFT.value
+    db.add(
+        ExpertSource(
+            expert_id=expert_row.id,
+            type=ExpertSourceType.CONNECTOR.value,
+            name="Pending connector source",
+            status=ExpertSourceStatus.PROCESSING.value,
+            config={},
+        )
+    )
+    db.commit()
+
+    blocked = client.post(
+        AGENT_CHAT,
+        headers=_api_key_headers(key["key"], expert["id"]),
+        json={
+            "model": PUBLIC_MODEL_ID,
+            "messages": [{"role": "user", "content": "Say hello"}],
+        },
+    )
+
+    assert blocked.status_code in {409, 422}, blocked.text
+    assert _error_code(blocked) == ErrorCategory.EXPERT_NOT_READY.value
+    assert calls == {"provider": 1}
+    db.expire_all()
+    assert (
+        db.scalar(
+            select(UsagePeriodCounter.used).where(
+                UsagePeriodCounter.workspace_id == workspace_id,
+                UsagePeriodCounter.metric == AGENT_REQUESTS_USAGE_METRIC,
+            )
+        )
+        == 1
+    )
 
 
 def test_agent_key_cannot_select_another_workspaces_expert(

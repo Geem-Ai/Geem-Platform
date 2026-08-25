@@ -30,7 +30,7 @@ from app.db.session import SessionLocal
 from app.entitlements.quota import QuotaService
 from app.experts.access import AuthorizedExpert
 from app.experts.knowledge import ResolvedExpertKnowledge
-from app.experts.models import Expert, ExpertType
+from app.experts.models import Expert, ExpertKnowledgeMode, ExpertType
 from app.experts.policy import ExpertAction
 from app.experts.query_service import ExpertQueryService
 from app.experts.service import client_agent_enabled
@@ -49,6 +49,7 @@ class AgentCompletionAdmission:
     db: Session
     access: RuntimeAppAccessSnapshot
     knowledge: ResolvedExpertKnowledge
+    execution_mode: str
     quota: AgentRequestQuotaReceipt
     meter: MeteredWorkspaceGeneration
     settings: Settings
@@ -61,6 +62,10 @@ class AgentCompletionAdmission:
     @property
     def closed(self) -> bool:
         return self._closed
+
+    @property
+    def uses_general_knowledge(self) -> bool:
+        return self.execution_mode == ExpertKnowledgeMode.GENERAL.value
 
     def usage_context(self) -> GenerationUsageContext:
         return self.meter.context()
@@ -202,7 +207,7 @@ def admit_agent_completion(
             action=ExpertAction.USE,
         )
         query = ExpertQueryService(db, cfg)
-        knowledge = query._finish_prepare(  # noqa: SLF001 - shared domain gate
+        knowledge = query.resolve_knowledge_for_agent(
             authorized,
             workspace=workspace,
             expert_id=expert.id,
@@ -213,6 +218,7 @@ def admit_agent_completion(
                 ErrorCategory.AGENT_EXPERT_NOT_ENABLED,
                 "Client agent API is not enabled for this Expert.",
             )
+        execution_mode = _agent_execution_mode(knowledge)
 
         ai_limits = QuotaService(db, cfg).get_ai_limits_db_only(workspace_id)
         meter.reserve_in_transaction(ai_limits)
@@ -226,6 +232,7 @@ def admit_agent_completion(
             db=db,
             access=access,
             knowledge=knowledge,
+            execution_mode=execution_mode,
             quota=receipt,
             meter=meter,
             settings=cfg,
@@ -242,6 +249,27 @@ def admit_agent_completion(
         _rollback_without_masking(db)
         db.close()
         raise
+
+
+def _agent_execution_mode(knowledge: ResolvedExpertKnowledge) -> str:
+    """Derive runtime mode without changing the persisted Expert mode."""
+
+    if (
+        knowledge.authorized.expert.knowledge_mode
+        == ExpertKnowledgeMode.GENERAL.value
+    ):
+        return ExpertKnowledgeMode.GENERAL.value
+    if knowledge.has_ready_knowledge:
+        return ExpertKnowledgeMode.RAG.value
+    if not knowledge.all_linked_document_ids and not knowledge.has_active_sources:
+        return ExpertKnowledgeMode.GENERAL.value
+
+    # ``resolve_knowledge_for_agent`` rejects this state. Keep this defensive
+    # boundary fail-closed if a future resolver change violates that contract.
+    raise AppError(
+        ErrorCategory.EXPERT_HAS_NO_KNOWLEDGE,
+        "Expert has no ready knowledge to answer with yet.",
+    )
 
 
 def _rollback_without_masking(db: Session) -> None:

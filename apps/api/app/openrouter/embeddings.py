@@ -63,10 +63,13 @@ class OpenRouterEmbeddingProvider:
         return self._embed_batch([text])[0]
 
     def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        provider_preferences = dict(self.client.provider_preferences())
+        if self.settings.openrouter_embedding_provider_sort:
+            provider_preferences["sort"] = self.settings.openrouter_embedding_provider_sort
         payload: dict[str, Any] = {
             "model": self.model_id,
             "input": texts,
-            "provider": self.client.provider_preferences(),
+            "provider": provider_preferences,
         }
         body, meta, status = self.client.request(
             "POST",

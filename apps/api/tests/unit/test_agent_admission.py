@@ -20,6 +20,7 @@ from app.apps_catalog.agent_usage import AgentRequestQuotaReceipt
 from app.core.config import Settings
 from app.core.errors import AppError, ErrorCategory
 from app.entitlements.quota import AiTokenLimits
+from app.experts.models import ExpertKnowledgeMode
 from app.usage.attribution import GenerationUsageContext
 
 
@@ -163,7 +164,7 @@ def _patch_successful_dependencies(
         def __init__(self, _db, _settings) -> None:
             pass
 
-        def _finish_prepare(self, authorized, **kwargs):
+        def resolve_knowledge_for_agent(self, authorized, **kwargs):
             assert authorized.ownership == "workspace"
             assert authorized.membership is None
             events.append("knowledge")
@@ -230,10 +231,16 @@ def test_completion_admission_commits_after_every_authority_and_quota_gate(
     expert = SimpleNamespace(
         id=expert_id,
         workspace_id=workspace_id,
+        knowledge_mode=ExpertKnowledgeMode.RAG.value,
         rag_config={"client_agent": {"enabled": True}},
     )
     workspace = SimpleNamespace(id=workspace_id)
-    knowledge = SimpleNamespace(authorized=SimpleNamespace(expert=expert))
+    knowledge = SimpleNamespace(
+        authorized=SimpleNamespace(expert=expert),
+        has_ready_knowledge=True,
+        all_linked_document_ids=(uuid.uuid4(),),
+        has_active_sources=False,
+    )
     db = _AdmissionDb(events, (expert, workspace))
     meter_holder = _patch_successful_dependencies(
         monkeypatch,
@@ -265,6 +272,8 @@ def test_completion_admission_commits_after_every_authority_and_quota_gate(
     assert admitted.request_id == request_id
     assert admitted.access is access
     assert admitted.knowledge is knowledge
+    assert admitted.execution_mode == ExpertKnowledgeMode.RAG.value
+    assert admitted.uses_general_knowledge is False
     assert admitted.quota.used == 1
     assert admitted.usage_context().api_key_id == api_key_id
     assert admitted.meter is meter_holder["meter"]
@@ -285,6 +294,7 @@ def test_daily_quota_failure_rolls_back_ai_hold_and_preserves_typed_error(
     expert = SimpleNamespace(
         id=expert_id,
         workspace_id=workspace_id,
+        knowledge_mode=ExpertKnowledgeMode.RAG.value,
         rag_config={"client_agent": {"enabled": True}},
     )
     db = _AdmissionDb(events, (expert, SimpleNamespace(id=workspace_id)))
@@ -298,7 +308,12 @@ def test_daily_quota_failure_rolls_back_ai_hold_and_preserves_typed_error(
         events=events,
         db=db,
         access=access,
-        knowledge=SimpleNamespace(authorized=SimpleNamespace(expert=expert)),
+        knowledge=SimpleNamespace(
+            authorized=SimpleNamespace(expert=expert),
+            has_ready_knowledge=True,
+            all_linked_document_ids=(uuid.uuid4(),),
+            has_active_sources=False,
+        ),
         quota_error=quota_error,
     )
 

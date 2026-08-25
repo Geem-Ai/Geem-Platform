@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -24,7 +25,6 @@ from app.agent.schemas import (
 )
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
-from app.experts.models import ExpertKnowledgeMode
 from app.experts.prompt import compose_expert_system_prompt
 from app.openrouter.chat import OpenRouterChatProvider
 from app.openrouter.client import OpenRouterStreamCancellation
@@ -90,20 +90,32 @@ class AgentCompletionService:
         """Run post-admission retrieval and close its DB transaction before LLM I/O."""
 
         try:
-            retrieval = self.retrieval.prepare(
-                knowledge=admission.knowledge,
-                api_key_id=admission.usage_context().api_key_id,
-                question=normalized.retrieval_question,
-                continuation=normalized.is_tool_continuation,
-                usage_context=admission.usage_context(),
-            )
+            if admission.uses_general_knowledge:
+                normalized_question = normalized.retrieval_question.strip()
+                retrieval = AgentRetrievalResult(
+                    source_xml="",
+                    citations=(),
+                    insufficient_context=None,
+                    status="skipped_general",
+                    question_hash=hashlib.sha256(
+                        normalized_question.encode("utf-8")
+                    ).hexdigest(),
+                    knowledge_revision=None,
+                )
+            else:
+                retrieval = self.retrieval.prepare(
+                    knowledge=admission.knowledge,
+                    api_key_id=admission.usage_context().api_key_id,
+                    question=normalized.retrieval_question,
+                    continuation=normalized.is_tool_continuation,
+                    usage_context=admission.usage_context(),
+                )
             # Revision/context queries and usage telemetry must not leave a
             # transaction open while the provider request is in flight.
             self.db.commit()
-            expert = admission.knowledge.authorized.expert
             base_prompt = (
                 load_general_chat_prompt()
-                if expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value
+                if admission.uses_general_knowledge
                 else load_agent_rag_prompt()
             )
             expert_prompt = compose_expert_system_prompt(

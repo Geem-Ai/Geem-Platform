@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,10 +22,13 @@ from app.core.config import Settings, get_settings
 from app.db.models import Chunk, Document
 from app.experts.knowledge import ResolvedExpertKnowledge
 from app.experts.models import ExpertDocument, ExpertKnowledgeMode
-from app.rag.service import RagService
+from app.rag.service import RagService, expert_query_embedding_input
 from app.usage.attribution import GenerationUsageContext
 
 logger = logging.getLogger(__name__)
+
+_QUERY_EMBEDDING_CACHE_SCHEMA = 1
+_MAX_QUERY_EMBEDDING_DIMENSION = 65_536
 
 
 class AgentContextCache(Protocol):
@@ -111,11 +116,29 @@ class AgentRetrievalService:
                     knowledge_revision=revision,
                 )
 
+        normalized_embedding_input = expert_query_embedding_input(normalized_question)
+        embedding_cache_key = self._query_embedding_cache_key(
+            workspace_id=knowledge.consumer_workspace_id,
+            expert_id=knowledge.expert_id,
+            normalized_query=normalized_embedding_input,
+        )
+        query_embedding = (
+            self._query_embedding_cache_get(embedding_cache_key)
+            if embedding_cache_key is not None
+            else None
+        )
         prepared = self.rag.prepare_expert_context_for_agent(
             question=normalized_question,
             knowledge=knowledge,
             usage_context=usage_context,
+            query_embedding=query_embedding,
         )
+        prepared_embedding = prepared.pop("_query_embedding", None)
+        if query_embedding is None and embedding_cache_key is not None:
+            self._query_embedding_cache_set(
+                embedding_cache_key,
+                prepared_embedding,
+            )
         chunks = prepared.get("context_chunks") or []
         citations = tuple(self._citation(chunk) for chunk in chunks)
         result = AgentRetrievalResult(
@@ -268,6 +291,45 @@ class AgentRetrievalService:
         digest = hashlib.sha256(material.encode("ascii")).hexdigest()
         return f"agent:context:v1:{digest}"
 
+    def _query_embedding_cache_key(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        expert_id: uuid.UUID,
+        normalized_query: str,
+    ) -> str | None:
+        """Build a tenant-scoped key without exposing query or scope values.
+
+        The API-key HMAC pepper is mandatory and high entropy outside local/test
+        environments. A cache-specific domain separator prevents this use from
+        overlapping API-key lookup hashes. Model and embedding version are part
+        of the authenticated material, so either change creates a cold cache.
+        """
+
+        try:
+            material = json.dumps(
+                {
+                    "workspace_id": str(workspace_id),
+                    "expert_id": str(expert_id),
+                    "model": self.settings.openrouter_embedding_model,
+                    "embedding_version": self.settings.embedding_version,
+                    "normalized_query_sha256": hashlib.sha256(
+                        normalized_query.encode("utf-8")
+                    ).hexdigest(),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            digest = hmac.new(
+                self.settings.effective_api_key_hash_pepper.encode("utf-8"),
+                b"geem:agent-query-embedding:v1\x00" + material,
+                hashlib.sha256,
+            ).hexdigest()
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("agent.query_embedding_cache_key_unavailable", exc_info=True)
+            return None
+        return f"agent:query-embedding:v1:{digest}"
+
     @staticmethod
     def _citation(chunk: dict[str, Any]) -> Citation:
         raw = str(chunk.get("canonical_text") or "").strip()
@@ -327,6 +389,148 @@ class AgentRetrievalService:
             self._client().setex(key, ttl, payload)
         except (RedisError, OSError):
             logger.info("agent.context_cache_write_skipped", exc_info=True)
+
+    def _query_embedding_cache_get(self, key: str) -> list[float] | None:
+        try:
+            raw = self._client().get(key)
+            if raw is None:
+                return None
+            payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+            if not isinstance(payload, dict):
+                return None
+            signature = payload.get("signature")
+            if not isinstance(signature, str):
+                return None
+            unsigned_payload = dict(payload)
+            unsigned_payload.pop("signature", None)
+            expected_signature = self._query_embedding_payload_signature(
+                key,
+                unsigned_payload,
+            )
+            if expected_signature is None or not hmac.compare_digest(
+                signature,
+                expected_signature,
+            ):
+                return None
+            if payload.get("schema") != _QUERY_EMBEDDING_CACHE_SCHEMA:
+                return None
+            if payload.get("model") != self.settings.openrouter_embedding_model:
+                return None
+            if payload.get("embedding_version") != self.settings.embedding_version:
+                return None
+            dimension = payload.get("dimension")
+            if not isinstance(dimension, int) or isinstance(dimension, bool):
+                return None
+            return self._validated_query_embedding(
+                payload.get("vector"),
+                declared_dimension=dimension,
+                expected_dimension=self._known_query_embedding_dimension(),
+            )
+        except (RedisError, OSError, ValueError, TypeError, OverflowError):
+            logger.info("agent.query_embedding_cache_miss_on_error", exc_info=True)
+            return None
+
+    def _query_embedding_cache_set(self, key: str, vector: Any) -> None:
+        try:
+            validated = self._validated_query_embedding(
+                vector,
+                expected_dimension=self._known_query_embedding_dimension(),
+            )
+            if validated is None:
+                return
+            unsigned_payload = {
+                "schema": _QUERY_EMBEDDING_CACHE_SCHEMA,
+                "model": self.settings.openrouter_embedding_model,
+                "embedding_version": self.settings.embedding_version,
+                "dimension": len(validated),
+                "vector": validated,
+            }
+            signature = self._query_embedding_payload_signature(key, unsigned_payload)
+            if signature is None:
+                return
+            payload = json.dumps(
+                unsigned_payload | {"signature": signature},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            ttl = max(
+                1,
+                int(self.settings.agent_query_embedding_cache_ttl_seconds),
+            )
+            self._client().setex(key, ttl, payload)
+        except (RedisError, OSError, ValueError, TypeError, OverflowError):
+            logger.info("agent.query_embedding_cache_write_skipped", exc_info=True)
+
+    def _query_embedding_payload_signature(
+        self,
+        key: str,
+        payload: dict[str, Any],
+    ) -> str | None:
+        """Authenticate a cached vector and bind it to its opaque scope key."""
+
+        try:
+            canonical_payload = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            return hmac.new(
+                self.settings.effective_api_key_hash_pepper.encode("utf-8"),
+                (
+                    b"geem:agent-query-embedding-payload:v1\x00"
+                    + key.encode("ascii")
+                    + b"\x00"
+                    + canonical_payload
+                ),
+                hashlib.sha256,
+            ).hexdigest()
+        except (RuntimeError, UnicodeError, ValueError, TypeError, OverflowError):
+            logger.info(
+                "agent.query_embedding_cache_signature_unavailable",
+                exc_info=True,
+            )
+            return None
+
+    def _known_query_embedding_dimension(self) -> int | None:
+        vector_store = getattr(self.rag, "vectors", None)
+        dimension = getattr(vector_store, "_vector_size", None)
+        if (
+            isinstance(dimension, int)
+            and not isinstance(dimension, bool)
+            and 0 < dimension <= _MAX_QUERY_EMBEDDING_DIMENSION
+        ):
+            return dimension
+        return None
+
+    @staticmethod
+    def _validated_query_embedding(
+        vector: Any,
+        *,
+        declared_dimension: int | None = None,
+        expected_dimension: int | None = None,
+    ) -> list[float] | None:
+        if not isinstance(vector, list):
+            return None
+        dimension = len(vector)
+        if dimension == 0 or dimension > _MAX_QUERY_EMBEDDING_DIMENSION:
+            return None
+        if declared_dimension is not None and declared_dimension != dimension:
+            return None
+        if expected_dimension is not None and expected_dimension != dimension:
+            return None
+
+        validated: list[float] = []
+        for value in vector:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                return None
+            validated.append(numeric)
+        return validated
 
 
 def _json_scalar(value: Any) -> Any:

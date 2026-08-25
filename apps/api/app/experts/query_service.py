@@ -34,7 +34,12 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.access import AuthorizedExpert, ExpertAccessService
 from app.experts.knowledge import ExpertKnowledgeResolver, ResolvedExpertKnowledge
-from app.experts.models import ExpertKnowledgeMode, ExpertStatus, ExpertType
+from app.experts.models import (
+    ExpertKnowledgeMode,
+    ExpertSourceStatus,
+    ExpertStatus,
+    ExpertType,
+)
 from app.experts.policy import ExpertAction
 from app.identity.models import User
 from app.workspaces.models import Workspace, WorkspaceMembership
@@ -251,6 +256,146 @@ class ExpertQueryService:
             workspace=workspace,
             expert_id=expert_id,
             actor_id=actor_id,
+        )
+
+    def resolve_knowledge_for_agent(
+        self,
+        authorized: AuthorizedExpert,
+        *,
+        workspace: Workspace,
+        expert_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
+    ) -> ResolvedExpertKnowledge:
+        """Resolve an already-authorized Expert for the paid Agent API.
+
+        A Workspace Expert with no active linked Documents may still execute
+        an Agent round using the Expert instructions and general model
+        knowledge. This exception is deliberately narrow: only ``draft`` or
+        ``ready`` RAG Experts with zero active links qualify. Once knowledge
+        has been attached, its processing/failure lifecycle remains
+        authoritative and the normal typed errors are preserved.
+
+        Authorization happens before this method in the Agent admission
+        transaction. Explicit ``knowledge_mode=general`` Experts continue
+        through the ordinary preparation path unchanged.
+        """
+
+        expert = authorized.expert
+        if (
+            expert.knowledge_mode == ExpertKnowledgeMode.GENERAL.value
+            or expert.status
+            not in {ExpertStatus.DRAFT.value, ExpertStatus.READY.value}
+        ):
+            return self._finish_prepare(
+                authorized,
+                workspace=workspace,
+                expert_id=expert_id,
+                actor_id=actor_id,
+            )
+
+        knowledge = self.resolver.resolve(authorized, lock_active_sources=True)
+
+        # A ready RAG Expert with ready Documents executes normal retrieval.
+        if (
+            expert.status == ExpertStatus.READY.value
+            and knowledge.has_ready_knowledge
+        ):
+            return knowledge
+
+        # Source rows may exist before a connector/upload has produced its
+        # first Document. Such sources are expected knowledge and must retain
+        # their processing/failure semantics rather than silently falling
+        # through to General model knowledge.
+        if not knowledge.all_linked_document_ids and knowledge.has_active_sources:
+            self._raise_agent_source_error(
+                authorized,
+                source_statuses=knowledge.active_source_statuses,
+                actor_id=actor_id,
+            )
+
+        # No active links or sources means there is no expected uploaded
+        # knowledge to wait for. The Agent service records a General execution
+        # mode without mutating the Expert's persisted knowledge_mode.
+        if not knowledge.all_linked_document_ids:
+            security_log(
+                "agent.general_fallback_selected",
+                expert_id=str(expert_id),
+                workspace_id=str(workspace.id),
+                actor_id=str(actor_id) if actor_id else None,
+                expert_status=expert.status,
+                reason="no_active_linked_documents",
+            )
+            return knowledge
+
+        # Linked-but-not-ready knowledge must never be silently bypassed. Use
+        # the same lifecycle/error taxonomy as every other Expert query.
+        self._require_serviceable(authorized, actor_id=actor_id)
+        security_log(
+            "expert.query_denied",
+            expert_id=str(expert_id),
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id) if actor_id else None,
+            reason="no_ready_knowledge",
+        )
+        raise AppError(
+            ErrorCategory.EXPERT_HAS_NO_KNOWLEDGE,
+            "Expert has no ready knowledge to answer with yet.",
+        )
+
+    def _raise_agent_source_error(
+        self,
+        authorized: AuthorizedExpert,
+        *,
+        source_statuses: tuple[str, ...],
+        actor_id: uuid.UUID | None,
+    ) -> None:
+        """Translate source-only knowledge state into the existing taxonomy."""
+
+        statuses = set(source_statuses)
+        log_fields = {
+            "expert_id": str(authorized.expert_id),
+            "workspace_id": str(authorized.workspace.id),
+            "actor_id": str(actor_id) if actor_id else None,
+        }
+        if statuses & {
+            ExpertSourceStatus.PENDING.value,
+            ExpertSourceStatus.PROCESSING.value,
+        }:
+            security_log(
+                "expert.query_denied",
+                **log_fields,
+                reason="source_processing",
+            )
+            raise AppError(
+                ErrorCategory.EXPERT_NOT_READY,
+                "Expert knowledge is still being processed.",
+            )
+        if statuses & {
+            ExpertSourceStatus.FAILED.value,
+            ExpertSourceStatus.STALE.value,
+            ExpertSourceStatus.UNAVAILABLE.value,
+        }:
+            security_log(
+                "expert.query_denied",
+                **log_fields,
+                reason="source_unavailable",
+            )
+            raise AppError(
+                ErrorCategory.EXPERT_KNOWLEDGE_UNAVAILABLE,
+                "Expert knowledge is currently unavailable.",
+            )
+
+        # A ready/legacy-active source without an active Document is an
+        # inconsistent but expected-knowledge state. Fail closed rather than
+        # presenting an uncited General answer.
+        security_log(
+            "expert.query_denied",
+            **log_fields,
+            reason="source_has_no_ready_document",
+        )
+        raise AppError(
+            ErrorCategory.EXPERT_HAS_NO_KNOWLEDGE,
+            "Expert has no ready knowledge to answer with yet.",
         )
 
     # ------------------------------------------------------------------

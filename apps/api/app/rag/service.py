@@ -46,6 +46,12 @@ GENERAL_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "gene
 GENERAL_CHAT_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "general_chat_v1.txt"
 
 
+def expert_query_embedding_input(question: str) -> str:
+    """Return the exact text sent to the Expert query embedding provider."""
+
+    return normalize_search(expand_article_query(question))
+
+
 def load_system_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
@@ -557,6 +563,8 @@ class RagService:
         knowledge: ResolvedExpertKnowledge,
         top_k: int | None,
         usage_context: GenerationUsageContext | None = None,
+        *,
+        query_embedding: list[float] | None = None,
     ) -> dict[str, Any]:
         question = (question or "").strip()
         if not question:
@@ -577,16 +585,21 @@ class RagService:
         effective_top_k = top_k or rag_cfg.top_k
         similarity_threshold = rag_cfg.similarity_threshold
 
-        retrieval_question = expand_article_query(question)
-        normalized_q = normalize_search(retrieval_question)
-        query_vec = self.embedder.embed_query(normalized_q)
-        self._note_openrouter_call(
-            OpenRouterFamily.EMBED,
-            "embed_query",
-            usage_context=usage_context,
-            scope=scope,
-            provider=self.embedder,
-        )
+        normalized_q = expert_query_embedding_input(question)
+        if query_embedding is None:
+            query_vec = self.embedder.embed_query(normalized_q)
+            self._note_openrouter_call(
+                OpenRouterFamily.EMBED,
+                "embed_query",
+                usage_context=usage_context,
+                scope=scope,
+                provider=self.embedder,
+            )
+        else:
+            # The Agent layer validates and model/version-scopes cached vectors.
+            # Skipping both the provider and usage event here keeps metering tied
+            # to real OpenRouter calls while retrieval/reranking still run fresh.
+            query_vec = query_embedding
 
         with start_span(
             "rag.retrieve",
@@ -733,6 +746,7 @@ class RagService:
             "allowed_ids": allowed_ids,
             "context_chunks": context_chunks,
             "scope": scope,
+            "_query_embedding": query_vec,
         }
 
     def prepare_expert_context_for_agent(
@@ -741,6 +755,7 @@ class RagService:
         question: str,
         knowledge: ResolvedExpertKnowledge,
         usage_context: GenerationUsageContext | None = None,
+        query_embedding: list[float] | None = None,
     ) -> dict[str, Any]:
         """Prepare scoped Expert sources without running answer generation.
 
@@ -756,6 +771,7 @@ class RagService:
             knowledge,
             top_k=None,
             usage_context=usage_context,
+            query_embedding=query_embedding,
         )
 
     def _carry_usage(self, previous: dict, validated: dict) -> dict:

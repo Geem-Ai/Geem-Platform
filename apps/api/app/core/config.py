@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -208,6 +209,9 @@ class Settings(BaseSettings):
     openrouter_pdf_engine: str = "mistral-ocr"
     openrouter_stt_model: str = "google/chirp-3"
     openrouter_embedding_model: str = "qwen/qwen3-embedding-8b"
+    # Embedding queries are latency-sensitive because retrieval cannot start until
+    # their vector is available. Empty disables embedding-specific provider sorting.
+    openrouter_embedding_provider_sort: Literal["", "latency"] = "latency"
     openrouter_rerank_model: str = "cohere/rerank-v3.5"
     openrouter_chat_model: str = "qwen/qwen3.8-max"
     openrouter_chat_fallback_model: str = "openai/gpt-5.6-terra"
@@ -352,6 +356,7 @@ class Settings(BaseSettings):
     agent_tool_schema_max_bytes: int = Field(default=65_536, gt=0)
     agent_client_instructions_max_chars: int = Field(default=4_000, gt=0)
     agent_context_cache_ttl_seconds: int = Field(default=900, gt=0)
+    agent_query_embedding_cache_ttl_seconds: int = Field(default=900, gt=0)
     agent_max_output_tokens: int = Field(default=4_096, gt=0)
     # Exact model-to-capability declaration used by Agent API readiness. A
     # model change must be accompanied by an explicit capability review; an

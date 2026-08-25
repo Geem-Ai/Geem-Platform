@@ -65,12 +65,22 @@ class _Db:
 
 
 class _Admission:
-    def __init__(self, events: list[str], *, settle_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        execution_mode: str = ExpertKnowledgeMode.RAG.value,
+        settle_error: Exception | None = None,
+    ) -> None:
         self.events = events
         self.closed = False
         self.db = SimpleNamespace()
         self.request_id = "agent-service-round"
         self.access = SimpleNamespace(workspace_id=uuid.uuid4())
+        self.execution_mode = execution_mode
+        self.uses_general_knowledge = (
+            execution_mode == ExpertKnowledgeMode.GENERAL.value
+        )
         expert = SimpleNamespace(
             id=uuid.uuid4(),
             knowledge_mode=ExpertKnowledgeMode.RAG.value,
@@ -208,6 +218,63 @@ def test_nonstream_round_commits_retrieval_before_provider_then_settles(
     assert provider.kwargs["system_prompt"].count("<SOURCE") == 1
     assert "evidence" in provider.kwargs["system_prompt"]
     assert provider.kwargs["tool_choice"] == "none"
+
+
+def test_general_execution_mode_skips_retrieval_and_uses_general_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    service, provider = _service(events)
+    admission = _Admission(
+        events,
+        execution_mode=ExpertKnowledgeMode.GENERAL.value,
+    )
+    request, normalized = _request_and_messages()
+
+    monkeypatch.setattr(
+        service_module,
+        "load_general_chat_prompt",
+        lambda: "GENERAL EXECUTION BASE",
+    )
+    monkeypatch.setattr(
+        service_module,
+        "load_agent_rag_prompt",
+        lambda: (_ for _ in ()).throw(AssertionError("RAG prompt loaded")),
+    )
+    monkeypatch.setattr(
+        service_module,
+        "record_openrouter_event",
+        lambda *_args, **_kwargs: events.append("usage_event") or 11,
+    )
+    monkeypatch.setattr(service_module, "security_log", lambda *_args, **_kwargs: None)
+
+    prepared = service.prepare_round(
+        request=request,
+        normalized=normalized,
+        admission=admission,
+    )
+
+    assert events == ["retrieval_commit"]
+    assert prepared.retrieval.status == "skipped_general"
+    assert prepared.retrieval.citations == ()
+    assert prepared.retrieval.insufficient_context is None
+    assert prepared.retrieval.knowledge_revision is None
+    assert "GENERAL EXECUTION BASE" in prepared.system_prompt
+    assert "GEEM_RAG_CONTEXT" not in prepared.system_prompt
+    assert admission.knowledge.authorized.expert.knowledge_mode == "rag"
+
+    completed = service.run_round(prepared)
+
+    assert events == [
+        "retrieval_commit",
+        "provider",
+        "usage_event",
+        "ai_settle",
+    ]
+    assert completed.geem.retrieval == "skipped_general"
+    assert completed.geem.citations == []
+    assert completed.geem.insufficient_context is None
+    assert provider.kwargs["system_prompt"] == prepared.system_prompt
 
 
 def test_retrieval_failure_rolls_back_and_releases_without_provider_work(

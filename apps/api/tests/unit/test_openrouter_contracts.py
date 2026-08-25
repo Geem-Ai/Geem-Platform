@@ -21,9 +21,12 @@ def settings() -> Settings:
         openrouter_base_url="https://openrouter.ai/api/v1",
         openrouter_pdf_trigger_model="test/trigger",
         openrouter_embedding_model="test/embed",
+        openrouter_embedding_provider_sort="latency",
         openrouter_rerank_model="test/rerank",
         openrouter_chat_model="test/chat",
         openrouter_chat_fallback_model="test/fallback",
+        openrouter_allow_fallbacks=True,
+        openrouter_data_collection="deny",
     )
 
 
@@ -79,7 +82,7 @@ def test_parser_recovers_annotations_from_error_metadata(settings: Settings):
 
 @respx.mock
 def test_embeddings_batch(settings: Settings):
-    respx.post("https://openrouter.ai/api/v1/embeddings").mock(
+    route = respx.post("https://openrouter.ai/api/v1/embeddings").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -93,11 +96,36 @@ def test_embeddings_batch(settings: Settings):
     emb = OpenRouterEmbeddingProvider(client=OpenRouterClient(settings), settings=settings)
     vectors = emb.embed_documents(["a", "b"])
     assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    payload = json.loads(route.calls[0].request.content)
+    assert payload["provider"] == {
+        "allow_fallbacks": True,
+        "data_collection": "deny",
+        "sort": "latency",
+    }
+
+
+@respx.mock
+def test_embedding_latency_sort_can_be_disabled(settings: Settings):
+    settings.openrouter_embedding_provider_sort = ""
+    route = respx.post("https://openrouter.ai/api/v1/embeddings").mock(
+        return_value=httpx.Response(
+            200,
+            json={"data": [{"index": 0, "embedding": [0.1, 0.2]}]},
+        )
+    )
+    emb = OpenRouterEmbeddingProvider(client=OpenRouterClient(settings), settings=settings)
+
+    assert emb.embed_query("a") == [0.1, 0.2]
+    payload = json.loads(route.calls[0].request.content)
+    assert payload["provider"] == {
+        "allow_fallbacks": True,
+        "data_collection": "deny",
+    }
 
 
 @respx.mock
 def test_rerank_preserves_ids(settings: Settings):
-    respx.post("https://openrouter.ai/api/v1/rerank").mock(
+    route = respx.post("https://openrouter.ai/api/v1/rerank").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -119,6 +147,12 @@ def test_rerank_preserves_ids(settings: Settings):
     )
     assert ranked[0]["chunk_id"] == "b"
     assert ranked[0]["final_rank"] == 1
+    payload = json.loads(route.calls[0].request.content)
+    assert payload["provider"] == {
+        "allow_fallbacks": True,
+        "data_collection": "deny",
+    }
+    assert "sort" not in payload["provider"]
 
 
 @respx.mock
@@ -154,6 +188,13 @@ def test_chat_fallback(settings: Settings):
     out = chat.answer("سؤال", "<SOURCE id='c1'>x</SOURCE>")
     assert out["answer_markdown"] == "جواب"
     assert out["model"] == "test/fallback"
+    for call in route.calls:
+        payload = json.loads(call.request.content)
+        assert payload["provider"] == {
+            "allow_fallbacks": True,
+            "data_collection": "deny",
+        }
+        assert "sort" not in payload["provider"]
 
 
 def test_extract_partial_json_string_incremental():
@@ -312,4 +353,3 @@ def test_answer_general_stream(settings: Settings):
     assert text == "Not in docs. General answer."
     done = next(e for e in events if e["type"] == "done")
     assert done["result"]["answer_markdown"] == "Not in docs. General answer."
-

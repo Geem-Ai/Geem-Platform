@@ -34,7 +34,12 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.db.models import Document
 from app.experts.access import AuthorizedExpert
-from app.experts.models import ExpertDocument, ExpertType
+from app.experts.models import (
+    ExpertDocument,
+    ExpertSource,
+    ExpertSourceStatus,
+    ExpertType,
+)
 from app.experts.rag_config import EffectiveRagConfig, resolve_effective_rag_config
 from app.storage.scopes import ExpertRagScope
 from app.workspaces.models import Workspace
@@ -52,6 +57,7 @@ class ResolvedExpertKnowledge:
     knowledge_workspace: Workspace
     ready_document_ids: tuple[uuid.UUID, ...]
     all_linked_document_ids: tuple[uuid.UUID, ...]
+    active_source_statuses: tuple[str, ...] = ()
 
     @property
     def knowledge_workspace_id(self) -> uuid.UUID:
@@ -69,6 +75,10 @@ class ResolvedExpertKnowledge:
     def has_ready_knowledge(self) -> bool:
         return bool(self.ready_document_ids)
 
+    @property
+    def has_active_sources(self) -> bool:
+        return bool(self.active_source_statuses)
+
 
 class ExpertKnowledgeResolver:
     def __init__(self, db: Session, settings: Settings | None = None) -> None:
@@ -76,7 +86,12 @@ class ExpertKnowledgeResolver:
         self.settings = settings or get_settings()
         self._workspaces = WorkspaceService(db, self.settings)
 
-    def resolve(self, authorized: AuthorizedExpert) -> ResolvedExpertKnowledge:
+    def resolve(
+        self,
+        authorized: AuthorizedExpert,
+        *,
+        lock_active_sources: bool = False,
+    ) -> ResolvedExpertKnowledge:
         """Build a ``ResolvedExpertKnowledge`` from an already-authorized Expert.
 
         Callers must obtain ``AuthorizedExpert`` through ``ExpertAccessService``
@@ -117,6 +132,11 @@ class ExpertKnowledgeResolver:
             all_doc_ids.append(doc.id)
             if doc.status == "ready" and doc.deleted_at is None:
                 ready_doc_ids.append(doc.id)
+        active_sources = (
+            self._list_active_sources(expert.id, lock_rows=True)
+            if lock_active_sources
+            else []
+        )
 
         scope = ExpertRagScope(
             consumer_workspace_id=consumer.id,
@@ -134,6 +154,7 @@ class ExpertKnowledgeResolver:
             knowledge_workspace=knowledge_workspace,
             ready_document_ids=tuple(ready_doc_ids),
             all_linked_document_ids=tuple(all_doc_ids),
+            active_source_statuses=tuple(source.status for source in active_sources),
         )
 
     def assert_candidate_membership(
@@ -185,6 +206,25 @@ class ExpertKnowledgeResolver:
             )
             .order_by(Document.created_at.asc())
         )
+        return list(self.db.scalars(stmt))
+
+    def _list_active_sources(
+        self,
+        expert_id: uuid.UUID,
+        *,
+        lock_rows: bool,
+    ) -> list[ExpertSource]:
+        stmt = (
+            select(ExpertSource)
+            .where(
+                ExpertSource.expert_id == expert_id,
+                ExpertSource.deleted_at.is_(None),
+                ExpertSource.status != ExpertSourceStatus.DISABLED.value,
+            )
+            .order_by(ExpertSource.created_at.asc(), ExpertSource.id.asc())
+        )
+        if lock_rows:
+            stmt = stmt.with_for_update(of=ExpertSource)
         return list(self.db.scalars(stmt))
 
     @staticmethod
