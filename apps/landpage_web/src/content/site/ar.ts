@@ -339,6 +339,7 @@ export const ar: SiteCopy = {
       { label: 'دخول مساحة العمل', href: 'login' },
     ],
     resourceLinks: [
+      { label: 'واجهة Agents AI', href: 'agent-ai' },
       { label: 'الأمان', href: 'security' },
     ],
     companyLinks: [

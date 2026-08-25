@@ -339,6 +339,7 @@ export const en: SiteCopy = {
       { label: 'Workspace Login', href: 'login' },
     ],
     resourceLinks: [
+      { label: 'Agents AI API', href: 'agent-ai' },
       { label: 'Security', href: 'security' },
     ],
     companyLinks: [

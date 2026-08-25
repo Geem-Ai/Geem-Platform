@@ -29,6 +29,8 @@ npm run verify    # after build — SEO/RTL smoke checks on dist/
 |------|---------|
 | `/` | Redirect to `/ar` |
 | `/ar`, `/en` | Homepage |
+| `/agent-ai` | Redirect to the Arabic Agents AI documentation |
+| `/[locale]/agent-ai` | Agents AI Client Agent API documentation |
 | `/[locale]/about` | About Geem / DALSEEN |
 | `/[locale]/contact` | Contact |
 | `/[locale]/security` | Security / isolation |

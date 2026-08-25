@@ -1,0 +1,856 @@
+---
+import type { Locale } from '../../lib/i18n';
+import type { AgentAiPageCopy } from '../../content/agent-ai';
+import { getSiteConfig } from '../../lib/site';
+import Button from '../ui/Button.astro';
+
+type Props = {
+  locale: Locale;
+  copy: AgentAiPageCopy;
+};
+
+const { copy } = Astro.props;
+const { apiBaseUrl, workspaceUrl } = getSiteConfig();
+const agentBaseUrl = `${apiBaseUrl.replace(/\/+$/, '')}/api/v1/agent`;
+const appUrl = `${workspaceUrl}/apps/agents-ai`;
+const apiKeysUrl = `${workspaceUrl}/api/keys`;
+
+const curlSample = [
+  `curl ${agentBaseUrl}/chat/completions \\`,
+  "  -H 'Authorization: Bearer geem_sk_...' \\",
+  "  -H 'X-Geem-Expert-Id: 00000000-0000-0000-0000-000000000000' \\",
+  "  -H 'Content-Type: application/json' \\",
+  "  -d '{",
+  '    "model": "dalseen/geem-1.0",',
+  '    "messages": [{"role": "user", "content": "Where is order 123?"}],',
+  '    "tools": [{"type": "function", "function": {',
+  '      "name": "lookup_order",',
+  '      "description": "Look up an order visible to the current caller",',
+  '      "parameters": {',
+  '        "type": "object",',
+  '        "properties": {"order_id": {"type": "string"}},',
+  '        "required": ["order_id"],',
+  '        "additionalProperties": false',
+  '      }',
+  '    }}],',
+  '    "tool_choice": "auto"',
+  "  }'",
+].join('\n');
+
+const modelsSample = [
+  `curl ${agentBaseUrl}/models \\`,
+  "  -H 'Authorization: Bearer geem_sk_...'",
+  '',
+  `curl ${agentBaseUrl}/models/dalseen/geem-1.0 \\`,
+  "  -H 'Authorization: Bearer geem_sk_...'",
+].join('\n');
+
+const replaySample = [
+  '{',
+  '  "model": "dalseen/geem-1.0",',
+  '  "messages": [',
+  '    {"role": "user", "content": "Where is order 123?"},',
+  '    {',
+  '      "role": "assistant",',
+  '      "content": null,',
+  '      "tool_calls": [{',
+  '        "id": "call_01H...",',
+  '        "type": "function",',
+  '        "function": {',
+  '          "name": "lookup_order",',
+  '          "arguments": "{\\"order_id\\":\\"123\\"}"',
+  '        }',
+  '      }]',
+  '    },',
+  '    {',
+  '      "role": "tool",',
+  '      "tool_call_id": "call_01H...",',
+  '      "content": "{\\"status\\":\\"shipped\\"}"',
+  '    }',
+  '  ],',
+  '  "tools": [{"type": "function", "function": {',
+  '    "name": "lookup_order",',
+  '    "parameters": {"type": "object"}',
+  '  }}]',
+  '}',
+].join('\n');
+
+const laravelSample = [
+  '// config/ai.php',
+  "'providers' => [",
+  "    'geem' => [",
+  "        'driver' => 'openai-compatible',",
+  "        'url' => env('GEEM_AGENT_URL'),",
+  "        'key' => env('GEEM_AGENT_API_KEY'),",
+  "        'headers' => [",
+  "            'X-Geem-Expert-Id' => env('GEEM_EXPERT_ID'),",
+  "        ],",
+  "        'models' => [",
+  "            'text' => ['default' => 'dalseen/geem-1.0'],",
+  "        ],",
+  "    ],",
+  "],",
+].join('\n');
+
+const pythonSample = [
+  'from openai import OpenAI',
+  '',
+  'client = OpenAI(',
+  '    api_key="geem_sk_...",',
+  `    base_url="${agentBaseUrl}",`,
+  '    default_headers={',
+  '        "X-Geem-Expert-Id":',
+  '            "00000000-0000-0000-0000-000000000000"',
+  '    },',
+  ')',
+  '',
+  'response = client.chat.completions.create(',
+  '    model="dalseen/geem-1.0",',
+  '    messages=[{',
+  '        "role": "user",',
+  '        "content": "Summarize the return policy."',
+  '    }],',
+  ')',
+].join('\n');
+
+const metadataSample = [
+  '{',
+  '  "retrieval": "executed",',
+  '  "citations": [],',
+  '  "insufficient_context": false,',
+  '  "billed_tokens": 1234',
+  '}',
+].join('\n');
+
+const errorSample = [
+  '{',
+  '  "error": {',
+  '    "message": "...",',
+  '    "type": "invalid_request_error",',
+  '    "param": "messages",',
+  '    "code": "agent_invalid_tool_transcript"',
+  '  }',
+  '}',
+].join('\n');
+---
+
+<section class="agent-hero">
+  <div class="container-shell agent-hero__grid">
+    <div class="agent-hero__copy" data-reveal>
+      <div class="agent-hero__badge">
+        <span aria-hidden="true"></span>
+        {copy.hero.availability}
+      </div>
+      <p class="agent-hero__eyebrow">{copy.hero.eyebrow}</p>
+      <h1>{copy.hero.title}</h1>
+      <p class="agent-hero__lead">{copy.hero.description}</p>
+      <div class="agent-hero__actions">
+        <Button href={appUrl} variant="primary">{copy.hero.primaryCta}</Button>
+        <Button href="#quickstart" variant="secondary">{copy.hero.secondaryCta}</Button>
+      </div>
+    </div>
+
+    <div class="agent-terminal" data-reveal aria-label={copy.access.title}>
+      <div class="agent-terminal__bar" aria-hidden="true">
+        <span></span><span></span><span></span>
+        <small>agent / chat.completions</small>
+      </div>
+      <div class="agent-terminal__body" dir="ltr">
+        <p><span>POST</span> /api/v1/agent/chat/completions</p>
+        <dl>
+          <div><dt>model</dt><dd>dalseen/geem-1.0</dd></div>
+          <div><dt>expert</dt><dd>X-Geem-Expert-Id</dd></div>
+          <div><dt>tools</dt><dd>client-owned</dd></div>
+          <div><dt>state</dt><dd>stateless replay</dd></div>
+        </dl>
+        <div class="agent-terminal__result">
+          <span aria-hidden="true"></span>
+          200 · assistant | tool_calls
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container-shell agent-docs-shell">
+  <aside class="agent-toc">
+    <nav aria-label={copy.toc.label}>
+      <p>{copy.toc.label}</p>
+      <ol>
+        {
+          copy.toc.items.map((item, index) => (
+            <li>
+              <a href={`#${item.id}`}>
+                <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </nav>
+  </aside>
+
+  <article class="agent-article">
+    <section id="overview" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.overview.eyebrow}</p>
+        <h2>{copy.overview.title}</h2>
+        <p>{copy.overview.description}</p>
+      </header>
+      <dl class="agent-facts">
+        {
+          copy.overview.facts.map((fact) => (
+            <div>
+              <dt dir={fact.value === 'OpenAI' ? 'ltr' : undefined}>{fact.value}</dt>
+              <dd>{fact.label}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    <section id="requirements" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.requirements.eyebrow}</p>
+        <h2>{copy.requirements.title}</h2>
+        <p>{copy.requirements.description}</p>
+      </header>
+      <ol class="agent-requirements">
+        {
+          copy.requirements.items.map((item, index) => (
+            <li><span aria-hidden="true">{index + 1}</span><p>{item}</p></li>
+          ))
+        }
+      </ol>
+      <aside class="agent-note">
+        <strong>agent:write</strong>
+        <p>{copy.requirements.note}</p>
+      </aside>
+    </section>
+
+    <section id="access" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.access.eyebrow}</p>
+        <h2>{copy.access.title}</h2>
+        <p>{copy.access.description}</p>
+      </header>
+      <dl class="agent-specs">
+        <div><dt>{copy.access.baseUrl}</dt><dd><code dir="ltr">{agentBaseUrl}</code></dd></div>
+        <div><dt>{copy.access.publicModel}</dt><dd><code dir="ltr">dalseen/geem-1.0</code></dd></div>
+        <div><dt>{copy.access.requiredScope}</dt><dd><code dir="ltr">agent:write</code></dd></div>
+        <div><dt>{copy.access.expertHeader}</dt><dd><code dir="ltr">X-Geem-Expert-Id</code></dd></div>
+      </dl>
+      <p class="agent-inline-note">{copy.access.modelNote}</p>
+
+      <div class="agent-subsection">
+        <div>
+          <h3>{copy.access.modelsTitle}</h3>
+          <p>{copy.access.modelsDescription}</p>
+        </div>
+        <div class="agent-code">
+          <div class="agent-code__bar">
+            <span>Models</span>
+            <button type="button" data-copy="agent-models" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
+          </div>
+          <pre id="agent-models" dir="ltr"><code>{modelsSample}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickstart" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.quickstart.eyebrow}</p>
+        <h2>{copy.quickstart.title}</h2>
+        <p>{copy.quickstart.description}</p>
+      </header>
+      <div class="agent-code agent-code--large">
+        <div class="agent-code__bar">
+          <span>{copy.quickstart.requestLabel}</span>
+          <button type="button" data-copy="agent-curl" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
+        </div>
+        <pre id="agent-curl" dir="ltr"><code>{curlSample}</code></pre>
+      </div>
+    </section>
+
+    <section id="tool-loop" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.toolLoop.eyebrow}</p>
+        <h2>{copy.toolLoop.title}</h2>
+        <p>{copy.toolLoop.description}</p>
+      </header>
+      <ol class="agent-loop">
+        {
+          copy.toolLoop.steps.map((step, index) => (
+            <li>
+              <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+              <div><h3>{step.title}</h3><p>{step.description}</p></div>
+            </li>
+          ))
+        }
+      </ol>
+      <div class="agent-subsection agent-subsection--stack">
+        <div><h3>{copy.toolLoop.replayTitle}</h3><p>{copy.toolLoop.replayDescription}</p></div>
+        <div class="agent-code">
+          <div class="agent-code__bar">
+            <span>JSON</span>
+            <button type="button" data-copy="agent-replay" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
+          </div>
+          <pre id="agent-replay" dir="ltr"><code>{replaySample}</code></pre>
+        </div>
+      </div>
+      <aside class="agent-billing-note">{copy.toolLoop.billingNote}</aside>
+    </section>
+
+    <section id="sdks" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.sdks.eyebrow}</p>
+        <h2>{copy.sdks.title}</h2>
+        <p>{copy.sdks.description}</p>
+      </header>
+      <div class="agent-sdk-grid">
+        <section>
+          <h3>{copy.sdks.laravelTitle}</h3>
+          <p>{copy.sdks.laravelDescription}</p>
+          <div class="agent-code">
+            <div class="agent-code__bar">
+              <span>PHP</span>
+              <button type="button" data-copy="agent-laravel" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
+            </div>
+            <pre id="agent-laravel" dir="ltr"><code>{laravelSample}</code></pre>
+          </div>
+        </section>
+        <section>
+          <h3>{copy.sdks.pythonTitle}</h3>
+          <p>{copy.sdks.pythonDescription}</p>
+          <div class="agent-code">
+            <div class="agent-code__bar">
+              <span>Python</span>
+              <button type="button" data-copy="agent-python" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
+            </div>
+            <pre id="agent-python" dir="ltr"><code>{pythonSample}</code></pre>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="streaming" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.streaming.eyebrow}</p>
+        <h2>{copy.streaming.title}</h2>
+        <p>{copy.streaming.description}</p>
+      </header>
+      <div class="agent-feature-grid">
+        {copy.streaming.items.map((item) => <article><h3>{item.title}</h3><p>{item.description}</p></article>)}
+      </div>
+      <div class="agent-subsection">
+        <div><h3>{copy.streaming.metadataTitle}</h3><p>{copy.streaming.metadataDescription}</p></div>
+        <div class="agent-code">
+          <div class="agent-code__bar"><span>geem</span></div>
+          <pre dir="ltr"><code>{metadataSample}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="safety" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.safety.eyebrow}</p>
+        <h2>{copy.safety.title}</h2>
+        <p>{copy.safety.description}</p>
+      </header>
+      <ul class="agent-check-list">{copy.safety.items.map((item) => <li>{item}</li>)}</ul>
+      <aside class="agent-warning"><strong>{copy.safety.warningTitle}</strong><p>{copy.safety.warning}</p></aside>
+    </section>
+
+    <section id="controls" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.controls.eyebrow}</p>
+        <h2>{copy.controls.title}</h2>
+      </header>
+      <div class="agent-contract-grid">
+        <section>
+          <h3>{copy.controls.acceptedTitle}</h3>
+          <ul>{copy.controls.accepted.map((item) => <li>{item}</li>)}</ul>
+        </section>
+        <section class="agent-contract-grid__rejected">
+          <h3>{copy.controls.rejectedTitle}</h3>
+          <ul>{copy.controls.rejected.map((item) => <li>{item}</li>)}</ul>
+        </section>
+      </div>
+    </section>
+
+    <section id="errors" class="agent-section">
+      <header>
+        <p class="eyebrow">{copy.errors.eyebrow}</p>
+        <h2>{copy.errors.title}</h2>
+        <p>{copy.errors.description}</p>
+      </header>
+      <div class="agent-subsection">
+        <p>{copy.errors.retry}</p>
+        <div class="agent-code">
+          <div class="agent-code__bar"><span>OpenAI error</span></div>
+          <pre dir="ltr"><code>{errorSample}</code></pre>
+        </div>
+      </div>
+    </section>
+  </article>
+</div>
+
+<section class="agent-cta">
+  <div class="container-shell agent-cta__inner">
+    <div><h2>{copy.cta.title}</h2><p>{copy.cta.description}</p></div>
+    <div>
+      <Button href={appUrl} variant="primary">{copy.cta.primary}</Button>
+      <Button href={apiKeysUrl} variant="secondary">{copy.cta.secondary}</Button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .agent-hero {
+    position: relative;
+    overflow: hidden;
+    padding-block: clamp(4.5rem, 9vw, 8rem);
+    color: white;
+    background:
+      radial-gradient(circle at 78% 20%, color-mix(in oklab, var(--geem-sky) 24%, transparent), transparent 34%),
+      radial-gradient(circle at 12% 100%, color-mix(in oklab, var(--geem-sand) 10%, transparent), transparent 34%),
+      linear-gradient(145deg, var(--geem-navy-950), var(--geem-navy-900));
+  }
+
+  .agent-hero::before {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(color-mix(in oklab, white 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, white 3%, transparent) 1px, transparent 1px);
+    background-size: 68px 68px;
+    content: '';
+    mask-image: linear-gradient(to bottom, black, transparent 90%);
+  }
+
+  .agent-hero__grid {
+    position: relative;
+    display: grid;
+    align-items: center;
+    gap: clamp(2.5rem, 6vw, 5rem);
+  }
+
+  .agent-hero__copy h1 {
+    max-inline-size: 13ch;
+    margin-block: 0.85rem 1.25rem;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 600;
+    letter-spacing: -0.045em;
+    line-height: 1.02;
+  }
+
+  .agent-hero__lead {
+    max-inline-size: 41rem;
+    color: color-mix(in oklab, white 76%, transparent);
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+  }
+
+  .agent-hero__badge,
+  .agent-hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .agent-hero__badge {
+    border: 1px solid color-mix(in oklab, var(--geem-sand) 28%, transparent);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    color: var(--geem-sand);
+    background: color-mix(in oklab, var(--geem-sand) 7%, transparent);
+  }
+
+  .agent-hero__badge span {
+    inline-size: 0.45rem;
+    block-size: 0.45rem;
+    border-radius: 999px;
+    background: #70d7a7;
+    box-shadow: 0 0 0 4px color-mix(in oklab, #70d7a7 16%, transparent);
+  }
+
+  .agent-hero__eyebrow {
+    display: block;
+    margin-block-start: 1.2rem;
+    color: color-mix(in oklab, white 58%, transparent);
+    letter-spacing: 0.04em;
+  }
+
+  .agent-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-block-start: 2rem;
+  }
+
+  .agent-terminal {
+    min-inline-size: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, white 13%, transparent);
+    border-radius: 1.25rem;
+    background: color-mix(in oklab, var(--geem-navy-950) 84%, transparent);
+    box-shadow: 0 32px 80px color-mix(in oklab, black 38%, transparent);
+  }
+
+  .agent-terminal__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    border-bottom: 1px solid color-mix(in oklab, white 9%, transparent);
+    padding: 0.85rem 1rem;
+  }
+
+  .agent-terminal__bar > span {
+    inline-size: 0.55rem;
+    block-size: 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, white 25%, transparent);
+  }
+
+  .agent-terminal__bar small {
+    margin-inline-start: auto;
+    color: color-mix(in oklab, white 45%, transparent);
+    font-family: 'IBM Plex Sans', monospace;
+  }
+
+  .agent-terminal__body {
+    padding: clamp(1.1rem, 3vw, 1.6rem);
+    color: #dceaf1;
+    font-family: 'IBM Plex Sans', monospace;
+    font-size: 0.86rem;
+    text-align: left;
+  }
+
+  .agent-terminal__body > p span {
+    margin-inline-end: 0.6rem;
+    color: #70d7a7;
+    font-weight: 600;
+  }
+
+  .agent-terminal dl {
+    display: grid;
+    gap: 0.65rem;
+    margin-block: 1.4rem;
+  }
+
+  .agent-terminal dl div {
+    display: grid;
+    grid-template-columns: 5rem minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .agent-terminal dt { color: #7ea0b3; }
+  .agent-terminal dd { overflow-wrap: anywhere; color: var(--geem-sand); }
+
+  .agent-terminal__result {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    border-top: 1px solid color-mix(in oklab, white 8%, transparent);
+    padding-block-start: 1rem;
+    color: #9fc8db;
+  }
+
+  .agent-terminal__result span {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 999px;
+    background: #70d7a7;
+  }
+
+  .agent-docs-shell {
+    display: grid;
+    align-items: start;
+    gap: clamp(2rem, 5vw, 4rem);
+    padding-block: clamp(3.5rem, 7vw, 7rem);
+  }
+
+  .agent-toc nav { border-inline-start: 1px solid var(--geem-border); padding-inline-start: 1rem; }
+  .agent-toc p {
+    margin-block-end: 0.75rem;
+    color: var(--geem-navy-900);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .agent-toc ol { display: grid; gap: 0.15rem; }
+  .agent-toc a {
+    display: flex;
+    gap: 0.65rem;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.45rem;
+    color: var(--geem-muted);
+    font-size: 0.88rem;
+    text-decoration: none;
+  }
+  .agent-toc a:hover,
+  .agent-toc a:focus-visible { color: var(--geem-navy-900); background: color-mix(in oklab, var(--geem-sky) 9%, transparent); }
+  .agent-toc a span { color: var(--geem-blue); font-variant-numeric: tabular-nums; }
+
+  .agent-article { min-inline-size: 0; }
+  .agent-section { scroll-margin-top: 6rem; padding-block: 1rem clamp(3.5rem, 7vw, 6rem); }
+  .agent-section + .agent-section { border-top: 1px solid var(--geem-border); padding-block-start: clamp(3.5rem, 7vw, 5rem); }
+  .agent-section > header { max-inline-size: 46rem; margin-block-end: 2rem; }
+  .agent-section h2 {
+    margin-block: 0.6rem 0.85rem;
+    color: var(--geem-navy-950);
+    font-size: clamp(1.8rem, 4vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+  }
+  .agent-section > header > p:last-child,
+  .agent-subsection p,
+  .agent-sdk-grid > section > p { color: var(--geem-muted); }
+
+  .agent-facts,
+  .agent-feature-grid { display: grid; gap: 0.8rem; }
+  .agent-facts div,
+  .agent-feature-grid article {
+    border: 1px solid var(--geem-border);
+    border-radius: 1rem;
+    background: white;
+    padding: 1.15rem;
+  }
+  .agent-facts dt { color: var(--geem-blue); font-size: 1.15rem; font-weight: 700; }
+  .agent-facts dd,
+  .agent-feature-grid p { margin-block-start: 0.3rem; color: var(--geem-muted); font-size: 0.9rem; }
+
+  .agent-requirements { display: grid; gap: 0.7rem; }
+  .agent-requirements li {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.9rem;
+    border: 1px solid var(--geem-border);
+    border-radius: 0.9rem;
+    background: white;
+    padding: 0.85rem 1rem;
+  }
+  .agent-requirements li > span,
+  .agent-loop li > span {
+    display: grid;
+    inline-size: 2.1rem;
+    block-size: 2.1rem;
+    place-items: center;
+    border-radius: 0.65rem;
+    color: var(--geem-navy-900);
+    background: color-mix(in oklab, var(--geem-sand) 55%, white);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .agent-note,
+  .agent-warning,
+  .agent-billing-note,
+  .agent-inline-note { border-radius: 0.9rem; padding: 1rem 1.1rem; }
+  .agent-note {
+    margin-block-start: 1rem;
+    border: 1px solid color-mix(in oklab, var(--geem-blue) 28%, white);
+    background: color-mix(in oklab, var(--geem-sky) 9%, white);
+  }
+  .agent-note strong {
+    display: block;
+    margin-block-end: 0.2rem;
+    color: var(--geem-blue);
+    font-family: 'IBM Plex Sans', monospace;
+    direction: ltr;
+    text-align: start;
+  }
+  .agent-note p,
+  .agent-warning p { color: var(--geem-muted); font-size: 0.9rem; }
+
+  .agent-specs {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1rem;
+    background: white;
+  }
+  .agent-specs div { min-inline-size: 0; padding: 1rem; }
+  .agent-specs div + div { border-top: 1px solid var(--geem-border); }
+  .agent-specs dt { color: var(--geem-muted); font-size: 0.78rem; }
+  .agent-specs dd { margin-block-start: 0.35rem; }
+  .agent-specs code { overflow-wrap: anywhere; color: var(--geem-navy-900); font-size: 0.88rem; }
+  .agent-inline-note { margin-block-start: 0.8rem; background: color-mix(in oklab, var(--geem-sand) 24%, white); color: var(--geem-muted); font-size: 0.9rem; }
+
+  .agent-subsection {
+    display: grid;
+    align-items: start;
+    gap: 1.25rem;
+    margin-block-start: 2rem;
+  }
+  .agent-subsection--stack { grid-template-columns: 1fr; }
+  .agent-subsection h3,
+  .agent-sdk-grid h3,
+  .agent-feature-grid h3 {
+    margin-block-end: 0.45rem;
+    color: var(--geem-navy-900);
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .agent-code {
+    min-inline-size: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, white 9%, transparent);
+    border-radius: 0.9rem;
+    background: var(--geem-navy-950);
+    box-shadow: 0 16px 36px color-mix(in oklab, var(--geem-navy-950) 12%, transparent);
+  }
+  .agent-code__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid color-mix(in oklab, white 10%, transparent);
+    padding: 0.65rem 0.85rem;
+    color: color-mix(in oklab, white 55%, transparent);
+    font-family: 'IBM Plex Sans', monospace;
+    font-size: 0.72rem;
+  }
+  .agent-code button {
+    border: 1px solid color-mix(in oklab, white 18%, transparent);
+    border-radius: 999px;
+    padding: 0.25rem 0.65rem;
+    color: color-mix(in oklab, white 80%, transparent);
+    background: color-mix(in oklab, white 5%, transparent);
+    cursor: pointer;
+  }
+  .agent-code button:hover,
+  .agent-code button:focus-visible { background: color-mix(in oklab, white 12%, transparent); }
+  .agent-code pre {
+    max-inline-size: 100%;
+    overflow-x: auto;
+    padding: 1rem;
+    color: #d9e9f1;
+    font-family: 'IBM Plex Sans', monospace;
+    font-size: 0.76rem;
+    line-height: 1.65;
+    text-align: left;
+    tab-size: 2;
+  }
+  .agent-code--large pre { max-block-size: 36rem; }
+
+  .agent-loop {
+    display: grid;
+    gap: 0;
+    border: 1px solid var(--geem-border);
+    border-radius: 1rem;
+    background: white;
+  }
+  .agent-loop li {
+    display: grid;
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+  .agent-loop li + li { border-top: 1px solid var(--geem-border); }
+  .agent-loop h3 { color: var(--geem-navy-900); font-weight: 600; }
+  .agent-loop p { margin-block-start: 0.15rem; color: var(--geem-muted); font-size: 0.88rem; }
+  .agent-billing-note {
+    margin-block-start: 1rem;
+    border-inline-start: 3px solid var(--geem-blue);
+    background: white;
+    color: var(--geem-muted);
+    font-size: 0.9rem;
+  }
+
+  .agent-sdk-grid { display: grid; gap: 1.2rem; }
+  .agent-sdk-grid > section { min-inline-size: 0; display: flex; flex-direction: column; }
+  .agent-sdk-grid .agent-code { margin-block-start: 1rem; }
+  .agent-feature-grid article { border-block-start: 3px solid var(--geem-blue); }
+
+  .agent-check-list { display: grid; gap: 0.7rem; }
+  .agent-check-list li { position: relative; padding-inline-start: 1.8rem; color: var(--geem-navy-900); }
+  .agent-check-list li::before {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0.38rem;
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    place-items: center;
+    border-radius: 999px;
+    color: white;
+    background: var(--geem-blue);
+    content: '✓';
+    font-size: 0.65rem;
+  }
+  .agent-warning {
+    margin-block-start: 1.5rem;
+    border: 1px solid color-mix(in oklab, #be762c 30%, white);
+    background: color-mix(in oklab, #f7d5a9 25%, white);
+  }
+  .agent-warning strong { display: block; margin-block-end: 0.25rem; color: #7e481d; }
+
+  .agent-contract-grid {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1rem;
+    background: white;
+  }
+  .agent-contract-grid section { padding: 1.2rem; }
+  .agent-contract-grid section + section { border-top: 1px solid var(--geem-border); }
+  .agent-contract-grid h3 { margin-block-end: 0.8rem; color: #24734e; font-weight: 700; }
+  .agent-contract-grid__rejected h3 { color: #9a493d; }
+  .agent-contract-grid ul { display: grid; gap: 0.5rem; color: var(--geem-muted); font-size: 0.9rem; }
+  .agent-contract-grid li { position: relative; padding-inline-start: 1.1rem; }
+  .agent-contract-grid li::before { position: absolute; inset-inline-start: 0; content: '•'; color: currentColor; }
+
+  .agent-cta {
+    padding-block: clamp(3.5rem, 7vw, 6rem);
+    color: white;
+    background:
+      radial-gradient(circle at 85% 0%, color-mix(in oklab, var(--geem-sky) 20%, transparent), transparent 38%),
+      var(--geem-navy-900);
+  }
+  .agent-cta__inner { display: grid; align-items: center; gap: 2rem; }
+  .agent-cta h2 {
+    max-inline-size: 22ch;
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+  .agent-cta p { max-inline-size: 42rem; margin-block-start: 0.65rem; color: color-mix(in oklab, white 68%, transparent); }
+  .agent-cta__inner > div:last-child { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+
+  @media (min-width: 48rem) {
+    .agent-facts,
+    .agent-feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .agent-specs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .agent-specs div:nth-child(2) { border-top: 0; }
+    .agent-specs div:nth-child(even) { border-inline-start: 1px solid var(--geem-border); }
+    .agent-subsection { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+    .agent-subsection--stack { grid-template-columns: 1fr; }
+    .agent-contract-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .agent-contract-grid section + section { border-top: 0; border-inline-start: 1px solid var(--geem-border); }
+    .agent-cta__inner { grid-template-columns: minmax(0, 1fr) auto; }
+  }
+
+  @media (min-width: 64rem) {
+    .agent-hero__grid { grid-template-columns: minmax(0, 1.08fr) minmax(22rem, 0.92fr); }
+    .agent-docs-shell { grid-template-columns: 14rem minmax(0, 1fr); }
+    .agent-toc { position: sticky; top: 6rem; }
+    .agent-sdk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 63.999rem) {
+    .agent-toc { overflow-x: auto; padding-block-end: 0.5rem; }
+    .agent-toc nav { min-inline-size: max-content; border-inline-start: 0; padding-inline-start: 0; }
+    .agent-toc p { margin-block-end: 0.45rem; }
+    .agent-toc ol { display: flex; gap: 0.35rem; }
+    .agent-toc a { border: 1px solid var(--geem-border); border-radius: 999px; background: white; padding: 0.45rem 0.75rem; }
+    .agent-toc a span { display: none; }
+  }
+</style>

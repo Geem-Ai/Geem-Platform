@@ -10,14 +10,14 @@ import type { AppAccessStatus, CatalogApp } from '@/services/api/apps';
 import { useAgentsAiUsage } from '../hooks/useAppsQueries';
 import { localizeAppPlanName } from '../lib/billing-label';
 
-const DEFAULT_CLIENT_AGENT_DOCS_URL =
-  'https://github.com/Geem-Ai/Geem-Platform/blob/main/docs/integrations/client-agent-api.md';
+const DEFAULT_MARKETING_URL = 'https://geem.ai';
 
-function clientAgentDocsUrl(): string {
-  return (
-    import.meta.env.VITE_CLIENT_AGENT_DOCS_URL?.trim() ||
-    DEFAULT_CLIENT_AGENT_DOCS_URL
-  );
+function clientAgentDocsUrl(language: string): string {
+  const baseUrl =
+    import.meta.env.VITE_MARKETING_URL?.trim().replace(/\/+$/, '') ||
+    DEFAULT_MARKETING_URL;
+  const locale = language.toLowerCase().startsWith('ar') ? 'ar' : 'en';
+  return `${baseUrl}/${locale}/agent-ai`;
 }
 
 function formatDateTime(value: string | null | undefined, locale: string): string {
@@ -266,7 +266,11 @@ export function AgentsAiPanel({ app }: { app: CatalogApp }) {
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <a href={clientAgentDocsUrl()} target="_blank" rel="noreferrer">
+            <a
+              href={clientAgentDocsUrl(i18n.language)}
+              target="_blank"
+              rel="noreferrer"
+            >
               <ExternalLink className="size-3.5" aria-hidden />
               {t('apps.agentsAi.documentation')}
             </a>

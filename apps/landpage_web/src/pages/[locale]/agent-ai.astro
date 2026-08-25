@@ -1,0 +1,27 @@
+---
+import MarketingLayout from '../../layouts/MarketingLayout.astro';
+import AgentAiPage from '../../components/sections/AgentAiPage.astro';
+import { getAgentAiCopy } from '../../content/agent-ai';
+import { getSiteCopy } from '../../content/site';
+import { isLocale, localeStaticPaths } from '../../lib/i18n';
+
+export function getStaticPaths() {
+  return localeStaticPaths();
+}
+
+const raw = Astro.params.locale;
+if (!isLocale(raw)) return Astro.redirect('/ar/agent-ai', 302);
+const locale = raw;
+const siteCopy = getSiteCopy(locale);
+const copy = getAgentAiCopy(locale);
+---
+
+<MarketingLayout
+  locale={locale}
+  copy={siteCopy}
+  title={copy.meta.title}
+  description={copy.meta.description}
+  path="agent-ai"
+>
+  <AgentAiPage locale={locale} copy={copy} />
+</MarketingLayout>

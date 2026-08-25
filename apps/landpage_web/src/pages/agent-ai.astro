@@ -1,0 +1,25 @@
+---
+import { defaultLocale, dirFor } from '../lib/i18n';
+import { getSiteConfig } from '../lib/site';
+
+const target = `/${defaultLocale}/agent-ai`;
+const canonical = `${getSiteConfig().siteUrl}${target}`;
+---
+
+<!doctype html>
+<html lang={defaultLocale} dir={dirFor(defaultLocale)}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,follow" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={canonical} />
+    <title>Agents AI | Geem</title>
+  </head>
+  <body>
+    <p><a href={target}>Agents AI documentation</a></p>
+    <script is:inline define:vars={{ target }}>
+      window.location.replace(target);
+    </script>
+  </body>
+</html>

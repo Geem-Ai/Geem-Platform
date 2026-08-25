@@ -19,6 +19,7 @@ const madeIn = locale === 'ar' ? company.madeInMadinahAr : company.madeInMadinah
 function resolveHref(href: string) {
   if (href === 'login') return loginUrl;
   if (href === 'security') return localizedPath(locale, 'security');
+  if (href === 'agent-ai') return localizedPath(locale, 'agent-ai');
   if (href === 'about') return localizedPath(locale, 'about');
   if (href === 'contact') return localizedPath(locale, 'contact');
   if (href === 'privacy') return localizedPath(locale, 'privacy');

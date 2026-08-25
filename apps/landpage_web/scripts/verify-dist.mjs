@@ -6,7 +6,7 @@ const failures = [];
 const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://geem.ai').replace(/\/$/, '');
 const socialImageName = 'og-geem.jpg';
 const socialImageUrl = `${siteUrl}/${socialImageName}`;
-const localizedPages = ['', 'about', 'contact', 'pdpl', 'privacy', 'security', 'terms'];
+const localizedPages = ['', 'about', 'agent-ai', 'contact', 'pdpl', 'privacy', 'security', 'terms'];
 const imageAlt = {
   ar: 'هوية جيم البصرية مع خبير ذكاء اصطناعي متصل بمعرفة المنشأة وأنظمتها فوق أفق سعودي',
   en: 'Geem AI Expert connected to an organization’s knowledge and systems over a Saudi skyline',
@@ -60,6 +60,7 @@ function jpegDimensions(path) {
 assert(existsSync(join(dist, 'index.html')), 'dist/index.html missing');
 assert(existsSync(join(dist, 'ar/index.html')), 'dist/ar/index.html missing');
 assert(existsSync(join(dist, 'en/index.html')), 'dist/en/index.html missing');
+assert(existsSync(join(dist, 'agent-ai/index.html')), 'dist/agent-ai/index.html missing');
 assert(existsSync(join(dist, 'robots.txt')), 'robots.txt missing');
 assert(existsSync(join(dist, 'sitemap-index.xml')), 'sitemap-index.xml missing');
 assert(existsSync(join(dist, socialImageName)), `${socialImageName} missing`);
@@ -74,6 +75,14 @@ assert(
 
 const ar = readFileSync(join(dist, 'ar/index.html'), 'utf8');
 const en = readFileSync(join(dist, 'en/index.html'), 'utf8');
+const agentAiRedirect = readFileSync(join(dist, 'agent-ai/index.html'), 'utf8');
+
+assert(agentAiRedirect.includes('/ar/agent-ai'), 'root agent-ai should redirect to /ar/agent-ai');
+assert(agentAiRedirect.includes('name="robots" content="noindex,follow"'), 'root agent-ai should be noindex');
+assert(
+  agentAiRedirect.includes(`<link rel="canonical" href="${siteUrl}/ar/agent-ai">`),
+  'root agent-ai should canonicalize to /ar/agent-ai',
+);
 
 assert(ar.includes('lang="ar"'), 'Arabic lang');
 assert(ar.includes('dir="rtl"'), 'Arabic dir=rtl');
@@ -140,6 +149,15 @@ for (const locale of ['ar', 'en']) {
   }
 }
 
+for (const locale of ['ar', 'en']) {
+  const agentAi = readFileSync(join(dist, locale, 'agent-ai', 'index.html'), 'utf8');
+  assert(agentAi.includes('/api/v1/agent'), `${locale}/agent-ai: Agent base URL`);
+  assert(agentAi.includes('dalseen/geem-1.0'), `${locale}/agent-ai: public model`);
+  assert(agentAi.includes('agent:write'), `${locale}/agent-ai: required scope`);
+  assert(agentAi.includes('X-Geem-Expert-Id'), `${locale}/agent-ai: Expert header`);
+  assert(agentAi.includes('openai-compatible'), `${locale}/agent-ai: Laravel provider`);
+}
+
 assert(ar.includes('خبراء') || ar.includes('خبير'), 'AR homepage mentions Experts');
 assert(ar.includes('مستندات') || ar.includes('معرفة'), 'AR homepage mentions documents/knowledge');
 assert(ar.includes('WhatsApp') || ar.includes('واتساب'), 'AR homepage mentions WhatsApp');
@@ -167,6 +185,7 @@ if (existsSync(sitemapPath)) {
   const sitemap = readFileSync(sitemapPath, 'utf8');
   assert(occurrences(sitemap, `<loc>${siteUrl}</loc>`) === 0, 'sitemap should exclude redirecting root URL');
   assert(occurrences(sitemap, `<loc>${siteUrl}/</loc>`) === 0, 'sitemap should exclude redirecting root URL with slash');
+  assert(occurrences(sitemap, `<loc>${siteUrl}/agent-ai</loc>`) === 0, 'sitemap should exclude redirecting agent-ai URL');
   for (const locale of ['ar', 'en']) {
     for (const page of localizedPages) {
       const suffix = page ? `/${page}` : '';

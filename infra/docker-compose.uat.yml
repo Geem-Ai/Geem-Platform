@@ -54,6 +54,7 @@ services:
       VITE_ROOT_DOMAIN: geem.ai
       VITE_APP_ENV: local
       VITE_TUNNEL_HOST: app-uat.geem.ai
+      VITE_MARKETING_URL: https://landpage-uat.geem.ai
 
   landpage_web:
     environment:

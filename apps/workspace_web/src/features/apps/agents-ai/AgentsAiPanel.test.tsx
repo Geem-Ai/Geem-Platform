@@ -137,6 +137,9 @@ describe('AgentsAiPanel', () => {
     );
     expect(
       screen.getByRole('link', { name: 'Integrator documentation' }),
+    ).toHaveAttribute('href', 'https://geem.ai/en/agent-ai');
+    expect(
+      screen.getByRole('link', { name: 'Integrator documentation' }),
     ).toHaveAttribute('target', '_blank');
   });
 
@@ -175,6 +178,9 @@ describe('AgentsAiPanel', () => {
     renderPanel();
     expect(screen.getByText(i18n.t('apps.agentsAi.usageTitle'))).toBeInTheDocument();
     expect(screen.getByText('dalseen/geem-1.0')).toHaveAttribute('dir', 'ltr');
+    expect(
+      screen.getByRole('link', { name: i18n.t('apps.agentsAi.documentation') }),
+    ).toHaveAttribute('href', 'https://geem.ai/ar/agent-ai');
   });
 
   it('does not call the published usage surface for a coming-soon catalog row', () => {

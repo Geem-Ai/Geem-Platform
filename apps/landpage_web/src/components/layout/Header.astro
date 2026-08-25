@@ -26,7 +26,10 @@ function navHref(item: SiteCopy['nav']['items'][number]) {
 }
 
 function isCurrentNav(item: SiteCopy['nav']['items'][number]) {
-  return item.href === 'security' && pathname.replace(/\/$/, '') === localizedPath(locale, 'security');
+  const current = pathname.replace(/\/$/, '');
+  if (item.href === 'security') return current === localizedPath(locale, 'security');
+  if (item.href === 'api') return current === localizedPath(locale, 'agent-ai');
+  return false;
 }
 ---
 

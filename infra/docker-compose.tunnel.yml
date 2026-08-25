@@ -45,6 +45,7 @@ services:
         VITE_API_URL: https://api.geem.ai
         VITE_ROOT_DOMAIN: geem.ai
         VITE_APP_ENV: production
+        VITE_MARKETING_URL: https://geem.ai
     environment: !reset {}
     env_file: !reset []
     volumes: !reset []

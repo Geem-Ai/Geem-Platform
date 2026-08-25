@@ -24,7 +24,11 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-      filter: (page) => page !== siteUrl && page !== `${siteUrl}/`,
+      filter: (page) =>
+        page !== siteUrl &&
+        page !== `${siteUrl}/` &&
+        page !== `${siteUrl}/agent-ai` &&
+        page !== `${siteUrl}/agent-ai/`,
       i18n: {
         defaultLocale: 'ar',
         locales: {
