@@ -1,6 +1,6 @@
 ---
 name: Multi-Tenant SaaS Plan
-overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp. **Transformation status: COMPLETE (Phases 0–12, incl. Platform Admin 12H release gate).**"
+overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp. **Core transformation status: COMPLETE (Phases 0–12, incl. Platform Admin 12H release gate); Phase 13 paid MCP Connectors App is pending; Phase 14 paid Agents AI App/client-owned Agent API is pending.**"
 todos:
   - id: phase-0
     content: "Phase 0: Create apps/workspace_web (keep apps/web); Geem branding assets; backend foundations + Metronic prep"
@@ -24,7 +24,7 @@ todos:
     content: "Phase 6: 6A PASS + 6B PASS (Workspace billing UI: subscription, credits, history, payment return). Do not start Phase 7 until requested."
     status: completed
   - id: phase-7
-    content: "Phase 7: 7A PASS + 7B PASS + 7C PASS (API Keys + OpenAI-compatible Chat Completions + API Usage UI). Do not start Phase 8 until requested."
+    content: "Phase 7: 7A PASS + 7B PASS + 7C PASS (API Keys + OpenAI-shaped answer-mode Chat Completions + API Usage UI). Do not start Phase 8 until requested."
     status: completed
   - id: phase-8
     content: "Phase 8: Workspace Storage inventory (/storage) — paginated file list, download, full MinIO/Qdrant/RAG purge on delete."
@@ -44,6 +44,12 @@ todos:
   - id: phase-12
     content: "Phase 12: COMPLETE — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS + 12G PASS + 12H PASS (Platform Admin security/E2E/RTL release gate)."
     status: completed
+  - id: phase-13
+    content: "Phase 13: PENDING — paid MCP Connectors App Store subscription with public-HTTPS remote MCP client/host, supported auth, discovery/grants, isolated egress, current single/compound runtime App gate, atomic tool quota, Geem-owned loops, write approval safety, and exact default-off Chat Widget/WhatsApp surface bindings in 13E."
+    status: pending
+  - id: phase-14
+    content: "Phase 14: PENDING — paid Agents AI non-connector App Store subscription at `/api/v1/agent`; current runtime App gate with one access data SELECT after a lightweight fence statement, atomic daily request quota, exact OpenAI client-owned tool protocol, stateless replay, instruction isolation, streaming, and real SDK tests."
+    status: pending
 isProject: false
 ---
 
@@ -195,7 +201,10 @@ billing/           # plans, subscriptions, purchases, gateway abstraction
 entitlements/      # quota definitions + resolution
 usage/             # credit ledger, period counters, metering
 api_keys/          # workspace API credentials
-apps_catalog/      # App Store: catalog, plans, licenses/subscriptions, installations (see §17)
+apps_catalog/      # App Store: catalog, plans, licenses/subscriptions, installations, single-data-SELECT runtime paid access after a lightweight fence statement (see §17)
+connectors/         # provider/server connections, encrypted credentials, OAuth, sync/webhooks; Phase 13 mcp_remote lifecycle
+mcp/                # remote tool inventory, Expert grants, invocation log, approval state, tool-loop policy
+egress/             # internal mTLS gateway contract/client; tenant-derived network access boundary
 platform_admin/    # platform admin APIs
 audit/             # audit log writer
 common/            # tenancy context, authz, idempotency, soft-delete mixins
@@ -596,6 +605,12 @@ erDiagram
   workspaces ||--o{ app_licenses : owns
   workspaces ||--o{ app_subscriptions : subscribes
   app_installations ||--o{ app_connections : connects
+  app_connections ||--o{ mcp_server_tools : advertises
+  mcp_server_tools ||--o{ mcp_tool_grants : granted_as
+  experts ||--o{ mcp_tool_grants : may_call
+  mcp_tool_grants ||--o{ mcp_tool_invocations : records
+  conversations ||--o{ mcp_pending_tool_calls : awaits
+  mcp_tool_grants ||--o{ mcp_pending_tool_calls : authorizes
 ```
 
 **Identity / tenancy**
@@ -624,6 +639,10 @@ erDiagram
 - api_keys (hashed secrets, scopes, revocation)
 - **App Store (Phase 9):** `app_categories`, `apps`, `app_plans`, `app_plan_entitlements`, `app_installations`, `app_licenses`, `app_subscriptions` — not boolean feature flags; price lives on `app_plans` (no flat `app_prices` table)
 - **Connectors (Phase 9C+):** `app_connections`, `connector_sync_runs`, `connector_items`, `connector_webhook_events`
+- **Remote MCP tools (Phase 13):** `mcp_server_tools`, `mcp_tool_grants`, `mcp_tool_invocations`, `mcp_pending_tool_calls`, `mcp_tool_surface_bindings`, `mcp_surface_deliveries`; every tenant-owned row carries `workspace_id`
+- Phase 13 migrations enforce exact relational integrity in addition to repository filtering: installation↔connection share a Workspace; each tool/grant names the exact connection; grants target only Workspace-owned Experts; `(conversation_id, message_id)` proves the message belongs to that exact Workspace conversation; invocation/approval rows follow their exact grant/tool/connection chain; each 13E external row proves one same-Workspace/same-Expert WidgetInstance or exact WhatsApp/OpenWA ChannelBinding + conversation binding, with mutually exclusive real-user/API/widget/channel attribution and no fabricated Geem user
+- Phase 13 starts after the current Alembic head (`0035` at this review); its first allocation is `0036`, and existing `0034`/`0035` are never reused
+- Phase 13 allocation continues through `0040` for exact Widget/WhatsApp surface bindings, pinned source config/principal epochs, idempotent Widget turn receipts, external pending/invocation attribution, and durable claim/lease/reconciliation delivery state; `0036`–`0040` remain immutable per slice
 - audit_logs
 - evolve `usage_events` with workspace/user/expert/api_key attribution; `cost_metadata` stores family, multiplier, raw vs billed tokens
 
@@ -650,7 +669,7 @@ Chat/API → Expert → system_instructions + expert knowledge set
 
 **Formats:** PDF + TXT + Markdown extractors; pluggable parser per mime.
 
-**MCP:** deferred; future tools wrap Expert-scoped `RagService`.
+**Tool surfaces:** Geem-dispatched remote MCP tools are deferred to the separate Phase 13 MCP plan; the remote server executes them. Caller-supplied OpenAI function tools are different: Phase 14 passes their schemas to the LLM, returns exact `tool_calls`, accepts matching tool results, and never dispatches or executes those client tools.
 
 ---
 
@@ -696,7 +715,22 @@ Atomic consume uses `request_id` idempotency (`ai_usage_reservations`) with `SEL
 
 ## 15–16. API auth/metering and Chat integration
 
-**Public API:** OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` + `GET /api/v1/models/{id}` with workspace API keys (hashed), scopes, rate limits on completions, Expert via `X-Geem-Expert-Id` (not `model`), shared `ChatTurnExecutor`. No public Conversations/Messages.
+**Public answer API (Phase 7, complete):** OpenAI-shaped answer mode at `POST /api/v1/chat/completions` + `GET /api/v1/models` + `GET /api/v1/models/{id}` with workspace API keys (hashed), scopes, rate limits on completions, Expert via `X-Geem-Expert-Id` (not `model`), and shared `ChatTurnExecutor`. It returns a final answer and intentionally ignores caller-supplied OpenAI tool schemas/results; Phase 13 may select a separate Geem-owned loop for active, surface-authorized MCP grants while keeping this endpoint answer-only. No public Conversations/Messages.
+
+**Client agent API (Phase 14, pending):** Paid non-connector App Store product **Agents AI**
+(`agents-ai`) with a separate OpenAI-compatible base `/api/v1/agent`, exposing
+`POST /api/v1/agent/chat/completions` and agent-scoped Models routes. Every route requires current
+published App + active installation + active subscription access in addition to `agent:write`; each
+admitted completion consumes the plan's typed `agent_requests_daily` unit, while Models consumes
+none. Expert remains selected by `X-Geem-Expert-Id`; keep `model` as the public Geem model identifier
+reserved for later model selection. The client owns tool execution and resends the bounded
+conversation transcript plus tools, controls, and client instructions on every round. Geem preserves
+assistant/tool roles, call IDs, types, names, ordering, and string argument protocol (without
+byte-comparing SDK-reserialized JSON across requests), requires every parallel call to resolve
+exactly once before inference, and demotes caller `system`/`developer` text to one bounded synthetic
+user-role block beneath the sole Geem/Expert system policy. A separate `AgentCompletionService`
+keeps Phase 7 behavior/contract unchanged, verified exactly under deterministic fixtures. No public
+Conversation/Message persistence is introduced.
 
 **Internal chat:** Metronic AI Chat UX + persisted conversations + Expert selection + existing Geem named SSE; same `ChatTurnExecutor` / `ExpertQueryService` engine, different wire format.
 
@@ -715,11 +749,11 @@ UI uses AI Concept visual language (cards/dialogs/drawers) — not another Metro
 | **Catalog app** (`apps`) | Global listing (slug, name, category, `billing_type`, `status`, optional `connector_key` / `connector_kind`) |
 | **App plan** (`app_plans`) | Priced SKU for one catalog app (`code`, `price_amount`, `currency`, `billing_interval`, entitlements) |
 | **Installation** (`app_installations`) | Workspace opted into the app (`active` / `suspended` / `uninstalled`). Soft lifecycle — one row per `(workspace, app)` |
-| **Connection** (`app_connections`) | Provider account linked under an installation (OAuth/session). Distinct from install |
+| **Connection** (`app_connections`) | Provider account or tenant-configured remote endpoint linked under an installation; supported per-connection credentials/OAuth are encrypted. Distinct from install |
 | **License / subscription** | Commercial entitlement records — **separate** from installation and from Workspace Geem `subscriptions` |
 
 ```text
-Browse catalog → (pay if required) → Install → Connect provider → Use (Expert sources / channel)
+Browse catalog → (pay if required) → Install → Connect provider/server → Use (Expert sources / channel / tools)
 ```
 
 ### Billing types (`apps.billing_type`) — locked
@@ -735,6 +769,9 @@ Exactly three commercial models. Do not invent a fourth without a plan revision.
 **Rules:**
 - Free apps: `POST …/install` creates/reactivates installation; no checkout.
 - Paid apps: checkout + ClickPay/Noop return (same Phase 6 gateway path) **before** install is allowed; `AppAccessService` is the gate — connectors and UI must not bypass it.
+- Existing paid fulfillment may create/reactivate the installation after verified payment. That UX
+  shortcut does not merge the records: runtime still requires both current commercial access and an
+  active installation, and uninstall independently denies use.
 - Coming-soon / draft / disabled catalog rows: browse may show them; install and checkout fail closed.
 - Currency v1: **SAR** (aligned with Workspace billing / ClickPay).
 - **No card-on-file auto-renew** in Phase 9 — subscription renewal is an explicit `POST …/renew` hosted-page checkout (manual renewal).
@@ -749,6 +786,35 @@ Exactly three commercial models. Do not invent a fourth without a plan revision.
 - `app_plan_entitlements` — key/value JSONB per plan (e.g. `connections: 1`). Resolved via `AppEntitlementService` — **not** Workspace `plan_entitlements`.
 - Do not hardcode `if app.slug == "…"` for limits; read entitlement keys.
 - WhatsApp / OpenWA: seed as `subscription` + `published` with monthly SAR plans `line` / `desk` / `ops` (`connections` 1 / 3 / 10).
+
+**Pending paid extension products (Phases 13–14):** these are independent App subscriptions; buying
+one never grants the other and neither changes Workspace AI-token/RPM entitlements.
+
+| App | Catalog identity | Monthly plans | Typed App entitlements | Publish gate |
+|-----|------------------|---------------|------------------------|--------------|
+| **MCP Connectors** | `mcp-connectors`; `automation`; `mcp_remote`; `tool_source` | `mcp-starter`, `mcp-team`, `mcp-scale` | `connections`, `tool_calls_daily` | Phase 13E full paid E2E + signed prices/limits |
+| **Agents AI** | `agents-ai`; `automation`; non-connector | `agents-starter`, `agents-team`, `agents-scale` | `agent_requests_daily` | Phase 14C full paid E2E + signed prices/limits |
+
+Both seed as `coming_soon`; every active SKU must have signed monthly SAR `price_amount`, positive
+typed limits, one default, and stable sort order before the App becomes `published`. Launch checkout
+selects a tier and manual renewal keeps it. The current shared commerce contract does not promise
+self-service upgrade/downgrade; Platform Admin may use its existing grant/assignment controls until
+an explicit plan-change checkout is designed.
+
+There is no circular "E2E before publish / checkout only after publish" gate. Early slices seed only
+the `coming_soon` App identity and typed-key catalog; they do not create zero/fake active production
+SKUs. Slice tests use an isolated test/staging fixture that is explicitly `published` with non-
+production plan values and active commercial/install rows. At each release slice, commercial
+sign-off first supplies the real `PlanSpec`s while production remains `coming_soon`; an isolated
+release-candidate catalog is published and passes hosted checkout/fulfillment/renewal/runtime E2E;
+only then does the validated production promotion set `published`.
+
+Extend the shared publish validator for these two products rather than relying on the generic "one
+priced plan exists" rule. Before promotion it verifies the exact launch plan-code set, all active
+SKUs' positive signed SAR monthly prices, exactly one default, stable sort order, every required
+positive-integer typed entitlement, and operational availability (`mcp_remote` registered/configured
+or `CLIENT_AGENT_API_ENABLED=true`). Missing data leaves the App `coming_soon`; neither seed
+reconciliation nor Platform Admin can bypass the product-specific validator.
 
 ### Catalog status (`apps.status`)
 
@@ -765,15 +831,78 @@ Categories (`app_categories`): knowledge, communication, productivity, analytics
 
 Authoritative statuses returned to API/UI: `not_entitled` | `entitled_not_installed` | `active` | `expired` | `unavailable`.
 
-Action flags (role-aware): `can_purchase`, `can_renew`, `can_install`, `can_uninstall`. Members browse; **owner/admin** (`MANAGE_APPS`) mutate install/checkout/renew/connect.
+Action flags are permission-aware: `APPS_VIEW` browses, `APPS_MANAGE` installs/purchases, and `APPS_CONNECT` manages provider/server connections. Owner/admin receive these by seeded default; dynamic Workspace roles remain authoritative.
+
+### Runtime paid-App authorization — locked hot path
+
+Runtime use of a paid App is authorized only by
+`AppAccessService.require_runtime_active(workspace_id, app_slug, entitlement_keys=...)`. Phase 13E
+adds `require_runtime_active_set(workspace_id, requirements_by_app_slug=...)`; the singular method is
+a one-item wrapper. Each protected operation performs one fresh, read-only SQLAlchemy Core/scalar
+PostgreSQL decision over a non-deleted active tenant Workspace and every required `published` App,
+active installation, matching active license/subscription, and subscription
+`[current_period_start, current_period_end)` using database
+statement time captured once with `statement_timestamp()` (never transaction-start
+`CURRENT_TIMESTAMP`). The selected commercial row and plan must name the same App:
+`app_plans.id=app_(license|subscription).app_plan_id AND app_plans.app_id=apps.id`.
+`AppPlan.is_active` controls new sale/selection; deactivating a plan does not silently revoke existing
+subscribers. The authorization read bypasses stale ORM identity-map state and never writes expiry
+normalization.
+
+The same purpose-built indexed SELECT joins/aggregates only the requested Apps and typed App
+entitlement rows and returns one compact snapshot/map: captured statement time, IDs/status, plan code, period end,
+and validated limits—no
+permissions, URLs, credentials, or tenant content. Launch uses no cross-request cached `active`
+decision or cached plan limits, so uninstall, suspension, revocation, unpublish, natural expiry, and
+entitlement reduction take effect on the next authorization check. Database failure or a missing,
+malformed, or non-positive required limit fails closed before provider/egress work with retryable
+`APP_RUNTIME_ACCESS_UNAVAILABLE` where appropriate.
+
+Hot-path acceptance is structural, not wishful caching: one access/entitlement **data SELECT**, no
+second `AppEntitlementService` resolve, reviewed indexes/`EXPLAIN`, latency/query-count metrics, and
+representative p95 at or below 20 ms. Agents AI runs it exactly once and reuses the result only
+inside that request when an authenticated/scoped/operational `/api/v1/agent/*` request reaches the
+paid gate; earlier rejects execute zero access SELECTs. MCP runs it fresh before every discovery,
+dispatch, and approval resume and never memoizes across model iterations or a human pause. A Widget/
+WhatsApp MCP call supplies both `mcp-connectors` and the originating `chat-widget`/`whatsapp` App;
+any source without an eligible grant/exact binding performs no MCP App lookup. A later cache needs a separately reviewed version/fence protocol and
+measured justification.
+
+For an operation that will start provider/egress work or consume an App counter, the access SELECT
+and quota receipt/counter update form one short **admission transaction** explicitly pinned and
+asserted as PostgreSQL `READ COMMITTED` before any statement; never rely on an unchecked server
+default. Before that SELECT, runtime paths use one preliminary statement to acquire transaction-
+scoped shared advisory fences from stable keys known before authorization, in fixed lexically sorted
+App-slugs → Workspace → matching lexically sorted Workspace+App → sorted exact external-surface-
+target-key order. Single-App Agent/MCP paths have one slug and no surface key; Widget MCP paths add
+the instance key, while WhatsApp adds its OpenWA connection + ChannelBinding keys.
+Restrictive plan/entitlement mutations take the App-level exclusive fence before writing; restrictive
+App/Workspace/install/subscription mutations take the matching exclusive fences in the same order.
+No selected-plan fence is derived within the access statement: its snapshot could predate a lock
+wait, while the App fence already serializes every restrictive plan/entitlement change. Thus a paid
+gate is one access/entitlement data SELECT plus the lightweight fence statement where protected
+admission requires it, not one total DB roundtrip. `READ COMMITTED` ensures that data SELECT receives
+a new post-wait statement snapshot; an isolation mismatch fails readiness/admission closed instead
+of running this protocol under `REPEATABLE READ`.
+MCP additionally takes deterministic shared row locks over its current MCP/originating-App
+connections, tool, grant, exact surface binding, Widget instance/conversation binding or OpenWA
+channel/conversation binding, conversation/message, and invocation chain. Surface revoke/rebind,
+Widget origin/Expert/state changes, and OpenWA account/session/binding/policy changes take the target
+exclusive fence plus conflicting row locks and make affected bindings inert before commit. The
+transaction captures one
+`statement_timestamp()` for access and UTC-period selection, validates current state/limits, writes
+the idempotent admission, and commits before any external I/O; shared locks do not serialize normal
+requests with one another. That commit is the cutoff: an already admitted operation may finish, but
+after a restrictive mutation's deny commit, no new admission can pass. Never hold a database lock or
+transaction open across model, gateway, OAuth, or other network I/O.
 
 ### Install vs connect vs Expert use
 
 | Layer | Table / surface | Notes |
 |-------|-----------------|-------|
 | Install | `app_installations` | Workspace enables the app |
-| Connect | `app_connections` | OAuth/session credentials encrypted; counts toward `connections` entitlement |
-| Use | Expert connector-sources / channel | Knowledge apps feed Document ingest; channel apps (9F) bind conversations |
+| Connect | `app_connections` | Provider/session/remote-server credentials encrypted; counts toward `connections` entitlement |
+| Use | Expert connector-sources / channel / MCP tool grants | Knowledge apps ingest documents; channels bind conversations; Phase 13 tools bind explicit approved grants to Experts |
 
 Encrypted blobs (`config_encrypted`, connection credentials, sync state) **never** appear in API DTOs.
 
@@ -783,8 +912,18 @@ Encrypted blobs (`config_encrypted`, connection credentials, sync state) **never
 |------------------|------|-------|
 | `knowledge_source` | Pick files → Document / MinIO / Qdrant | 9D Drive, 9E/9E.1 OneDrive |
 | `channel` | Messaging surface ↔ Expert | 9F OpenWA |
+| `tool_source` | Remote MCP tools → reviewed Expert grants → Geem-owned tool loop | Phase 13 |
 
 Non-connector catalog apps are allowed later (tooling/utilities) with `connector_key` null — still use the same install + billing model.
+
+Phase 13 adds one generic remote MCP Connector catalog app (`connector_key=mcp_remote`,
+`connector_kind=tool_source`). Tenant server URLs are connections under that app, not one catalog
+app or adapter per MCP vendor.
+
+Phase 14 adds the non-connector `agents-ai` catalog app. Its custom detail panel exposes plan,
+period, daily request usage, API base/model information, and links to API Keys/Experts; it must not
+fall through to a generic "integration later" placeholder. API keys and Expert flags remain separate
+configuration gates and stay stored-but-inert during expiry/uninstall.
 
 ### APIs (Phase 9 surface)
 
@@ -829,17 +968,71 @@ BillingGateway (protocol)
 
 Celery tasks carry `workspace_id`, `expert_id`, `document_id`, `actor_id`; ContextVar on workers; jobs for purge, period reset, storage recompute, reindex; keep reprocess modes with workspace authz.
 
+Phase 13 Celery tasks orchestrate scheduled MCP discovery/health only: they carry identifiers, recheck
+the active Workspace/App/connection, obtain credentials through the trusted service boundary, call
+the internal egress gateway, and persist bounded results. Synchronous Chat calls and OAuth exchanges
+use the gateway directly; decrypted credentials and raw MCP bodies never enter the Celery broker.
+This boundary governs tenant-configured MCP/OAuth targets, not existing fixed-provider connector
+adapters operating under their own reviewed endpoint policies.
+
 ---
 
 ## 20. Security and tenant isolation
 
 Argon2 passwords; JWT/session; authorized downloads / signed URLs; mandatory Qdrant filters; repository requires `workspace_id`; encrypt integration secrets; soft-delete + retention; frontend never trusted for isolation.
 
+Phase 13 tenant-configured HTTP is a separate security boundary. Outside explicit local development,
+only canonical public HTTPS targets are accepted; stdio/local-process configuration is rejected;
+DNS/IP policy blocks loopback, private, link-local, metadata, Docker-service, alternate-IP, and
+rebinding targets; every bounded redirect is revalidated and cross-origin auth is stripped. All
+MCP and OAuth discovery/registration/token/refresh traffic traverses a minimal internal mTLS egress
+gateway with no route to Postgres, application Redis, Qdrant, or MinIO. API/ordinary workers cannot
+directly fetch tenant-configured MCP/OAuth target URLs; existing fixed-provider connector adapters
+retain their separately reviewed egress policies.
+
+MCP credentials are per connection and Workspace-shared in Phase 13; the connected external account
+and sharing effect are disclosed before activation. Geem JWTs, sessions, Workspace API keys, and
+model-provider credentials are never forwarded. OAuth state is one-time and binds Workspace, actor,
+connection, redirect, PKCE verifier, canonical resource, expected issuer, scopes, and client
+registration. Secrets/raw bodies are absent from DTOs, logs, traces, audit, errors, and broker data.
+Disconnect, connection removal, App uninstall, and Workspace purge attempt supported remote
+revocation, then always clear local static/OAuth/client-registration credentials and legacy sessions
+even if revocation fails.
+
+Tool access is default-deny and revalidated immediately before every discovery, call, or resume:
+active Workspace, App access, connection/auth, compatible complete-snapshot tool, pinned definition,
+approved Geem classification, Expert grant, invocation surface config/principal/epoch, initiating
+Widget Origin where applicable, principal, and quota must all remain valid. Classification or source-
+audience/account changes atomically stale affected grants/bindings and require explicit re-review;
+a stable target ID alone never preserves authorization.
+Tool schemas/descriptions/results are untrusted; remote `$ref` and resource dereferencing are
+forbidden; arguments/results are schema-checked and bounded. Even read-only calls send arguments to
+an external service. SDK/HTTP automatic `tools/call` retries are disabled; a write never follows a
+3xx, and any redirect/transport ambiguity after dispatch becomes `outcome_unknown`. Workspace
+Chat binds approval to its initiating user; the answer API alone may have explicit unattended opt-in.
+Chat Widget visitors and WhatsApp senders are not Geem principals and can never approve or run an
+unattended write: an exact default-off same-Workspace/Expert surface binding, both paid Apps, and a
+current `mcp_tools.approve_external` Workspace operator are required. `write_policy=deny` omits the
+external write tool; only `workspace_operator_approval` exposes it through a pause. Widget tools
+require exact HTTPS origins, an opaque session-bound turn handle, and private/no-store stream/status
+responses. The bundled client persists a high-entropy `client_turn_id` before its first stream POST;
+one digest-keyed receipt makes token/event-loss retries return the same logical turn. WhatsApp tools
+are direct-chat only and use a freshly authorized, single-writer durable segment outbox;
+`delivery_unknown` is listed/released only by the same `mcp_tools.approve_external` permission
+through a constrained same-Workspace CAS reconciliation that never
+resends. External responses reveal final text/coarse state but no raw tool activity,
+arguments/results, citations, or internal identifiers.
+
 ---
 
 ## 21–23. Caching, rate limiting, audit
 
-Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; structured logs + `audit_logs`; keep model `usage_events` for cost (raw + billed tokens, family, multiplier).
+Redis Workspace-plan entitlement/slug/rate-limit keys; entitlement-driven API rate limits;
+structured logs + `audit_logs`; keep model `usage_events` for cost (raw + billed tokens, family,
+multiplier). Paid App runtime access and requested App-plan limits use the fresh single/compound-
+App data-SELECT §17
+path, not the Workspace entitlement cache and not a positive cross-request App-access cache. Atomic
+App usage counters/receipts are separate from authorization snapshots.
 
 ---
 
@@ -848,6 +1041,9 @@ Redis entitlement/slug/rate-limit keys; entitlement-driven API rate limits; stru
 - Backend: entitlements, ledger races, expert visibility, tenant isolation, **checkout return idempotency** (replayed return URL must not double-GRANT)
 - Frontend: auth shell, Expert flows, chat SSE, RTL smoke, role-aware nav
 - Preserve chunker/normalize unit tests; update RAG tests for expert filters
+- Phase 13 backend gate: current stateless + promised legacy MCP wire/version/session matrix; required headers, JSON/request-SSE/cancellation, initialize/session-ID/SSE-channel continuity/cleanup; complete/partial/cyclic pagination with TTL polling; duplicate tool aliases; schema/result/error and unsupported-capability handling; no-auth/restricted-static/full OAuth discovery/PKCE/resource/CIMD/pre-registration/DCR/issuer/refresh-race/runtime-reauth/step-up; SSRF/DNS-rebinding/redirect/origin matrix across every MCP/OAuth URL; write-call SDK retry disabled and redirect-after-side-effect ambiguity; mTLS egress isolation/bypass; secret absence and lifecycle teardown; exact same-Workspace/relationship constraints plus Platform Expert rejection; isolated published commercial fixture and paid checkout/fulfillment/renew/install/uninstall/revoke/unpublish/expiry/Workspace-suspend-or-delete matrix; one access/entitlement data SELECT plus its preliminary known-key fence statement, including compound MCP + Widget/WhatsApp App sets and exact surface targets in canonical lock order, explicit `READ COMMITTED` assertion/mismatch denial, exact statement-time `[period_start,period_end)` boundary, every same-App plan join, reviewed index/end-to-end latency, no stale positive, no lookup without an eligible source binding, fail-closed DB error with zero egress, and waiter-starts-before-deny-commit/source-rebind races proving the post-wait SELECT observes denial; definition/classification/principal/credential/source-epoch default-deny gates; all four Workspace/API/Widget/WhatsApp selectors; selected-model one-call/max-iteration loop; N+1 metering; idempotent N/N+1 App tool quota races/counter failure; approval concurrency/tampering/expiry lock release; commit/enqueue and pre/post-dispatch worker-crash recovery; external visitor/sender non-approval; permissioned operator approval; exact Widget origin/session/opaque-handle/no-store/binding plus first-token/pending/final disconnect and concurrent idempotent-turn receipt, and WhatsApp HMAC/dedupe/direct-chat/binding matrices; one external nonterminal turn ordering; ID-only resume jobs; durable immutable CAS/lease WhatsApp segment outbox, fresh delivery authorization, per-chat ordering, concurrent workers, and same-Workspace CAS delivery-unknown reconciliation/unblock; timeout-after-write ambiguity; product-specific publish-validator bypass; purge; default-citation and zero-binding byte identity
+- Phase 13 frontend/E2E gate: signed plan/current-period/connection/tool-usage states; permission-aware MCP management; external-account/outbound-data/public-audience disclosure; choose plan → hosted checkout/payment fulfillment → active subscription+installation → attach/authenticate → fully discover → classify/approve → bind → invoke through Workspace Chat and answer API; then exact default-off Widget + direct WhatsApp read-tool final-answer paths and external write → generic pending → authenticated Workspace-operator exact-argument approval → one dispatch → one final delivery; legacy Widget JSON/ordinary WhatsApp regression; dual-App expiry/uninstall/rebind; deny/expire/outcome-unknown/delivery-unknown; no external tool activity/citations; Workspace caches; EN/AR + RTL
+- Phase 14 contract gate: isolated published commercial fixture and paid Agents AI checkout/fulfillment/renew/install/uninstall/revoke/unpublish/expiry/Workspace-suspend-or-delete matrix; one access/entitlement data SELECT for requests reaching admission and zero for earlier rejects, plus the preliminary known-key fence statement, with explicit `READ COMMITTED` assertion/mismatch denial, exact statement-time period boundary, same-App plan join, reviewed index/end-to-end latency, no stale positive or double-resolve, fail-closed DB error with zero provider work, and waiter-starts-before-deny-commit race proving the post-wait SELECT observes denial; DB-only/no-commit/no-client-I/O AI-reserve rollback; product-specific publish-validator bypass; `agent:write` issuance and Expert-enable independence; atomic idempotent N/N+1 `agent_requests_daily`, reset/counter failure, and Models no-consumption; exact Models/non-streaming/streaming Chat Completions fixtures; complete assistant/tool call-ID state machine including parallel tools; cache-hit/miss/revision stateless replay equivalence; deterministic client-instruction privilege demotion; OpenAI-shaped errors/usage; unchanged Phase 7 behavior/contract under deterministic regression fixtures; committed exact-version real `laravel/ai` `openai-compatible` tool-loop fixtures plus an exact-locked official OpenAI SDK base-URL/header smoke test
 
 ---
 
@@ -1143,9 +1339,9 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 ### Phase 7 — API keys + public Chat API + API UI
 
-**Status:** **7A PASS + 7B PASS + 7C PASS** (workspace API keys + OpenAI-compatible public Chat Completions + Keys/Usage UI). Phase 8 Storage is complete.
+**Status:** **7A PASS + 7B PASS + 7C PASS** (workspace API keys + OpenAI-shaped answer-mode Chat Completions + Keys/Usage UI). Phase 8 Storage is complete. Caller-owned function tools are a separate pending Phase 14 contract and are not implied by this PASS.
 
-**Goal:** OpenAI-compatible public Chat Completions + Models + workspace keys; Keys/Usage pages in shell.
+**Goal:** OpenAI-shaped final-answer Chat Completions + Models + workspace keys; Keys/Usage pages in shell.
 
 **Acceptance:** Key auth, revocation, metering attribution; UI for create/revoke/copy-once; Expert selected by header, not `model`.
 
@@ -1160,14 +1356,21 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 #### 7B — Public Chat API + rate limiting + API-key metering — **PASS**
 
 - `POST /api/v1/chat/completions` authenticated only by Workspace API key (`chat:write`); Workspace derived from the key
-- Expert from `X-Geem-Expert-Id` (alias `X-Expert-Id`); `model` is echoed only and is **not** used for routing
+- Expert from `X-Geem-Expert-Id` (alias `X-Expert-Id`); request `model` is ignored for routing and the response is canonicalized to `PUBLIC_MODEL_ID`
 - `GET /api/v1/models` + `GET /api/v1/models/{id}`: same auth; ready Experts the Workspace can see (`list_for_workspace` + `status=ready`); 404 if not usable; no instructions/`rag_config`. Header not required on Models. Chat still enforces full `USE` (lifecycle + knowledge)
 - OpenAI Chat Completions JSON + concatenative SSE (`data: {...}` / `data: [DONE]`); Geem `citations` extra top-level field; Geem `code` inside OpenAI `error.code` on these paths only (session APIs unchanged). `RequestValidationError` on these paths is also OpenAI-shaped (400)
-- Tools/temperature/vision/function-calling are ignored (`extra="ignore"`); client `system` messages ignored (server-owned Expert instructions)
+- Caller-supplied tools/temperature/vision/function-calling are ignored (`extra="ignore"`); client `system` messages ignored (server-owned Expert instructions)
 - Stateless Expert turn (no Conversation/Message); shared `ChatTurnExecutor` + `ExpertQueryService`
 - Entitlement key `api_requests_per_minute` (Redis atomic Workspace + API-key buckets) applies to **completions**, not GET `/models`
 - Phase 5 AI token pool reused; reserve before SSE; `usage_events.api_key_id` attribution (`user_id` null)
 - **Not in 7B:** API Keys/Usage UI (7C), public conversations, SDKs, per-key quotas, embeddings/images/Assistants, `/v1` without the `/api` prefix
+
+**Forward boundary:** The tools/system-message behavior above is locked historical behavior for `/api/v1/chat/completions`. Phase 14 does not reinterpret the Phase 7 PASS or add conditional branches here; it adds `/api/v1/agent/chat/completions` with a separate scope, executor, exact tool protocol, and real SDK contract tests.
+
+**Phase 13 boundary:** Caller-supplied OpenAI tools remain ignored on the answer endpoint. An Expert
+with current active MCP grants for `source=api` selects the separate Geem-owned `ToolLoopTurnExecutor`,
+which dispatches registered remote MCP tools and still returns only the final OpenAI-shaped answer.
+Zero active grants preserve the original Phase 7 executor and wire output byte-for-byte.
 
 #### 7C — Workspace API Keys + API Usage UI — **PASS**
 
@@ -1220,7 +1423,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 | One-time | `app_licenses`; survives uninstall; re-install free while license `active` |
 | Subscription | `app_subscriptions`; time-aware periods; **manual** renew via hosted page (no auto-charge) |
 | Free | Install/uninstall only; default plan entitlements (e.g. `connections`) |
-| Roles | Browse: any member; install/checkout/renew/connect/disconnect: owner/admin |
+| Roles | Dynamic permissions are authoritative: `APPS_VIEW` browse, `APPS_MANAGE` install/checkout/renew, `APPS_CONNECT` connect/disconnect; seeded owner/admin roles receive them by default |
 | Secrets | Encrypted at rest; never in API responses |
 | UI routes | `/apps`, `/apps/:slug`, `/apps/installed` (+ payment-result reuse from Billing) |
 | Starter catalog | Drive + OneDrive **free/published**; WhatsApp **subscription/published** (`line`/`desk`/`ops` SAR); Chat Widget **subscription/published** (`standard` 199 SAR) |
@@ -1261,7 +1464,7 @@ Credentials (sandbox vs production): `profile_id`, `server_key` (and `client_key
 
 **9H Acceptance:** Subscribe → install → configure Expert/appearance/origins → public bootstrap respects allowlist; expired subscription fails closed; docs in `docs/apps/chat-widget.md`. **PASS.**
 
-**Next:** Multi-Tenant SaaS Transformation Plan **COMPLETE** (Phases 0–12). Phase 12 **COMPLETE** — **12A–12H PASS**. Future work (MCP, SSO, etc.) remains documented as deferred/non-goals — not Phase 13.
+**Core transformation status:** Phases 0–12 are **COMPLETE** and Phase 12 is **12A–12H PASS**. Later extension plans use their own phase numbers: Phase 13 for the paid MCP Connectors App and Geem-dispatched remote MCP, and Phase 14 for the paid Agents AI App/client-owned Agent API; neither changes the completed Phase 9 acceptance or creates a second commerce system.
 
 ---
 
@@ -1489,6 +1692,190 @@ Delivered:
 - Documentation: [`docs/platform-admin.md`](../../docs/platform-admin.md) — security boundary, data access, billing safety, deployment variables, testing
 
 **Acceptance (full Phase 12):** Platform Admin is production-ready on separate `dashboard_web` / `APP_ADMIN_HOST` with global Workspaces/Users/Plans/Credits/Platform Experts/App Store/Payment Gateways/Purchases/Usage/Audit Logs; host + `platform_role=admin` enforced; Workspace/API-key isolation verified; EN/AR + RTL + responsive; E2E smoke PASS. **Met** — Phase 12 **COMPLETE**.
+
+### Phase 13 — Remote MCP client/host
+
+**Status:** pending. Canonical detailed design: [`mcp.plan.md`](mcp.plan.md).
+
+**Goal:** Let a Workspace attach compatible public-HTTPS remote MCP tool servers while Geem remains
+the model-owning host and the only LLM endpoint the caller configures. Geem authenticates, discovers
+and grants tools, chooses calls with its configured model provider, dispatches them through isolated
+egress, and returns results to the Geem-owned loop. The remote server executes tools and never
+receives a Geem/OpenRouter model credential. Phase 13E exposes exact default-off grants on Chat
+Widget and WhatsApp/OpenWA as well as Workspace Chat and the answer API; this makes no claim about
+the server's private internals.
+
+**Locked boundaries:**
+
+- Geem is an MCP client/host only. Exposing Geem as an MCP server is a separate effort.
+- Current MCP `2026-07-28` stateless Streamable HTTP is primary. Only named, pinned, conformance-
+  tested legacy fallbacks are supported initially (`2025-11-25` Streamable HTTP and `2024-11-05`
+  HTTP+SSE). The gateway owns bounded initialized/session-ID/live-SSE lifecycle for legacy revisions,
+  closes it on cancellation/TTL, and never carries a legacy session across human approval. Use the
+  pinned Tier-1 Python SDK; no handwritten thin protocol client.
+- Public HTTPS remote servers only. `stdio`, local command/args/env execution, private/on-prem
+  targets, tenant TLS bypass/custom CA, and arbitrary proprietary authentication are rejected.
+- Supported authentication is no-auth, restricted static bearer/allowlisted header, and the full
+  MCP OAuth flow: challenge/resource metadata, OAuth/OIDC discovery, PKCE, resource indicators,
+  issuer validation, CIMD/pre-registration/DCR fallback, optional refresh rotation, and bounded
+  `APPS_CONNECT`-approved insufficient-scope step-up outside any active Workspace/API/Widget/
+  WhatsApp turn. One connection
+  is a Workspace-shared external service account; per-user delegated credentials are deferred and
+  the sharing effect is disclosed. Endpoint/resource/issuer/client/account changes—or an identity
+  that cannot be proven unchanged—increment a credential epoch and invalidate grants; verified
+  same-principal token refresh does not.
+- A single generic App Store connector (`mcp_remote`, `tool_source`) owns tenant server connections.
+  Install, connect/authenticate, complete discovery, classify, acknowledge outbound data, grant,
+  and invoke are separate default-deny gates.
+- The catalog product is the paid monthly `mcp-connectors` subscription with app-specific
+  `mcp-starter|mcp-team|mcp-scale` plan codes and typed `connections` + `tool_calls_daily` limits.
+  It stays `coming_soon` until 13E's isolated release-candidate paid E2E passes and all prices/limits are commercially signed;
+  there is no free tier, Agents AI bundle, or launch-time self-service tier switch.
+- Every paid operation uses §17's one access/entitlement data-SELECT
+  `require_runtime_active`/set decision after the preliminary known-key fence statement. Server/OAuth/
+  discovery/classification/grant activation and every dispatch/resume require current subscription +
+  installation; Widget/WhatsApp dispatch/resume proves both MCP Connectors and its originating App in
+  the same compound decision. Checkout/renew, listing, disconnect/delete, revoke, uninstall, and
+  local cleanup remain reachable after expiry. No cross-request positive cache is authoritative; a
+  source without an eligible grant/exact binding performs no MCP App lookup. Restrictive teardown
+  commits local deny before slow remote revoke.
+- All tenant-derived MCP and OAuth HTTP uses a minimal internal mTLS egress gateway with no route to
+  application datastores. Celery orchestrates scheduled discovery/health and ID-only external-
+  surface resume/delivery jobs; plaintext credentials, arguments, results, and raw MCP bodies never
+  enter the broker. Automatic `tools/call` retry is disabled; classified writes never follow 3xx,
+  and any post-dispatch redirect/transport ambiguity is `outcome_unknown`.
+- Tool discovery is complete and paginated; tool names receive stable provider-safe aliases;
+  inventory refresh uses bounded TTL polling rather than a long-lived subscription; model/execution-
+  relevant descriptors are canonicalized and hash-pinned. `unknown`, malformed, unsupported, stale,
+  or withdrawn tools never execute. Exact same-Workspace DB constraints complement required
+  repository filters. Grants also pin the exact reviewed Geem classification; a classification edit
+  stales the grant and dependent surface bindings. Grants bind only to Workspace-owned Experts;
+  Platform Experts are rejected.
+- Phase 13 injects only bounded text and output-schema-validated structured JSON into the model.
+  Image/audio/resource blocks are never dereferenced. MRTR `input_required`/elicitation, Tasks,
+  roots, prompts, resources, and sampling are unsupported and fail explicitly.
+- The tool-capable model loop permits one call per iteration, disables parallel calls, reserves the
+  maximum iterations plus final synthesis, and rechecks Workspace/App/connection/auth/tool/hash/
+  grant/surface/principal/quota immediately before every dispatch or resume. `tool_calls_daily` is
+  atomically admitted by unique invocation ID against the UTC-day
+  `app:mcp-connectors:tool_calls` counter immediately before egress; duplicate processing charges once, a
+  limit of N admits exactly N concurrent calls, and an
+  admitted failure/ambiguous outcome/crash-before-egress still counts.
+- Workspace Chat requires actor-bound per-call approval for writes. Approval/resume is atomic,
+  executes encrypted server-authoritative arguments, never automatically retries after dispatch,
+  and records `outcome_unknown` after an ambiguous remote write. Public answer mode blocks writes
+  unless the exact grant has explicit current unattended-write opt-in. Widget visitors and WhatsApp
+  senders are not Geem principals and can never approve: `write_policy=deny` omits external writes,
+  while `workspace_operator_approval` pauses for a current `mcp_tools.approve_external` Workspace
+  operator, then resumes asynchronously with current dual-App/surface checks. The committed DB
+  decision is authoritative over best-effort queue publication; leased claims, a pre/post-dispatch
+  marker, recovery sweep, and stale-execution watchdog prevent replay and blocked conversations.
+  The same permission may list and CAS-reconcile only this Workspace's `delivery_unknown` rows with
+  `confirmed_sent|cancelled`, never resend or edit content. Unattended external writes are
+  structurally rejected.
+- `/api/v1/chat/completions` stays answer-only and ignores caller-supplied tool schemas/results.
+  Active `source=api` MCP grants may select Geem's internal tool loop; zero grants preserve the
+  original Phase 7 executor and wire output byte-for-byte. Widget/channel resolve empty through 13D;
+  13E permits only exact active same-Workspace/Expert WidgetInstance or direct-WhatsApp bindings.
+  Bindings pin the reviewed source audience/account/config epoch and are serialized with source
+  revoke/rebind/origin/account/session/policy mutation. Widget uses an opaque session-bound public
+  turn handle, a client-generated idempotent receipt that survives first-event loss, and private/no-
+  store final-only stream/status; WhatsApp uses a current-source-authorized immutable CAS/lease
+  segment outbox with per-chat ordering and permissioned delivery-unknown reconciliation that never
+  resends. External surfaces return final text/
+  coarse pending state only—no tool events, arguments/results, citations, or internal IDs—and their
+  no-binding/legacy paths remain byte-compatible.
+- MCP migrations begin after the current Alembic head and are immutable per slice: `0036` connection
+  state/inventory, `0037` grants, `0038` invocations, `0039` pending approvals, and `0040` exact
+  external surface bindings/attribution/delivery at this review; existing `0034`/`0035` are never
+  reused.
+
+**Slices:** 13A secure outbound gateway; 13B protocol/auth/connections/discovery; 13C review and
+Expert grants; 13D Workspace/API read-only tool loop; 13E write approval/resume, exact Chat Widget/
+WhatsApp read+write surface rollout, durable external delivery, and ambiguous-outcome safety.
+
+**Acceptance:** A tenant can choose a signed plan, complete hosted checkout/payment fulfillment into
+an active subscription + installation, attach and authenticate a supported remote MCP URL, fully
+discover and approve compatible tools, bind them to a Workspace-
+owned Expert, and invoke them through Workspace Chat and the answer-mode public API while the caller
+configures only Geem as its LLM endpoint. The tenant then binds exact Widget and direct WhatsApp
+surfaces: read tools return final external answers, while writes produce a generic pending state and
+resume exactly once only after authenticated Workspace-operator approval. Protocol/version/auth
+conformance, SSRF and egress isolation, secret
+absence, tenant/FK isolation, alias collisions, descriptor drift, default-deny surfaces, provider
+tool compatibility, classification/source-identity drift, current single-data-SELECT paid access after a lightweight fence statement plus
+explicit `READ COMMITTED` post-wait denial, compound dual-App gate/fence ordering, exact Widget/
+WhatsApp binding/origin/session/opaque-handle/no-store/webhook/direct-chat isolation, serialized
+surface mutation, visitor/sender non-approval, commit/enqueue and pre/post-dispatch crash recovery,
+asynchronous ordering/at-most-once outbox delivery with fresh source authorization,
+expiry/renewal/uninstall/unpublish behavior,
+idempotent N/N+1 quota races, N+1 model metering, write approval concurrency/tampering/expiry,
+write-redirect ambiguity, ambiguous write/delivery outcomes, publication guards, and zero-binding byte identity/no-MCP-lookup
+are release-blocking.
+
+---
+
+### Phase 14 — Client-owned Agent API
+
+**Status:** pending. Canonical detailed design: [`agent-api.plan.md`](agent-api.plan.md).
+
+**Goal:** Sell **Agents AI** through the App Store so Laravel AI and other OpenAI Chat Completions
+clients can use Geem as their only configured LLM provider while the caller owns and executes its
+local tools.
+
+**Locked boundaries:**
+
+- Separate base `/api/v1/agent`; standard leaves `POST /api/v1/agent/chat/completions`, `GET /api/v1/agent/models`, and `GET /api/v1/agent/models/{model_id:path}` (path converter supports slash-containing public model IDs). Existing `/api/v1/chat/completions` remains answer-only with unchanged behavior/contract, proven exactly under deterministic fixtures.
+- `agents-ai` is a paid monthly non-connector App Store product with app-specific
+  `agents-starter|agents-team|agents-scale` plans and typed `agent_requests_daily`. It stays
+  `coming_soon` until 14C's isolated release-candidate paid E2E passes and every price/limit is commercially signed; there is no
+  free tier, MCP bundle, or launch-time self-service tier switch.
+- An authenticated, `agent:write`-scoped, operational Agent route that reaches paid admission uses
+  §17's one access/entitlement data SELECT after the preliminary known-key fence statement; requests
+  rejected before that gate execute zero App-access SELECTs. It requires a published App, active
+  installation, current subscription, and valid matching plan limits; expiry, uninstall, revoke,
+  unpublish, or Workspace suspend/delete denies the next request without a positive access cache.
+  Checkout/renew/uninstall remain reachable for recovery. Database failure is retryable 503
+  `APP_RUNTIME_ACCESS_UNAVAILABLE` before model work.
+- Workspace API key + `agent:write`; Workspace from key; completions require a Workspace-owned Expert
+  from `X-Geem-Expert-Id` and full USE authorization, while agent Models routes require no Expert
+  header. `agent:write` is selectable on key creation only while App access is active, never
+  auto-granted, and changing scopes requires key reissue. Keep `model` for current/future public
+  Geem model selection; do not repurpose it as the Expert ID.
+- Both opt-in gates default closed: global `CLIENT_AGENT_API_ENABLED=false` and per-Expert `rag_config.client_agent.enabled=false`. Phase 14A extends the validated `rag_config` schema/allowlist for that nested boolean; it is not an unvalidated JSON escape hatch.
+  Enabling the Expert flag requires current paid access; an existing flag/key remains stored but
+  inert across expiry/uninstall and never substitutes for the runtime App gate.
+- Phase 14 interoperability requires a configurable Chat Completions base URL, bearer key, and custom Expert header. Laravel AI and official OpenAI SDK clients satisfy this; a client hard-wired to base URL/key/model only is outside the contract until a future non-header Expert-selection mechanism is designed.
+- Stateless continuation: caller resends the bounded conversation `messages`, model, tools/controls, and client instructions on each model step. Geem derives the last real-user retrieval question from that transcript; Redis retrieval context is revision/hash-keyed optimization only, with safe re-retrieval on miss and cache bypass if the knowledge revision cannot be computed. No proprietary session header or public Conversation persistence.
+- Exactly preserve assistant/tool roles, `tool_calls`, `tool_call_id`, types, names, and ordering, including parallel calls; argument strings are opaque within a request and may be semantically reserialized by an SDK across requests. Every call must resolve exactly once before subsequent inference. Geem emits calls and ingests results but never dispatches or executes caller tools.
+- One Geem-owned upstream system prompt with immutable platform/safety + agent appendix above scoped Expert/RAG policy. Caller `system`/`developer` text is accepted only as a leading prefix, size-limited, safely escaped, and demoted exactly once to a synthetic user-role block immediately after it; later/interleaved privileged roles are rejected. Only length/keyed digest and identity metadata are audited, never raw text. It never controls auth, tenancy, Expert selection, retrieval scope, billing ownership/entitlement, or server policy, though its prompt tokens are billed normally.
+- Exact non-streaming response/usage/error wire and indexed streaming tool deltas, terminal finish reason, optional usage chunk, and `[DONE]`; recognized unsupported fields fail explicitly rather than being silently ignored. Successful responses emit the namespaced `geem` metadata exactly once; retrieval sources are candidates made available to the round, not a claim that the assistant cited them.
+- Separate `AgentCompletionService` / provider method. After auth/scope/global and deterministic
+  request/model/transcript validation, each completion consumes the existing entitlement-driven
+  `api_requests_per_minute`; then one short shared-fence DB admission transaction rechecks paid
+  access, authorizes the Expert, uses a DB-only/no-commit/no-client-I/O AI reserve owned by that outer
+  transaction, and atomically admits one `agent_requests_daily` unit before retrieval/provider work.
+  Do not invoke the current commit-owning reserve helper or Redis entitlement lookup while a fence is
+  held. Any admission failure rolls back both AI and App holds. The exact App metric is
+  `app:agents-ai:requests`; the unique AI reservation/request row is the quota receipt in the same
+  transaction as the UTC-day conditional counter increment. N client model steps are N admitted App
+  units and N Geem AI reservations; caller-local tool execution is not counted. Models routes require
+  paid access + scope but consume no RPM, daily App unit, or AI tokens.
+
+**Acceptance:** A tenant chooses a signed Agents AI plan, completes hosted checkout/payment
+fulfillment into active subscription + installation, creates an `agent:write` key, enables a
+Workspace-owned Expert, and completes real non-streaming/streaming local-tool loops. Expiry/renewal,
+uninstall/reinstall, revoke/unpublish, Workspace suspension/deletion, exact period boundaries,
+single-data-SELECT-plus-fence performance, atomic idempotent N/N+1 quota, counter failure, Models
+no-consumption, explicit `READ COMMITTED` post-wait denial, and
+publication guards pass. A committed exact Composer lock tests Laravel AI `openai-compatible` at the
+`v0.10.3` minimum/current baseline; once Geem supports a newer 0.x release, a second exact current-
+version fixture joins the retained minimum fixture. Captured first/continuation payloads prove full
+replay and instruction demotion. An exact-locked official OpenAI SDK base-URL/header smoke passes.
+Models allowlisting, complete parallel call-ID linkage, stateless cache hit/miss/revision equivalence,
+positive/adversarial instruction behavior, tenant/scope/Expert gates, exact error/usage/SSE fixtures,
+and unchanged Phase 7 behavior/contract under deterministic regression fixtures all pass.
+
 ---
 
 ## Cross-cutting defaults (locked for this plan)
@@ -1507,11 +1894,15 @@ Delivered:
 | Workspace routing | Subdomain slug + API-key workspace for public API |
 | Billing | Multi-gateway registry, **exactly one enabled**; Phase 6 = ClickPay hosted redirect + query-on-return (**no webhooks**) |
 | Auth | Email/password + JWT/session; API keys for machine access |
-| Public machine API | OpenAI Chat Completions wire format at `/api/v1/chat/completions` + `/api/v1/models`; Expert via `X-Geem-Expert-Id`; do **not** route by `model`; no public conversation persistence |
+| Remote MCP | Phase 13 — paid `mcp-connectors` App subscription; Geem is the model-owning remote MCP client/host with supported public-HTTPS connections, per-connection auth, complete hash/principal-pinned discovery, Workspace-Expert/surface grants, fresh paid access + atomic tool quota before dispatch, and Geem-owned loop. Active `source=api` grants may run it on answer-only `/api/v1/chat/completions`; 13E adds exact default-off Chat Widget/WhatsApp bindings with Workspace-operator approval for external writes; caller-supplied tools remain ignored. See [`mcp.plan.md`](mcp.plan.md) |
+| Tenant outbound egress | Phase 13 — minimal internal mTLS gateway with public egress and no application-datastore route; canonical URL/DNS/IP/TLS/redirect policy; all MCP/OAuth traffic uses it; Celery handles ID-only background orchestration, including external-surface resume/delivery, but never direct tenant-target HTTP |
+| Public machine API | Phase 7 answer mode at `/api/v1/chat/completions` canonicalizes responses to `PUBLIC_MODEL_ID`; pending Phase 14 client-agent base at `/api/v1/agent` adds standard `/chat/completions` and `/models` leaves and keeps `model` for future public model selection. Expert via `X-Geem-Expert-Id`; no public conversation persistence |
+| Client agent API | Phase 14 — paid non-connector `agents-ai` App subscription with typed daily request quota; caller executes tools; exact OpenAI roles/linkage with complete parallel resolution; bounded-history stateless replay; demoted caller instructions; exact-version Laravel AI + OpenAI SDK contract gates. See [`agent-api.plan.md`](agent-api.plan.md) |
+| Paid App runtime | Phase 13/14 protected operations use one preliminary known-key advisory-fence statement plus one fresh indexed DB-time `AppAccessService.require_runtime_active`/set data SELECT for Workspace/App/install/subscription/requested limits; Widget/WhatsApp MCP admission checks both paid Apps in canonical lexical fence order; no authoritative cross-request positive cache; fail closed before provider/egress; MCP sources without an eligible binding perform no lookup |
 | RAG product unit | Expert (not raw file lists) |
 | Chat UX | Metronic AI Chat adapted to FastAPI SSE |
 | i18n | EN + AR with RTL/LTR; strings outside components |
-| MCP | Deferred until after Experts + API |
+| Tool execution | Caller-supplied OpenAI function tools are Phase 14 and execute only on the client; Geem-dispatched remote MCP tools execute on their server under the orthogonal Phase 13 plan |
 | Formats in Expert phase | PDF + TXT + Markdown |
 | Platform Admin UI | Separate app `apps/dashboard_web` (not inside `workspace_web`) |
 | Marketing site | `apps/landpage_web` (Astro static; independent of Phase 11/12) |
@@ -1529,3 +1920,31 @@ Delivered:
 7. **New app bootstrap** for `workspace_web` (Vite 7 + Tailwind v4) while keeping `apps/web` runnable in parallel
 8. Treating frontend hostname as security (mitigate: backend always re-resolves workspace)
 9. Payment return replay / forged return URLs (mitigate: server-side ClickPay query + idempotent `tran_ref` / `request_id`; no webhook trust in Phase 6)
+10. Client-agent prompt injection / RAG egress through caller-owned tools (mitigate: explicit Expert opt-in, one Geem-owned system prompt, demoted/bounded caller instructions, untrusted tool-result handling, and a clear warning that prompt controls cannot guarantee egress prevention)
+11. Agent transcript/cache confusion across concurrent callers (mitigate: never use transcript as authorization; exact tool-call linkage; cache key includes Workspace + Expert + API key + question hash + knowledge revision; safe retrieval on cache miss)
+12. Tenant-configured MCP SSRF / DNS rebinding into Geem infrastructure (mitigate: Phase 13A first, canonical address pinning, revalidated redirects, mandatory deployed proxy/network policy, and isolated mTLS egress)
+13. Egress gateway becoming a secret/data bridge (mitigate: no datastore route/general app environment, ephemeral one-call auth, bounded envelopes, redacted observability, no broker persistence)
+14. MCP OAuth mix-up, issuer/client reuse, or token forwarding (mitigate: resource + issuer + PKCE + registration binding, one-time state, origin stripping, optional-refresh handling, and adversarial conformance tests)
+15. Workspace-shared MCP service-account identity changes, data exposure, or outbound RAG leakage (mitigate: external-identity/data-boundary disclosure, definition + principal/credential-epoch-pinned grants, invalidation on unverified account changes, current surface/principal checks, untrusted content handling, and explicit acknowledgement that prompt controls cannot guarantee confidentiality)
+16. Duplicate/ambiguous remote writes after timeout, redirect, or API-process/gateway loss (mitigate: DB-authoritative source-appropriate resume, leased claims + durable dispatch marker/watchdog, no automatic retry or write redirect replay, explicit idempotency only when supported, and `outcome_unknown` reconciliation)
+17. MCP protocol/provider drift or tool-name/schema incompatibility (mitigate: pinned Tier-1 SDK/version matrix, real configured-model tool-call fixtures, stable aliases, supported-schema/result profile, and fail-closed compatibility states)
+18. Slow or stale paid-App checks on high-volume Agent/MCP paths (mitigate: one purpose-built indexed
+    DB-time access+limit data SELECT after one lightweight known-key fence statement for protected
+    admission, canonical compound-App ordering where required, no cross-request positive
+    authorization cache, Agent request-local reuse only, fresh MCP dispatch/resume checks, zero MCP
+    lookup without an eligible source binding, query-count/EXPLAIN/end-to-end p95 metrics, and fail-
+    closed DB errors)
+19. Publishing unusable or commercially incomplete paid Apps (mitigate: app-specific plan codes,
+    signed SAR price + positive typed limits, paid checkout/expiry/renewal E2E, operational feature
+    gates, and `coming_soon` until Phase 13E/14C release acceptance)
+20. Public Widget/WhatsApp users abusing a Workspace-shared MCP account or crossing surface bindings
+    (mitigate: exact default-off same-Workspace/Expert target rows, classification + source-config/
+    principal/epoch pinning, serialized target mutation, exact Widget HTTPS origins/opaque handles/
+    no-store responses + idempotent first-turn receipts, direct-chat-only WhatsApp, keyed external-
+    principal fingerprints, dual-App checks, disclosure, rate/pending caps, and no external-user
+    approval or unattended writes)
+21. Async external write/delivery confusion (mitigate: one pending turn, permissioned Workspace-
+    operator exact-argument decision, DB-authoritative ID-only resume + recovery, lock reacquisition/
+    current recheck, immutable single-writer WhatsApp segment outbox with fresh delivery authorization
+    and per-chat ordering, permissioned CAS reconciliation without resend, and distinct
+    `outcome_unknown` versus `delivery_unknown` states)
