@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="Geem Laravel AI v0.11.0 contract">
+      <file>../laravel-ai-contract/AgentContractTest.php</file>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="GEEM_EXPECTED_LARAVEL_AI_VERSION" value="v0.11.0"/>
+  </php>
+</phpunit>

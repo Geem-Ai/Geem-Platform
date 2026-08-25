@@ -35,7 +35,6 @@ Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.curso
 |------|------|
 | `apps/api` | FastAPI + Celery |
 | `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
-| `apps/web` | Legacy MVP UI (port **5173**) — keep runnable; not the product |
 | `apps/dashboard_web` | Platform Admin SPA (port **5175**; UAT `admin-uat.geem.ai`) |
 | `apps/landpage_web` | Marketing — placeholder only |
 | `infra/docker-compose.yml` | Local full stack |
@@ -59,7 +58,6 @@ docker compose up -d --build
 | Workspace UI | http://localhost:5174 |
 | API docs | http://localhost:8000/docs |
 | API ready | http://localhost:8000/api/health/ready |
-| Legacy MVP UI | http://localhost:5173 |
 | MinIO console | http://localhost:9101 (`minio` / `change-me`) |
 
 Keep `AUTH_REQUIRED=true` and `LEGACY_MVP_WRITES_ENABLED=false`. Document, query, and job APIs require a logged-in Workspace user.
@@ -134,7 +132,6 @@ python -m app.eval.run
 - **OCR / chat failures**: `OPENROUTER_API_KEY`, credits, and `checks.openrouter` on ready.
 - **Login works, refresh fails**: SPA origin vs API host; refresh cookie is host-only on the API host; `CORS_ORIGINS` must list the SPA origin.
 - **Embedding dimension mismatch**: do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models.
-- **Legacy `apps/web` 401s**: expected after the SaaS cutover. Do not turn `AUTH_REQUIRED` off to make it work.
 
 ## License
 

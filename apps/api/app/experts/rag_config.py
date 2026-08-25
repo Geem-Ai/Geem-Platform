@@ -26,7 +26,7 @@ _SIM_MIN = 0.0
 _SIM_MAX = 1.0
 
 SUPPORTED_KEYS: frozenset[str] = frozenset(
-    {"top_k", "rerank_top_n", "similarity_threshold"}
+    {"top_k", "rerank_top_n", "similarity_threshold", "client_agent"}
 )
 
 

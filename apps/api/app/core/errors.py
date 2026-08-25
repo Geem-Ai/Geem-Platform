@@ -142,6 +142,23 @@ class ErrorCategory(StrEnum):
     APP_CHECKOUT_IN_PROGRESS = "app_checkout_in_progress"
     APP_PURCHASE_NOT_PAYABLE = "app_purchase_not_payable"
 
+    # Paid App runtime / Agents AI (Phase 14)
+    APP_RUNTIME_ACCESS_UNAVAILABLE = "app_runtime_access_unavailable"
+    AGENT_API_DISABLED = "agent_api_disabled"
+    AGENT_EXPERT_NOT_ENABLED = "agent_expert_not_enabled"
+    AGENT_USER_MESSAGE_REQUIRED = "agent_user_message_required"
+    AGENT_INVALID_TOOL_TRANSCRIPT = "agent_invalid_tool_transcript"
+    AGENT_UNSUPPORTED_PARAMETER = "agent_unsupported_parameter"
+    AGENT_MODEL_REQUIRED = "agent_model_required"
+    AGENT_MODEL_NOT_FOUND = "model_not_found"
+    AGENT_TOOL_LIMIT_EXCEEDED = "agent_tool_limit_exceeded"
+    AGENT_MESSAGE_LIMIT_EXCEEDED = "agent_message_limit_exceeded"
+    AGENT_CLIENT_INSTRUCTION_LIMIT_EXCEEDED = (
+        "agent_client_instruction_limit_exceeded"
+    )
+    AGENT_SCOPE_REQUIRED = "agent_scope_required"
+    AGENT_REQUEST_QUOTA_EXCEEDED = "agent_request_quota_exceeded"
+
     # Connectors (Phase 9C)
     CONNECTOR_NOT_AVAILABLE = "connector_not_available"
     CONNECTOR_NOT_SUPPORTED = "connector_not_supported"
@@ -331,6 +348,20 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "app_checkout_forbidden": 403,
     "app_checkout_in_progress": 409,
     "app_purchase_not_payable": 422,
+    # Phase 14 — paid Agent API
+    "app_runtime_access_unavailable": 503,
+    "agent_api_disabled": 503,
+    "agent_expert_not_enabled": 403,
+    "agent_user_message_required": 400,
+    "agent_invalid_tool_transcript": 400,
+    "agent_unsupported_parameter": 400,
+    "agent_model_required": 400,
+    "model_not_found": 404,
+    "agent_tool_limit_exceeded": 400,
+    "agent_message_limit_exceeded": 400,
+    "agent_client_instruction_limit_exceeded": 400,
+    "agent_scope_required": 403,
+    "agent_request_quota_exceeded": 429,
     # Phase 9C — Connectors
     "connector_not_available": 409,
     "connector_not_supported": 409,

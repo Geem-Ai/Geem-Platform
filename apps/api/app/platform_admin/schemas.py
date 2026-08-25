@@ -516,6 +516,7 @@ class PlatformAppPlanListItem(BaseModel):
     currency: str
     is_default: bool
     is_active: bool
+    sort_order: int
     active_entitlement_count: int = 0
     entitlements: list[PlatformAppPlanEntitlementOut] = Field(default_factory=list)
     created_at: datetime
@@ -541,6 +542,7 @@ class PlatformAppPlanCreateRequest(BaseModel):
     currency: str = Field(default="SAR", min_length=3, max_length=3)
     billing_interval: str = Field(default="none")
     is_default: bool = False
+    sort_order: int = Field(default=0, ge=0)
     entitlements: list[PlatformAppPlanEntitlementIn] = Field(default_factory=list)
 
 
@@ -552,6 +554,7 @@ class PlatformAppPlanUpdateRequest(BaseModel):
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     is_default: bool | None = None
     is_active: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0)
     billing_interval: str | None = None
     entitlements: list[PlatformAppPlanEntitlementIn] | None = None
     reason: str | None = Field(default=None, max_length=500)

@@ -47,7 +47,11 @@ export function ApiKeysList({ keys, canManage, onRevoke }: ApiKeysListProps) {
                   <div className="flex flex-wrap gap-1">
                     {key.scopes.map((scope) => (
                       <Badge key={scope} variant="secondary" appearance="light" size="sm">
-                        {scope === 'chat:write' ? t('apiKeys.scopeChatShort') : scope}
+                        {scope === 'chat:write'
+                          ? t('apiKeys.scopeChatShort')
+                          : scope === 'agent:write'
+                            ? t('apiKeys.scopeAgentShort')
+                            : scope}
                       </Badge>
                     ))}
                   </div>

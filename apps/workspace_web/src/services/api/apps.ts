@@ -52,6 +52,36 @@ export type AppAccess = {
   can_uninstall: boolean;
 };
 
+export const AGENTS_AI_APP_SLUG = 'agents-ai';
+
+export type AgentsAiUsageAccess = {
+  status: AppAccessStatus;
+  plan_id: string | null;
+  plan_code: string | null;
+  plan_name: string | null;
+  plan_price_amount: string | null;
+  plan_currency: string | null;
+  plan_billing_interval: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  commercially_entitled: boolean;
+  installed: boolean;
+};
+
+export type AgentsAiDailyUsage = {
+  used: number;
+  limit: number;
+  reset_at: string;
+};
+
+/** Workspace/session view used by the Agents AI App detail and enablement controls. */
+export type AgentsAiUsage = {
+  access: AgentsAiUsageAccess;
+  agent_requests_daily: AgentsAiDailyUsage;
+  base_url: string;
+  model: string;
+};
+
 export type ConnectionStatus =
   | 'pending'
   | 'connecting'
@@ -298,6 +328,10 @@ export async function listApps(params?: ListAppsParams): Promise<CatalogAppList>
 
 export async function getApp(slug: string): Promise<CatalogApp> {
   return apiRequest<CatalogApp>(`/api/apps/${encodeURIComponent(slug)}`);
+}
+
+export async function getAgentsAiUsage(): Promise<AgentsAiUsage> {
+  return apiRequest<AgentsAiUsage>('/api/apps/agents-ai/usage');
 }
 
 export async function listAppInstallations(params?: {
@@ -631,6 +665,22 @@ export function isChatWidgetApp(
   app: Pick<CatalogApp, 'slug'> | null | undefined,
 ): boolean {
   return app?.slug === 'chat-widget';
+}
+
+export function isAgentsAiApp(
+  app: Pick<CatalogApp, 'slug'> | null | undefined,
+): boolean {
+  return app?.slug === AGENTS_AI_APP_SLUG;
+}
+
+export function hasActiveAgentsAiAccess(
+  usage: Pick<AgentsAiUsage, 'access'> | null | undefined,
+): boolean {
+  return Boolean(
+    usage?.access.status === 'active' &&
+      usage.access.commercially_entitled &&
+      usage.access.installed,
+  );
 }
 
 export async function getChatWidget(): Promise<ChatWidgetInstance> {

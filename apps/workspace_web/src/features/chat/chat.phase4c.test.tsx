@@ -7,6 +7,18 @@ import { ChatStarter } from './components/ChatStarter';
 import { CitationList } from './components/CitationList';
 import type { Expert } from '@/services/api/types';
 
+vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
+  useWorkspace: () => ({
+    currentWorkspace: {
+      id: 'ws-1',
+      name: 'Test workspace',
+      slug: 'test-workspace',
+      role: 'owner',
+    },
+    currentMembership: null,
+  }),
+}));
+
 function withI18n(ui: React.ReactElement) {
   return render(<I18nextProvider i18n={i18n}>{ui}</I18nextProvider>);
 }

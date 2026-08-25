@@ -33,12 +33,19 @@ export function serializeRagConfig(values: {
   top_k: number;
   rerank_top_n: number;
   similarity_threshold: number;
-}): ExpertRagConfig {
+}, clientAgentEnabled = false): ExpertRagConfig {
   return {
     top_k: values.top_k,
     rerank_top_n: values.rerank_top_n,
     similarity_threshold: values.similarity_threshold,
+    client_agent: { enabled: clientAgentEnabled },
   };
+}
+
+export function isClientAgentEnabled(
+  raw: ExpertRagConfig | null | undefined,
+): boolean {
+  return raw?.client_agent?.enabled === true;
 }
 
 export function clampRagValue(

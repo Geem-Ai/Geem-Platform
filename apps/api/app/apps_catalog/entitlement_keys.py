@@ -21,6 +21,9 @@ _SLUG_ENTITLEMENTS: dict[str, tuple[AppEntitlementKeySpec, ...]] = {
     "chat-widget": (AppEntitlementKeySpec("widgets", "integer", "widgets"),),
     "google-drive": (AppEntitlementKeySpec("connections", "integer", "connections"),),
     "microsoft-onedrive": (AppEntitlementKeySpec("connections", "integer", "connections"),),
+    "agents-ai": (
+        AppEntitlementKeySpec("agent_requests_daily", "integer", "requests/day"),
+    ),
 }
 
 _CONNECTOR_ENTITLEMENTS: dict[str, tuple[AppEntitlementKeySpec, ...]] = {

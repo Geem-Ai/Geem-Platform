@@ -6,9 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { queryKeys } from '@/services/api/query-keys';
 import type { ApiKey, CreatedApiKey } from '@/services/api/api-keys';
+import type { AgentsAiUsage } from '@/services/api/apps';
 import { ApiKeysPage } from './ApiKeysPage';
 
 const workspaceState = { id: 'ws-a', role: 'owner' as string, permissions: [] as string[] };
+
+const { useAgentsAiUsage } = vi.hoisted(() => ({
+  useAgentsAiUsage: vi.fn(),
+}));
+
+vi.mock('@/features/apps/hooks/useAppsQueries', () => ({
+  useAgentsAiUsage: (...args: unknown[]) => useAgentsAiUsage(...args),
+}));
 
 vi.mock('@/features/workspaces/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -78,6 +87,31 @@ function key(partial: Partial<ApiKey> = {}): ApiKey {
   };
 }
 
+function agentsUsage(active: boolean): AgentsAiUsage {
+  return {
+    access: {
+      status: active ? 'active' : 'not_entitled',
+      plan_id: active ? 'agents-plan' : null,
+      plan_code: active ? 'agents-team' : null,
+      plan_name: active ? 'Agents Team' : null,
+      plan_price_amount: active ? '199.00' : null,
+      plan_currency: active ? 'SAR' : null,
+      plan_billing_interval: active ? 'monthly' : null,
+      current_period_start: active ? '2026-08-01T00:00:00Z' : null,
+      current_period_end: active ? '2026-09-01T00:00:00Z' : null,
+      commercially_entitled: active,
+      installed: active,
+    },
+    agent_requests_daily: {
+      used: 0,
+      limit: active ? 100 : 0,
+      reset_at: '2026-08-26T00:00:00Z',
+    },
+    base_url: 'https://api.geem.ai/api/v1/agent',
+    model: 'dalseen/geem-1.0',
+  };
+}
+
 function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -104,6 +138,13 @@ describe('ApiKeysPage', () => {
     listApiKeys.mockReset();
     createApiKey.mockReset();
     revokeApiKey.mockReset();
+    useAgentsAiUsage.mockReset();
+    useAgentsAiUsage.mockReturnValue({
+      data: agentsUsage(false),
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
     listApiKeys.mockResolvedValue([key()]);
     await i18n.changeLanguage('en');
   });
@@ -121,6 +162,17 @@ describe('ApiKeysPage', () => {
     expect(screen.getByText(/geem_sk_abcd1234••••wxyz/)).toBeInTheDocument();
     expect(screen.queryByText(/geem_sk_[a-zA-Z0-9_-]{20,}/)).not.toBeInTheDocument();
     expect(screen.getByTestId('api-key-status-active')).toBeInTheDocument();
+  });
+
+  it('localizes the independent Agents AI scope in the key list', async () => {
+    listApiKeys.mockResolvedValue([
+      key({ scopes: ['chat:write', 'agent:write'] }),
+    ]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('api-keys-list')).toBeInTheDocument();
+    });
+    expect(screen.getByText(i18n.t('apiKeys.scopeAgentShort'))).toBeInTheDocument();
   });
 
   it('shows empty state for owners', async () => {
@@ -182,6 +234,53 @@ describe('ApiKeysPage', () => {
     });
     const cached = client.getQueryData(queryKeys.apiKeys('ws-a')) as ApiKey[] | undefined;
     expect(JSON.stringify(cached ?? [])).not.toContain('geem_sk_once-only-secret-value-xxxxxxxx');
+  });
+
+  it('adds agent:write only when the active-access checkbox is explicitly selected', async () => {
+    listApiKeys.mockResolvedValue([]);
+    useAgentsAiUsage.mockReturnValue({
+      data: agentsUsage(true),
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    createApiKey.mockResolvedValue({
+      ...key({ id: 'key-agent', name: 'Agent runtime', scopes: ['chat:write', 'agent:write'] }),
+      key: 'geem_sk_agent-secret-once',
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByTestId('create-api-key'));
+    const scope = await screen.findByTestId('api-key-agent-scope');
+    expect(scope).toBeEnabled();
+    expect(scope).not.toBeChecked();
+    fireEvent.click(scope);
+    fireEvent.change(screen.getByTestId('api-key-name-input'), {
+      target: { value: 'Agent runtime' },
+    });
+    fireEvent.click(screen.getByTestId('create-api-key-submit'));
+
+    await waitFor(() => {
+      expect(createApiKey).toHaveBeenCalledWith({
+        name: 'Agent runtime',
+        scopes: ['chat:write', 'agent:write'],
+        expires_at: null,
+      });
+    });
+  });
+
+  it('keeps agent:write disabled without active installed access', async () => {
+    listApiKeys.mockResolvedValue([]);
+    renderPage();
+    fireEvent.click(await screen.findByTestId('create-api-key'));
+    expect(await screen.findByTestId('api-key-agent-scope')).toBeDisabled();
+    expect(screen.getByTestId('api-key-agent-scope-gate')).toHaveTextContent(
+      i18n.t('apiKeys.scopeAgentAccessRequired'),
+    );
+    expect(screen.getByRole('link', { name: i18n.t('apiKeys.manageAgentsAi') })).toHaveAttribute(
+      'href',
+      '/apps/agents-ai',
+    );
   });
 
   it('validates name before submit', async () => {

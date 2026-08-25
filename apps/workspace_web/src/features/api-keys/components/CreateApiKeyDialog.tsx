@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,7 +13,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
-import { API_KEY_SCOPE_CHAT_WRITE, type CreatedApiKey } from '@/services/api/api-keys';
+import {
+  API_KEY_SCOPE_AGENT_WRITE,
+  API_KEY_SCOPE_CHAT_WRITE,
+  type CreatedApiKey,
+} from '@/services/api/api-keys';
+import { hasActiveAgentsAiAccess } from '@/services/api/apps';
+import { useAgentsAiUsage } from '@/features/apps/hooks/useAppsQueries';
 import { useCreateApiKey } from '../hooks/useApiKeyQueries';
 
 type CreateApiKeyDialogProps = {
@@ -28,10 +35,13 @@ export function CreateApiKeyDialog({
 }: CreateApiKeyDialogProps) {
   const { t } = useTranslation();
   const create = useCreateApiKey();
+  const agentsAiUsage = useAgentsAiUsage(open);
   const [name, setName] = useState('');
   const [expiresMode, setExpiresMode] = useState<'never' | 'date'>('never');
   const [expiresLocal, setExpiresLocal] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [agentScope, setAgentScope] = useState(false);
+  const agentScopeAvailable = hasActiveAgentsAiAccess(agentsAiUsage.data);
 
   useEffect(() => {
     if (!open) return;
@@ -39,6 +49,7 @@ export function CreateApiKeyDialog({
     setExpiresMode('never');
     setExpiresLocal('');
     setErrorKey(null);
+    setAgentScope(false);
     create.reset();
     // Intentionally reset only when the dialog opens — not on mutation identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,7 +79,12 @@ export function CreateApiKeyDialog({
     try {
       const created = await create.mutateAsync({
         name: trimmed,
-        scopes: [API_KEY_SCOPE_CHAT_WRITE],
+        scopes: [
+          API_KEY_SCOPE_CHAT_WRITE,
+          ...(agentScope && agentScopeAvailable
+            ? [API_KEY_SCOPE_AGENT_WRITE]
+            : []),
+        ],
         expires_at: expiresAt,
       });
       onCreated(created);
@@ -110,6 +126,53 @@ export function CreateApiKeyDialog({
             <p className="text-sm text-muted-foreground">{t('apiKeys.scopeChatWrite')}</p>
             <p className="text-xs font-mono text-muted-foreground" dir="ltr">
               {API_KEY_SCOPE_CHAT_WRITE}
+            </p>
+            <label
+              htmlFor="api-key-agent-scope"
+              className={`mt-3 flex items-start gap-2 rounded-lg border border-border p-3 ${
+                agentScopeAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+              }`}
+            >
+              <input
+                id="api-key-agent-scope"
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 accent-primary"
+                checked={agentScope}
+                onChange={(event) => setAgentScope(event.target.checked)}
+                disabled={!agentScopeAvailable || create.isPending}
+                data-testid="api-key-agent-scope"
+              />
+              <span className="min-w-0 space-y-1">
+                <span className="block text-sm font-medium">
+                  {t('apiKeys.scopeAgentWrite')}
+                </span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">
+                  {t('apiKeys.scopeAgentWriteHint')}
+                </span>
+                <code dir="ltr" className="block text-xs font-mono text-muted-foreground">
+                  {API_KEY_SCOPE_AGENT_WRITE}
+                </code>
+              </span>
+            </label>
+            {!agentScopeAvailable ? (
+              <p className="text-xs text-muted-foreground" data-testid="api-key-agent-scope-gate">
+                {agentsAiUsage.isLoading
+                  ? t('apiKeys.scopeAgentChecking')
+                  : agentsAiUsage.isError
+                    ? t('apiKeys.scopeAgentCheckFailed')
+                    : t('apiKeys.scopeAgentAccessRequired')}{' '}
+                {!agentsAiUsage.isLoading ? (
+                  <Link
+                    to="/apps/agents-ai"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {t('apiKeys.manageAgentsAi')}
+                  </Link>
+                ) : null}
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {t('apiKeys.scopeReissueHint')}
             </p>
           </div>
 

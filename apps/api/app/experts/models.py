@@ -124,7 +124,9 @@ class ExpertSourceStatus(str, enum.Enum):
 
 # Sensible defaults for stored rag_config; Phase 3B applies them at retrieval.
 DEFAULT_RAG_CONFIG: dict[str, Any] = {}
-SUPPORTED_RAG_CONFIG_KEYS = frozenset({"top_k", "rerank_top_n", "similarity_threshold"})
+SUPPORTED_RAG_CONFIG_KEYS = frozenset(
+    {"top_k", "rerank_top_n", "similarity_threshold", "client_agent"}
+)
 
 MAX_SYSTEM_INSTRUCTIONS_LENGTH = 32_000
 MAX_EXPERT_NAME_LENGTH = 200

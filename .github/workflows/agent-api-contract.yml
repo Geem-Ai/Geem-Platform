@@ -1,0 +1,158 @@
+name: Agent API contract
+
+on:
+  push:
+    tags:
+      - "testing-v**"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-protocol:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: pip install -r requirements.txt
+      # Protocol tests are deliberately isolated from the repository-level
+      # database fixture. The database admission contract runs in the next job.
+      - name: Agent protocol and Phase 7 regression contracts
+        run: >-
+          pytest -q --confcutdir=tests/unit
+          tests/unit/test_agent_*.py
+          tests/unit/test_agents_ai_commercial_foundation.py
+          tests/unit/test_openai_compat.py
+          tests/unit/test_openrouter_contracts.py
+
+  backend-admission:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: geem
+          POSTGRES_PASSWORD: geem
+          POSTGRES_DB: geem_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geem -d geem_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://geem:geem@localhost:5432/geem_test
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Paid admission and commercial invariant integration tests
+        run: >-
+          pytest -q
+          tests/integration/test_agent_expert_flag.py
+          tests/integration/test_agent_paid_e2e.py
+          tests/integration/test_agent_retrieval.py
+          tests/integration/test_agents_ai_commercial_foundation.py
+          tests/integration/test_public_chat_phase7b.py::test_valid_key_can_chat
+          tests/integration/test_public_chat_phase7b.py::test_sse_chat_lifecycle_and_no_persistence
+
+  workspace-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/workspace_web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/workspace_web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Agents AI workspace contracts
+        run: >-
+          npx vitest run
+          src/services/api/apps.agents-ai.test.ts
+          src/features/apps/pages/AppsPage.test.tsx
+          src/features/apps/agents-ai/AgentsAiPanel.test.tsx
+          src/features/experts/components/ClientAgentToggle.test.tsx
+          src/features/experts/components/ExpertFormSheet.client-agent.test.tsx
+          src/features/experts/lib/rag-config.test.ts
+          src/features/api-keys/pages/ApiKeysPage.test.tsx
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Agents AI paid-access browser smoke
+        run: npx playwright test e2e/apps-smoke.spec.ts --project=chromium
+
+  sdk-live:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: geem
+          POSTGRES_PASSWORD: geem
+          POSTGRES_DB: geem_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geem -d geem_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://geem:geem@localhost:5432/geem_test
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            apps/api/requirements.txt
+            apps/api/tests/sdk/openai-python/requirements.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+          tools: composer:v2
+      - run: pip install -r requirements.txt
+      - name: Install exact Laravel AI fixtures
+        run: |
+          composer install --working-dir=tests/sdk/laravel-ai-v0.10.3 --no-interaction --prefer-dist --no-progress
+          composer install --working-dir=tests/sdk/laravel-ai-v0.11.0 --no-interaction --prefer-dist --no-progress
+      - name: Install exact OpenAI SDK fixture in isolation
+        run: |
+          python -m venv tests/sdk/openai-python/.venv
+          tests/sdk/openai-python/.venv/bin/python -m pip install --require-hashes -r tests/sdk/openai-python/requirements.lock
+      - name: Laravel AI v0.10.3 through real paid Agent routes
+        env:
+          GEEM_SDK_TARGET: laravel-ai-v0.10.3
+        run: pytest -q tests/integration/test_agent_sdk_live.py
+      - name: Laravel AI v0.11.0 through real paid Agent routes
+        env:
+          GEEM_SDK_TARGET: laravel-ai-v0.11.0
+        run: pytest -q tests/integration/test_agent_sdk_live.py
+      - name: OpenAI Python through real paid Agent routes
+        env:
+          GEEM_SDK_TARGET: openai-python
+        run: pytest -q tests/integration/test_agent_sdk_live.py

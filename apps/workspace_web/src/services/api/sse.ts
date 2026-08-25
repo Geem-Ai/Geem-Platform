@@ -25,7 +25,7 @@ function parseSseBlock(block: string): { event: string; data: string } | null {
 }
 
 /**
- * Generic SSE POST reader adapted from the MVP `apps/web` client.
+ * Generic SSE POST reader (ported from the retired legacy MVP client).
  * Domain chat wiring belongs in later phases.
  */
 export async function streamSse(

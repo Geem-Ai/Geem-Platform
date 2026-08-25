@@ -517,6 +517,19 @@
     },
     "advancedSettings": "إعدادات متقدمة",
     "advancedSettingsHint": "تتحكم هذه القيم في كيفية إيجاد الخبير للمقاطع في معرفته قبل الإجابة.",
+    "clientAgent": {
+      "label": "السماح بواجهة وكيل العميل",
+      "description": "اسمح لمفاتيح API التي تحمل نطاق Agents AI باستخدام خبير مساحة العمل عبر واجهة حلقة الوكيل التي يديرها العميل.",
+      "securityWarning": "يمكن للعملاء الخارجيين إرسال تعليمات وتعريفات أدوات ونتائج أدوات غير موثوقة إلى هذا الخبير. راجع سياسته ولا تصدر مفاتيح محددة النطاق إلا للتطبيقات الموثوقة.",
+      "enabledButInactive": "هذا الإعداد محفوظ، لكنه غير نشط حتى استعادة وصول Agents AI. يمكنك إيقافه الآن.",
+      "checkingAccess": "جارٍ التحقق من وصول Agents AI…",
+      "accessCheckFailed": "تعذّر التحقق من وصول Agents AI، لذلك سيبقى التفعيل محظوراً حتى ينجح الفحص.",
+      "accessRequired": "يلزم اشتراك Agents AI نشط ومثبّت قبل تفعيل هذا الإعداد.",
+      "accessActive": "Agents AI نشط ومثبّت لمساحة العمل هذه.",
+      "renewAccess": "تجديد Agents AI",
+      "reinstallApp": "إعادة تثبيت Agents AI",
+      "purchaseAccess": "الحصول على Agents AI"
+    },
     "ragRange": "{{min}}–{{max}}",
     "ragConfig": "إعدادات الاسترجاع",
     "topK": "Top K",
@@ -1149,7 +1162,7 @@
   "apiKeys": {
     "eyebrow": "واجهة البرمجة",
     "title": "مفاتيح API",
-    "description": "أنشئ بيانات اعتماد مساحة العمل لواجهة المحادثة العامة. يُعرض السر مرة واحدة فقط.",
+    "description": "أنشئ بيانات اعتماد مساحة العمل لواجهتي المحادثة العامة وAgents AI. يُعرض السر مرة واحدة فقط.",
     "refresh": "تحديث",
     "retry": "إعادة المحاولة",
     "listTitle": "المفاتيح",
@@ -1164,6 +1177,14 @@
     "scope": "النطاق",
     "scopeChatWrite": "محادثة — إرسال رسائل إلى الخبراء",
     "scopeChatShort": "محادثة",
+    "scopeAgentWrite": "Agents AI — تشغيل حلقات الوكيل التي يديرها العميل",
+    "scopeAgentWriteHint": "اختياري. يسمح لهذا المفتاح باستدعاء ‎/api/v1/agent بعد تفعيل خبير، ولا يستبدل وصول المحادثة.",
+    "scopeAgentShort": "Agents AI",
+    "scopeAgentChecking": "جارٍ التحقق من وصول Agents AI…",
+    "scopeAgentCheckFailed": "تعذّر التحقق من وصول Agents AI، لذلك لا يمكن اختيار هذا النطاق.",
+    "scopeAgentAccessRequired": "اشترك في Agents AI وثبّته قبل اختيار هذا النطاق.",
+    "manageAgentsAi": "إدارة Agents AI",
+    "scopeReissueHint": "لا يمكن تغيير نطاقات مفتاح موجود. أبطله وأصدر مفتاحاً بديلاً لتغيير الوصول.",
     "key": "المفتاح",
     "created": "تاريخ الإنشاء",
     "lastUsed": "آخر استخدام",
@@ -1298,6 +1319,39 @@
     "manageView": "عرض",
     "installedAt": "ثُبّت في {{date}}",
     "integrationLater": "مثبت. إعداد التكامل سيكون متاحاً في مرحلة لاحقة.",
+    "agentsAi": {
+      "comingSoonHint": "سيتوفر Agents AI قريباً. ستظهر الخطط وعناصر التحكم بالتكامل هنا عند نشره.",
+      "installedSummary": "استخدم مفاتيح API محددة النطاق وخبراء مساحة العمل المفعّلين لتشغيل حلقات الوكيل التي يديرها العميل.",
+      "usageLoadError": "تعذّر تحميل وصول Agents AI واستخدامه.",
+      "noPlan": "لا توجد خطة نشطة",
+      "accessTitle": "الوصول والفترة الحالية",
+      "accessStatus": {
+        "not_entitled": "يلزم اشتراك",
+        "entitled_not_installed": "يلزم إعادة التثبيت",
+        "active": "نشط",
+        "expired": "منتهٍ",
+        "unavailable": "غير متاح"
+      },
+      "plan": "الخطة",
+      "installation": "التثبيت",
+      "installedState": "مثبّت",
+      "notInstalledState": "غير مثبّت",
+      "periodStart": "بداية الفترة",
+      "periodEnd": "نهاية الفترة",
+      "usageTitle": "طلبات الوكيل اليوم",
+      "usageHint": "يستهلك كل طلب إكمال مقبول وحدة يومية واحدة. طلبات النماذج لا تستهلك هذه الحصة.",
+      "usageValue": "{{used}} / {{limit}}",
+      "usageProgressLabel": "الاستخدام اليومي لطلبات Agents AI",
+      "resetsAt": "تُعاد التهيئة في {{date}}",
+      "integrationTitle": "التكامل",
+      "integrationHint": "استخدم عميلاً متوافقاً مع OpenAI مع مفتاح Bearer وترويسة X-Geem-Expert-Id.",
+      "baseUrl": "عنوان أساس الوكيل",
+      "modelsEndpoint": "نقطة نهاية النماذج",
+      "model": "النموذج",
+      "manageKeys": "مفاتيح API",
+      "manageExperts": "الخبراء",
+      "documentation": "دليل التكامل"
+    },
     "installedEmptyTitle": "لا توجد تطبيقات مثبتة",
     "installedEmptyHint": "تصفح المتجر لتثبيت تطبيقات مجانية لهذه المساحة.",
     "connections": {
@@ -1429,12 +1483,25 @@
       "standard": {
         "name": "ويدجت الدردشة القياسي",
         "description": "ويدجت دردشة واحد قابل للتضمين ومربوط بخبير Geem."
+      },
+      "agents-starter": {
+        "name": "Agents Starter",
+        "description": "خطة بداية للتطبيقات التي تشغّل حلقات وكيل يديرها العميل."
+      },
+      "agents-team": {
+        "name": "Agents Team",
+        "description": "سعة يومية موسعة للفرق وتكاملات الإنتاج."
+      },
+      "agents-scale": {
+        "name": "Agents Scale",
+        "description": "أعلى سعة إطلاق لأحمال وكلاء العميل الأكبر."
       }
     },
     "entitlements": {
       "connections": "{{count}} اتصالات",
       "widgets": "{{count}} ويدجت",
       "sessions": "{{count}} جلسات",
+      "agent_requests_daily": "{{count}} طلب وكيل / يوم بالتوقيت العالمي",
       "other": "{{key}}: {{value}}"
     },
     "payment": {
@@ -1493,6 +1560,11 @@
         "name": "ويدجت الدردشة",
         "shortDescription": "ضمّن ويدجت دردشة خبير Geem في موقعك.",
         "description": "اشترك شهرياً، ثبّت ويدجت الدردشة، اربط خبيراً واحداً لتأسيس المعرفة الخاصة، خصّص المظهر، والصق وسم السكربت في موقعك. يمكن تقييد النطاقات المسموح بها اختيارياً."
+      },
+      "agents-ai": {
+        "name": "Agents AI",
+        "shortDescription": "أضف استرجاع Geem وجولات النموذج إلى حلقات الوكيل التي يديرها العميل.",
+        "description": "استخدم نقطة نهاية Agents AI المتوافقة مع OpenAI من بيئة الوكيل لديك. ينفّذ تطبيقك الأدوات، بينما توفر Geem سياسة الخبير وسياق الاسترجاع وجولات النموذج."
       }
     },
     "chatWidget": {
@@ -1707,6 +1779,19 @@
     "appCheckoutForbidden": "الدفع غير متاح لهذا التطبيق",
     "appCheckoutInProgress": "عملية دفع لهذا التطبيق جارية بالفعل",
     "appPurchaseNotPayable": "لا يمكن شراء خطة هذا التطبيق",
+    "appRuntimeAccessUnavailable": "تعذّر التحقق من وصول Agents AI. حاول بعد قليل.",
+    "agentApiDisabled": "واجهة Agents AI غير متاحة مؤقتاً.",
+    "agentExpertNotEnabled": "فعّل واجهة وكيل العميل لهذا الخبير قبل استخدامها.",
+    "agentUserMessageRequired": "أضف رسالة مستخدم قبل طلب جولة الوكيل التالية.",
+    "agentInvalidToolTranscript": "سجل استدعاءات الأدوات المرسل غير مكتمل أو غير صالح.",
+    "agentUnsupportedParameter": "يحتوي هذا الطلب على معامل لا تدعمه Agents AI.",
+    "agentModelRequired": "النموذج مطلوب لطلبات Agents AI.",
+    "agentModelNotFound": "لم يتم العثور على نموذج Agents AI هذا.",
+    "agentToolLimitExceeded": "يحتوي الطلب على أدوات كثيرة أو بيانات مخطط أدوات تتجاوز الحد.",
+    "agentMessageLimitExceeded": "يتجاوز سجل الوكيل حد الرسائل المسموح.",
+    "agentClientInstructionLimitExceeded": "تتجاوز تعليمات العميل الحجم المسموح.",
+    "agentScopeRequired": "لا يحمل مفتاح API هذا نطاق Agents AI.",
+    "agentRequestQuotaExceeded": "تم استنفاد حصة طلبات Agents AI اليومية.",
     "connectorNotAvailable": "هذا الموصّل غير متاح بعد",
     "connectorNotSupported": "هذا الموصّل غير مدعوم",
     "connectorLimitReached": "تم بلوغ حد الموصلات لهذا التطبيق",

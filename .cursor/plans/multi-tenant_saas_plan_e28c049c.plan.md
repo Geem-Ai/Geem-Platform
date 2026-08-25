@@ -3,7 +3,7 @@ name: Multi-Tenant SaaS Plan
 overview: "Evolve the Geem MVP into a production multi-tenant SaaS platform (FastAPI + Celery + React) centered on Workspace, Expert, Subscription/Entitlements, Usage/Credit Ledger, and App Store foundations—with Workspace UI at apps/workspace_web founded on the Metronic Vite 9.5.0 AI Concept (read-only sample → selectively ported; siblings dashboard_web and landpage_web). Brand: Geem; avatar https://geem.ai/assets/geem-avatar.webp. **Core transformation status: COMPLETE (Phases 0–12, incl. Platform Admin 12H release gate); Phase 13 paid MCP Connectors App is pending; Phase 14 paid Agents AI App/client-owned Agent API is pending.**"
 todos:
   - id: phase-0
-    content: "Phase 0: Create apps/workspace_web (keep apps/web); Geem branding assets; backend foundations + Metronic prep"
+    content: "Phase 0: Create apps/workspace_web; Geem branding assets; backend foundations + Metronic prep. Legacy apps/web later retired."
     status: completed
   - id: phase-1
     content: "Phase 1: Identity/workspaces backend + Metronic AI shell (auth screens, sidebar, workspace switcher)"
@@ -106,19 +106,17 @@ Separate Vite SPAs under `apps/` by product surface (not one monolith frontend):
 
 ```text
 apps/
-├── api/                 # FastAPI backend (existing)
-├── web/                 # Existing MVP UI — keep as-is (do not rename or delete)
-├── workspace_web/       # New Workspace tenant product UI (this plan)
-├── dashboard_web/       # Platform Admin UI (future — Phase 12, last)
-└── landpage_web/        # Marketing / landing site (Astro static; independent of Phase 11/12)
+├── api/                 # FastAPI backend
+├── workspace_web/       # Workspace tenant product UI
+├── dashboard_web/       # Platform Admin UI
+└── landpage_web/        # Marketing / landing site (Astro static)
 ```
 
-- **Today:** MVP UI lives at [`apps/web`](apps/web) and **stays there**.
-- **Phase 0:** create a **new** [`apps/workspace_web`](apps/workspace_web) app (scaffold Vite/React + Metronic AI port). Do **not** rename, move, or delete `apps/web`.
-- Reuse useful patterns from `apps/web` by **copying/adapting** (e.g. SSE client ideas, `react-markdown` usage) into `workspace_web` — not by importing across apps at runtime.
-- Add a Docker Compose service (or profile) for `workspace_web` alongside the existing `web` service so the MVP remains runnable during the transition.
-- Do **not** implement `dashboard_web` or `landpage_web` in early phases; reserve the names so Platform Admin and marketing stay out of the Workspace app.
-- Shared UI primitives may later be extracted to a package if needed; until then, prefer copying/adapting only what `workspace_web` needs from Metronic AI. Do not create a cross-app runtime dependency on `samples/`.
+- Legacy MVP [`apps/web`](apps/web) was **retired** after the SaaS cutover; do not recreate it.
+- Product UI is [`apps/workspace_web`](apps/workspace_web) only (Metronic AI Concept port).
+- Useful MVP patterns (SSE client, `react-markdown`) were copied into `workspace_web` — not shared at runtime.
+- Compose runs `workspace_web` (no legacy `web` service).
+- Do **not** fold Platform Admin or marketing into `workspace_web`; keep one SPA per product surface.
 
 Metronic supplies visual design, shell, layout, chat UX, forms/modals/menus/drawers, theme, and responsive behavior for **`workspace_web`**. **FastAPI remains the source of truth** for auth, workspaces, Experts, RAG, billing, quotas, and all domain data. Discard Metronic mock data, fake chat replies, demo user menus, and demo module routing.
 
@@ -212,11 +210,9 @@ common/            # tenancy context, authz, idempotency, soft-delete mixins
 
 ### Frontend — `apps/workspace_web` (Workspace product only)
 
-Production Workspace UI destination: **new** [`apps/workspace_web`](apps/workspace_web).
+Production Workspace UI: [`apps/workspace_web`](apps/workspace_web). Legacy MVP `apps/web` is **retired**.
 
-[`apps/web`](apps/web) remains the existing MVP app — **do not rename, delete, or replace it**. Product development for the SaaS Workspace happens only in `workspace_web`.
-
-Future siblings (out of early-phase scope):
+Siblings (separate SPAs):
 - `apps/dashboard_web` — Platform Admin product UI
 - `apps/landpage_web` — public marketing / landing
 
@@ -498,10 +494,10 @@ Client responsibilities: auth headers/cookies, workspace context header/slug, st
 
 ### 19. Migration from existing frontend
 
-1. Phase 0: scaffold **new** `apps/workspace_web`; keep `apps/web` MVP running in parallel.
-2. Phase 1+: build authenticated Workspace product only in `workspace_web`.
-3. Phase 3–4: Expert + Chat live in `workspace_web`; `apps/web` Ask/Documents remain available as legacy MVP until deliberately retired later (optional; not required for SaaS launch).
-4. Do not delete `apps/web` as part of this plan unless a later explicit decision says so.
+1. Phase 0: scaffolded `apps/workspace_web` alongside then-kept `apps/web`.
+2. Phase 1+: authenticated Workspace product only in `workspace_web`.
+3. Phase 3–4: Expert + Chat live in `workspace_web`.
+4. **Done:** legacy `apps/web` and Compose `web` service retired; product UI is `workspace_web` only.
 
 ### 20. Frontend testing strategy
 
@@ -1886,8 +1882,8 @@ and unchanged Phase 7 behavior/contract under deterministic regression fixtures 
 | Product name | **Geem** |
 | Brand avatar | Vendored from `https://geem.ai/assets/geem-avatar.webp` |
 | Brand domain | `geem.ai` (tenant subdomains e.g. `{slug}.geem.ai` when configured) |
-| Frontend apps | `web` (MVP, kept); `workspace_web` (Geem SaaS); `landpage_web` (Astro marketing); `dashboard_web` (Platform Admin, 12A+) |
-| Workspace UI path | **New** `apps/workspace_web` — do **not** rename `apps/web` |
+| Frontend apps | `workspace_web` (Geem SaaS); `landpage_web` (Astro marketing); `dashboard_web` (Platform Admin). Legacy MVP `apps/web` **retired** |
+| Workspace UI path | `apps/workspace_web` (legacy `apps/web` removed) |
 | UI foundation | Metronic Vite 9.5.0 **AI Concept only** (ported into `apps/workspace_web`), rebranded as Geem |
 | Samples | Read-only (`metronic_vite_9.5.0`, `clickpay_gateway`); no runtime dependency |
 | Tenancy | Shared DB + `workspace_id` row isolation |
@@ -1917,7 +1913,7 @@ and unchanged Phase 7 behavior/contract under deterministic regression fixtures 
 4. Subdomain local-dev DX (header fallback only when `APP_ENV=local`)
 5. **UI port scope creep** — importing non-AI Metronic concepts (mitigate: dependency allowlist from this plan)
 6. **Tailwind v4 + existing CSS collision** during Phase 0/1 (mitigate: gradual cutover; keep MVP routes working)
-7. **New app bootstrap** for `workspace_web` (Vite 7 + Tailwind v4) while keeping `apps/web` runnable in parallel
+7. **New app bootstrap** for `workspace_web` (Vite 7 + Tailwind v4); legacy `apps/web` was retired after SaaS cutover
 8. Treating frontend hostname as security (mitigate: backend always re-resolves workspace)
 9. Payment return replay / forged return URLs (mitigate: server-side ClickPay query + idempotent `tran_ref` / `request_id`; no webhook trust in Phase 6)
 10. Client-agent prompt injection / RAG egress through caller-owned tools (mitigate: explicit Expert opt-in, one Geem-owned system prompt, demoted/bounded caller instructions, untrusted tool-result handling, and a clear warning that prompt controls cannot guarantee egress prevention)

@@ -63,7 +63,7 @@ Serve `dist/` from Nginx (aaPanel). See [docs/deployment.md](../../docs/deployme
 
 ## Boundaries
 
-- Do **not** import from `apps/workspace_web`, `apps/web`, or `samples/`
+- Do **not** import from `apps/workspace_web`, `apps/dashboard_web`, or `samples/`
 - Brand assets are vendored under `src/assets/`
 - No analytics by default
 - Independent of Phase 11 / Phase 12 work

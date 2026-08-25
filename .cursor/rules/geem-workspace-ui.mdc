@@ -6,7 +6,7 @@ alwaysApply: true
 # Geem Workspace frontend conventions
 
 - Product name: **Geem**. Workspace UI lives in `apps/workspace_web`.
-- Keep `apps/web` intact as the legacy MVP; never rename/delete it for SaaS work.
+- Legacy MVP `apps/web` is removed; do not recreate it.
 - UI foundation: Metronic Vite 9.5.0 **AI Concept only**, ported into `workspace_web`.
 - Never import from `samples/`. Never mutate Metronic sample source.
 - Do not port CRM/Mail/Calendar/Todo/Real Estate/Store Inventory concepts.

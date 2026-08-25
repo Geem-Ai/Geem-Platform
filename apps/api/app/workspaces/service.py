@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.apps_catalog.runtime_locks import acquire_workspace_runtime_mutation_fence
 from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
@@ -202,6 +203,7 @@ class WorkspaceService:
         if len(clean_reason) > 500:
             raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
 
+        acquire_workspace_runtime_mutation_fence(self.db, workspace_id)
         workspace = self.workspaces.get_by_id(workspace_id)
         if workspace is None:
             raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
@@ -257,6 +259,7 @@ class WorkspaceService:
         if clean_reason is not None and len(clean_reason) > 500:
             raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
 
+        acquire_workspace_runtime_mutation_fence(self.db, workspace_id)
         workspace = self.workspaces.get_by_id(workspace_id)
         if workspace is None:
             raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
@@ -333,6 +336,8 @@ class WorkspaceService:
         WorkspacePolicy.require(membership, WorkspaceAction.DELETE_WORKSPACE)
         if workspace.kind != WorkspaceKind.TENANT.value:
             raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        acquire_workspace_runtime_mutation_fence(self.db, workspace.id)
+        self.db.refresh(workspace)
         if workspace.deleted_at is not None:
             return
 

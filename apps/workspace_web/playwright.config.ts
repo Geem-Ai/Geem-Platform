@@ -1,10 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Phase 9G Apps browser smoke.
+ * Phase 9G / Phase 14 Apps browser smoke.
  * Runs against Vite preview with API routes mocked — proves UI wiring,
  * not live provider OAuth. Full commercial/connector paths are covered by
- * `apps/api/tests/integration/test_apps_management_phase9g.py`.
+ * backend integration suites, including `test_agent_paid_e2e.py`.
  */
 export default defineConfig({
   testDir: './e2e',

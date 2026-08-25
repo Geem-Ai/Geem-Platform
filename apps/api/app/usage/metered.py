@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
+from app.entitlements.quota import AiTokenLimits
 from app.usage.ai_usage import AiUsageService
 from app.usage.attribution import GenerationUsageContext
 from app.usage.weights import settled_tokens_from_payload
@@ -71,6 +72,27 @@ class MeteredWorkspaceGeneration:
             expert_id=self.expert_id,
         )
         self.db.commit()
+        return self._context
+
+    def reserve_in_transaction(
+        self, ai_limits: AiTokenLimits
+    ) -> GenerationUsageContext:
+        """Reserve on the caller's transaction with pre-resolved DB limits.
+
+        This admission primitive intentionally performs no commit and no
+        cache-backed entitlement lookup. The outer coordinator atomically
+        composes it with paid App access and request-quota admission.
+        """
+        AiUsageService(self.db, self.settings).reserve_ai_usage(
+            self.workspace_id,
+            self.request_id,
+            self.settings.effective_ai_usage_reservation_tokens,
+            conversation_id=self.conversation_id,
+            message_id=self.message_id,
+            user_id=self.user_id,
+            expert_id=self.expert_id,
+            limits=ai_limits,
+        )
         return self._context
 
     def settle(self, payload: dict[str, Any] | None) -> None:

@@ -12,7 +12,7 @@ Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](../pla
 - Treat that plan as the **source of truth** for scope, phase order, acceptance criteria, and locked decisions.
 - Work the current open phase; do not skip ahead unless the user explicitly asks.
 - Before implementing, read the plan frontmatter todos and the matching phase section.
-- Prefer locked plan choices over inventing alternate architecture (Expert as RAG unit, Metronic AI Concept only, keep `apps/web`, separate `dashboard_web` / `landpage_web`, shared-DB row tenancy, etc.).
+- Prefer locked plan choices over inventing alternate architecture (Expert as RAG unit, Metronic AI Concept only, `workspace_web` / `dashboard_web` / `landpage_web`, shared-DB row tenancy, etc.). `apps/web` is retired.
 
 ## Keep status current
 

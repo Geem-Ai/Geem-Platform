@@ -86,6 +86,19 @@ export type ApiErrorCode =
   | 'app_checkout_forbidden'
   | 'app_checkout_in_progress'
   | 'app_purchase_not_payable'
+  | 'app_runtime_access_unavailable'
+  | 'agent_api_disabled'
+  | 'agent_expert_not_enabled'
+  | 'agent_user_message_required'
+  | 'agent_invalid_tool_transcript'
+  | 'agent_unsupported_parameter'
+  | 'agent_model_required'
+  | 'model_not_found'
+  | 'agent_tool_limit_exceeded'
+  | 'agent_message_limit_exceeded'
+  | 'agent_client_instruction_limit_exceeded'
+  | 'agent_scope_required'
+  | 'agent_request_quota_exceeded'
   | 'connector_not_available'
   | 'connector_not_supported'
   | 'connector_limit_reached'
@@ -234,6 +247,19 @@ const KNOWN_CODES = new Set<string>([
   'app_checkout_forbidden',
   'app_checkout_in_progress',
   'app_purchase_not_payable',
+  'app_runtime_access_unavailable',
+  'agent_api_disabled',
+  'agent_expert_not_enabled',
+  'agent_user_message_required',
+  'agent_invalid_tool_transcript',
+  'agent_unsupported_parameter',
+  'agent_model_required',
+  'model_not_found',
+  'agent_tool_limit_exceeded',
+  'agent_message_limit_exceeded',
+  'agent_client_instruction_limit_exceeded',
+  'agent_scope_required',
+  'agent_request_quota_exceeded',
   'connector_not_available',
   'connector_not_supported',
   'connector_limit_reached',
@@ -435,6 +461,20 @@ export function errorMessageKey(code: string): string {
     app_checkout_forbidden: 'errors.appCheckoutForbidden',
     app_checkout_in_progress: 'errors.appCheckoutInProgress',
     app_purchase_not_payable: 'errors.appPurchaseNotPayable',
+    app_runtime_access_unavailable: 'errors.appRuntimeAccessUnavailable',
+    agent_api_disabled: 'errors.agentApiDisabled',
+    agent_expert_not_enabled: 'errors.agentExpertNotEnabled',
+    agent_user_message_required: 'errors.agentUserMessageRequired',
+    agent_invalid_tool_transcript: 'errors.agentInvalidToolTranscript',
+    agent_unsupported_parameter: 'errors.agentUnsupportedParameter',
+    agent_model_required: 'errors.agentModelRequired',
+    model_not_found: 'errors.agentModelNotFound',
+    agent_tool_limit_exceeded: 'errors.agentToolLimitExceeded',
+    agent_message_limit_exceeded: 'errors.agentMessageLimitExceeded',
+    agent_client_instruction_limit_exceeded:
+      'errors.agentClientInstructionLimitExceeded',
+    agent_scope_required: 'errors.agentScopeRequired',
+    agent_request_quota_exceeded: 'errors.agentRequestQuotaExceeded',
     connector_not_available: 'errors.connectorNotAvailable',
     connector_not_supported: 'errors.connectorNotSupported',
     connector_limit_reached: 'errors.connectorLimitReached',
@@ -547,6 +587,7 @@ export function isQuotaErrorCode(code: string | null | undefined): boolean {
     code === 'insufficient_credits' ||
     code === 'expert_limit_reached' ||
     code === 'storage_quota_exceeded' ||
-    code === 'connector_limit_reached'
+    code === 'connector_limit_reached' ||
+    code === 'agent_request_quota_exceeded'
   );
 }

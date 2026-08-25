@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.audit import AuditAction, AuditEntityType, record_audit
@@ -73,7 +73,7 @@ def normalize_system_instructions(raw: str | None) -> str:
 
 
 def normalize_rag_config(raw: dict[str, Any] | None) -> dict[str, Any]:
-    """Validate Expert rag_config. Only known knobs; Phase 3B applies them."""
+    """Validate retrieval knobs and the paid client-agent opt-in."""
     if raw is None:
         return dict(DEFAULT_RAG_CONFIG)
     if not isinstance(raw, dict):
@@ -104,7 +104,85 @@ def normalize_rag_config(raw: dict[str, Any] | None) -> dict[str, Any]:
                 "rag_config.similarity_threshold must be between 0 and 1.",
             )
         out["similarity_threshold"] = float(thr)
+    if "client_agent" in raw:
+        client_agent = raw["client_agent"]
+        if not isinstance(client_agent, dict):
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "rag_config.client_agent must be an object.",
+            )
+        unknown_client_keys = set(client_agent) - {"enabled"}
+        if unknown_client_keys:
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "Unsupported rag_config.client_agent keys.",
+                details={"supported": ["enabled"]},
+            )
+        enabled = client_agent.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "rag_config.client_agent.enabled must be a boolean.",
+            )
+        out["client_agent"] = {"enabled": enabled}
     return out
+
+
+def client_agent_enabled(raw: dict[str, Any] | None) -> bool:
+    """Return the stored opt-in without truthy coercion."""
+
+    if not isinstance(raw, dict):
+        return False
+    nested = raw.get("client_agent")
+    return isinstance(nested, dict) and nested.get("enabled") is True
+
+
+def _require_client_agent_paid_access(workspace_id: uuid.UUID) -> None:
+    """Linearize an enable transition against restrictive App mutations."""
+
+    from app.apps_catalog.access import AppAccessService
+    from app.apps_catalog.agent_product import (
+        AGENT_REQUESTS_DAILY_ENTITLEMENT,
+        AGENTS_AI_APP_SLUG,
+    )
+    from app.apps_catalog.runtime_locks import (
+        acquire_runtime_admission_fences,
+        begin_runtime_admission_transaction,
+    )
+    from app.db.session import SessionLocal
+
+    gate_db = SessionLocal()
+    try:
+        begin_runtime_admission_transaction(gate_db)
+        acquire_runtime_admission_fences(
+            gate_db,
+            workspace_id=workspace_id,
+            app_slugs=(AGENTS_AI_APP_SLUG,),
+        )
+        AppAccessService(gate_db).require_runtime_active(
+            workspace_id,
+            app_slug=AGENTS_AI_APP_SLUG,
+            entitlement_keys=(AGENT_REQUESTS_DAILY_ENTITLEMENT,),
+        )
+        gate_db.commit()
+    except SQLAlchemyError as exc:
+        try:
+            gate_db.rollback()
+        except SQLAlchemyError:
+            logger.exception("client_agent_access_rollback_failed")
+        raise AppError(
+            ErrorCategory.APP_RUNTIME_ACCESS_UNAVAILABLE,
+            "Agents AI access is temporarily unavailable.",
+            retryable=True,
+        ) from exc
+    except Exception:
+        try:
+            gate_db.rollback()
+        except SQLAlchemyError:
+            logger.exception("client_agent_access_rollback_failed")
+        raise
+    finally:
+        gate_db.close()
 
 
 def _normalize_name(name: str) -> str:
@@ -264,6 +342,10 @@ class ExpertService:
 
         ExpertQuotaService(self.db, self.settings).acquire_slot(workspace.id)
 
+        normalized_rag_config = normalize_rag_config(rag_config)
+        if client_agent_enabled(normalized_rag_config):
+            _require_client_agent_paid_access(workspace.id)
+
         expert = Expert(
             workspace_id=workspace.id,
             type=ExpertType.WORKSPACE.value,
@@ -271,7 +353,7 @@ class ExpertService:
             description=_normalize_description(description),
             icon_url=(icon_url.strip() if icon_url else None),
             system_instructions=normalize_system_instructions(system_instructions),
-            rag_config=normalize_rag_config(rag_config),
+            rag_config=normalized_rag_config,
             status=st,
             visibility=vis,
             availability_mode=ExpertAvailabilityMode.SELECTED_WORKSPACES.value,
@@ -345,7 +427,13 @@ class ExpertService:
         if system_instructions is not None:
             expert.system_instructions = normalize_system_instructions(system_instructions)
         if rag_config is not None:
-            expert.rag_config = normalize_rag_config(rag_config)
+            normalized_rag_config = normalize_rag_config(rag_config)
+            if (
+                client_agent_enabled(normalized_rag_config)
+                and not client_agent_enabled(expert.rag_config)
+            ):
+                _require_client_agent_paid_access(workspace.id)
+            expert.rag_config = normalized_rag_config
         if visibility is not None:
             if visibility not in {ExpertVisibility.PRIVATE.value, ExpertVisibility.WORKSPACE.value}:
                 raise AppError(ErrorCategory.VALIDATION, "Invalid visibility for Workspace Expert.")
@@ -914,6 +1002,13 @@ class ExpertService:
         if mode not in {m.value for m in ExpertAvailabilityMode}:
             raise AppError(ErrorCategory.VALIDATION, "Invalid availability_mode.")
 
+        normalized_rag_config = normalize_rag_config(rag_config)
+        if client_agent_enabled(normalized_rag_config):
+            raise AppError(
+                ErrorCategory.VALIDATION,
+                "Client agent API is available only for Workspace-owned Experts.",
+            )
+
         expert = Expert(
             workspace_id=None,
             type=ExpertType.PLATFORM.value,
@@ -921,7 +1016,7 @@ class ExpertService:
             description=_normalize_description(description),
             icon_url=(icon_url.strip() if icon_url else None),
             system_instructions=normalize_system_instructions(system_instructions),
-            rag_config=normalize_rag_config(rag_config),
+            rag_config=normalized_rag_config,
             status=st,
             visibility=vis,
             availability_mode=mode,
@@ -972,7 +1067,13 @@ class ExpertService:
         if system_instructions is not None:
             expert.system_instructions = normalize_system_instructions(system_instructions)
         if rag_config is not None:
-            expert.rag_config = normalize_rag_config(rag_config)
+            normalized_rag_config = normalize_rag_config(rag_config)
+            if client_agent_enabled(normalized_rag_config):
+                raise AppError(
+                    ErrorCategory.VALIDATION,
+                    "Client agent API is available only for Workspace-owned Experts.",
+                )
+            expert.rag_config = normalized_rag_config
         if visibility is not None:
             if visibility not in {
                 ExpertVisibility.PLATFORM_DRAFT.value,

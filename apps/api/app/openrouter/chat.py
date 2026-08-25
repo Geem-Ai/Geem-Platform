@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
+from app.agent.constants import SUPPORTED_AGENT_FINISH_REASONS
+from app.agent.schemas import (
+    AgentAssistantResponseMessage,
+    AgentFunctionCall,
+    AgentProviderResult,
+    AgentProviderStreamEvent,
+    AgentProviderToolCallDelta,
+    AgentToolCall,
+    AgentUsage,
+)
 from app.chat_attachments.payload import ChatTurnAttachment, build_user_message_content
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.openrouter.client import OpenRouterClient
+from app.openrouter.client import OpenRouterClient, OpenRouterStreamCancellation
 
 
 ANSWER_SCHEMA_HINT = """
@@ -136,6 +146,348 @@ class OpenRouterChatProvider:
                 history=history,
                 attachment=attachment,
             )
+
+    def complete_for_agent(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        system_prompt: str | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        tool_choice: str | Mapping[str, Any] = "none",
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
+        parallel_tool_calls: bool | None = None,
+    ) -> AgentProviderResult:
+        """Run one client-owned agent model round with pre-response fallback."""
+
+        payload = self._agent_payload(
+            self.settings.openrouter_chat_model,
+            messages,
+            system_prompt=system_prompt,
+            tools=tools,
+            tool_choice=tool_choice,
+            stream=False,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        names = _agent_declared_names(tools)
+        try:
+            return self._call_agent(
+                self.settings.openrouter_chat_model,
+                payload,
+                declared_names=names,
+            )
+        except AppError:
+            fallback = self.settings.openrouter_chat_fallback_model
+            payload["model"] = fallback
+            return self._call_agent(fallback, payload, declared_names=names)
+
+    def stream_for_agent(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        system_prompt: str | None = None,
+        tools: Sequence[Mapping[str, Any]] | None = None,
+        tool_choice: str | Mapping[str, Any] = "none",
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_tokens: int | None = None,
+        parallel_tool_calls: bool | None = None,
+        cancellation: OpenRouterStreamCancellation | None = None,
+    ) -> Iterator[AgentProviderStreamEvent]:
+        """Yield provider-neutral events; fallback is forbidden after event one."""
+
+        primary = self.settings.openrouter_chat_model
+        payload = self._agent_payload(
+            primary,
+            messages,
+            system_prompt=system_prompt,
+            tools=tools,
+            tool_choice=tool_choice,
+            stream=True,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        names = _agent_declared_names(tools)
+        emitted = False
+        try:
+            for event in self._call_agent_stream(
+                primary,
+                payload,
+                declared_names=names,
+                cancellation=cancellation,
+            ):
+                emitted = True
+                yield event
+        except AppError:
+            if emitted or (cancellation is not None and cancellation.cancelled):
+                raise
+            fallback = self.settings.openrouter_chat_fallback_model
+            payload["model"] = fallback
+            yield from self._call_agent_stream(
+                fallback,
+                payload,
+                declared_names=names,
+                cancellation=cancellation,
+            )
+
+    def complete_for_agent_stream(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        **kwargs: Any,
+    ) -> Iterator[AgentProviderStreamEvent]:
+        """Compatibility alias for callers that group Agent methods by prefix."""
+
+        yield from self.stream_for_agent(messages, **kwargs)
+
+    def _agent_payload(
+        self,
+        model: str,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        system_prompt: str | None,
+        tools: Sequence[Mapping[str, Any]] | None,
+        tool_choice: str | Mapping[str, Any],
+        stream: bool,
+        temperature: float | None,
+        top_p: float | None,
+        max_tokens: int | None,
+        parallel_tool_calls: bool | None,
+    ) -> dict[str, Any]:
+        resolved_system = self.system_prompt if system_prompt is None else system_prompt
+        if not isinstance(resolved_system, str) or not resolved_system.strip():
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "Agent provider requires a non-empty Geem system prompt.",
+            )
+        if not messages:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "Agent provider requires a normalized client transcript.",
+            )
+        caller_messages: list[dict[str, Any]] = []
+        for message in messages:
+            copied = dict(message)
+            if copied.get("role") not in {"user", "assistant", "tool"}:
+                raise AppError(
+                    ErrorCategory.GENERATION_FAILED,
+                    "Agent provider input contains an invalid or privileged role.",
+                )
+            caller_messages.append(copied)
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": resolved_system,
+                },
+                *caller_messages,
+            ],
+            "provider": self.client.provider_preferences(),
+        }
+        if stream:
+            payload["stream"] = True
+            payload["stream_options"] = {"include_usage": True}
+        if tools:
+            payload["tools"] = [dict(tool) for tool in tools]
+            payload["tool_choice"] = (
+                dict(tool_choice) if isinstance(tool_choice, Mapping) else tool_choice
+            )
+        for key, value in (
+            ("temperature", temperature),
+            ("top_p", top_p),
+            ("max_tokens", max_tokens),
+            ("parallel_tool_calls", parallel_tool_calls),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    def _call_agent(
+        self,
+        model: str,
+        payload: dict[str, Any],
+        *,
+        declared_names: frozenset[str],
+    ) -> AgentProviderResult:
+        body, meta, status = self.client.request(
+            "POST",
+            "/chat/completions",
+            json_body=payload,
+            timeout=120.0,
+        )
+        if status >= 400 or not isinstance(body, dict):
+            raise _agent_provider_error(
+                f"Agent generation failed with status {status}.",
+                model=model,
+                meta=meta,
+                retryable=status in {429, 500, 502, 503, 504, 529},
+            )
+        return validate_agent_provider_response(
+            body,
+            declared_names=declared_names,
+            meta=meta,
+            fallback_model=model,
+        )
+
+    def _call_agent_stream(
+        self,
+        model: str,
+        payload: dict[str, Any],
+        *,
+        declared_names: frozenset[str],
+        cancellation: OpenRouterStreamCancellation | None = None,
+    ) -> Iterator[AgentProviderStreamEvent]:
+        content_parts: list[str] = []
+        calls: dict[int, dict[str, str]] = {}
+        ids: set[str] = set()
+        mode: str | None = None
+        finish_reason: str | None = None
+        usage_raw: Any = None
+        provider_model: str | None = None
+        provider_request_id: str | None = None
+        provider_completion_id: str | None = None
+        started = False
+
+        stream_kwargs: dict[str, Any] = {
+            "json_body": payload,
+            "timeout": 180.0,
+        }
+        if cancellation is not None and getattr(
+            self.client, "supports_stream_cancellation", False
+        ):
+            stream_kwargs["cancellation"] = cancellation
+        for chunk in self.client.stream(
+            "POST",
+            "/chat/completions",
+            **stream_kwargs,
+        ):
+            if not isinstance(chunk, Mapping):
+                raise _agent_provider_error("Invalid Agent stream chunk.", model=model)
+            if isinstance(chunk.get("model"), str):
+                provider_model = chunk["model"]
+            if isinstance(chunk.get("_request_id"), str):
+                provider_request_id = chunk["_request_id"]
+            if isinstance(chunk.get("id"), str):
+                provider_completion_id = chunk["id"]
+            if chunk.get("usage") is not None:
+                usage_raw = chunk.get("usage")
+
+            choices = chunk.get("choices")
+            if choices is None:
+                choices = []
+            if not isinstance(choices, list) or len(choices) > 1:
+                raise _agent_provider_error("Invalid Agent stream choices.", model=model)
+            if not choices:
+                continue
+            choice = choices[0]
+            if not isinstance(choice, Mapping):
+                raise _agent_provider_error("Invalid Agent stream choice.", model=model)
+            if finish_reason is not None:
+                raise _agent_provider_error(
+                    "Agent provider emitted choices after the terminal choice.", model=model
+                )
+            if choice.get("index") not in {None, 0}:
+                raise _agent_provider_error("Invalid Agent stream choice index.", model=model)
+            delta = choice.get("delta")
+            if delta is None:
+                delta = {}
+            if not isinstance(delta, Mapping):
+                raise _agent_provider_error("Invalid Agent stream delta.", model=model)
+            if delta.get("role") not in {None, "assistant"}:
+                raise _agent_provider_error("Invalid Agent stream role.", model=model)
+
+            buffered: list[AgentProviderStreamEvent] = []
+            content = delta.get("content")
+            if content is not None:
+                if not isinstance(content, str):
+                    raise _agent_provider_error("Agent content delta must be text.", model=model)
+                if content:
+                    if mode == "tool":
+                        raise _agent_provider_error(
+                            "Agent provider mixed text and tool-call output.", model=model
+                        )
+                    mode = "text"
+                    content_parts.append(content)
+                    buffered.append(
+                        AgentProviderStreamEvent(type="content_delta", content=content)
+                    )
+
+            raw_tool_deltas = delta.get("tool_calls")
+            if raw_tool_deltas is not None:
+                if not isinstance(raw_tool_deltas, list):
+                    raise _agent_provider_error("Invalid tool-call delta list.", model=model)
+                for raw_delta in raw_tool_deltas:
+                    event = _consume_agent_tool_delta(
+                        raw_delta,
+                        calls=calls,
+                        ids=ids,
+                        declared_names=declared_names,
+                        model=model,
+                    )
+                    if mode == "text":
+                        raise _agent_provider_error(
+                            "Agent provider mixed text and tool-call output.", model=model
+                        )
+                    mode = "tool"
+                    if event is not None:
+                        buffered.append(event)
+
+            raw_finish = choice.get("finish_reason")
+            if raw_finish is not None:
+                if raw_finish not in SUPPORTED_AGENT_FINISH_REASONS:
+                    raise _agent_provider_error("Unsupported Agent finish reason.", model=model)
+                if finish_reason is not None and raw_finish != finish_reason:
+                    raise _agent_provider_error("Agent finish reason changed.", model=model)
+                finish_reason = raw_finish
+
+            if not started:
+                started = True
+                yield AgentProviderStreamEvent(type="start")
+            yield from buffered
+
+        if not started or finish_reason is None:
+            raise _agent_provider_error("Incomplete Agent stream.", model=model)
+
+        if mode == "tool":
+            if finish_reason != "tool_calls" or set(calls) != set(range(len(calls))):
+                raise _agent_provider_error("Invalid completed Agent tool stream.", model=model)
+            tool_calls = [
+                AgentToolCall(
+                    id=calls[index]["id"],
+                    type="function",
+                    function=AgentFunctionCall(
+                        name=calls[index]["name"],
+                        arguments=calls[index]["arguments"],
+                    ),
+                )
+                for index in range(len(calls))
+            ]
+            message = AgentAssistantResponseMessage(
+                content=None,
+                tool_calls=tool_calls,
+            )
+        else:
+            if finish_reason == "tool_calls":
+                raise _agent_provider_error("Tool finish without tool calls.", model=model)
+            message = AgentAssistantResponseMessage(
+                content="".join(content_parts),
+                tool_calls=None,
+            )
+        result = AgentProviderResult(
+            message=message,
+            finish_reason=finish_reason,
+            usage=_validated_agent_usage(usage_raw, model=model),
+            provider_model=provider_model or model,
+            provider_request_id=provider_request_id,
+            provider_completion_id=provider_completion_id,
+        )
+        yield AgentProviderStreamEvent(type="done", result=result)
 
     def answer_general(
         self,
@@ -482,3 +834,236 @@ class OpenRouterChatProvider:
             "citation_chunk_ids": data.get("citation_chunk_ids") or [],
             "insufficient_context": bool(data.get("insufficient_context", False)),
         }
+
+
+def validate_agent_provider_response(
+    body: Mapping[str, Any],
+    *,
+    declared_names: frozenset[str],
+    meta: Mapping[str, Any] | None = None,
+    fallback_model: str | None = None,
+) -> AgentProviderResult:
+    """Reject malformed provider output before it reaches the public protocol."""
+
+    choices = body.get("choices")
+    if not isinstance(choices, list) or len(choices) != 1:
+        raise _agent_provider_error(
+            "Agent provider must return exactly one choice.", model=fallback_model
+        )
+    choice = choices[0]
+    if not isinstance(choice, Mapping):
+        raise _agent_provider_error("Invalid Agent provider choice.", model=fallback_model)
+    if choice.get("index") not in {None, 0}:
+        raise _agent_provider_error("Invalid Agent provider choice index.", model=fallback_model)
+    message = choice.get("message")
+    finish_reason = choice.get("finish_reason")
+    if not isinstance(message, Mapping) or message.get("role") != "assistant":
+        raise _agent_provider_error("Invalid Agent assistant message.", model=fallback_model)
+    if finish_reason not in SUPPORTED_AGENT_FINISH_REASONS:
+        raise _agent_provider_error("Unsupported Agent finish reason.", model=fallback_model)
+
+    raw_calls = message.get("tool_calls")
+    if raw_calls is not None:
+        if not isinstance(raw_calls, list) or not raw_calls:
+            raise _agent_provider_error("Agent tool_calls must be non-empty.", model=fallback_model)
+        if message.get("content") is not None or finish_reason != "tool_calls":
+            raise _agent_provider_error(
+                "Agent tool output has inconsistent content or finish reason.",
+                model=fallback_model,
+            )
+        calls: list[AgentToolCall] = []
+        ids: set[str] = set()
+        for raw in raw_calls:
+            if not isinstance(raw, Mapping):
+                raise _agent_provider_error("Invalid Agent tool call.", model=fallback_model)
+            function = raw.get("function")
+            call_id = raw.get("id")
+            if (
+                not isinstance(call_id, str)
+                or not call_id
+                or call_id in ids
+                or raw.get("type") != "function"
+                or not isinstance(function, Mapping)
+            ):
+                raise _agent_provider_error(
+                    "Invalid Agent tool call metadata.", model=fallback_model
+                )
+            name = function.get("name")
+            arguments = function.get("arguments")
+            if name not in declared_names or not isinstance(arguments, str):
+                raise _agent_provider_error(
+                    "Agent provider returned an undeclared or malformed function call.",
+                    model=fallback_model,
+                )
+            ids.add(call_id)
+            try:
+                calls.append(
+                    AgentToolCall(
+                        id=call_id,
+                        type="function",
+                        function=AgentFunctionCall(name=name, arguments=arguments),
+                    )
+                )
+            except Exception as exc:
+                raise _agent_provider_error(
+                    "Agent provider returned invalid tool-call data.", model=fallback_model
+                ) from exc
+        parsed_message = AgentAssistantResponseMessage(
+            content=None,
+            tool_calls=calls,
+        )
+    else:
+        content = message.get("content")
+        if not isinstance(content, str) or finish_reason == "tool_calls":
+            raise _agent_provider_error(
+                "Agent text output has inconsistent content or finish reason.",
+                model=fallback_model,
+            )
+        parsed_message = AgentAssistantResponseMessage(content=content, tool_calls=None)
+
+    metadata = meta or {}
+    raw_usage = body.get("usage")
+    if raw_usage is None:
+        raw_usage = metadata.get("usage")
+    provider_model = body.get("model")
+    provider_completion_id = body.get("id")
+    return AgentProviderResult(
+        message=parsed_message,
+        finish_reason=finish_reason,
+        usage=_validated_agent_usage(raw_usage, model=fallback_model),
+        provider_model=provider_model if isinstance(provider_model, str) else fallback_model,
+        provider_request_id=(
+            metadata.get("request_id")
+            if isinstance(metadata.get("request_id"), str)
+            else None
+        ),
+        provider_completion_id=(
+            provider_completion_id
+            if isinstance(provider_completion_id, str)
+            else metadata.get("openrouter_id")
+            if isinstance(metadata.get("openrouter_id"), str)
+            else None
+        ),
+    )
+
+
+def _consume_agent_tool_delta(
+    raw_delta: Any,
+    *,
+    calls: dict[int, dict[str, str]],
+    ids: set[str],
+    declared_names: frozenset[str],
+    model: str,
+) -> AgentProviderStreamEvent | None:
+    if not isinstance(raw_delta, Mapping):
+        raise _agent_provider_error("Invalid Agent tool-call delta.", model=model)
+    index = raw_delta.get("index")
+    if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+        raise _agent_provider_error("Invalid Agent tool-call index.", model=model)
+    function = raw_delta.get("function")
+    if function is None:
+        function = {}
+    if not isinstance(function, Mapping):
+        raise _agent_provider_error("Invalid Agent function delta.", model=model)
+
+    call_id = raw_delta.get("id")
+    call_type = raw_delta.get("type")
+    name = function.get("name")
+    arguments = function.get("arguments")
+    if arguments is not None and not isinstance(arguments, str):
+        raise _agent_provider_error("Agent argument delta must be text.", model=model)
+
+    first = index not in calls
+    if first:
+        if (
+            not isinstance(call_id, str)
+            or not call_id
+            or call_id in ids
+            or call_type != "function"
+            or not isinstance(name, str)
+            or name not in declared_names
+        ):
+            raise _agent_provider_error(
+                "The first Agent tool delta lacks valid function metadata.", model=model
+            )
+        calls[index] = {
+            "id": call_id,
+            "name": name,
+            "arguments": arguments or "",
+        }
+        ids.add(call_id)
+        parsed = AgentProviderToolCallDelta(
+            index=index,
+            id=call_id,
+            type="function",
+            name=name,
+            arguments=arguments,
+        )
+    else:
+        current = calls[index]
+        if call_id is not None and call_id != current["id"]:
+            raise _agent_provider_error("Agent tool-call id changed.", model=model)
+        if call_type is not None and call_type != "function":
+            raise _agent_provider_error("Agent tool-call type changed.", model=model)
+        if name is not None and name != current["name"]:
+            raise _agent_provider_error("Agent function name changed.", model=model)
+        if arguments is not None:
+            current["arguments"] += arguments
+        else:
+            return None
+        parsed = AgentProviderToolCallDelta(index=index, arguments=arguments)
+    return AgentProviderStreamEvent(type="tool_call_delta", tool_call=parsed)
+
+
+def _agent_declared_names(
+    tools: Sequence[Mapping[str, Any]] | None,
+) -> frozenset[str]:
+    names: set[str] = set()
+    for tool in tools or ():
+        function = tool.get("function") if isinstance(tool, Mapping) else None
+        if isinstance(function, Mapping) and isinstance(function.get("name"), str):
+            names.add(function["name"])
+    return frozenset(names)
+
+
+def _validated_agent_usage(raw: Any, *, model: str | None) -> AgentUsage:
+    if not isinstance(raw, Mapping):
+        raise _agent_provider_error("Agent provider omitted token usage.", model=model)
+    values: dict[str, int] = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        value = raw.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise _agent_provider_error("Agent provider returned invalid token usage.", model=model)
+        values[key] = value
+    if values["total_tokens"] != values["prompt_tokens"] + values["completion_tokens"]:
+        raise _agent_provider_error(
+            "Agent provider returned inconsistent token usage.", model=model
+        )
+    return AgentUsage(**values)
+
+
+def _agent_provider_error(
+    message: str,
+    *,
+    model: str | None = None,
+    meta: Mapping[str, Any] | None = None,
+    retryable: bool = False,
+) -> AppError:
+    details: dict[str, Any] = {}
+    if model:
+        details["model"] = model
+    if meta and isinstance(meta.get("openrouter_id"), str):
+        details["openrouter_id"] = meta["openrouter_id"]
+    return AppError(
+        ErrorCategory.GENERATION_FAILED,
+        message,
+        details=details or None,
+        retryable=retryable,
+    )
+
+
+__all__ = [
+    "OpenRouterChatProvider",
+    "extract_partial_json_string",
+    "validate_agent_provider_response",
+]

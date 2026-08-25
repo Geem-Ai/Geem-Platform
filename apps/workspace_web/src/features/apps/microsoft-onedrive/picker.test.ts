@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildOneDrivePickerActionUrl, openOneDrivePicker } from './picker';
 
 describe('Microsoft OneDrive picker module', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
   it('builds ODSP FilePicker.aspx URL for work/school', () => {
     const q = new URLSearchParams({ filePicker: '{}' });
     expect(

@@ -10,6 +10,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.apps_catalog.access import AppAccessSnapshot, AppAccessStatus
+from app.apps_catalog.agent_usage import AgentsAiUsageSnapshot
 from app.apps_catalog.models import (
     AppBillingType,
     AppInstallation,
@@ -78,6 +79,33 @@ class AppAccessOut(BaseModel):
     can_renew: bool = False
     can_install: bool = False
     can_uninstall: bool = False
+
+
+class AgentsAiUsageAccessOut(BaseModel):
+    status: str
+    plan_id: uuid.UUID | None = None
+    plan_code: str | None = None
+    plan_name: str | None = None
+    plan_price_amount: str | None = None
+    plan_currency: str | None = None
+    plan_billing_interval: str | None = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    commercially_entitled: bool = False
+    installed: bool = False
+
+
+class AgentsAiDailyUsageOut(BaseModel):
+    used: int = 0
+    limit: int = 0
+    reset_at: datetime
+
+
+class AgentsAiUsageOut(BaseModel):
+    access: AgentsAiUsageAccessOut
+    agent_requests_daily: AgentsAiDailyUsageOut
+    base_url: str
+    model: str
 
 
 class ConnectionUsageOut(BaseModel):
@@ -197,6 +225,32 @@ def to_access_out(snapshot: AppAccessSnapshot) -> AppAccessOut:
         can_renew=snapshot.can_renew,
         can_install=snapshot.can_install,
         can_uninstall=snapshot.can_uninstall,
+    )
+
+
+def to_agents_ai_usage_out(snapshot: AgentsAiUsageSnapshot) -> AgentsAiUsageOut:
+    access = snapshot.access
+    return AgentsAiUsageOut(
+        access=AgentsAiUsageAccessOut(
+            status=access.status.value,
+            plan_id=access.plan_id,
+            plan_code=access.plan_code,
+            plan_name=access.plan_name,
+            plan_price_amount=snapshot.plan_price_amount,
+            plan_currency=snapshot.plan_currency,
+            plan_billing_interval=snapshot.plan_billing_interval,
+            current_period_start=_utc(access.current_period_start),
+            current_period_end=_utc(access.current_period_end),
+            commercially_entitled=access.commercially_entitled,
+            installed=access.installed,
+        ),
+        agent_requests_daily=AgentsAiDailyUsageOut(
+            used=snapshot.used,
+            limit=snapshot.limit,
+            reset_at=snapshot.window.end,
+        ),
+        base_url=snapshot.base_url,
+        model=snapshot.model,
     )
 
 

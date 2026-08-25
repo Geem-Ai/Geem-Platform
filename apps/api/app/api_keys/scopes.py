@@ -5,7 +5,8 @@ from __future__ import annotations
 from app.core.errors import AppError, ErrorCategory
 
 SCOPE_CHAT_WRITE = "chat:write"
-ALLOWED_SCOPES: frozenset[str] = frozenset({SCOPE_CHAT_WRITE})
+SCOPE_AGENT_WRITE = "agent:write"
+ALLOWED_SCOPES: frozenset[str] = frozenset({SCOPE_CHAT_WRITE, SCOPE_AGENT_WRITE})
 DEFAULT_SCOPES: tuple[str, ...] = (SCOPE_CHAT_WRITE,)
 
 

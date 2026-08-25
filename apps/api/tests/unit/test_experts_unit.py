@@ -7,7 +7,11 @@ import pytest
 from app.core.errors import AppError, ErrorCategory
 from app.experts.models import ExpertVisibility
 from app.experts.policy import ExpertAction, ExpertPolicy
-from app.experts.service import normalize_rag_config, normalize_system_instructions
+from app.experts.service import (
+    client_agent_enabled,
+    normalize_rag_config,
+    normalize_system_instructions,
+)
 from app.workspaces.permissions import ADMIN_PERMISSION_KEYS, MEMBER_PERMISSION_KEYS
 from tests.support.rbac import fake_membership
 
@@ -48,6 +52,23 @@ def test_normalize_rag_config() -> None:
         normalize_rag_config({"top_k": 0})
     with pytest.raises(AppError):
         normalize_rag_config({"similarity_threshold": 1.5})
+
+
+def test_normalize_client_agent_config_is_strict_and_defaults_disabled() -> None:
+    assert normalize_rag_config({"client_agent": {}}) == {
+        "client_agent": {"enabled": False}
+    }
+    enabled = normalize_rag_config({"top_k": 4, "client_agent": {"enabled": True}})
+    assert enabled == {"top_k": 4, "client_agent": {"enabled": True}}
+    assert client_agent_enabled(enabled)
+    assert not client_agent_enabled({})
+
+    with pytest.raises(AppError):
+        normalize_rag_config({"client_agent": True})
+    with pytest.raises(AppError):
+        normalize_rag_config({"client_agent": {"enabled": 1}})
+    with pytest.raises(AppError):
+        normalize_rag_config({"client_agent": {"enabled": False, "future": True}})
 
 
 def test_normalize_system_instructions() -> None:

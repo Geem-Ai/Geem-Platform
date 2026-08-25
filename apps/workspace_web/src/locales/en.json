@@ -517,6 +517,19 @@
     },
     "advancedSettings": "Advanced settings",
     "advancedSettingsHint": "Controls how this Expert finds passages in its knowledge before answering.",
+    "clientAgent": {
+      "label": "Allow client agent API",
+      "description": "Let API keys with the Agents AI scope use this Workspace Expert through the client-owned agent loop API.",
+      "securityWarning": "External clients can send untrusted instructions, tool definitions, and tool results to this Expert. Review its policy and issue scoped keys only to trusted applications.",
+      "enabledButInactive": "This setting is stored, but it is inactive until Agents AI access is restored. You can turn it off now.",
+      "checkingAccess": "Checking Agents AI access…",
+      "accessCheckFailed": "Agents AI access could not be verified. Enabling stays blocked until the check succeeds.",
+      "accessRequired": "An active, installed Agents AI subscription is required before this setting can be enabled.",
+      "accessActive": "Agents AI is active and installed for this workspace.",
+      "renewAccess": "Renew Agents AI",
+      "reinstallApp": "Reinstall Agents AI",
+      "purchaseAccess": "Get Agents AI"
+    },
     "ragRange": "{{min}}–{{max}}",
     "ragConfig": "Retrieval settings",
     "topK": "Top K",
@@ -1137,7 +1150,7 @@
   "apiKeys": {
     "eyebrow": "API",
     "title": "API Keys",
-    "description": "Create Workspace credentials for the public Chat API. The secret is shown once.",
+    "description": "Create Workspace credentials for the public Chat and Agents AI APIs. The secret is shown once.",
     "refresh": "Refresh",
     "retry": "Retry",
     "listTitle": "Keys",
@@ -1152,6 +1165,14 @@
     "scope": "Scope",
     "scopeChatWrite": "Chat — Send messages to Experts",
     "scopeChatShort": "Chat",
+    "scopeAgentWrite": "Agents AI — Run client-owned agent loops",
+    "scopeAgentWriteHint": "Optional. Allows this key to call /api/v1/agent after an Expert is enabled. It does not replace Chat access.",
+    "scopeAgentShort": "Agents AI",
+    "scopeAgentChecking": "Checking Agents AI access…",
+    "scopeAgentCheckFailed": "Agents AI access could not be verified, so this scope cannot be selected.",
+    "scopeAgentAccessRequired": "Subscribe to and install Agents AI before selecting this scope.",
+    "manageAgentsAi": "Manage Agents AI",
+    "scopeReissueHint": "Scopes cannot be changed on an existing key. Revoke it and issue a replacement key to change access.",
     "key": "Key",
     "created": "Created",
     "lastUsed": "Last used",
@@ -1286,6 +1307,39 @@
     "manageView": "View",
     "installedAt": "Installed {{date}}",
     "integrationLater": "Installed. Integration setup will be available in a later phase.",
+    "agentsAi": {
+      "comingSoonHint": "Agents AI is coming soon. Plans and integration controls will appear here when it is published.",
+      "installedSummary": "Use scoped API keys and enabled Workspace Experts to run client-owned agent loops.",
+      "usageLoadError": "Couldn’t load Agents AI access and usage.",
+      "noPlan": "No active plan",
+      "accessTitle": "Access and current period",
+      "accessStatus": {
+        "not_entitled": "Subscription required",
+        "entitled_not_installed": "Reinstall required",
+        "active": "Active",
+        "expired": "Expired",
+        "unavailable": "Unavailable"
+      },
+      "plan": "Plan",
+      "installation": "Installation",
+      "installedState": "Installed",
+      "notInstalledState": "Not installed",
+      "periodStart": "Period starts",
+      "periodEnd": "Period ends",
+      "usageTitle": "Agent requests today",
+      "usageHint": "Each admitted completion request uses one daily unit. Models requests do not consume this quota.",
+      "usageValue": "{{used}} / {{limit}}",
+      "usageProgressLabel": "Daily Agents AI request usage",
+      "resetsAt": "Resets at {{date}}",
+      "integrationTitle": "Integration",
+      "integrationHint": "Use an OpenAI-compatible client with a Bearer API key and the X-Geem-Expert-Id header.",
+      "baseUrl": "Agent base URL",
+      "modelsEndpoint": "Models endpoint",
+      "model": "Model",
+      "manageKeys": "API Keys",
+      "manageExperts": "Experts",
+      "documentation": "Integrator documentation"
+    },
     "installedEmptyTitle": "No installed apps",
     "installedEmptyHint": "Browse the App Store to install free apps for this workspace.",
     "connections": {
@@ -1417,12 +1471,25 @@
       "standard": {
         "name": "Chat Widget Standard",
         "description": "One embeddable chat widget grounded on a Geem Expert."
+      },
+      "agents-starter": {
+        "name": "Agents Starter",
+        "description": "Entry plan for applications running client-owned agent loops."
+      },
+      "agents-team": {
+        "name": "Agents Team",
+        "description": "Expanded daily agent capacity for teams and production integrations."
+      },
+      "agents-scale": {
+        "name": "Agents Scale",
+        "description": "Highest launch capacity for larger client-owned agent workloads."
       }
     },
     "entitlements": {
       "connections": "{{count}} connections",
       "widgets": "{{count}} widgets",
       "sessions": "{{count}} sessions",
+      "agent_requests_daily": "{{count}} agent requests / UTC day",
       "other": "{{key}}: {{value}}"
     },
     "payment": {
@@ -1481,6 +1548,11 @@
         "name": "Chat Widget",
         "shortDescription": "Embed a Geem Expert chat widget on your website.",
         "description": "Subscribe monthly, install Chat Widget, bind one Expert for private RAG grounding, customize appearance, and paste a script tag on your site. Optional allowed origins restrict which domains can load the widget."
+      },
+      "agents-ai": {
+        "name": "Agents AI",
+        "shortDescription": "Add Geem RAG and model rounds to client-owned agent loops.",
+        "description": "Use the OpenAI-compatible Agents AI endpoint from your own agent runtime. Your application executes tools; Geem supplies Expert policy, retrieval context, and model rounds."
       }
     },
     "chatWidget": {
@@ -1695,6 +1767,19 @@
     "appCheckoutForbidden": "Checkout is not available for this App",
     "appCheckoutInProgress": "A checkout for this app is already in progress",
     "appPurchaseNotPayable": "This App plan cannot be purchased",
+    "appRuntimeAccessUnavailable": "Agents AI access could not be verified. Try again shortly.",
+    "agentApiDisabled": "The Agents AI API is temporarily unavailable.",
+    "agentExpertNotEnabled": "Enable the client agent API for this Expert before using it.",
+    "agentUserMessageRequired": "Add a user message before requesting the next agent round.",
+    "agentInvalidToolTranscript": "The submitted tool-call transcript is incomplete or invalid.",
+    "agentUnsupportedParameter": "This request contains a parameter that Agents AI does not support.",
+    "agentModelRequired": "A model is required for Agents AI requests.",
+    "agentModelNotFound": "That Agents AI model was not found.",
+    "agentToolLimitExceeded": "This request contains too many tools or too much tool schema data.",
+    "agentMessageLimitExceeded": "This agent transcript exceeds the allowed message limit.",
+    "agentClientInstructionLimitExceeded": "Client instructions exceed the allowed size.",
+    "agentScopeRequired": "This API key does not have the Agents AI scope.",
+    "agentRequestQuotaExceeded": "The Agents AI daily request quota is exhausted.",
     "connectorNotAvailable": "This connector is not available yet",
     "connectorNotSupported": "This connector is not supported",
     "connectorLimitReached": "Connection limit reached for this app",

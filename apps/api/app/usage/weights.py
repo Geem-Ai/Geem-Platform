@@ -48,6 +48,7 @@ OPERATION_FAMILY: dict[str, OpenRouterFamily] = {
     "chat": OpenRouterFamily.CHAT,
     "generation": OpenRouterFamily.CHAT,
     "generation_attempt": OpenRouterFamily.CHAT,
+    "agent_completion": OpenRouterFamily.CHAT,
     "general_expert": OpenRouterFamily.CHAT,
     "general_fallback": OpenRouterFamily.CHAT,
     "general_chat": OpenRouterFamily.CHAT,

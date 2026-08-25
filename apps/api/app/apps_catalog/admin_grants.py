@@ -26,6 +26,7 @@ from app.apps_catalog.models import (
     CatalogApp,
 )
 from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.runtime_locks import acquire_workspace_app_runtime_mutation_fence
 from app.core.errors import AppError, ErrorCategory
 from app.identity.models import User
 from app.usage.locks import workspace_app_advisory_lock
@@ -53,6 +54,9 @@ class AppAdminGrantService:
         self._assert_one_time(app)
         self._validate_plan(app, plan, require_active=True)
 
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=app.slug
+        )
         workspace_app_advisory_lock(self.db, workspace.id, app.id)
         existing_by_key = self.repo.get_license_by_idempotency_key(idempotency_key)
         if existing_by_key is not None:
@@ -122,6 +126,9 @@ class AppAdminGrantService:
     ) -> AppLicense:
         self._assert_tenant(workspace)
         self._assert_one_time(app)
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=app.slug
+        )
         locked = self.repo.get_license_for_update(workspace.id, app.id)
         if locked is None or locked.status != AppLicenseStatus.ACTIVE.value:
             raise AppError(
@@ -148,6 +155,9 @@ class AppAdminGrantService:
         self._assert_subscription(app)
         self._validate_plan(app, plan, require_active=True)
 
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=app.slug
+        )
         workspace_app_advisory_lock(self.db, workspace.id, app.id)
         existing_by_key = self.repo.get_subscription_by_idempotency_key(idempotency_key)
         if existing_by_key is not None:
@@ -218,6 +228,9 @@ class AppAdminGrantService:
         self._assert_tenant(workspace)
         self._assert_subscription(app)
 
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=app.slug
+        )
         workspace_app_advisory_lock(self.db, workspace.id, app.id)
         existing_by_key = self.repo.get_subscription_by_idempotency_key(idempotency_key)
         if existing_by_key is not None:
@@ -264,6 +277,9 @@ class AppAdminGrantService:
     ) -> AppSubscription:
         self._assert_tenant(workspace)
         self._assert_subscription(app)
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=app.slug
+        )
         sub = self.repo.get_subscription_for_update(workspace.id, app.id)
         if sub is None:
             raise AppError(

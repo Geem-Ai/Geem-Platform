@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import random
+import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx
@@ -18,6 +19,61 @@ logger = logging.getLogger(__name__)
 
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504, 529}
 BACKOFF_SECONDS = [2.0, 5.0, 15.0, 45.0]
+
+
+class OpenRouterStreamCancellation:
+    """Thread-safe ownership handle for one active streaming response.
+
+    Agent SSE iteration runs in a worker thread.  The ASGI task keeps this
+    handle so a downstream disconnect can close the active httpx response and
+    unblock a worker that is waiting for the next provider frame.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._closer: Callable[[], None] | None = None
+
+    @property
+    def cancelled(self) -> bool:
+        with self._lock:
+            return self._cancelled
+
+    def bind(self, closer: Callable[[], None]) -> bool:
+        """Bind the current response closer, or close it if already cancelled."""
+
+        with self._lock:
+            if self._cancelled:
+                close_now = True
+            else:
+                self._closer = closer
+                close_now = False
+        if close_now:
+            self._close(closer)
+            return False
+        return True
+
+    def unbind(self, closer: Callable[[], None]) -> None:
+        with self._lock:
+            if self._closer is closer:
+                self._closer = None
+
+    def cancel(self) -> None:
+        """Idempotently close the currently bound provider response."""
+
+        with self._lock:
+            self._cancelled = True
+            closer = self._closer
+            self._closer = None
+        if closer is not None:
+            self._close(closer)
+
+    @staticmethod
+    def _close(closer: Callable[[], None]) -> None:
+        try:
+            closer()
+        except Exception:
+            logger.exception("openrouter_stream_cancel_close_failed")
 
 
 def _openrouter_span_name(path: str) -> str:
@@ -34,6 +90,8 @@ def _openrouter_span_name(path: str) -> str:
 
 
 class OpenRouterClient:
+    supports_stream_cancellation = True
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self.base_url = self.settings.openrouter_base_url.rstrip("/")
@@ -60,6 +118,7 @@ class OpenRouterClient:
         path: str,
         json_body: dict[str, Any] | None = None,
         timeout: float = 180.0,
+        cancellation: OpenRouterStreamCancellation | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Yield parsed OpenRouter SSE chunk objects from a streaming chat request."""
         if not self.api_key:
@@ -68,43 +127,81 @@ class OpenRouterClient:
         request_id = str(uuid.uuid4())
         url = f"{self.base_url}{path}"
         started = time.perf_counter()
-        with start_span(_openrouter_span_name(path)):
-            with httpx.Client(timeout=timeout) as client:
-                with client.stream(
-                    method,
-                    url,
-                    headers=self._headers(request_id),
-                    json=json_body,
-                ) as response:
-                    if response.status_code >= 400:
+        try:
+            with start_span(_openrouter_span_name(path)):
+                with httpx.Client(timeout=timeout) as client:
+                    with client.stream(
+                        method,
+                        url,
+                        headers=self._headers(request_id),
+                        json=json_body,
+                    ) as response:
+                        closer: Callable[[], None] | None = None
+                        bound = True
+                        if cancellation is not None:
+                            closer = response.close
+                            bound = cancellation.bind(closer)
                         try:
-                            err_body = response.read().decode("utf-8", errors="replace")
-                        except Exception:
-                            err_body = ""
-                        raise AppError(
-                            ErrorCategory.GENERATION_FAILED,
-                            f"OpenRouter stream failed with status {response.status_code}",
-                            details={"status": response.status_code, "request_id": request_id},
-                            retryable=response.status_code in RETRYABLE_STATUS,
-                        )
+                            if not bound:
+                                return
+                            if response.status_code >= 400:
+                                raise AppError(
+                                    ErrorCategory.GENERATION_FAILED,
+                                    f"OpenRouter stream failed with status {response.status_code}",
+                                    details={
+                                        "status": response.status_code,
+                                        "request_id": request_id,
+                                    },
+                                    retryable=response.status_code in RETRYABLE_STATUS,
+                                )
 
-                    for line in response.iter_lines():
-                        if not line:
-                            continue
-                        if line.startswith(":"):
-                            continue
-                        if not line.startswith("data:"):
-                            continue
-                        data = line[5:].strip()
-                        if not data or data == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data)
-                        except json.JSONDecodeError:
-                            continue
-                        if isinstance(chunk, dict):
-                            chunk["_request_id"] = request_id
-                            yield chunk
+                            for line in response.iter_lines():
+                                if not line:
+                                    continue
+                                if line.startswith(":"):
+                                    continue
+                                if not line.startswith("data:"):
+                                    continue
+                                data = line[5:].strip()
+                                if not data or data == "[DONE]":
+                                    break
+                                try:
+                                    chunk = json.loads(data)
+                                except json.JSONDecodeError as exc:
+                                    raise AppError(
+                                        ErrorCategory.GENERATION_FAILED,
+                                        "OpenRouter returned malformed stream data.",
+                                        details={"request_id": request_id},
+                                        retryable=True,
+                                    ) from exc
+                                if not isinstance(chunk, dict):
+                                    raise AppError(
+                                        ErrorCategory.GENERATION_FAILED,
+                                        "OpenRouter returned malformed stream data.",
+                                        details={"request_id": request_id},
+                                        retryable=True,
+                                    )
+                                chunk["_request_id"] = request_id
+                                yield chunk
+                        finally:
+                            if cancellation is not None and closer is not None:
+                                cancellation.unbind(closer)
+        except AppError:
+            raise
+        except httpx.TimeoutException as exc:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "OpenRouter stream timed out.",
+                details={"request_id": request_id},
+                retryable=True,
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "OpenRouter streaming transport failed.",
+                details={"request_id": request_id},
+                retryable=True,
+            ) from exc
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         logger.info(

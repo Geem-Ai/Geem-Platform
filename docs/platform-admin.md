@@ -201,6 +201,6 @@ npm install
 npm run dev    # port 5175
 ```
 
-Docker Compose service: `dashboard_web` on **5175**. Does not replace `web` (5173), `workspace_web` (5174), or `landpage_web` (4321).
+Docker Compose service: `dashboard_web` on **5175**. Sibling SPAs: `workspace_web` (5174), `landpage_web` (4321).
 
 UAT Cloudflare Tunnel: **https://admin-uat.geem.ai** (see [development.md](./development.md) § C). Overlay sets `VITE_API_URL=https://api-uat.geem.ai`. `CORS_ORIGINS` must include `https://admin-uat.geem.ai`. This is not a tenant host.

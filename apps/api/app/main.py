@@ -8,14 +8,24 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import documents, health, query
+from app.api.v1.agent_compat import (
+    AgentErrorBoundaryMiddleware,
+    agent_aware_http_exception_handler,
+    agent_error_response,
+    agent_validation_response,
+    is_agent_compat_path,
+)
 from app.api.v1.openai_compat import (
     is_openai_compat_path,
     openai_error_response,
     openai_validation_response,
 )
 from app.api.v1.router import router as public_v1_router
+from app.agent.router import router as agent_router
+from app.agent.schemas import AgentProtocolError
 from app.common.middleware import RequestContextMiddleware
 from app.observability.http_middleware import ObservabilityHttpMiddleware
 from app.core.config import get_settings
@@ -103,6 +113,13 @@ app.add_middleware(RequestContextMiddleware)
 app.add_middleware(ObservabilityHttpMiddleware)
 # Outermost: answer widget preflight before SPA-only CORS rejects customer Origins.
 app.add_middleware(PublicWidgetCorsMiddleware)
+# Outermost among user middleware: dependencies and transaction cleanup on
+# Agent routes must never fall back to Starlette's non-OpenAI 500 body.
+app.add_middleware(AgentErrorBoundaryMiddleware)
+app.add_exception_handler(
+    StarletteHTTPException,
+    agent_aware_http_exception_handler,
+)
 
 app.include_router(health.router)
 app.include_router(auth_router)
@@ -127,6 +144,7 @@ app.include_router(apps_connections_router)
 app.include_router(connectors_router)
 app.include_router(chat_widget_router)
 app.include_router(public_widgets_router)
+app.include_router(agent_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
 
@@ -169,6 +187,8 @@ def geem_animated_mascot() -> FileResponse:
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    if is_agent_compat_path(request.url.path):
+        return agent_error_response(exc)
     if is_openai_compat_path(request.url.path):
         return openai_error_response(exc)
     code = HTTP_STATUS_BY_CATEGORY.get(exc.category.value, 500)
@@ -191,10 +211,19 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=code, content=payload, headers=exc.headers or None)
 
 
+@app.exception_handler(AgentProtocolError)
+async def agent_protocol_error_handler(
+    request: Request, exc: AgentProtocolError
+) -> JSONResponse:
+    return agent_error_response(exc)
+
+
 @app.exception_handler(RequestValidationError)
 async def request_validation_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    if is_agent_compat_path(request.url.path):
+        return agent_validation_response(exc)
     if is_openai_compat_path(request.url.path):
         return openai_validation_response(exc)
     return JSONResponse(

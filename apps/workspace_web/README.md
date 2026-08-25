@@ -1,8 +1,6 @@
 # Geem Workspace Web
 
-Production Workspace SaaS UI for **Geem**.
-
-Legacy MVP remains at `apps/web` (port **5173**). This app runs on port **5174**.
+Production Workspace SaaS UI for **Geem**. Dev server port **5174**.
 
 ## Development
 
@@ -58,4 +56,4 @@ Service `workspace_web` maps host **5174** → container 5174 (Vite dev). The Cl
 ## Notes
 
 - Metronic sample is read-only; see `METRONIC_PORT.md` and root `AGENTS.md`.
-- Do not import from `samples/` or `apps/web` at runtime.
+- Do not import from `samples/` at runtime.

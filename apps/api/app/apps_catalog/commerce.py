@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -35,6 +36,7 @@ from app.apps_catalog.models import (
     CatalogApp,
 )
 from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.runtime_locks import acquire_workspace_app_runtime_mutation_fence
 from app.billing.checkout import BillingService
 from app.billing.models import Purchase, PurchaseKind
 from app.billing.money import normalize_currency, parse_decimal_money, quantize_money
@@ -261,6 +263,11 @@ class AppCommerceService:
         if purchase.workspace_id is None:
             raise AppError(ErrorCategory.INVALID_PURCHASE, "Purchase missing workspace.")
 
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db,
+            workspace_id=purchase.workspace_id,
+            app_slug=self._runtime_app_slug(payload, app_id),
+        )
         workspace_app_advisory_lock(self.db, purchase.workspace_id, app_id)
         locked = self.repo.get_license_for_update(purchase.workspace_id, app_id)
         if locked is not None:
@@ -367,6 +374,11 @@ class AppCommerceService:
         if purchase.workspace_id is None:
             raise AppError(ErrorCategory.INVALID_PURCHASE, "Purchase missing workspace.")
 
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db,
+            workspace_id=purchase.workspace_id,
+            app_slug=self._runtime_app_slug(payload, app_id),
+        )
         workspace_app_advisory_lock(self.db, purchase.workspace_id, app_id)
         sub = self.repo.get_subscription_for_update(purchase.workspace_id, app_id)
         if sub is not None and sub.latest_purchase_id == purchase.id:
@@ -665,6 +677,20 @@ class AppCommerceService:
         if subscription_id:
             payload["subscription_id"] = subscription_id
         return payload
+
+    def _runtime_app_slug(self, payload: dict[str, Any], app_id: uuid.UUID) -> str:
+        database_slug = self.db.scalar(
+            select(CatalogApp.slug).where(CatalogApp.id == app_id)
+        )
+        if database_slug is None:
+            raise AppError(ErrorCategory.INVALID_PURCHASE, "Purchase App is unavailable.")
+        payload_slug = str(payload.get("app_slug") or "").strip().lower()
+        if payload_slug and payload_slug != database_slug:
+            raise AppError(
+                ErrorCategory.INVALID_PURCHASE,
+                "Purchase App identity does not match the catalog.",
+            )
+        return database_slug
 
     @staticmethod
     def _assert_tenant(workspace: Workspace) -> None:

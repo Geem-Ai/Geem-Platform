@@ -28,9 +28,10 @@ import { AppSubscriptionStatus } from './AppSubscriptionStatus';
 import { AppConnectionsPanel } from '../connections/components/AppConnectionsPanel';
 import { AppSyncHistoryPanel } from '../connections/components/AppSyncHistoryPanel';
 import { ChatWidgetConfigDialog } from '../chat-widget/ChatWidgetConfigDialog';
-import { isChatWidgetApp } from '@/services/api/apps';
+import { isAgentsAiApp, isChatWidgetApp } from '@/services/api/apps';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { AgentsAiPanel } from '../agents-ai/AgentsAiPanel';
 
 const SHEET_PANEL = floatingSheetPanel(
   'sm:w-[min(100%-2.5rem,36rem)]',
@@ -107,6 +108,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
   const installed = app?.installation_status === 'active';
   const defaultTab = !installed && showPlans ? 'plans' : 'connections';
   const chatWidget = isChatWidgetApp(app);
+  const agentsAi = isAgentsAiApp(app);
   const [widgetOpen, setWidgetOpen] = useState(false);
 
   return (
@@ -197,6 +199,8 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </p>
                   </div>
 
+                  {agentsAi ? <AgentsAiPanel app={app} /> : null}
+
                   {installed && chatWidget ? (
                     <div className="space-y-3" data-testid="chat-widget-panel">
                       <p className="text-sm text-muted-foreground">
@@ -218,7 +222,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </div>
                   ) : null}
 
-                  {installed && !app.connector && !chatWidget ? (
+                  {installed && !app.connector && !chatWidget && !agentsAi ? (
                     <div
                       role="note"
                       className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"

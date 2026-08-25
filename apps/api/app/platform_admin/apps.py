@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.apps_catalog.access import AppAccessService
 from app.apps_catalog.admin_grants import AppAdminGrantService
+from app.apps_catalog.agent_product import AGENTS_AI_APP_SLUG
 from app.apps_catalog.commerce import AppCommerceService
 from app.apps_catalog.entitlement_keys import (
     entitlement_catalog_for_app,
@@ -28,6 +29,8 @@ from app.apps_catalog.models import (
     CatalogApp,
 )
 from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.publication import validate_product_publish_ready
+from app.apps_catalog.runtime_locks import acquire_app_runtime_mutation_fence
 from app.apps_catalog.seed import APP_SPECS
 from app.apps_catalog.service import AppInstallationService
 from app.audit import AuditAction, AuditEntityType, record_audit
@@ -294,6 +297,8 @@ class PlatformAdminAppsService:
     ) -> PlatformAppDetailOut:
         require_platform_admin_user(actor)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         before = self._app_snapshot(app)
         slug_locked = self._slug_locked(app)
         billing_locked = self._billing_type_locked(app)
@@ -349,6 +354,7 @@ class PlatformAdminAppsService:
         if billing_type_changed:
             self._normalize_plans_for_billing_type(app)
         self.db.flush()
+        self._validate_published_product_after_mutation(app)
         after = self._app_snapshot(app)
         self._audit_and_commit(
             action=AuditAction.APP_UPDATED,
@@ -366,6 +372,8 @@ class PlatformAdminAppsService:
         require_platform_admin_user(actor)
         _ = AppAdminGrantService.normalize_reason(body.reason)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         self._validate_publish_ready(app)
         old = app.status
         app.status = AppStatus.PUBLISHED.value
@@ -391,6 +399,8 @@ class PlatformAdminAppsService:
         require_platform_admin_user(actor)
         _ = AppAdminGrantService.normalize_reason(body.reason)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         old = app.status
         app.status = AppStatus.DRAFT.value
         self.db.flush()
@@ -415,6 +425,8 @@ class PlatformAdminAppsService:
         require_platform_admin_user(actor)
         _ = AppAdminGrantService.normalize_reason(body.reason)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         old = app.status
         app.status = AppStatus.COMING_SOON.value
         self.db.flush()
@@ -439,6 +451,8 @@ class PlatformAdminAppsService:
         require_platform_admin_user(actor)
         _ = AppAdminGrantService.normalize_reason(body.reason)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         if self._is_seeded(app):
             raise AppError(
                 ErrorCategory.VALIDATION,
@@ -484,6 +498,8 @@ class PlatformAdminAppsService:
     ) -> PlatformAppPlanDetailOut:
         require_platform_admin_user(actor)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         if self.repo.get_plan_by_code(app.id, body.code):
             raise AppError(ErrorCategory.CONFLICT, "App plan code already exists.")
         amount = parse_decimal_money(body.price_amount)
@@ -499,7 +515,7 @@ class PlatformAdminAppsService:
             currency=currency,
             is_default=body.is_default,
             is_active=True,
-            sort_order=0,
+            sort_order=body.sort_order,
         )
         self._apply_plan_billing_rules(app, plan)
         self.commerce._validate_plan_matches_billing(app, plan)
@@ -508,6 +524,7 @@ class PlatformAdminAppsService:
         if body.is_default:
             self._set_default_plan(app, plan)
         self.db.flush()
+        self._validate_published_product_after_mutation(app)
         self._audit_and_commit(
             action=AuditAction.APP_PLAN_CREATED,
             entity_type=AuditEntityType.APP_PLAN,
@@ -532,6 +549,8 @@ class PlatformAdminAppsService:
     ) -> PlatformAppPlanDetailOut:
         require_platform_admin_user(actor)
         app = self._require_app(app_id)
+        acquire_app_runtime_mutation_fence(self.db, app.slug)
+        self.db.expire(app)
         plan = self._require_plan(app, plan_id)
         before = self._plan_snapshot(plan)
         if body.code is not None:
@@ -555,6 +574,8 @@ class PlatformAdminAppsService:
                 plan.is_active = False
             else:
                 plan.is_active = body.is_active
+        if body.sort_order is not None:
+            plan.sort_order = body.sort_order
         if body.billing_interval is not None:
             plan.billing_interval = body.billing_interval
         self._apply_plan_billing_rules(app, plan)
@@ -573,6 +594,7 @@ class PlatformAdminAppsService:
             self._sync_entitlements(app, plan, body.entitlements, replace=True)
             ent_changed = True
         self.db.flush()
+        self._validate_published_product_after_mutation(app)
         after = self._plan_snapshot(plan)
         action = AuditAction.APP_PLAN_UPDATED
         if body.is_active is False:
@@ -1097,6 +1119,7 @@ class PlatformAdminAppsService:
             currency=plan.currency,
             is_default=plan.is_default,
             is_active=plan.is_active,
+            sort_order=plan.sort_order,
             active_entitlement_count=active_count,
             entitlements=[
                 PlatformAppPlanEntitlementOut(key=e.key, value=e.value)
@@ -1198,6 +1221,7 @@ class PlatformAdminAppsService:
                 "Connector key is not registered.",
                 details={"connector_key": app.connector_key},
             )
+        validate_product_publish_ready(app, self.settings)
 
     @staticmethod
     def _validate_billing_type(value: str) -> None:
@@ -1234,6 +1258,12 @@ class PlatformAdminAppsService:
         return self.repo.app_has_commercial_history(app.id)
 
     def _billing_type_locked(self, app: CatalogApp) -> bool:
+        # Agents AI's paid, non-connector subscription identity is part of its
+        # public contract. It must not be changed around the product-specific
+        # publication validator, including while the seeded row is still
+        # coming soon and commercial plan values are being prepared.
+        if app.slug == AGENTS_AI_APP_SLUG:
+            return True
         if self._is_seeded(app):
             return False
         if app.status != AppStatus.DRAFT.value:
@@ -1244,6 +1274,25 @@ class PlatformAdminAppsService:
         if self._is_seeded(app):
             return True
         return self.repo.app_has_commercial_history(app.id)
+
+    def _validate_published_product_after_mutation(self, app: CatalogApp) -> None:
+        """Keep product publication invariants true after admin mutations.
+
+        Publication is not a one-time escape hatch: a published Agents AI row
+        must not later acquire a fourth plan, lose a launch plan or default,
+        reorder/rename a launch code, or receive a missing/non-positive daily
+        entitlement. Refresh plan relationships after the mutation flush so
+        validation observes inserts and entitlement deletes rather than stale
+        identity-map collections.
+        """
+
+        if app.status != AppStatus.PUBLISHED.value:
+            return
+        for plan in list(app.plans or []):
+            self.db.expire(plan, ["entitlements"])
+        self.db.expire(app, ["plans"])
+        refreshed = self._require_app(app.id)
+        validate_product_publish_ready(refreshed, self.settings)
 
     @staticmethod
     def _app_snapshot(app: CatalogApp) -> dict[str, Any]:

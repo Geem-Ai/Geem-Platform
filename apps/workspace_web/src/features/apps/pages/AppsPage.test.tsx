@@ -22,6 +22,7 @@ const {
   useUninstallApp,
   useAppCheckout,
   useAppRenewal,
+  useAgentsAiUsage,
   installMutate,
   uninstallMutate,
   checkoutMutate,
@@ -40,6 +41,7 @@ const {
     useUninstallApp: vi.fn(),
     useAppCheckout: vi.fn(),
     useAppRenewal: vi.fn(),
+    useAgentsAiUsage: vi.fn(),
     installMutate,
     uninstallMutate,
     checkoutMutate,
@@ -74,6 +76,7 @@ vi.mock('../hooks/useAppsQueries', () => ({
   useUninstallApp: () => useUninstallApp(),
   useAppCheckout: () => useAppCheckout(),
   useAppRenewal: () => useAppRenewal(),
+  useAgentsAiUsage: (...args: unknown[]) => useAgentsAiUsage(...args),
 }));
 
 vi.mock('../connections/hooks/useConnectionQueries', () => ({
@@ -304,6 +307,30 @@ describe('Apps feature', () => {
       querySuccess(
         starterApps.find((a) => a.slug === slug) ?? catalogApp({ slug: slug ?? 'x' }),
       ),
+    );
+    useAgentsAiUsage.mockReturnValue(
+      querySuccess({
+        access: {
+          status: 'active',
+          plan_id: 'agents-team-id',
+          plan_code: 'agents-team',
+          plan_name: 'Agents Team',
+          plan_price_amount: '199.00',
+          plan_currency: 'SAR',
+          plan_billing_interval: 'monthly',
+          current_period_start: '2026-08-01T00:00:00Z',
+          current_period_end: '2026-09-01T00:00:00Z',
+          commercially_entitled: true,
+          installed: true,
+        },
+        agent_requests_daily: {
+          used: 12,
+          limit: 100,
+          reset_at: '2026-08-26T00:00:00Z',
+        },
+        base_url: 'https://api.geem.ai/api/v1/agent',
+        model: 'dalseen/geem-1.0',
+      }),
     );
     installMutate.mockResolvedValue({});
     uninstallMutate.mockResolvedValue({});
@@ -729,6 +756,48 @@ describe('Apps feature', () => {
     expect(screen.queryByText(/auto renew/i)).not.toBeInTheDocument();
   });
 
+  it('renders the Agents AI product panel instead of the non-connector placeholder', async () => {
+    useApp.mockReturnValue(
+      querySuccess(
+        catalogApp({
+          id: 'agents-app',
+          slug: 'agents-ai',
+          name: 'Agents AI',
+          billing_type: 'subscription',
+          status: 'published',
+          connector: null,
+          installation_status: 'active',
+          can_install: false,
+          can_uninstall: true,
+          access_requirement: 'subscription',
+          access: {
+            status: 'active',
+            plan_id: 'agents-team-id',
+            plan_code: 'agents-team',
+            plan_name: 'Agents Team',
+            current_period_start: '2026-08-01T00:00:00Z',
+            current_period_end: '2026-09-01T00:00:00Z',
+            commercially_entitled: true,
+            can_purchase: false,
+            can_renew: true,
+            can_install: false,
+            can_uninstall: true,
+          },
+          plans: [],
+        }),
+      ),
+    );
+
+    renderAt('/apps/agents-ai');
+    expect(await screen.findByTestId('agents-ai-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('agents-ai-daily-usage')).toHaveTextContent('12 / 100');
+    expect(screen.queryByText(i18n.t('apps.integrationLater'))).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: i18n.t('apps.agentsAi.manageKeys') })).toHaveAttribute(
+      'href',
+      '/api/keys',
+    );
+  });
+
   it('member cannot purchase', async () => {
     workspaceState.role = 'member';
     useApp.mockReturnValue(
@@ -813,6 +882,13 @@ describe('Apps feature', () => {
       'apps',
       'detail',
       'google-drive',
+    ]);
+    expect(queryKeys.agentsAiUsage('ws-a')).toEqual([
+      'workspace',
+      'ws-a',
+      'apps',
+      'agents-ai',
+      'usage',
     ]);
     expect(queryKeys.apps('ws-a')).not.toEqual(queryKeys.apps('ws-b'));
   });

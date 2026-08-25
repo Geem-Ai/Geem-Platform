@@ -158,24 +158,6 @@ services:
         condition: service_healthy
     command: celery -A app.worker.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
 
-  web:
-    build:
-      context: ../apps/web
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      # Browser calls the published API host (not the Docker service name).
-      VITE_API_URL: ${VITE_API_URL:-http://api.geem.dm:8000}
-    ports:
-      - "5173:5173"
-    volumes:
-      - ../apps/web:/app
-      - /app/node_modules
-    depends_on:
-      api:
-        condition: service_started
-    command: npm run dev -- --host 0.0.0.0 --port 5173
-
   workspace_web:
     build:
       context: ../apps/workspace_web

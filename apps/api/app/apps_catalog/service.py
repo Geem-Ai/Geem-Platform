@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.apps_catalog.access import AppAccessService, AppAccessStatus
-from app.audit import AuditAction, AuditEntityType, record_audit
 from app.apps_catalog.encryption import AppConfigEncryptionService
 from app.apps_catalog.models import (
     AppBillingType,
@@ -19,6 +18,7 @@ from app.apps_catalog.models import (
 )
 from app.apps_catalog.policy import can_manage_apps
 from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.runtime_locks import acquire_workspace_app_runtime_mutation_fence
 from app.apps_catalog.schemas import (
     AppCategoryOut,
     AppInstallationListOut,
@@ -31,6 +31,7 @@ from app.apps_catalog.schemas import (
     to_category_out,
     to_installation_out,
 )
+from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.connectors.types import CONNECTION_USABLE_STATUSES, ConnectionStatus
 from app.core.config import Settings, get_settings
@@ -452,6 +453,9 @@ class AppInstallationService:
         slug: str,
     ) -> AppInstallationOut:
         self._require_tenant(workspace)
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=slug
+        )
         security_log(
             "app_install_started",
             workspace_id=str(workspace.id),
@@ -545,6 +549,9 @@ class AppInstallationService:
         slug: str,
     ) -> AppInstallationOut:
         self._require_tenant(workspace)
+        acquire_workspace_app_runtime_mutation_fence(
+            self.db, workspace_id=workspace.id, app_slug=slug
+        )
         app = self.repo.get_app_by_slug(slug)
         if app is None:
             raise AppError(ErrorCategory.APP_NOT_FOUND, "App not found.")

@@ -73,7 +73,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
-from app.entitlements.quota import QuotaService
+from app.entitlements.quota import AiTokenLimits, QuotaService
 from app.usage.credits import CreditService
 from app.usage.dtos import AiUsageReservationDTO, CreditAllocation
 from app.usage.meters import UsageMeterService
@@ -105,6 +105,7 @@ class AiUsageService:
         user_id: uuid.UUID | None = None,
         expert_id: uuid.UUID | None = None,
         extra: dict[str, Any] | None = None,
+        limits: AiTokenLimits | None = None,
     ) -> AiUsageReservationDTO:
         rid = (request_id or "").strip()
         if not rid:
@@ -130,15 +131,16 @@ class AiUsageService:
                     reservation_outcome="created",
                 ):
                     return self._reserve_locked(
-                    workspace_id,
-                    rid,
-                    estimated_tokens,
-                    conversation_id=conversation_id,
-                    message_id=message_id,
-                    user_id=user_id,
-                    expert_id=expert_id,
-                    extra=extra,
-                )
+                        workspace_id,
+                        rid,
+                        estimated_tokens,
+                        conversation_id=conversation_id,
+                        message_id=message_id,
+                        user_id=user_id,
+                        expert_id=expert_id,
+                        extra=extra,
+                        limits=limits,
+                    )
         except IntegrityError:
             replay = self.reservations.get_by_request_id(workspace_id, rid)
             if replay is not None:
@@ -228,6 +230,7 @@ class AiUsageService:
         user_id: uuid.UUID | None,
         expert_id: uuid.UUID | None,
         extra: dict[str, Any] | None,
+        limits: AiTokenLimits | None,
     ) -> AiUsageReservationDTO:
         existing = self.reservations.get_by_request_id_for_update(workspace_id, request_id)
         if existing is not None:
@@ -270,7 +273,7 @@ class AiUsageService:
         if daily is None or weekly is None or monthly is None:
             raise AppError(ErrorCategory.NOT_FOUND, "Usage period counters could not be locked.")
 
-        limits = self.quota.get_ai_limits(workspace_id)
+        limits = limits or self.quota.get_ai_limits(workspace_id)
         daily_rem = _remaining(limits.daily, daily)
         weekly_rem = _remaining(limits.weekly, weekly)
         monthly_rem = _remaining(limits.monthly, monthly)

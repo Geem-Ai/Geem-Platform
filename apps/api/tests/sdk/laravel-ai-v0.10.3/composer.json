@@ -1,0 +1,26 @@
+{
+  "name": "geem/laravel-ai-v0.10.3-contract",
+  "description": "Exact minimum Laravel AI compatibility fixture for the Geem Client Agent API",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "laravel/ai": "0.10.3"
+  },
+  "require-dev": {
+    "orchestra/testbench": "^10.0",
+    "phpunit/phpunit": "^11.5"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Geem\\AgentContract\\": "tests/"
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "php-http/discovery": true
+    },
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

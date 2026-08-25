@@ -27,9 +27,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import { InstructionsEditor } from './InstructionsEditor';
 import { RagConfigFields } from './RagConfigFields';
+import { ClientAgentToggle } from './ClientAgentToggle';
+import { useAgentsAiUsage } from '@/features/apps/hooks/useAppsQueries';
 import { useCreateExpert, useUpdateExpert } from '../hooks/useExpertMutations';
 import { useExpert } from '../hooks/useExpert';
-import { parseRagConfig, serializeRagConfig } from '../lib/rag-config';
+import {
+  isClientAgentEnabled,
+  parseRagConfig,
+  serializeRagConfig,
+} from '../lib/rag-config';
 
 /** Metronic store-inventory ProductFormSheet layout — floating inset panel. */
 const SHEET_PANEL = floatingSheetPanel(
@@ -62,6 +68,7 @@ export function ExpertFormSheet({
   const createMutation = useCreateExpert();
   const updateMutation = useUpdateExpert(expertId ?? '');
   const usageQuery = useUsageSummary();
+  const agentsAiUsageQuery = useAgentsAiUsage(open && !isCreate);
   const expertsMeter = usageQuery.data?.experts;
   const expertsExhausted =
     isCreate && expertsMeter != null && meterWarningLevel(expertsMeter) === 'exhausted';
@@ -73,6 +80,7 @@ export function ExpertFormSheet({
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
   const [ragConfig, setRagConfig] = useState(parseRagConfig(null));
+  const [clientAgentEnabled, setClientAgentEnabled] = useState(false);
 
   const pending = createMutation.isPending || updateMutation.isPending;
 
@@ -83,6 +91,7 @@ export function ExpertFormSheet({
       setDescription('');
       setInstructions('');
       setRagConfig(parseRagConfig(null));
+      setClientAgentEnabled(false);
       setCreateQuotaCode(null);
       return;
     }
@@ -96,6 +105,7 @@ export function ExpertFormSheet({
     setDescription(expert.description ?? '');
     setInstructions(expert.system_instructions ?? '');
     setRagConfig(parseRagConfig(expert.rag_config));
+    setClientAgentEnabled(isClientAgentEnabled(expert.rag_config));
   }, [open, isCreate, expertQuery.data, onOpenChange]);
 
   function handleSubmit(e: FormEvent) {
@@ -135,7 +145,7 @@ export function ExpertFormSheet({
         name: name.trim(),
         description: description.trim() || null,
         system_instructions: instructions.trim() || null,
-        rag_config: serializeRagConfig(ragConfig),
+        rag_config: serializeRagConfig(ragConfig, clientAgentEnabled),
       },
       {
         onSuccess: () => {
@@ -239,11 +249,23 @@ export function ExpertFormSheet({
                         <CardTitle className="text-sm">{t('experts.advancedSettings')}</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-4">
-                        <RagConfigFields
-                          value={ragConfig}
-                          onChange={setRagConfig}
-                          disabled={pending}
-                        />
+                        <div className="space-y-5">
+                          <RagConfigFields
+                            value={ragConfig}
+                            onChange={setRagConfig}
+                            disabled={pending}
+                          />
+                          <div className="border-t border-border pt-5">
+                            <ClientAgentToggle
+                              checked={clientAgentEnabled}
+                              onCheckedChange={setClientAgentEnabled}
+                              usage={agentsAiUsageQuery.data}
+                              accessLoading={agentsAiUsageQuery.isLoading}
+                              accessError={agentsAiUsageQuery.isError}
+                              pending={pending}
+                            />
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   )}

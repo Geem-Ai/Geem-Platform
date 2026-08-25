@@ -1,6 +1,7 @@
 import { apiRequest } from './client';
 
 export const API_KEY_SCOPE_CHAT_WRITE = 'chat:write';
+export const API_KEY_SCOPE_AGENT_WRITE = 'agent:write';
 
 export type ApiKeyStatus = 'active' | 'revoked' | 'expired';
 

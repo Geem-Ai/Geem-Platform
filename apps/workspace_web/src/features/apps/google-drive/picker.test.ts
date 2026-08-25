@@ -8,6 +8,8 @@ import {
 
 describe('Google Drive picker module', () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
     __resetGooglePickerLoaderForTests();
     vi.stubGlobal('gapi', {
       load: (_api: string, cb: () => void) => cb(),

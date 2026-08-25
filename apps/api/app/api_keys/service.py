@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 from app.api_keys.models import ApiKey
 from app.api_keys.principal import ApiKeyPrincipal
 from app.api_keys.repository import ApiKeyRepository
-from app.api_keys.scopes import DEFAULT_SCOPES, normalize_scopes
+from app.api_keys.scopes import (
+    DEFAULT_SCOPES,
+    SCOPE_AGENT_WRITE,
+    normalize_scopes,
+)
 from app.api_keys.security import (
     display_prefix,
     generate_api_key_secret,
@@ -22,6 +26,12 @@ from app.api_keys.security import (
     parse_presented_api_key,
     reject_invalid_api_key,
 )
+from app.apps_catalog.access import AppAccessService
+from app.apps_catalog.agent_product import (
+    AGENT_REQUESTS_DAILY_ENTITLEMENT,
+    AGENTS_AI_APP_SLUG,
+)
+from app.apps_catalog.runtime_locks import acquire_runtime_admission_fences
 from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
 from app.core.config import Settings, get_settings
@@ -67,6 +77,17 @@ class ApiKeyService:
             )
 
         normalized_scopes = normalize_scopes(scopes)
+        if SCOPE_AGENT_WRITE in normalized_scopes:
+            acquire_runtime_admission_fences(
+                self.db,
+                workspace_id=workspace.id,
+                app_slugs=(AGENTS_AI_APP_SLUG,),
+            )
+            AppAccessService(self.db).require_runtime_active(
+                workspace.id,
+                app_slug=AGENTS_AI_APP_SLUG,
+                entitlement_keys=(AGENT_REQUESTS_DAILY_ENTITLEMENT,),
+            )
         expiry = self._validate_expiry(expires_at)
 
         plaintext, row = self._build_key_row(
@@ -238,7 +259,11 @@ class ApiKeyService:
     def require_scope(self, principal: ApiKeyPrincipal, scope: str) -> None:
         if not principal.has_scope(scope):
             raise AppError(
-                ErrorCategory.FORBIDDEN,
+                (
+                    ErrorCategory.AGENT_SCOPE_REQUIRED
+                    if scope == SCOPE_AGENT_WRITE
+                    else ErrorCategory.FORBIDDEN
+                ),
                 "API key is missing the required scope.",
                 details={"required_scope": scope},
             )

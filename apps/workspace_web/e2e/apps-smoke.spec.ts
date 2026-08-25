@@ -134,6 +134,76 @@ function whatsappApp() {
   };
 }
 
+function agentsAiApp() {
+  return {
+    ...driveApp(false),
+    id: 'app-agents-ai',
+    slug: 'agents-ai',
+    name: 'Agents AI',
+    short_description: 'Client-owned agent loops with Geem RAG.',
+    description: 'OpenAI-compatible Agent API.',
+    billing_type: 'subscription',
+    status: 'published',
+    installation: { id: 'install-agents', status: 'active' },
+    installation_status: 'active',
+    access_requirement: 'subscription',
+    can_install: false,
+    can_uninstall: true,
+    access: {
+      status: 'active',
+      plan_id: 'plan-agents-team',
+      plan_code: 'agents-team',
+      plan_name: 'Agents Team',
+      current_period_start: '2026-08-01T00:00:00Z',
+      current_period_end: '2026-09-01T00:00:00Z',
+      commercially_entitled: true,
+      can_purchase: false,
+      can_renew: true,
+      can_install: false,
+      can_uninstall: true,
+    },
+    plans: [
+      {
+        id: 'plan-agents-team',
+        code: 'agents-team',
+        name: 'Agents Team',
+        description: 'Team request allowance',
+        billing_interval: 'monthly',
+        price_amount: '149.00',
+        currency: 'SAR',
+        is_default: true,
+        entitlements: { agent_requests_daily: 500 },
+      },
+    ],
+    connector: null,
+  };
+}
+
+function agentsAiUsage() {
+  return {
+    access: {
+      status: 'active',
+      plan_id: 'plan-agents-team',
+      plan_code: 'agents-team',
+      plan_name: 'Agents Team',
+      plan_price_amount: '149.00',
+      plan_currency: 'SAR',
+      plan_billing_interval: 'monthly',
+      current_period_start: '2026-08-01T00:00:00Z',
+      current_period_end: '2026-09-01T00:00:00Z',
+      commercially_entitled: true,
+      installed: true,
+    },
+    agent_requests_daily: {
+      used: 73,
+      limit: 500,
+      reset_at: '2026-08-26T00:00:00Z',
+    },
+    base_url: 'https://api.geem.test/api/v1/agent',
+    model: 'dalseen/geem-1.0',
+  };
+}
+
 function workspace(role: 'owner' | 'admin' | 'member') {
   const isOwner = role === 'owner';
   return {
@@ -216,6 +286,12 @@ async function mockAuthenticatedApp(page: Page, role: 'owner' | 'member' = 'owne
       }
       return fulfillJson(route, app);
     }
+    if (path.endsWith('/apps/agents-ai/usage')) {
+      return fulfillJson(route, agentsAiUsage());
+    }
+    if (path.endsWith('/apps/agents-ai')) {
+      return fulfillJson(route, agentsAiApp());
+    }
     if (path.includes('/apps/') && path.includes('/connections')) {
       return fulfillJson(route, {
         items: [],
@@ -229,8 +305,8 @@ async function mockAuthenticatedApp(page: Page, role: 'owner' | 'member' = 'owne
     if (path.endsWith('/apps') || /\/apps\?/.test(path)) {
       const canInstall = role !== 'member';
       return fulfillJson(route, {
-        items: [driveApp(canInstall), whatsappApp()],
-        total: 2,
+        items: [driveApp(canInstall), whatsappApp(), agentsAiApp()],
+        total: 3,
         limit: 50,
         offset: 0,
       });
@@ -274,5 +350,24 @@ test.describe('Apps Phase 9G browser smoke', () => {
     });
     await expect(page.getByTestId('app-plan-line')).toBeVisible();
     await expect(page.getByTestId('app-plan-desk')).toBeVisible();
+  });
+
+  test('Agents AI detail shows paid access, usage, and integrator endpoints', async ({
+    page,
+  }) => {
+    await mockAuthenticatedApp(page, 'owner');
+    await page.goto('/apps/agents-ai');
+    await expect(page.getByTestId('agents-ai-panel')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('agents-ai-access-active')).toBeVisible();
+    await expect(page.getByTestId('agents-ai-daily-usage')).toContainText('73');
+    await expect(
+      page.getByText('https://api.geem.test/api/v1/agent', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('dalseen/geem-1.0')).toBeVisible();
+    await expect(
+      page.getByText('Installed. Integration setup will be available in a later phase.'),
+    ).toHaveCount(0);
   });
 });

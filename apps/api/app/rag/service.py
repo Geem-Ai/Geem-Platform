@@ -67,7 +67,7 @@ def build_source_xml(chunks: list[dict]) -> str:
                 f'document_id="{c["document_id"]}" '
                 f'document_title="{_xml_escape(c.get("document_title") or "")}" '
                 f'page="{c["page"]}">\n'
-                f'{c.get("canonical_text") or ""}\n'
+                f'{_xml_escape(c.get("canonical_text") or "")}\n'
                 f"</SOURCE>"
             )
         )
@@ -734,6 +734,29 @@ class RagService:
             "context_chunks": context_chunks,
             "scope": scope,
         }
+
+    def prepare_expert_context_for_agent(
+        self,
+        *,
+        question: str,
+        knowledge: ResolvedExpertKnowledge,
+        usage_context: GenerationUsageContext | None = None,
+    ) -> dict[str, Any]:
+        """Prepare scoped Expert sources without running answer generation.
+
+        The client-agent API owns its provider transcript and tool loop, but it
+        must use exactly the same retrieval, membership checks, token budget,
+        and embed/rerank usage attribution as the first-party answer path.
+        Keeping this as a small public wrapper avoids coupling Agent code to a
+        private implementation or duplicating tenant-isolation logic.
+        """
+
+        return self._prepare_expert_context(
+            question,
+            knowledge,
+            top_k=None,
+            usage_context=usage_context,
+        )
 
     def _carry_usage(self, previous: dict, validated: dict) -> dict:
         if previous.get("usage"):

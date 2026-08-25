@@ -23,7 +23,6 @@ You do **not** need the Metronic sample under `samples/` to run the stack. That 
 |------|------|
 | `apps/api` | FastAPI + Celery |
 | `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
-| `apps/web` | Legacy MVP UI (port **5173**) — keep runnable; not the product |
 | `apps/landpage_web` | Public marketing site (Astro, port **4321**) |
 | `apps/dashboard_web` | Platform Admin SPA (port **5175**) — not a tenant app; see [platform-admin.md](./platform-admin.md) |
 | `infra/docker-compose.yml` | Local full stack |
@@ -248,7 +247,6 @@ docker compose up -d --build
 |---------|-----|
 | Workspace UI | http://localhost:5174 or http://app.geem.dm:5174 |
 | Platform Admin UI | http://localhost:5175 (`apps/dashboard_web`; not a tenant app) |
-| Legacy MVP UI | http://localhost:5173 |
 | API | http://localhost:8000 |
 | OpenAPI | http://localhost:8000/docs |
 | Live | http://localhost:8000/api/health/live |
@@ -401,9 +399,8 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 - `CORS_ORIGINS` is an exact-origin list (no `*`); `APP_ROOT_DOMAIN` also allows one-label tenant hosts
 - Do not put `http://api.geem.dm:5174` in `CORS_ORIGINS` — that is not an SPA origin
 
-## What not to expect from the legacy stack
+## What not to expect from older scripts
 
-- `apps/web` still builds, but unauthenticated Document / Query / Jobs calls return **401** after the SaaS cutover. Do not turn `AUTH_REQUIRED` off to make it work.
 - `scripts/smoke_test.sh` still posts to `/api/documents` without auth. It will fail against the current API.
 
 ## Troubleshooting

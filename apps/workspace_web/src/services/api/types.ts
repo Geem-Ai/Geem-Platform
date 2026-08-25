@@ -143,6 +143,9 @@ export type ExpertRagConfig = {
   top_k?: number;
   rerank_top_n?: number;
   similarity_threshold?: number;
+  client_agent?: {
+    enabled: boolean;
+  };
 };
 
 export type Expert = {

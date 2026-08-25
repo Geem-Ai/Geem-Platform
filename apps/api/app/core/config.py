@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from functools import lru_cache
@@ -341,6 +342,28 @@ class Settings(BaseSettings):
     openwa_api_key: str = Field(default="", repr=False, exclude=True)
     openwa_timeout_seconds: float = 30.0
 
+    # Phase 14 — paid client-owned Agent API. Both the operational switch and
+    # each Expert's explicit JSONB opt-in default closed.
+    client_agent_api_enabled: bool = False
+    agent_max_messages: int = Field(default=64, gt=0)
+    agent_max_body_bytes: int = Field(default=262_144, gt=0)
+    agent_max_tools: int = Field(default=32, gt=0)
+    agent_tool_result_max_chars: int = Field(default=8_000, gt=0)
+    agent_tool_schema_max_bytes: int = Field(default=65_536, gt=0)
+    agent_client_instructions_max_chars: int = Field(default=4_000, gt=0)
+    agent_context_cache_ttl_seconds: int = Field(default=900, gt=0)
+    agent_max_output_tokens: int = Field(default=4_096, gt=0)
+    # Exact model-to-capability declaration used by Agent API readiness. A
+    # model change must be accompanied by an explicit capability review; an
+    # absent/partial entry fails closed when CLIENT_AGENT_API_ENABLED=true.
+    agent_provider_capability_matrix: str = (
+        '{"qwen/qwen3.8-max":["function_calling","streamed_indexed_tool_deltas",'
+        '"temperature","top_p","max_tokens","parallel_tool_calls"],'
+        '"openai/gpt-5.6-terra":["function_calling",'
+        '"streamed_indexed_tool_deltas","temperature","top_p","max_tokens",'
+        '"parallel_tool_calls"]}'
+    )
+
     # Phase 4B — persisted chat orchestration
     chat_history_max_messages: int = 20
     conversation_title_max_length: int = 80
@@ -648,6 +671,62 @@ def assert_usage_scale_settings(settings: Settings) -> None:
         )
 
 
+_REQUIRED_AGENT_PROVIDER_CAPABILITIES = frozenset(
+    {
+        "function_calling",
+        "streamed_indexed_tool_deltas",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "parallel_tool_calls",
+    }
+)
+
+
+def assert_agent_provider_settings(settings: Settings) -> None:
+    """Fail closed when an enabled Agent provider matrix is incomplete."""
+
+    if not settings.client_agent_api_enabled:
+        return
+    if not (settings.openrouter_api_key or "").strip():
+        raise RuntimeError(
+            "CLIENT_AGENT_API_ENABLED requires OPENROUTER_API_KEY to be configured."
+        )
+    if not settings.openrouter_allow_fallbacks:
+        raise RuntimeError(
+            "CLIENT_AGENT_API_ENABLED requires the reviewed primary and fallback "
+            "Agent provider path (OPENROUTER_ALLOW_FALLBACKS=true)."
+        )
+    primary = (settings.openrouter_chat_model or "").strip()
+    fallback = (settings.openrouter_chat_fallback_model or "").strip()
+    if not primary or not fallback:
+        raise RuntimeError(
+            "CLIENT_AGENT_API_ENABLED requires both OPENROUTER_CHAT_MODEL and "
+            "OPENROUTER_CHAT_FALLBACK_MODEL."
+        )
+    try:
+        raw = json.loads(settings.agent_provider_capability_matrix or "{}")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "AGENT_PROVIDER_CAPABILITY_MATRIX must be a JSON object."
+        ) from exc
+    if not isinstance(raw, dict):
+        raise RuntimeError("AGENT_PROVIDER_CAPABILITY_MATRIX must be a JSON object.")
+    for model in (primary, fallback):
+        declared = raw.get(model)
+        capabilities = (
+            {str(value).strip() for value in declared if str(value).strip()}
+            if isinstance(declared, list)
+            else set()
+        )
+        missing = sorted(_REQUIRED_AGENT_PROVIDER_CAPABILITIES - capabilities)
+        if missing:
+            raise RuntimeError(
+                f"Agent provider model {model!r} is not readiness-approved; "
+                f"missing capabilities: {', '.join(missing)}."
+            )
+
+
 _OTEL_SAMPLERS = frozenset(
     {
         "parentbased_traceidratio",
@@ -687,5 +766,6 @@ def get_settings() -> Settings:
     settings = Settings()
     assert_secure_settings(settings)
     assert_usage_scale_settings(settings)
+    assert_agent_provider_settings(settings)
     assert_otel_settings(settings)
     return settings

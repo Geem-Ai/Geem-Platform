@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { AppInstallation } from '@/services/api/apps';
+import { isAgentsAiApp, type AppInstallation } from '@/services/api/apps';
 import {
   localizeCatalogApp,
   localizeAppPlanName,
@@ -59,6 +59,7 @@ export function InstalledAppCard({
   const access = app.access;
   const accessBadge = resolveAppAccessBadge(app);
   const usage = app.connection_usage;
+  const agentsAi = isAgentsAiApp(app);
   const summaries = app.connections ?? [];
   const periodRange = formatPeriodRange(
     access?.current_period_start,
@@ -199,6 +200,13 @@ export function InstalledAppCard({
                 <span>{t('apps.connections.connectorAvailableSoon')}</span>
               ) : null}
             </div>
+          ) : agentsAi ? (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="installed-agents-ai-summary"
+            >
+              {t('apps.agentsAi.installedSummary')}
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">
               {t('apps.integrationLater')}

@@ -1,4 +1,4 @@
-# Load and isolation tests (Phase 11D)
+# Load and isolation tests (Phases 11D and 14)
 
 Backend concurrency and cross-tenant fail-closed checks. **No real OpenRouter
 or other paid provider calls** — fakes/mocks only.
@@ -20,6 +20,9 @@ pytest -q -m isolation
 pytest -q -m load
 pytest -q -m "not performance and not isolation and not load"
 GEEM_USAGE_SCALE=1 pytest -q tests/performance/test_usage_events_scale_phase11b.py
+
+# Phase 14 paid-runtime query count, fence race, EXPLAIN, and warm p95 gate
+pytest -q tests/integration/test_agents_ai_commercial_foundation.py
 ```
 
 ## What is covered
@@ -33,6 +36,7 @@ GEEM_USAGE_SCALE=1 pytest -q tests/performance/test_usage_events_scale_phase11b.
 - Concurrent fake-provider Chat turns (ContextVar + argument Workspace stay aligned)
 - Sequential Celery-style `tenant_context` A then B in one process
 - Concurrent `usage_events` inserts into the current month partition
+- Agents AI paid-admission races: statement-time access visibility, atomic daily N/N+1, and no provider work after a failed gate
 
 Correctness under concurrency is the gate. Numbers from a laptop test DB are
 baselines, not production SLAs.

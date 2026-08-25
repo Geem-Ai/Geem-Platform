@@ -130,7 +130,7 @@ def bootstrap_platform_admin(
         # App Store starter catalog (Google Drive, OneDrive, WhatsApp coming soon).
         from app.apps_catalog.seed import ensure_app_catalog
 
-        ensure_app_catalog(db)
+        ensure_app_catalog(db, settings=settings)
         db.commit()
 
         # Geem General Platform Expert (LLM-only; available to all workspaces).

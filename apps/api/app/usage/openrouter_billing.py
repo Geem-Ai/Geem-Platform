@@ -38,6 +38,7 @@ def charge_immediate(
     message_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     expert_id: uuid.UUID | None = None,
+    api_key_id: uuid.UUID | None = None,
 ) -> None:
     if billed_tokens <= 0 or not is_billable_workspace(db, workspace_id):
         return
@@ -67,6 +68,7 @@ def record_openrouter_event(
     workspace_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     expert_id: uuid.UUID | None = None,
+    api_key_id: uuid.UUID | None = None,
     conversation_id: uuid.UUID | None = None,
     message_id: uuid.UUID | None = None,
     document_id: uuid.UUID | None = None,
@@ -118,7 +120,7 @@ def record_openrouter_event(
     eid = usage_context.expert_id if usage_context else expert_id
     cid = usage_context.conversation_id if usage_context else conversation_id
     mid = usage_context.message_id if usage_context else message_id
-    kid = usage_context.api_key_id if usage_context else None
+    kid = usage_context.api_key_id if usage_context else api_key_id
     rid = request_id or (usage_context.request_id if usage_context else None)
 
     db.add(

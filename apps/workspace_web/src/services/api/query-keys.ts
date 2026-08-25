@@ -116,6 +116,8 @@ export const queryKeys = {
     workspaceQueryKey(workspaceId, 'apps', 'categories'),
   app: (workspaceId: string, slug: string) =>
     workspaceQueryKey(workspaceId, 'apps', 'detail', slug),
+  agentsAiUsage: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'agents-ai', 'usage'),
   appInstallations: (workspaceId: string) =>
     workspaceQueryKey(workspaceId, 'apps', 'installations'),
   appInstallation: (workspaceId: string, installationId: string) =>

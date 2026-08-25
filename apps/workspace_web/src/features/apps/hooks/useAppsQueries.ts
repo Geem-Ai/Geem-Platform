@@ -5,6 +5,7 @@ import { queryKeys } from '@/services/api/query-keys';
 import {
   createAppCheckout,
   createAppRenewal,
+  getAgentsAiUsage,
   getApp,
   installApp,
   listAppCategories,
@@ -54,6 +55,15 @@ export function useApp(slug: string | undefined, enabled = true) {
   });
 }
 
+export function useAgentsAiUsage(enabled = true) {
+  const workspaceId = useWorkspaceId();
+  return useQuery({
+    queryKey: queryKeys.agentsAiUsage(workspaceId),
+    queryFn: getAgentsAiUsage,
+    enabled: Boolean(workspaceId) && enabled,
+  });
+}
+
 export function useAppInstallations(enabled = true) {
   const workspaceId = useWorkspaceId();
   return useQuery({
@@ -76,6 +86,11 @@ export async function invalidateAppsCache(
     slug
       ? queryClient.invalidateQueries({
           queryKey: queryKeys.app(workspaceId, slug),
+        })
+      : Promise.resolve(),
+    !slug || slug === 'agents-ai'
+      ? queryClient.invalidateQueries({
+          queryKey: queryKeys.agentsAiUsage(workspaceId),
         })
       : Promise.resolve(),
   ]);

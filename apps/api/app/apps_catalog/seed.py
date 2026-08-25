@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.apps_catalog.agent_product import AGENTS_AI_APP_SLUG
 from app.apps_catalog.models import (
     AppBillingType,
     AppCategory,
@@ -20,8 +21,11 @@ from app.apps_catalog.models import (
     AppStatus,
     CatalogApp,
 )
+from app.apps_catalog.publication import validate_product_publish_ready
 from app.apps_catalog.repository import AppCatalogRepository
+from app.apps_catalog.runtime_locks import acquire_app_runtime_mutation_fence
 from app.billing.money import parse_decimal_money
+from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,10 @@ class AppSpec:
     connector_key: str | None = None
     connector_kind: str | None = None
     plans: tuple[PlanSpec, ...] = ()
+    # Product launch lifecycle is controlled by a validated promotion, not by
+    # a routine metadata seed. Such rows are created with ``status`` once and
+    # later seed runs preserve the database lifecycle state.
+    preserve_status: bool = False
 
 
 CATEGORY_SPECS: tuple[CategorySpec, ...] = (
@@ -238,6 +246,25 @@ APP_SPECS: tuple[AppSpec, ...] = (
         connector_kind=None,
         plans=CHAT_WIDGET_PLANS,
     ),
+    AppSpec(
+        slug="agents-ai",
+        name="Agents AI",
+        short_description="Build client-owned agents with Geem knowledge and models.",
+        description=(
+            "Use an OpenAI-compatible Agent API with a Workspace-owned Expert while "
+            "your application owns and executes its tools. Agents AI is a separate "
+            "paid App subscription and is not an MCP connector."
+        ),
+        category_slug="automation",
+        billing_type=AppBillingType.SUBSCRIPTION.value,
+        status=AppStatus.COMING_SOON.value,
+        is_featured=False,
+        sort_order=50,
+        connector_key=None,
+        connector_kind=None,
+        plans=(),
+        preserve_status=True,
+    ),
 )
 
 # One-time slug renames so re-seed migrates existing rows instead of duplicating.
@@ -246,7 +273,11 @@ _SLUG_ALIASES: dict[str, str] = {
 }
 
 
-def seed_app_catalog(db: Session) -> tuple[list[AppCategory], list[CatalogApp]]:
+def seed_app_catalog(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+) -> tuple[list[AppCategory], list[CatalogApp]]:
     """Insert/update starter categories and apps. Idempotent by slug/code."""
     repo = AppCatalogRepository(db)
     categories: list[AppCategory] = []
@@ -255,7 +286,22 @@ def seed_app_catalog(db: Session) -> tuple[list[AppCategory], list[CatalogApp]]:
 
     apps: list[CatalogApp] = []
     for spec in APP_SPECS:
-        apps.append(_ensure_app(repo, spec))
+        guarded_product_mutation = _seeds_agents_ai_commercial_authority(spec)
+        if guarded_product_mutation:
+            # A signed Agents AI seed mutates the same global plan/quota
+            # authority read by paid admission. Hold the App-wide exclusive
+            # fence before any metadata, plan, or entitlement upsert so a
+            # concurrent shared-fence waiter can only observe the complete
+            # pre-seed or post-seed product state.
+            acquire_app_runtime_mutation_fence(db, spec.slug)
+        app = _ensure_app(repo, spec)
+        if guarded_product_mutation:
+            _validate_seeded_product_after_mutation(
+                repo,
+                app,
+                settings=settings,
+            )
+        apps.append(app)
 
     db.flush()
     logger.info(
@@ -266,9 +312,45 @@ def seed_app_catalog(db: Session) -> tuple[list[AppCategory], list[CatalogApp]]:
     return categories, apps
 
 
-def ensure_app_catalog(db: Session) -> tuple[list[AppCategory], list[CatalogApp]]:
+def ensure_app_catalog(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+) -> tuple[list[AppCategory], list[CatalogApp]]:
     """Always-safe entrypoint for bootstrap / API startup."""
-    return seed_app_catalog(db)
+    return seed_app_catalog(db, settings=settings)
+
+
+def _seeds_agents_ai_commercial_authority(spec: AppSpec) -> bool:
+    """Return true only once signed Agents AI plan specs are populated.
+
+    The current launch-safe ``coming_soon`` entry intentionally has no plans.
+    Routine generic seeding therefore retains its historical behavior and does
+    not acquire a runtime fence or require the operational launch flag.
+    """
+
+    return spec.slug == AGENTS_AI_APP_SLUG and bool(spec.plans)
+
+
+def _validate_seeded_product_after_mutation(
+    repo: AppCatalogRepository,
+    app: CatalogApp,
+    *,
+    settings: Settings | None,
+) -> None:
+    """Revalidate a published signed product from freshly loaded relationships."""
+
+    if app.status != AppStatus.PUBLISHED.value:
+        return
+    db = repo.db
+    db.flush()
+    for plan in list(app.plans or []):
+        db.expire(plan, ["entitlements"])
+    db.expire(app, ["plans"])
+    refreshed = repo.get_app_by_slug(app.slug)
+    if refreshed is None:
+        raise RuntimeError(f"Seeded app '{app.slug}' disappeared before validation")
+    validate_product_publish_ready(refreshed, settings or get_settings())
 
 
 def _ensure_category(repo: AppCatalogRepository, spec: CategorySpec) -> AppCategory:
@@ -330,7 +412,8 @@ def _ensure_app(repo: AppCatalogRepository, spec: AppSpec) -> CatalogApp:
         row.category_id = category.id
         row.icon_url = spec.icon_url
         row.billing_type = spec.billing_type
-        row.status = spec.status
+        if not spec.preserve_status:
+            row.status = spec.status
         row.is_featured = spec.is_featured
         row.sort_order = spec.sort_order
         row.connector_key = spec.connector_key

@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
+from app.apps_catalog.agent_usage import AgentsAiUsageService
 from app.apps_catalog.commerce import AppCommerceService
 from app.apps_catalog.policy import require_browse, require_manage_apps
 from app.apps_catalog.schemas import (
@@ -15,8 +16,10 @@ from app.apps_catalog.schemas import (
     AppInstallationListOut,
     AppInstallationOut,
     AppRenewRequest,
+    AgentsAiUsageOut,
     CatalogAppListOut,
     CatalogAppOut,
+    to_agents_ai_usage_out,
 )
 from app.apps_catalog.service import AppCatalogService, AppInstallationService
 from app.billing.checkout_router import _checkout_out, _spa_origin_from_request
@@ -96,6 +99,16 @@ def list_apps(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/agents-ai/usage", response_model=AgentsAiUsageOut)
+def get_agents_ai_usage(
+    pair: tuple[Workspace, WorkspaceMembership] = Depends(require_workspace),
+    db: Session = Depends(get_db),
+) -> AgentsAiUsageOut:
+    workspace, membership = pair
+    require_browse(membership)
+    return to_agents_ai_usage_out(AgentsAiUsageService(db).snapshot(workspace.id))
 
 
 @router.get("/{app_slug}", response_model=CatalogAppOut)
