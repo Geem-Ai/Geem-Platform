@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from typing import Any
 
 
 class McpAuthMode(StrEnum):
@@ -51,6 +53,24 @@ class McpSessionMode(StrEnum):
     LEGACY_HTTP_SSE = "legacy_http_sse"
 
 
+def annotations_forbid_read_only(
+    annotations: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether remote hints explicitly contradict a read-only review.
+
+    MCP annotations are untrusted hints and can never authorize a tool.  An
+    explicit mutating/destructive hint can, however, make a read-only
+    classification unsafe, so runtime and management paths fail closed.
+    """
+
+    if not isinstance(annotations, Mapping):
+        return False
+    return (
+        annotations.get("readOnlyHint") is False
+        or annotations.get("destructiveHint") is True
+    )
+
+
 __all__ = [
     "McpAuthMode",
     "McpCompatibilityStatus",
@@ -59,4 +79,5 @@ __all__ = [
     "McpSessionMode",
     "McpToolClassification",
     "McpToolStatus",
+    "annotations_forbid_read_only",
 ]

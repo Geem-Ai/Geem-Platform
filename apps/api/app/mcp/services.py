@@ -85,6 +85,7 @@ from app.mcp.types import (
     McpGrantState,
     McpToolClassification,
     McpToolStatus,
+    annotations_forbid_read_only,
 )
 from app.workspaces.repository import MembershipRepository
 
@@ -634,6 +635,15 @@ class McpServerService:
             tool = repo.get_tool(workspace_id, tool_id, for_update=True)
             if tool is None:
                 raise AppError(ErrorCategory.CONNECTOR_NOT_FOUND, "MCP tool not found.")
+            if (
+                classification == McpToolClassification.READ_ONLY.value
+                and annotations_forbid_read_only(tool.annotations)
+            ):
+                raise AppError(
+                    ErrorCategory.VALIDATION,
+                    "This MCP tool declares mutating behavior and must be reviewed "
+                    "as a write tool.",
+                )
             if tool.classification != classification:
                 tool.classification = classification
                 repo.stale_grants_for_classification(tool.id)
@@ -1143,6 +1153,10 @@ class McpGrantService:
                 tool.status != McpToolStatus.ACTIVE.value
                 or tool.compatibility_status != McpCompatibilityStatus.COMPATIBLE.value
                 or tool.classification == McpToolClassification.UNKNOWN.value
+                or (
+                    tool.classification == McpToolClassification.READ_ONLY.value
+                    and annotations_forbid_read_only(tool.annotations)
+                )
             ):
                 raise AppError(
                     ErrorCategory.MCP_TOOL_INCOMPATIBLE,

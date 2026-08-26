@@ -7,17 +7,20 @@ from types import SimpleNamespace
 import pytest
 
 import app.mcp.resolver as resolver_module
+import app.mcp.services as services_module
 from app.connectors.types import ConnectionHealth, ConnectionStatus
 from app.conversations.invocation import ChatInvocationContext
 from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.mcp.repository import McpGrantRecord
 from app.mcp.resolver import McpGrantResolver
+from app.mcp.services import McpServerService
 from app.mcp.types import (
     McpCompatibilityStatus,
     McpGrantState,
     McpToolClassification,
     McpToolStatus,
+    annotations_forbid_read_only,
 )
 
 
@@ -130,6 +133,11 @@ def _current_record() -> McpGrantRecord:
         compatibility_status=McpCompatibilityStatus.COMPATIBLE.value,
         classification=McpToolClassification.READ_ONLY.value,
         definition_hash=definition_hash,
+        annotations={"readOnlyHint": True},
+        llm_tool_name="mcp_lookup",
+        input_schema={"type": "object"},
+        description="Look up a record",
+        title="Lookup",
     )
     connection = SimpleNamespace(
         status=ConnectionStatus.ACTIVE.value,
@@ -179,6 +187,87 @@ def test_exact_current_pins_resolve() -> None:
         source="workspace",
         decision_at=datetime.now(timezone.utc),
     )
+
+
+@pytest.mark.parametrize(
+    "annotations",
+    [
+        {"readOnlyHint": False},
+        {"destructiveHint": True},
+        {"readOnlyHint": False, "destructiveHint": False},
+    ],
+)
+def test_mutating_annotation_never_resolves_as_read_only(annotations) -> None:
+    record = _current_record()
+    record.tool.annotations = annotations
+    resolver = McpGrantResolver(SimpleNamespace(), settings=get_settings())
+
+    assert annotations_forbid_read_only(annotations)
+    assert not resolver._record_is_current(
+        record,
+        source="workspace",
+        decision_at=datetime.now(timezone.utc),
+    )
+
+
+def test_provider_schema_labels_write_tools_for_explicit_mutation_only() -> None:
+    record = _current_record()
+    record.tool.classification = McpToolClassification.WRITE.value
+
+    schema = McpGrantResolver._provider_schema(record.tool)
+
+    description = schema["function"]["description"]
+    assert description.startswith("WRITE TOOL.")
+    assert "latest user request explicitly asks" in description
+    assert description.endswith("Look up a record")
+
+
+def test_classification_rejects_explicit_mutator_as_read_only(monkeypatch) -> None:
+    tool = SimpleNamespace(
+        annotations={"readOnlyHint": False},
+        classification=McpToolClassification.UNKNOWN.value,
+    )
+
+    class _Repo:
+        def __init__(self, _db) -> None:
+            pass
+
+        @staticmethod
+        def get_tool(*_args, **_kwargs):
+            return tool
+
+    class _Gate:
+        rolled_back = False
+        closed = False
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    gate = _Gate()
+    monkeypatch.setattr(services_module, "_begin_paid_access", lambda *_a, **_k: None)
+    monkeypatch.setattr(services_module, "McpRepository", _Repo)
+    service = McpServerService(
+        SimpleNamespace(),  # type: ignore[arg-type]
+        session_factory=lambda: gate,  # type: ignore[arg-type]
+        gateway=SimpleNamespace(),  # type: ignore[arg-type]
+        oauth=SimpleNamespace(),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(AppError) as raised:
+        service.classify_tool(
+            workspace_id=uuid.uuid4(),
+            actor_id=uuid.uuid4(),
+            tool_id=uuid.uuid4(),
+            classification=McpToolClassification.READ_ONLY.value,
+        )
+
+    assert raised.value.category == ErrorCategory.VALIDATION
+    assert "must be reviewed as a write tool" in raised.value.message
+    assert gate.rolled_back is True
+    assert gate.closed is True
 
 
 def test_public_api_write_requires_unattended_opt_in() -> None:

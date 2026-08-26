@@ -43,6 +43,7 @@ from app.mcp.types import (
     McpGrantState,
     McpToolClassification,
     McpToolStatus,
+    annotations_forbid_read_only,
 )
 
 logger = logging.getLogger(__name__)
@@ -194,6 +195,11 @@ class McpGrantResolver:
             McpToolClassification.WRITE.value,
         }:
             return False
+        if (
+            tool.classification == McpToolClassification.READ_ONLY.value
+            and annotations_forbid_read_only(getattr(tool, "annotations", None))
+        ):
+            return False
         if grant.approved_definition_hash != tool.definition_hash:
             return False
         if grant.approved_classification != tool.classification:
@@ -229,8 +235,14 @@ class McpGrantResolver:
             "parameters": dict(tool.input_schema or {}),
         }
         description = (tool.description or tool.title or "").strip()
-        if description:
-            function["description"] = description
+        if tool.classification == McpToolClassification.WRITE.value:
+            guidance = (
+                "WRITE TOOL. Select only when the latest user request explicitly "
+                "asks to change external data; never use it to gather evidence."
+            )
+        else:
+            guidance = "READ-ONLY TOOL. Use only to retrieve evidence."
+        function["description"] = f"{guidance} {description}".strip()
         return {"type": "function", "function": function}
 
     @staticmethod

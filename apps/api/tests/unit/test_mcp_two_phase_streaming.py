@@ -99,9 +99,10 @@ class _ScriptedToolProvider:
 
     def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
         self.messages.append(list(messages))
-        self.tool_sets.append(list(_kwargs.get("tools") or []))
+        tool_set = list(_kwargs.get("tools") or [])
+        self.tool_sets.append(tool_set)
         round_index = len(self.messages) - 1
-        if round_index < len(self.arguments):
+        if tool_set and round_index < len(self.arguments):
             return AgentProviderResult(
                 message=AgentAssistantResponseMessage(
                     content=None,
@@ -239,8 +240,19 @@ def _tool_loop(
             "type": "object",
             "properties": {
                 "customer_id": {"type": "integer"},
-                "page": {"type": "integer"},
-                "perPage": {"type": "integer"},
+                "page": {
+                    "type": "number",
+                    "minimum": 1,
+                    "description": "Page number for pagination (min 1)",
+                },
+                "perPage": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": (
+                        "Results per page for pagination (min 1, max 100)"
+                    ),
+                },
             },
             "required": ["customer_id"],
             "additionalProperties": False,
@@ -458,6 +470,126 @@ def test_distinct_page_arguments_dispatch_both_calls() -> None:
             "tool_name": "lookup_customer",
         }
     ]
+
+
+def test_pagination_profile_change_stops_observed_refetch_sequence() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7}',
+            '{"customer_id":7,"page":2}',
+            '{"customer_id":7,"page":2,"perPage":100}',
+            '{"customer_id":7,"page":1,"perPage":100}',
+        ],
+        final_content=(
+            '{"answer_markdown":"One branch found.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+        ),
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="count all branches",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 2
+    assert dispatcher.arguments == [
+        {"customer_id": 7},
+        {"customer_id": 7, "page": 2},
+    ]
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [
+        True,
+        True,
+        True,
+        False,
+    ]
+    assert not any(
+        call.get("id") == "call-4"
+        for messages in provider.messages
+        for message in messages
+        for call in message.get("tool_calls") or []
+    )
+    result = events[-1].result
+    assert result is not None
+    assert result.answer == "One branch found."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
+
+
+def test_short_explicit_page_stops_forward_pagination() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":1,"perPage":100}',
+            '{"customer_id":7,"page":2,"perPage":100}',
+        ],
+        final_content=(
+            '{"answer_markdown":"One branch found.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+        ),
+    )
+    dispatcher = _RecordingDispatcher()
+    page_value = json.dumps([{"name": "master"}], separators=(",", ":"))
+    dispatcher.normalized = NormalizedToolResult(
+        model_content=(
+            "<untrusted_mcp_tool_result>\n"
+            + json.dumps(
+                {
+                    "content_kind": "text",
+                    "is_error": False,
+                    "truncated": False,
+                    "value": page_value,
+                },
+                separators=(",", ":"),
+            )
+            + "\n</untrusted_mcp_tool_result>"
+        ),
+        is_error=False,
+        transport_bytes=12,
+        content_types=("text",),
+        unsupported_blocks=(),
+    )
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="count all branches",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, True, False]
+    assert result.answer == "One branch found."
 
 
 def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None:
