@@ -1690,44 +1690,10 @@ def _pagination_result_is_empty(result: NormalizedToolResult) -> bool:
         payload = json.loads(value)
     except (TypeError, ValueError):
         return False
-    if isinstance(payload, list):
-        return len(payload) == 0
-    if not isinstance(payload, dict) or _payload_has_continuation(payload):
-        return False
-    for key in ("items", "results", "data", "branches"):
-        collection = payload.get(key)
-        if isinstance(collection, list):
-            return len(collection) == 0
-    return False
-
-
-def _payload_has_continuation(payload: dict[str, Any]) -> bool:
-    containers = [payload]
-    containers.extend(
-        value
-        for key in ("pageInfo", "page_info", "pagination", "meta")
-        if isinstance((value := payload.get(key)), dict)
-    )
-    for container in containers:
-        if any(
-            container.get(key) is True
-            for key in ("hasNextPage", "has_next_page", "hasMore", "has_more")
-        ):
-            return True
-        if any(
-            (value := container.get(key)) is not None
-            and value != ""
-            and value is not False
-            for key in (
-                "next",
-                "nextPage",
-                "next_page",
-                "nextCursor",
-                "next_cursor",
-            )
-        ):
-            return True
-    return False
+    # Object wrappers can carry provider-specific continuation metadata in
+    # arbitrary fields. Only a raw empty array is terminal without a reviewed
+    # output contract; false negatives merely permit another bounded read.
+    return isinstance(payload, list) and len(payload) == 0
 
 
 _HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")

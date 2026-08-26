@@ -675,7 +675,7 @@ def test_empty_page_with_continuation_does_not_end_pagination() -> None:
     dispatcher = _RecordingDispatcher()
     dispatcher.normalized_results = [
         _normalized_json_result([{"name": "master"}]),
-        _normalized_json_result({"items": [], "hasNextPage": True}),
+        _normalized_json_result({"items": [], "links": {"next": "page-3"}}),
         _normalized_json_result([{"name": "later"}]),
     ]
     executor, resolved, invocation = _tool_loop(provider, dispatcher)
