@@ -173,6 +173,8 @@ for tool-only evidence; Geem attaches tool citations separately.
 class _PaginationCall:
     query_fingerprint: tuple[str, str]
     page: int
+    first_page: int
+    page_size_profile: tuple[str, str]
 
 
 def _run_blocking_with_keepalives(
@@ -722,7 +724,10 @@ class ToolLoopTurnExecutor:
         messages = copy.deepcopy(prepared.messages)
         citations: list[dict[str, Any]] = []
         successful_calls: set[tuple[str, str]] = set()
-        successful_pages: dict[tuple[str, str], set[int]] = {}
+        successful_pages: dict[
+            tuple[str, str], set[tuple[int, tuple[str, str]]]
+        ] = {}
+        exhausted_page_queries: set[tuple[str, str]] = set()
         max_iterations = int(self.settings.mcp_max_tool_iterations)
         deadline = time.monotonic() + float(self.settings.mcp_total_turn_timeout_seconds)
 
@@ -774,8 +779,16 @@ class ToolLoopTurnExecutor:
                 )
                 page_already_fetched = bool(
                     pagination_call is not None
-                    and pagination_call.page
-                    in successful_pages.get(pagination_call.query_fingerprint, set())
+                    and (
+                        pagination_call.query_fingerprint in exhausted_page_queries
+                        or (
+                            pagination_call.page,
+                            pagination_call.page_size_profile,
+                        )
+                        in successful_pages.get(
+                            pagination_call.query_fingerprint, set()
+                        )
+                    )
                 )
                 if fingerprint in successful_calls or page_already_fetched:
                     repeated_provider_result = yield from _run_blocking_with_keepalives(
@@ -930,9 +943,24 @@ class ToolLoopTurnExecutor:
                     return
                 successful_calls.add(fingerprint)
                 if pagination_call is not None:
-                    successful_pages.setdefault(
+                    query_pages = successful_pages.setdefault(
                         pagination_call.query_fingerprint, set()
-                    ).add(pagination_call.page)
+                    )
+                    query_pages.add(
+                        (
+                            pagination_call.page,
+                            pagination_call.page_size_profile,
+                        )
+                    )
+                    if _pagination_result_is_empty(
+                        normalized
+                    ) and _pagination_profile_is_contiguous(
+                        query_pages,
+                        call=pagination_call,
+                    ):
+                        exhausted_page_queries.add(
+                            pagination_call.query_fingerprint
+                        )
                 if citation not in citations:
                     citations.append(citation)
                 continue
@@ -1574,9 +1602,24 @@ def _pagination_call_identity(
     query_arguments.pop(size_key, None)
     query_fingerprint = _tool_call_fingerprint(tool_name, query_arguments)
 
+    if size_key in arguments:
+        page_size = _positive_integral_argument(arguments[size_key])
+        if page_size is None:
+            return None
+        page_size_profile = (size_key, str(page_size))
+    else:
+        default_size = _positive_integral_argument(size_schema.get("default"))
+        page_size_profile = (
+            (size_key, str(default_size))
+            if default_size is not None
+            else (size_key, "<server-default>")
+        )
+
     return _PaginationCall(
         query_fingerprint=query_fingerprint,
         page=page,
+        first_page=first_page,
+        page_size_profile=page_size_profile,
     )
 
 
@@ -1591,12 +1634,100 @@ def _schema_first_page(schema: dict[str, Any]) -> int | None:
 
 
 def _nonnegative_integral_argument(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool):
         return None
-    numeric = float(value)
-    if not math.isfinite(numeric) or numeric < 0 or not numeric.is_integer():
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if not isinstance(value, float):
         return None
-    return int(numeric)
+    if not math.isfinite(value) or value < 0 or not value.is_integer():
+        return None
+    return int(value)
+
+
+def _positive_integral_argument(value: Any) -> int | None:
+    result = _nonnegative_integral_argument(value)
+    return result if result is not None and result > 0 else None
+
+
+def _pagination_profile_is_contiguous(
+    pages: set[tuple[int, tuple[str, str]]],
+    *,
+    call: _PaginationCall,
+) -> bool:
+    """Return whether one fixed-size profile covers every page through this call."""
+
+    if call.page < call.first_page:
+        return False
+    expected_count = call.page - call.first_page + 1
+    actual_count = sum(
+        1
+        for page, profile in pages
+        if call.first_page <= page <= call.page
+        and profile == call.page_size_profile
+    )
+    return actual_count == expected_count
+
+
+def _pagination_result_is_empty(result: NormalizedToolResult) -> bool:
+    """Detect only explicit empty JSON collections, never short non-empty pages."""
+
+    prefix = "<untrusted_mcp_tool_result>\n"
+    suffix = "\n</untrusted_mcp_tool_result>"
+    content = result.model_content
+    if not content.startswith(prefix) or not content.endswith(suffix):
+        return False
+    try:
+        envelope = json.loads(content[len(prefix) : -len(suffix)])
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(envelope, dict) or envelope.get("truncated") is True:
+        return False
+    value = envelope.get("value")
+    if not isinstance(value, str):
+        return False
+    try:
+        payload = json.loads(value)
+    except (TypeError, ValueError):
+        return False
+    if isinstance(payload, list):
+        return len(payload) == 0
+    if not isinstance(payload, dict) or _payload_has_continuation(payload):
+        return False
+    for key in ("items", "results", "data", "branches"):
+        collection = payload.get(key)
+        if isinstance(collection, list):
+            return len(collection) == 0
+    return False
+
+
+def _payload_has_continuation(payload: dict[str, Any]) -> bool:
+    containers = [payload]
+    containers.extend(
+        value
+        for key in ("pageInfo", "page_info", "pagination", "meta")
+        if isinstance((value := payload.get(key)), dict)
+    )
+    for container in containers:
+        if any(
+            container.get(key) is True
+            for key in ("hasNextPage", "has_next_page", "hasMore", "has_more")
+        ):
+            return True
+        if any(
+            (value := container.get(key)) is not None
+            and value != ""
+            and value is not False
+            for key in (
+                "next",
+                "nextPage",
+                "next_page",
+                "nextCursor",
+                "next_cursor",
+            )
+        ):
+            return True
+    return False
 
 
 _HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")

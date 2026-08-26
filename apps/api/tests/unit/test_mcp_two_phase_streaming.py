@@ -132,6 +132,29 @@ class _ScriptedToolProvider:
         )
 
 
+def _normalized_json_result(value) -> NormalizedToolResult:
+    encoded = json.dumps(value, separators=(",", ":"))
+    return NormalizedToolResult(
+        model_content=(
+            "<untrusted_mcp_tool_result>\n"
+            + json.dumps(
+                {
+                    "content_kind": "text",
+                    "is_error": False,
+                    "truncated": False,
+                    "value": encoded,
+                },
+                separators=(",", ":"),
+            )
+            + "\n</untrusted_mcp_tool_result>"
+        ),
+        is_error=False,
+        transport_bytes=len(encoded.encode("utf-8")),
+        content_types=("text",),
+        unsupported_blocks=(),
+    )
+
+
 class _RecordingDispatcher:
     def __init__(self, *, delay: float = 0.0, is_error: bool = False) -> None:
         self.delay = delay
@@ -149,13 +172,20 @@ class _RecordingDispatcher:
             content_types=("text",),
             unsupported_blocks=(),
         )
+        self.normalized_results: list[NormalizedToolResult] | None = None
 
     def dispatch(self, **_kwargs):
+        call_index = self.calls
         self.calls += 1
         self.arguments.append(dict(_kwargs["arguments"]))
         if self.delay:
             time.sleep(self.delay)
-        return self.normalized, {
+        normalized = (
+            self.normalized_results[call_index]
+            if self.normalized_results is not None
+            else self.normalized
+        )
+        return normalized, {
             "kind": "tool",
             "connection_display_name": "CRM",
             "tool_name": "lookup_customer",
@@ -523,6 +553,10 @@ def test_pagination_profile_change_stops_observed_refetch_sequence() -> None:
         ),
     )
     dispatcher = _RecordingDispatcher()
+    dispatcher.normalized_results = [
+        _normalized_json_result([{"name": "master"}]),
+        _normalized_json_result([]),
+    ]
     executor, resolved, invocation = _tool_loop(
         provider,
         dispatcher,
@@ -629,6 +663,61 @@ def test_short_generic_page_does_not_suppress_an_unseen_page() -> None:
     assert result.answer == "One branch found."
 
 
+def test_empty_page_with_continuation_does_not_end_pagination() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":1,"perPage":100}',
+            '{"customer_id":7,"page":2,"perPage":100}',
+            '{"customer_id":7,"page":3,"perPage":100}',
+        ],
+        final_content="Continuation followed.",
+    )
+    dispatcher = _RecordingDispatcher()
+    dispatcher.normalized_results = [
+        _normalized_json_result([{"name": "master"}]),
+        _normalized_json_result({"items": [], "hasNextPage": True}),
+        _normalized_json_result([{"name": "later"}]),
+    ]
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 3
+    assert result.answer == "Continuation followed."
+
+
+def test_larger_page_size_can_expand_nonempty_page_coverage() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":1,"perPage":1}',
+            '{"customer_id":7,"page":1,"perPage":100}',
+        ],
+        final_content="Expanded page used.",
+    )
+    dispatcher = _RecordingDispatcher()
+    dispatcher.normalized = _normalized_json_result([{"name": "master"}])
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 2
+    assert result.answer == "Expanded page used."
+
+
 def test_zero_based_numbered_pages_are_not_mistaken_for_repeats() -> None:
     provider = _ScriptedToolProvider(
         [
@@ -656,6 +745,32 @@ def test_zero_based_numbered_pages_are_not_mistaken_for_repeats() -> None:
         {"customer_id": 7, "page": 1, "perPage": 100},
     ]
     assert result.answer == "Both pages used."
+
+
+def test_large_page_integer_does_not_overflow_pagination_identity() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            json.dumps(
+                {"customer_id": 7, "page": 10**400, "perPage": 100},
+                separators=(",", ":"),
+            )
+        ],
+        final_content="Large page handled.",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert result.answer == "Large page handled."
 
 
 def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None:
