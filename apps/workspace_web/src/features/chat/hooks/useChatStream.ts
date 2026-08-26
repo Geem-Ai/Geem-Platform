@@ -88,9 +88,11 @@ async function pollForConversationTitle(
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversation(workspaceId, conversationId),
+        exact: true,
       }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+        exact: true,
       }),
     ]);
     if (isCancelled()) return;
@@ -211,12 +213,15 @@ export function useChatStream({
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversation(workspaceId, conversationId),
+        exact: true,
       }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversationMessages(workspaceId, conversationId),
+        exact: true,
       }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+        exact: true,
       }),
     ]);
   }, [conversationId, queryClient, workspaceId]);
@@ -291,9 +296,11 @@ export function useChatStream({
         if (payload.title) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.conversations(workspaceId),
+            exact: true,
           });
           void queryClient.invalidateQueries({
             queryKey: queryKeys.conversation(workspaceId, conversationId),
+            exact: true,
           });
         }
         return;
@@ -309,9 +316,11 @@ export function useChatStream({
           );
           void queryClient.invalidateQueries({
             queryKey: queryKeys.conversations(workspaceId),
+            exact: true,
           });
           void queryClient.invalidateQueries({
             queryKey: queryKeys.conversation(workspaceId, conversationId),
+            exact: true,
           });
         }
         return;

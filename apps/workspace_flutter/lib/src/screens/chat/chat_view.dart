@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -339,13 +340,22 @@ class _MessageListState extends State<_MessageList> {
   @override
   void didUpdateWidget(covariant _MessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final oldLast = oldWidget.messages.isEmpty ? null : oldWidget.messages.last;
+    final newLast = widget.messages.isEmpty ? null : widget.messages.last;
     final changed =
         oldWidget.messages.length != widget.messages.length ||
-        (widget.messages.isNotEmpty &&
-            oldWidget.messages.isNotEmpty &&
-            oldWidget.messages.last.content.length !=
-                widget.messages.last.content.length);
+        oldLast?.content.length != newLast?.content.length ||
+        oldLast?.citations.length != newLast?.citations.length ||
+        _toolStateFingerprint(oldLast) != _toolStateFingerprint(newLast);
     if (changed && stickToBottom) _scrollAfterFrame();
+  }
+
+  String _toolStateFingerprint(ChatMessage? message) {
+    if (message == null) return '';
+    final activities = message.toolActivities
+        .map((item) => '${item.id}:${item.status}')
+        .join('|');
+    return '$activities:${message.toolApproval?.status ?? ''}';
   }
 
   void _scrollAfterFrame({bool jump = false}) {
@@ -510,6 +520,11 @@ class _MessageBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (message.toolActivities.isNotEmpty) ...[
+          _ToolActivityList(activities: message.toolActivities),
+          if (isWaiting || message.content.isNotEmpty)
+            const SizedBox(height: 10),
+        ],
         if (isWaiting)
           GeemThinkingTypewriter(
             messages: _thinkingMessages(context),
@@ -519,14 +534,14 @@ class _MessageBody extends StatelessWidget {
               fontSize: 12.5,
             ),
           )
-        else if (!message.isAssistant)
+        else if (!message.isAssistant && message.content.isNotEmpty)
           SelectionArea(
             child: Text(
               message.content,
               style: TextStyle(color: foreground, fontSize: 14, height: 1.75),
             ),
           )
-        else
+        else if (message.content.isNotEmpty)
           GeemMarkdown(data: message.content, foreground: foreground),
         if (message.status == 'streaming' && message.content.isNotEmpty)
           Padding(
@@ -544,6 +559,10 @@ class _MessageBody extends StatelessWidget {
         if (message.status != 'streaming' && message.citations.isNotEmpty) ...[
           const SizedBox(height: 12),
           _CitationPanel(citations: message.citations),
+        ],
+        if (message.toolApproval != null) ...[
+          const SizedBox(height: 12),
+          _ToolApprovalCard(message: message),
         ],
         if (message.isFailed && message.isAssistant) ...[
           const SizedBox(height: 10),
@@ -571,6 +590,318 @@ class _MessageBody extends StatelessWidget {
   }
 }
 
+class _ToolActivityList extends StatelessWidget {
+  const _ToolActivityList({required this.activities});
+
+  final List<ToolActivity> activities;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: const Key('tool-activity-list'),
+    children: [
+      for (final activity in activities) ...[
+        _ToolActivityRow(activity: activity),
+        if (activity != activities.last) const SizedBox(height: 7),
+      ],
+    ],
+  );
+}
+
+class _ToolActivityRow extends StatelessWidget {
+  const _ToolActivityRow({required this.activity});
+
+  final ToolActivity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending =
+        activity.status == 'calling' || activity.status == 'approval_required';
+    final failed =
+        activity.status == 'failed' || activity.status == 'outcome_unknown';
+    final succeeded = activity.status == 'succeeded';
+    final cancelled = activity.status == 'cancelled';
+    final brightness = Theme.of(context).brightness;
+    final color = failed
+        ? Theme.of(context).colorScheme.error
+        : pending
+        ? Theme.of(context).colorScheme.primary
+        : !succeeded
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : brightness == Brightness.dark
+        ? Colors.green.shade300
+        : Colors.green.shade800;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        key: ValueKey('tool-activity-${activity.id}'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.geemTokens.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (pending)
+              SizedBox.square(
+                dimension: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.8,
+                  color: color,
+                ),
+              )
+            else
+              Icon(
+                failed
+                    ? Icons.error_outline_rounded
+                    : !succeeded
+                    ? cancelled
+                          ? Icons.cancel_outlined
+                          : Icons.info_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 16,
+                color: color,
+              ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.build_outlined, size: 13),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          activity.toolName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          _toolStatusLabel(context, activity.status),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (activity.connectionName?.isNotEmpty == true) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      activity.connectionName!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                  if (activity.status == 'outcome_unknown') ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      context.strings.text('toolOutcomeUnknown'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 10.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ] else if (activity.status == 'failed' &&
+                      activity.errorCode?.isNotEmpty == true) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      context.strings.error(activity.errorCode),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 10.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolApprovalCard extends StatelessWidget {
+  const _ToolApprovalCard({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final approval = message.toolApproval!;
+    final controller = AppScope.of(context);
+    final actionable = approval.status == 'pending';
+    final reviewAvailable =
+        approval.arguments != null &&
+        (actionable ||
+            approval.status == 'approved' ||
+            approval.status == 'executing');
+    final busy = controller.decidingToolApprovalId == approval.id;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        key: const Key('tool-approval-card'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.amber.withValues(alpha: 0.48)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.shield_outlined,
+                  size: 18,
+                  color: Colors.amber.shade800,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        actionable
+                            ? context.strings.text('toolApprovalRequired')
+                            : _toolApprovalStatusLabel(
+                                context,
+                                approval.status,
+                              ),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        [
+                          if (approval.connectionName?.isNotEmpty == true)
+                            approval.connectionName!,
+                          approval.toolName,
+                        ].join(' · '),
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (reviewAvailable) ...[
+              const SizedBox(height: 10),
+              Text(
+                context.strings.text('toolExactArguments'),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                key: const Key('tool-approval-arguments'),
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 208),
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: context.geemTokens.border),
+                ),
+                child: SingleChildScrollView(
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: SelectableText(
+                      _prettyArguments(approval.arguments),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10.5,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.strings.text('toolApprovalDisclosure'),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(height: 1.45),
+              ),
+            ],
+            if (actionable && !reviewAvailable) ...[
+              const SizedBox(height: 10),
+              Text(
+                context.strings.text('toolArgumentsUnavailable'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            if (actionable) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (reviewAvailable)
+                    FilledButton(
+                      key: const Key('approve-tool-call'),
+                      onPressed: busy
+                          ? null
+                          : () => unawaited(
+                              controller.decideToolApproval(message, 'approve'),
+                            ),
+                      child: Text(context.strings.text('toolApproveOnce')),
+                    ),
+                  FilledButton.tonal(
+                    key: const Key('deny-tool-call'),
+                    onPressed: busy
+                        ? null
+                        : () => unawaited(
+                            controller.decideToolApproval(message, 'deny'),
+                          ),
+                    style: FilledButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    child: Text(context.strings.text('toolDeny')),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CitationPanel extends StatelessWidget {
   const _CitationPanel({required this.citations});
 
@@ -579,55 +910,92 @@ class _CitationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Theme(
     data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-    child: ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: EdgeInsets.zero,
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      leading: const Icon(Icons.menu_book_outlined, size: 17),
-      title: Text(
-        '${context.strings.text('sources')} (${citations.length})',
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-      children: [
-        for (final citation in citations)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 7),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.geemTokens.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  citation.documentTitle,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11.5,
+    child: Material(
+      color: Colors.transparent,
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading: const Icon(Icons.menu_book_outlined, size: 17),
+        title: Text(
+          '${context.strings.text('sources')} (${citations.length})',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        ),
+        children: [
+          for (final (index, citation) in citations.indexed)
+            Container(
+              key: ValueKey(
+                citation.isTool
+                    ? 'tool-citation-${citation.connectionName ?? 'unknown'}-${citation.toolCallId ?? citation.toolName ?? 'tool'}-$index'
+                    : 'chunk-citation-${citation.chunkId ?? citation.documentId ?? 'source'}-$index',
+              ),
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 7),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.geemTokens.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        citation.isTool
+                            ? Icons.build_outlined
+                            : Icons.description_outlined,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          citation.isTool
+                              ? citation.toolTitle ??
+                                    citation.toolName ??
+                                    context.strings.text('tool')
+                              : citation.documentTitle ??
+                                    context.strings.text('source'),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                if (citation.page > 0)
-                  Text(
-                    '${context.strings.text('page')} ${citation.page}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                if (citation.snippet.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    citation.snippet,
-                    style: const TextStyle(fontSize: 11, height: 1.5),
-                  ),
+                  if (citation.isTool &&
+                      citation.connectionName?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 22),
+                      child: Text(
+                        citation.connectionName!,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  if (!citation.isTool && (citation.page ?? 0) > 0)
+                    Text(
+                      '${context.strings.text('page')} ${citation.page}',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  if (!citation.isTool &&
+                      citation.snippet?.isNotEmpty == true) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      citation.snippet!,
+                      style: const TextStyle(fontSize: 11, height: 1.5),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -669,11 +1037,14 @@ class _ChatComposerState extends State<_ChatComposer> {
     final strings = context.strings;
     final selected = controller.selectedExpert;
     final isNewChat = controller.activeConversation == null;
+    final toolTurnPending = controller.hasPendingToolTurn;
     final canSend =
         input.text.trim().isNotEmpty &&
         !controller.chatBusy &&
         (!isNewChat || selected?.isAvailable == true);
-    final placeholder = isNewChat && selected?.isAvailable == true
+    final placeholder = toolTurnPending
+        ? strings.text('toolComposerPaused')
+        : isNewChat && selected?.isAvailable == true
         ? strings.text('askHint').replaceAll('{{name}}', selected!.name)
         : strings.text(isNewChat ? 'expertRequired' : 'messageHint');
     return Container(
@@ -692,6 +1063,26 @@ class _ChatComposerState extends State<_ChatComposer> {
       ),
       child: Column(
         children: [
+          if (toolTurnPending)
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 10, 16, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.pause_circle_outline_rounded,
+                    size: 15,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      strings.text('toolComposerPaused'),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsetsDirectional.fromSTEB(16, 9, 9, 9),
             child: Row(
@@ -760,6 +1151,37 @@ class _ChatComposerState extends State<_ChatComposer> {
     );
   }
 }
+
+String _prettyArguments(Object? arguments) {
+  try {
+    return const JsonEncoder.withIndent('  ').convert(arguments ?? const {});
+  } on JsonUnsupportedObjectError {
+    return '{}';
+  }
+}
+
+String _toolStatusLabel(BuildContext context, String status) =>
+    switch (status) {
+      'calling' => context.strings.text('toolStatusCalling'),
+      'succeeded' => context.strings.text('toolStatusSucceeded'),
+      'failed' => context.strings.text('toolStatusFailed'),
+      'outcome_unknown' => context.strings.text('toolStatusOutcomeUnknown'),
+      'approval_required' => context.strings.text('toolStatusApprovalRequired'),
+      'cancelled' => context.strings.text('toolStatusCancelled'),
+      _ => status,
+    };
+
+String _toolApprovalStatusLabel(BuildContext context, String status) =>
+    switch (status) {
+      'approved' => context.strings.text('toolApprovalApproved'),
+      'denied' => context.strings.text('toolApprovalDenied'),
+      'expired' => context.strings.text('toolApprovalExpired'),
+      'executing' => context.strings.text('toolApprovalExecuting'),
+      'executed' ||
+      'completed' => context.strings.text('toolApprovalCompleted'),
+      'outcome_unknown' => context.strings.text('toolStatusOutcomeUnknown'),
+      _ => status,
+    };
 
 String _formatTime(DateTime value) {
   final local = value.toLocal();

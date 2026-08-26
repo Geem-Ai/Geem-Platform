@@ -1,8 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { ApiError } from '@/services/api/errors';
+import { queryKeys } from '@/services/api/query-keys';
 
 const streamMock = vi.fn();
 const retryMock = vi.fn();
@@ -25,15 +30,33 @@ import {
   setPendingChatMessage,
 } from '../lib/pendingChatMessage';
 
-function createWrapper() {
-  const client = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+}
+
+function createWrapper(client = createQueryClient()) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
   };
+}
+
+function activateQuery<T>(
+  client: QueryClient,
+  queryKey: readonly unknown[],
+  initialData: T,
+  queryFn: () => Promise<T>,
+) {
+  const observer = new QueryObserver<T>(client, {
+    queryKey,
+    queryFn,
+    initialData,
+    staleTime: Infinity,
+  });
+  return observer.subscribe(() => undefined);
 }
 
 describe('useChatStream', () => {
@@ -129,6 +152,70 @@ describe('useChatStream', () => {
     expect(assistants[0]?.content).toBe('Hello');
     expect(assistants[0]?.citations).toHaveLength(1);
     expect(assistants[0]?.status).toBe('completed');
+  });
+
+  it('refetches each active conversation cache exactly once after a stream', async () => {
+    streamMock.mockResolvedValue(undefined);
+
+    const client = createQueryClient();
+    const listData = [{ id: 'c1', title: 'Existing conversation' }];
+    const detailData = { id: 'c1', title: 'Existing conversation' };
+    const messagesData: unknown[] = [];
+    const unrelatedData = { id: 'c2', title: 'Unrelated conversation' };
+    const listFetch = vi.fn(async () => listData);
+    const detailFetch = vi.fn(async () => detailData);
+    const messagesFetch = vi.fn(async () => messagesData);
+    const unrelatedFetch = vi.fn(async () => unrelatedData);
+
+    const unsubscribe = [
+      activateQuery(
+        client,
+        queryKeys.conversations('ws1'),
+        listData,
+        listFetch,
+      ),
+      activateQuery(
+        client,
+        queryKeys.conversation('ws1', 'c1'),
+        detailData,
+        detailFetch,
+      ),
+      activateQuery(
+        client,
+        queryKeys.conversationMessages('ws1', 'c1'),
+        messagesData,
+        messagesFetch,
+      ),
+      activateQuery(
+        client,
+        queryKeys.conversation('ws1', 'c2'),
+        unrelatedData,
+        unrelatedFetch,
+      ),
+    ];
+
+    try {
+      const { result } = renderHook(
+        () =>
+          useChatStream({
+            workspaceId: 'ws1',
+            conversationId: 'c1',
+            initialMessages: [],
+          }),
+        { wrapper: createWrapper(client) },
+      );
+
+      await act(async () => {
+        await result.current.send('One request per cache');
+      });
+
+      expect(listFetch).toHaveBeenCalledTimes(1);
+      expect(detailFetch).toHaveBeenCalledTimes(1);
+      expect(messagesFetch).toHaveBeenCalledTimes(1);
+      expect(unrelatedFetch).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe.forEach((stop) => stop());
+    }
   });
 
   it('keeps tool activity and exact approval arguments in the assistant turn', async () => {

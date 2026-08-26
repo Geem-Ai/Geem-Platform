@@ -12,7 +12,7 @@ import hashlib
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -41,7 +41,6 @@ class McpToolCallRequest:
     arguments: dict[str, Any]
     write: bool
     protocol_version: str | None = None
-    extra_headers: dict[str, str] = field(default_factory=dict)
     deadline_seconds: float | None = None
 
 
@@ -268,9 +267,7 @@ class HttpMcpGatewayClient:
                     "operation_id": request.operation_id,
                     "operation": "tools_call",
                     "target_url": request.target_url,
-                    "headers": _merged_headers(
-                        request.auth, request.extra_headers
-                    ),
+                    "headers": _auth_headers(request.auth),
                     "mode": mode,
                     "caller_binding": caller_binding,
                     "tool_name": request.tool_name,
@@ -475,24 +472,6 @@ def _auth_headers(auth: dict[str, Any]) -> dict[str, str]:
         token_type = str(auth.get("token_type") or "Bearer").strip() or "Bearer"
         return {"Authorization": f"{token_type} {token}"}
     raise AppError(ErrorCategory.MCP_AUTH_REQUIRED, "MCP authorization is required.")
-
-
-def _merged_headers(
-    auth: dict[str, Any], extra_headers: dict[str, str]
-) -> dict[str, str]:
-    result = _auth_headers(auth)
-    seen = {name.casefold() for name in result}
-    for raw_name, raw_value in extra_headers.items():
-        name = str(raw_name)
-        value = str(raw_value)
-        if name.casefold() in seen:
-            raise AppError(
-                ErrorCategory.MCP_TOOL_INCOMPATIBLE,
-                "An MCP argument header conflicts with authorization.",
-            )
-        seen.add(name.casefold())
-        result[name] = value
-    return result
 
 
 def _gateway_error_category(code: str, *, outcome_unknown: bool) -> ErrorCategory:

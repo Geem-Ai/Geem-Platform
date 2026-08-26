@@ -49,4 +49,72 @@ void main() {
     expect(expert('draft').isAvailable, isFalse);
     expect(expert('processing').isAvailable, isFalse);
   });
+
+  test('message parses MCP tool citations, activity, and approval', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'role': 'assistant',
+      'content': 'This tool call is awaiting your approval.',
+      'status': 'pending',
+      'created_at': '2026-08-26T12:00:00Z',
+      'citations': [
+        {
+          'kind': 'tool',
+          'connection_display_name': 'Customer CRM',
+          'tool_name': 'update_customer',
+        },
+      ],
+      'tool_activities': [
+        {
+          'id': 'invocation-1',
+          'tool_call_id': 'call-1',
+          'connection_name': 'Customer CRM',
+          'tool_name': 'update_customer',
+          'status': 'calling',
+          'error_code': null,
+        },
+        {
+          'id': 'approval-1',
+          'tool_call_id': 'call-1',
+          'connection_name': 'Customer CRM',
+          'tool_name': 'update_customer',
+          'status': 'approval_required',
+        },
+      ],
+      'tool_approval': {
+        'id': 'approval-1',
+        'tool_call_id': 'call-1',
+        'connection_name': 'Customer CRM',
+        'tool_name': 'update_customer',
+        'arguments': {'customer_id': 7, 'tier': 'gold'},
+        'status': 'pending',
+        'expires_at': '2026-08-26T12:05:00Z',
+      },
+    });
+
+    final citation = message.citations.single;
+    expect(citation.isTool, isTrue);
+    expect(citation.connectionName, 'Customer CRM');
+    expect(citation.toolName, 'update_customer');
+    expect(citation.documentId, isNull);
+
+    final activity = message.toolActivities.single;
+    expect(activity.id, 'invocation-1');
+    expect(activity.toolCallId, 'call-1');
+    expect(activity.connectionName, 'Customer CRM');
+    expect(activity.toolName, 'update_customer');
+    expect(activity.status, 'calling');
+    expect(activity.errorCode, isNull);
+
+    final approval = message.toolApproval!;
+    expect(approval.id, 'approval-1');
+    expect(approval.toolCallId, 'call-1');
+    expect(approval.connectionName, 'Customer CRM');
+    expect(approval.toolName, 'update_customer');
+    expect(approval.arguments, {'customer_id': 7, 'tier': 'gold'});
+    expect(approval.status, 'pending');
+    expect(approval.expiresAt, DateTime.parse('2026-08-26T12:05:00Z'));
+    expect(approval.blocksComposer, isTrue);
+  });
 }

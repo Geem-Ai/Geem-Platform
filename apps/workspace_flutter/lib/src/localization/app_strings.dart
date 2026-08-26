@@ -29,6 +29,24 @@ class AppStrings {
       'forbidden' || 'insufficient_workspace_role' => 'errorForbidden',
       'rate_limited' => 'errorRateLimited',
       'monthly_quota_exceeded' || 'credit_balance_exhausted' => 'errorQuota',
+      'mcp_protocol_unsupported' => 'errorMcpProtocolUnsupported',
+      'mcp_server_unreachable' => 'errorMcpServerUnreachable',
+      'mcp_auth_required' => 'errorMcpAuthRequired',
+      'mcp_oauth_client_registration_failed' =>
+        'errorMcpOauthClientRegistration',
+      'mcp_reauthorization_required' => 'errorMcpReauthorizationRequired',
+      'mcp_tool_not_granted' => 'errorMcpToolNotGranted',
+      'mcp_tool_set_changed' => 'errorMcpToolSetChanged',
+      'mcp_tool_incompatible' => 'errorMcpToolIncompatible',
+      'mcp_tool_result_unsupported' => 'errorMcpToolResultUnsupported',
+      'mcp_response_too_large' => 'errorMcpResponseTooLarge',
+      'mcp_tool_call_failed' => 'errorMcpToolCallFailed',
+      'mcp_tool_outcome_unknown' => 'errorMcpToolOutcomeUnknown',
+      'mcp_tool_limit_reached' => 'errorMcpToolLimitReached',
+      'mcp_external_approval_required' => 'errorMcpExternalApprovalRequired',
+      'mcp_external_turn_pending' => 'errorMcpExternalTurnPending',
+      'mcp_external_delivery_unknown' => 'errorMcpExternalDeliveryUnknown',
+      'egress_target_blocked' => 'errorEgressTargetBlocked',
       'network' => 'errorNetwork',
       'validation' => 'errorValidation',
       'expert_required' => 'expertRequired',
@@ -132,7 +150,32 @@ class AppStrings {
       'retrying': 'Trying again…',
       'retry': 'Try again',
       'sources': 'Sources',
+      'source': 'Source',
       'page': 'Page',
+      'tool': 'Tool',
+      'toolApprovalRequired': 'Approval required',
+      'toolExactArguments': 'Exact arguments',
+      'toolApprovalDisclosure':
+          'Approving sends these arguments to the connected external MCP server. Approve only if you trust the server and intended this action.',
+      'toolArgumentsUnavailable':
+          'The exact arguments are unavailable, so this tool call cannot be approved safely. You can still deny it.',
+      'toolApproveOnce': 'Approve once',
+      'toolDeny': 'Deny',
+      'toolOutcomeUnknown':
+          'The external server may have completed this action, but Geem could not confirm the outcome. Check the external system before retrying.',
+      'toolComposerPaused':
+          'Finish the pending tool approval before sending another message.',
+      'toolStatusCalling': 'Running',
+      'toolStatusSucceeded': 'Completed',
+      'toolStatusFailed': 'Failed',
+      'toolStatusOutcomeUnknown': 'Outcome unknown',
+      'toolStatusApprovalRequired': 'Approval required',
+      'toolStatusCancelled': 'Cancelled',
+      'toolApprovalApproved': 'Approved — execution is being checked',
+      'toolApprovalDenied': 'Denied',
+      'toolApprovalExpired': 'Approval expired',
+      'toolApprovalExecuting': 'Running',
+      'toolApprovalCompleted': 'Completed',
       'chatUnavailable': 'Chat is not available in this workspace.',
       'noWorkspacesTitle': 'No workspace access',
       'noWorkspacesBody':
@@ -162,6 +205,38 @@ class AppStrings {
       'errorForbidden': 'You do not have permission to do that.',
       'errorRateLimited': 'Too many attempts. Please wait and try again.',
       'errorQuota': 'This workspace has reached its AI usage limit.',
+      'errorMcpProtocolUnsupported':
+          'This MCP server uses an unsupported protocol version.',
+      'errorMcpServerUnreachable':
+          'The MCP server could not be reached safely.',
+      'errorMcpAuthRequired': 'Authentication is required for this MCP server.',
+      'errorMcpOauthClientRegistration':
+          'The provider rejected Geem as an OAuth client.',
+      'errorMcpReauthorizationRequired':
+          'Reauthorize this MCP server and review its tool grants.',
+      'errorMcpToolNotGranted':
+          'This tool is not granted to the selected Expert.',
+      'errorMcpToolSetChanged':
+          'The server’s tool definition changed. Review the grant again.',
+      'errorMcpToolIncompatible':
+          'This tool definition is not compatible with Geem.',
+      'errorMcpToolResultUnsupported':
+          'The MCP tool returned an unsupported result.',
+      'errorMcpResponseTooLarge':
+          'The MCP server response is too large for Geem to process.',
+      'errorMcpToolCallFailed': 'The external MCP tool call failed.',
+      'errorMcpToolOutcomeUnknown':
+          'The external tool outcome is unknown. Check the external system before retrying.',
+      'errorMcpToolLimitReached':
+          'The daily MCP tool-call limit has been reached.',
+      'errorMcpExternalApprovalRequired':
+          'A workspace operator must approve this external write tool call.',
+      'errorMcpExternalTurnPending':
+          'This external conversation already has a pending tool turn.',
+      'errorMcpExternalDeliveryUnknown':
+          'The reply delivery outcome is unknown and requires reconciliation.',
+      'errorEgressTargetBlocked':
+          'This external network target is blocked by Geem’s egress policy.',
       'errorNetwork':
           'Could not reach Geem. Check your connection and try again.',
       'errorValidation': 'Check the entered information and try again.',
@@ -255,7 +330,32 @@ class AppStrings {
       'retrying': 'جارٍ المحاولة مرة أخرى…',
       'retry': 'إعادة المحاولة',
       'sources': 'المصادر',
+      'source': 'مصدر',
       'page': 'صفحة',
+      'tool': 'أداة',
+      'toolApprovalRequired': 'الموافقة مطلوبة',
+      'toolExactArguments': 'الوسائط الفعلية',
+      'toolApprovalDisclosure':
+          'ترسل الموافقة هذه الوسائط إلى خادم MCP الخارجي المتصل. وافق فقط إذا كنت تثق بالخادم وتقصد تنفيذ هذا الإجراء.',
+      'toolArgumentsUnavailable':
+          'الوسائط الفعلية غير متاحة، لذلك لا يمكن الموافقة على استدعاء الأداة بأمان. لا يزال بإمكانك رفضه.',
+      'toolApproveOnce': 'موافقة لمرة واحدة',
+      'toolDeny': 'رفض',
+      'toolOutcomeUnknown':
+          'ربما أكمل الخادم الخارجي هذا الإجراء، لكن تعذر على جيم تأكيد النتيجة. تحقق من النظام الخارجي قبل إعادة المحاولة.',
+      'toolComposerPaused':
+          'أكمل الموافقة المعلقة على الأداة قبل إرسال رسالة أخرى.',
+      'toolStatusCalling': 'جارٍ التشغيل',
+      'toolStatusSucceeded': 'مكتمل',
+      'toolStatusFailed': 'فشل',
+      'toolStatusOutcomeUnknown': 'النتيجة غير معروفة',
+      'toolStatusApprovalRequired': 'الموافقة مطلوبة',
+      'toolStatusCancelled': 'ملغى',
+      'toolApprovalApproved': 'تمت الموافقة — جارٍ التحقق من التنفيذ',
+      'toolApprovalDenied': 'مرفوض',
+      'toolApprovalExpired': 'انتهت صلاحية الموافقة',
+      'toolApprovalExecuting': 'جارٍ التشغيل',
+      'toolApprovalCompleted': 'مكتمل',
       'chatUnavailable': 'المحادثة غير متاحة في مساحة العمل هذه.',
       'noWorkspacesTitle': 'لا توجد مساحة عمل',
       'noWorkspacesBody':
@@ -285,6 +385,32 @@ class AppStrings {
       'errorForbidden': 'ليست لديك صلاحية لتنفيذ هذا الإجراء.',
       'errorRateLimited': 'محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.',
       'errorQuota': 'وصلت مساحة العمل إلى حد استخدام الذكاء الاصطناعي.',
+      'errorMcpProtocolUnsupported':
+          'يستخدم خادم MCP إصدار بروتوكول غير مدعوم.',
+      'errorMcpServerUnreachable': 'تعذر الوصول إلى خادم MCP بأمان.',
+      'errorMcpAuthRequired': 'يتطلب خادم MCP هذا مصادقة.',
+      'errorMcpOauthClientRegistration': 'رفض المزوّد تسجيل جيم كعميل OAuth.',
+      'errorMcpReauthorizationRequired':
+          'أعد تفويض خادم MCP وراجع صلاحيات أدواته.',
+      'errorMcpToolNotGranted': 'هذه الأداة غير ممنوحة للخبير المحدد.',
+      'errorMcpToolSetChanged':
+          'تغير تعريف الأداة في الخادم. راجع الصلاحية مجددًا.',
+      'errorMcpToolIncompatible': 'تعريف هذه الأداة غير متوافق مع جيم.',
+      'errorMcpToolResultUnsupported': 'أعادت أداة MCP نتيجة غير مدعومة.',
+      'errorMcpResponseTooLarge':
+          'استجابة خادم MCP أكبر من أن يتمكن جيم من معالجتها.',
+      'errorMcpToolCallFailed': 'فشل استدعاء أداة MCP الخارجية.',
+      'errorMcpToolOutcomeUnknown':
+          'نتيجة الأداة الخارجية غير معروفة. تحقق من النظام الخارجي قبل إعادة المحاولة.',
+      'errorMcpToolLimitReached': 'تم بلوغ الحد اليومي لاستدعاءات أدوات MCP.',
+      'errorMcpExternalApprovalRequired':
+          'يجب أن يوافق مشغّل مساحة العمل على استدعاء أداة الكتابة الخارجية.',
+      'errorMcpExternalTurnPending':
+          'توجد بالفعل عملية أداة معلقة لهذه المحادثة الخارجية.',
+      'errorMcpExternalDeliveryUnknown':
+          'نتيجة تسليم الرد غير معروفة وتحتاج إلى تسوية.',
+      'errorEgressTargetBlocked':
+          'تحظر سياسة الاتصال الخارجي في جيم هذا الهدف الشبكي.',
       'errorNetwork': 'تعذر الاتصال بجيم. تحقق من الشبكة وحاول مجددًا.',
       'errorValidation': 'تحقق من البيانات المدخلة وحاول مجددًا.',
       'errorServer': 'جيم غير متاح مؤقتًا. حاول لاحقًا.',

@@ -25,6 +25,7 @@ export function useCreateConversation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+        exact: true,
       });
     },
   });
@@ -49,6 +50,7 @@ export function useUpdateConversation() {
       );
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+        exact: true,
       });
     },
   });
@@ -63,12 +65,15 @@ export function useDeleteConversation() {
     onSuccess: async (_data, conversationId) => {
       queryClient.removeQueries({
         queryKey: queryKeys.conversation(workspaceId, conversationId),
+        exact: true,
       });
       queryClient.removeQueries({
         queryKey: queryKeys.conversationMessages(workspaceId, conversationId),
+        exact: true,
       });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations(workspaceId),
+        exact: true,
       });
     },
   });

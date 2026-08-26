@@ -77,7 +77,11 @@ from app.mcp.types import (
     McpToolClassification,
     McpToolStatus,
 )
-from app.openrouter.chat import ANSWER_SCHEMA_HINT, OpenRouterChatProvider
+from app.openrouter.chat import (
+    ANSWER_SCHEMA_HINT,
+    OpenRouterChatProvider,
+    parse_answer_json_content,
+)
 from app.rag.service import RagService
 from app.usage.attribution import GenerationUsageContext
 from app.widgets.models import WidgetConversationBinding, WidgetInstance, WidgetInstanceStatus
@@ -198,7 +202,6 @@ class _DispatchSnapshot:
     classification: str
     connection_display_name: str
     wire_arguments: dict[str, Any]
-    argument_headers: dict[str, str]
 
 
 class McpDispatchService:
@@ -278,7 +281,6 @@ class McpDispatchService:
                     auth=copy.deepcopy(snapshot.auth),
                     tool_name=snapshot.tool_name,
                     arguments=copy.deepcopy(snapshot.wire_arguments),
-                    extra_headers=copy.deepcopy(snapshot.argument_headers),
                     write=snapshot.classification == McpToolClassification.WRITE.value,
                     protocol_version=snapshot.protocol_version,
                     deadline_seconds=(
@@ -474,7 +476,7 @@ class McpDispatchService:
                 unattended_write_allowed=grant.unattended_write_allowed,
                 approved_write_resume=approved_write_resume,
             )
-            wire_arguments, argument_headers = _extract_argument_headers(
+            _validate_argument_header_values(
                 arguments,
                 tool.input_schema,
             )
@@ -534,8 +536,10 @@ class McpDispatchService:
                 protocol_version=tool.protocol_version,
                 classification=tool.classification,
                 connection_display_name=(connection.display_name or "MCP server")[:200],
-                wire_arguments=wire_arguments,
-                argument_headers=argument_headers,
+                # The official gateway SDK must receive the original annotated
+                # arguments so it can mirror them into spec-owned Mcp-Param-*
+                # headers for the negotiated 2026 protocol.
+                wire_arguments=copy.deepcopy(arguments),
             )
             db.commit()
             return output
@@ -705,6 +709,7 @@ class ToolLoopTurnExecutor:
                     model=model,
                     system_prompt=prepared.system_prompt,
                     tools=tool_schemas,
+                    json_response=not prepared.general,
                     timeout_seconds=_remaining_deadline(deadline),
                 ),
                 keepalive_interval_seconds=keepalive_interval_seconds,
@@ -825,8 +830,6 @@ class ToolLoopTurnExecutor:
                         "status": "error" if normalized.is_error else "completed",
                     },
                 )
-                if citation not in citations:
-                    citations.append(citation)
                 messages.append(
                     {
                         "role": "assistant",
@@ -841,6 +844,29 @@ class ToolLoopTurnExecutor:
                         "content": normalized.model_content,
                     }
                 )
+                if normalized.is_error:
+                    error_provider_result = yield from _run_blocking_with_keepalives(
+                        lambda: self._answer_after_tool_error(
+                            messages=messages,
+                            model=model,
+                            prepared=prepared,
+                            deadline=deadline,
+                        ),
+                        keepalive_interval_seconds=keepalive_interval_seconds,
+                    )
+                    yield ToolLoopStreamEvent(
+                        event="complete",
+                        data={},
+                        result=self._finalize(
+                            error_provider_result,
+                            prepared=prepared,
+                            tool_citations=citations,
+                            usage_context=usage_context,
+                        ),
+                    )
+                    return
+                if citation not in citations:
+                    citations.append(citation)
                 continue
 
             if provider_result.finish_reason != "stop":
@@ -926,6 +952,7 @@ class ToolLoopTurnExecutor:
             model=model,
             system_prompt=prepared.system_prompt,
             tools=[],
+            json_response=not prepared.general,
             timeout_seconds=_remaining_deadline(deadline),
         )
         _require_deadline(deadline)
@@ -933,6 +960,33 @@ class ToolLoopTurnExecutor:
             raise AppError(
                 ErrorCategory.MCP_TOOL_INCOMPATIBLE,
                 "The MCP fallback synthesis did not complete.",
+            )
+        return result
+
+    def _answer_after_tool_error(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str,
+        prepared: _PreparedTurn,
+        deadline: float,
+    ) -> AgentProviderResult:
+        """Explain one confirmed remote error without repeatedly calling tools."""
+
+        _require_deadline(deadline)
+        result = self.provider.answer_with_tools(
+            messages,
+            model=model,
+            system_prompt=prepared.system_prompt,
+            tools=[],
+            json_response=not prepared.general,
+            timeout_seconds=_remaining_deadline(deadline),
+        )
+        _require_deadline(deadline)
+        if result.message.tool_calls or result.finish_reason != "stop":
+            raise AppError(
+                ErrorCategory.MCP_TOOL_INCOMPATIBLE,
+                "The MCP error synthesis did not complete.",
             )
         return result
 
@@ -1032,6 +1086,7 @@ class ToolLoopTurnExecutor:
             model=model,
             system_prompt=prepared.system_prompt,
             tools=[],
+            json_response=not prepared.general,
             timeout_seconds=_remaining_deadline(deadline),
         )
         _require_deadline(deadline)
@@ -1149,17 +1204,12 @@ class ToolLoopTurnExecutor:
             operation = "mcp_general_synthesis"
         else:
             try:
-                parsed = json.loads(content)
-            except (TypeError, json.JSONDecodeError) as exc:
+                parsed = parse_answer_json_content(content)
+            except (TypeError, ValueError) as exc:
                 raise AppError(
                     ErrorCategory.GENERATION_FAILED,
                     "The MCP synthesis returned an invalid answer.",
                 ) from exc
-            if not isinstance(parsed, dict):
-                raise AppError(
-                    ErrorCategory.GENERATION_FAILED,
-                    "The MCP synthesis returned an invalid answer.",
-                )
             parsed["model"] = result.provider_model
             validated = self.rag._validate_citations(
                 parsed,
@@ -1344,17 +1394,15 @@ def _validate_arguments(
 _HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 
 
-def _extract_argument_headers(
+def _validate_argument_header_values(
     arguments: dict[str, Any], schema: dict[str, Any]
-) -> tuple[dict[str, Any], dict[str, str]]:
-    """Project reviewed top-level string arguments into safe ephemeral headers."""
+) -> None:
+    """Validate Geem's reviewed x-mcp-header subset before SDK transport."""
 
-    wire = copy.deepcopy(arguments)
-    headers: dict[str, str] = {}
     seen: set[str] = set()
     properties = schema.get("properties")
     if not isinstance(properties, dict):
-        return wire, headers
+        return
     for property_name, raw_schema in properties.items():
         if not isinstance(raw_schema, dict) or "x-mcp-header" not in raw_schema:
             continue
@@ -1378,7 +1426,7 @@ def _extract_argument_headers(
                 ErrorCategory.MCP_TOOL_INCOMPATIBLE,
                 "The approved MCP header mapping is unsafe.",
             )
-        value = wire.get(str(property_name))
+        value = arguments.get(str(property_name))
         if not isinstance(value, str) or not value or len(value) > 8_192:
             raise AppError(
                 ErrorCategory.MCP_TOOL_INCOMPATIBLE,
@@ -1396,10 +1444,7 @@ def _extract_argument_headers(
                 ErrorCategory.MCP_TOOL_INCOMPATIBLE,
                 "An MCP header argument cannot be transported safely.",
             ) from exc
-        headers[header] = value
         seen.add(lowered)
-        wire.pop(str(property_name), None)
-    return wire, headers
 
 
 def _reject_remote_refs(node: Any) -> None:

@@ -290,6 +290,37 @@ class GeemApiClient {
     );
   }
 
+  Future<String> decideToolApproval(
+    String conversationId,
+    String approvalId,
+    String decision,
+  ) async {
+    if (decision != 'approve' && decision != 'deny') {
+      throw ArgumentError.value(
+        decision,
+        'decision',
+        'Must be either approve or deny.',
+      );
+    }
+    final safeConversationId = Uri.encodeComponent(conversationId);
+    final safeApprovalId = Uri.encodeComponent(approvalId);
+    final json = await _requestJson(
+      'POST',
+      '/api/conversations/$safeConversationId/tool-approvals/$safeApprovalId',
+      jsonBody: {'decision': decision},
+    );
+    final payload = _asJsonMap(json);
+    final status = payload['status'] as String?;
+    if (status == null || status.isEmpty) {
+      throw const ApiException(
+        'The server returned an invalid approval response.',
+        status: 0,
+        code: 'invalid_response',
+      );
+    }
+    return status;
+  }
+
   Stream<SseEvent> _streamSse(String path, JsonMap body) async* {
     await _ensureFreshAccessToken();
 
@@ -307,7 +338,16 @@ class GeemApiClient {
 
         final response = await streamClient.send(request);
         if (response.statusCode == 401 && attempt == 0) {
-          await response.stream.drain<void>();
+          final responseBody = await response.stream.bytesToString();
+          final errorResponse = http.Response(
+            responseBody,
+            response.statusCode,
+            headers: response.headers,
+            reasonPhrase: response.reasonPhrase,
+          );
+          if (!_isSessionAuthFailure(errorResponse)) {
+            throw _apiException(errorResponse);
+          }
           if (tokenUsed == null || tokenUsed == _accessToken) {
             await refreshSession();
           }
@@ -365,7 +405,7 @@ class GeemApiClient {
       accessToken: tokenUsed,
       pinAccessToken: true,
     );
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 && _isSessionAuthFailure(response)) {
       if (tokenUsed == null || tokenUsed == _accessToken) {
         await refreshSession();
       }
@@ -523,6 +563,21 @@ class GeemApiClient {
         response.reasonPhrase ??
         'Request failed.';
     return ApiException(message, status: response.statusCode, code: code);
+  }
+
+  bool _isSessionAuthFailure(http.Response response) {
+    if (response.statusCode != 401) return false;
+    JsonMap body = const {};
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) body = Map<String, dynamic>.from(decoded);
+    } on FormatException {
+      return true;
+    }
+    final code = (body['code'] as String?) ?? (body['error'] as String?);
+    if (code == null || code.isEmpty) return true;
+    if (code == 'mcp_auth_required') return false;
+    return true;
   }
 
   String _statusCode(int status) => switch (status) {

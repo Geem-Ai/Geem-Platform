@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.errors import AppError, ErrorCategory
-from app.mcp.executor import _extract_argument_headers
+from app.mcp.executor import _validate_argument_header_values
 from app.mcp.normalization import canonicalize_mcp_url, normalize_tool_definition
 from app.mcp.schemas import McpServerCreateIn
 from app.mcp.types import McpCompatibilityStatus
@@ -67,7 +67,7 @@ def test_static_auth_rejects_cookie_and_extra_transport_fields() -> None:
         )
 
 
-def test_required_top_level_argument_header_is_hash_pinned_and_projected() -> None:
+def test_required_top_level_argument_header_is_hash_pinned_for_sdk_transport() -> None:
     schema = {
         "type": "object",
         "properties": {
@@ -84,12 +84,11 @@ def test_required_top_level_argument_header_is_hash_pinned_and_projected() -> No
     )
     assert normalized.compatibility_status == McpCompatibilityStatus.COMPATIBLE.value
 
-    wire, headers = _extract_argument_headers(
-        {"tenant": "acme", "query": "hello"},
-        normalized.input_schema,
-    )
-    assert wire == {"query": "hello"}
-    assert headers == {"X-Tenant-Scope": "acme"}
+    arguments = {"tenant": "acme", "query": "hello"}
+    _validate_argument_header_values(arguments, normalized.input_schema)
+    # The API must not strip or project annotated arguments. The gateway SDK
+    # owns the protocol-defined Mcp-Param-* mirroring after tools/list.
+    assert arguments == {"tenant": "acme", "query": "hello"}
 
     changed = normalize_tool_definition(
         {
@@ -163,5 +162,5 @@ def test_argument_header_value_rejects_control_and_non_latin1() -> None:
     }
     for unsafe in ("acme\r\nInjected: yes", "شركة"):
         with pytest.raises(AppError) as caught:
-            _extract_argument_headers({"tenant": unsafe}, schema)
+            _validate_argument_header_values({"tenant": unsafe}, schema)
         assert caught.value.category == ErrorCategory.MCP_TOOL_INCOMPATIBLE

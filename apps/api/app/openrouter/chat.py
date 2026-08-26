@@ -31,6 +31,23 @@ Return ONLY valid JSON with this schema:
 """
 
 
+def parse_answer_json_content(content: str) -> dict[str, Any]:
+    """Normalize one model answer object, tolerating a surrounding JSON fence."""
+
+    text = content.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    data = json.loads(text)
+    if not isinstance(data, Mapping):
+        raise ValueError("Model answer JSON must be an object.")
+    return {
+        "answer_markdown": data.get("answer_markdown") or data.get("answer") or "",
+        "citation_chunk_ids": data.get("citation_chunk_ids") or [],
+        "insufficient_context": bool(data.get("insufficient_context", False)),
+    }
+
+
 def extract_partial_json_string(text: str, field: str) -> str | None:
     """Return the (possibly incomplete) JSON string value for `field`, or None."""
     pattern = f'"{field}"'
@@ -192,6 +209,7 @@ class OpenRouterChatProvider:
         model: str,
         system_prompt: str,
         tools: Sequence[Mapping[str, Any]],
+        json_response: bool = False,
         max_tokens: int | None = None,
         timeout_seconds: float | None = None,
     ) -> AgentProviderResult:
@@ -220,6 +238,8 @@ class OpenRouterChatProvider:
             max_tokens=max_tokens,
             parallel_tool_calls=False,
         )
+        if json_response:
+            payload["response_format"] = {"type": "json_object"}
         return self._call_agent(
             selected,
             payload,
@@ -864,22 +884,13 @@ class OpenRouterChatProvider:
         yield {"type": "done", "result": parsed}
 
     def _parse_json_content(self, content: str) -> dict:
-        text = content.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```(?:json)?\s*", "", text)
-            text = re.sub(r"\s*```$", "", text)
         try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
+            return parse_answer_json_content(content)
+        except (TypeError, ValueError) as exc:
             raise AppError(
                 ErrorCategory.GENERATION_FAILED,
                 "Model did not return valid JSON",
             ) from exc
-        return {
-            "answer_markdown": data.get("answer_markdown") or data.get("answer") or "",
-            "citation_chunk_ids": data.get("citation_chunk_ids") or [],
-            "insufficient_context": bool(data.get("insufficient_context", False)),
-        }
 
 
 def validate_agent_provider_response(

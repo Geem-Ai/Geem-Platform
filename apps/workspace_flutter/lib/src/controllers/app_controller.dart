@@ -18,15 +18,36 @@ class AppController extends ChangeNotifier {
     required GeemApiClient api,
     required CredentialStore credentials,
     Locale initialLocale = const Locale('ar'),
-  }) => AppController._(api, credentials, initialLocale);
+    @visibleForTesting List<Duration>? toolApprovalPollDelays,
+  }) =>
+      AppController._(api, credentials, initialLocale, toolApprovalPollDelays);
 
-  AppController._(this._api, this._credentials, Locale initialLocale)
-    : locale = initialLocale.languageCode == 'ar'
+  AppController._(
+    this._api,
+    this._credentials,
+    Locale initialLocale,
+    List<Duration>? toolApprovalPollDelays,
+  ) : _toolApprovalPollDelays =
+          toolApprovalPollDelays == null || toolApprovalPollDelays.isEmpty
+          ? _defaultToolApprovalPollDelays
+          : List.unmodifiable(toolApprovalPollDelays),
+      locale = initialLocale.languageCode == 'ar'
           ? const Locale('ar')
           : const Locale('en');
 
+  static const _defaultToolApprovalPollDelays = [
+    Duration(milliseconds: 1500),
+    Duration(milliseconds: 2500),
+    Duration(seconds: 4),
+    Duration(seconds: 6),
+    Duration(seconds: 10),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+  ];
+
   final GeemApiClient _api;
   final CredentialStore _credentials;
+  final List<Duration> _toolApprovalPollDelays;
 
   AppSessionState sessionState = AppSessionState.bootstrapping;
   AuthPage authPage = AuthPage.login;
@@ -53,6 +74,7 @@ class AppController extends ChangeNotifier {
   String? errorMessage;
   String? noticeMessage;
   String? streamStage;
+  String? decidingToolApprovalId;
 
   StreamSubscription<SseEvent>? _streamSubscription;
   Completer<void>? _streamCompleter;
@@ -61,6 +83,12 @@ class AppController extends ChangeNotifier {
   int _clientSequence = 0;
   int _streamGeneration = 0;
   int _contextGeneration = 0;
+  int _streamToolSequence = 0;
+  int _toolApprovalPollToken = 0;
+  int? _toolApprovalPollContextGeneration;
+  String? _toolApprovalPollConversationId;
+  Timer? _toolApprovalPollTimer;
+  Completer<void>? _toolApprovalPollDelayCompleter;
   bool _invalidatingSession = false;
   bool _disposed = false;
 
@@ -91,7 +119,10 @@ class AppController extends ChangeNotifier {
   }
 
   bool get canUseCurrentWorkspace => currentWorkspace?.canChat ?? false;
-  bool get chatBusy => sending || streaming;
+  bool get hasPendingToolTurn => messages.any(_messageHasPendingToolTurn);
+  bool get toolApprovalBusy => decidingToolApprovalId != null;
+  bool get chatBusy =>
+      sending || streaming || toolApprovalBusy || hasPendingToolTurn;
 
   Future<void> initialize() async {
     try {
@@ -459,7 +490,10 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> openConversation(String conversationId) async {
-    if (activeConversation?.id == conversationId && messages.isNotEmpty) return;
+    if (activeConversation?.id == conversationId && messages.isNotEmpty) {
+      _startToolApprovalPolling();
+      return;
+    }
     await stopStreaming();
     final conversation = conversations.cast<Conversation?>().firstWhere(
       (item) => item?.id == conversationId,
@@ -481,6 +515,7 @@ class AppController extends ChangeNotifier {
       if (_isCurrentContext(generation, workspaceId) &&
           activeConversation?.id == conversationId) {
         messages = loaded;
+        _startToolApprovalPolling();
       }
     } on ApiException catch (error) {
       if (_isCurrentContext(generation, workspaceId)) _setError(error);
@@ -709,6 +744,8 @@ class AppController extends ChangeNotifier {
         workspaceId == null ||
         streaming ||
         sending ||
+        toolApprovalBusy ||
+        hasPendingToolTurn ||
         !message.isAssistant ||
         message.id.startsWith('client-')) {
       return;
@@ -720,6 +757,8 @@ class AppController extends ChangeNotifier {
         content: '',
         status: 'streaming',
         citations: const [],
+        toolActivities: const [],
+        clearToolApproval: true,
         clearError: true,
       ),
     );
@@ -751,6 +790,68 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> decideToolApproval(ChatMessage message, String decision) async {
+    final conversation = activeConversation;
+    final workspaceId = currentWorkspace?.id;
+    final approval = message.toolApproval;
+    if (conversation == null ||
+        workspaceId == null ||
+        approval == null ||
+        approval.status != 'pending' ||
+        toolApprovalBusy ||
+        (decision != 'approve' && decision != 'deny') ||
+        message.conversationId != conversation.id) {
+      return;
+    }
+
+    final generation = _contextGeneration;
+    decidingToolApprovalId = approval.id;
+    _clearFeedback();
+    _replaceMessage(
+      message.id,
+      message.copyWith(
+        toolApproval: approval.copyWith(
+          status: decision == 'approve' ? 'approved' : 'denied',
+        ),
+      ),
+    );
+    _notify();
+    try {
+      final status = await _api.decideToolApproval(
+        conversation.id,
+        approval.id,
+        decision,
+      );
+      if (!_isCurrentConversation(generation, workspaceId, conversation.id)) {
+        return;
+      }
+      _updateToolApprovalStatus(message.id, approval.id, status);
+      await _refreshActiveMessages(
+        generation: generation,
+        workspaceId: workspaceId,
+        conversationId: conversation.id,
+      );
+      if (_isCurrentConversation(generation, workspaceId, conversation.id)) {
+        _startToolApprovalPolling();
+      }
+    } on ApiException catch (error) {
+      if (_isCurrentConversation(generation, workspaceId, conversation.id)) {
+        _updateToolApprovalStatus(message.id, approval.id, approval.status);
+        _setError(error);
+      }
+    } catch (error) {
+      if (_isCurrentConversation(generation, workspaceId, conversation.id)) {
+        _updateToolApprovalStatus(message.id, approval.id, approval.status);
+        _setUnknownError(error);
+      }
+    } finally {
+      if (decidingToolApprovalId == approval.id) {
+        decidingToolApprovalId = null;
+      }
+      _notify();
+    }
+  }
+
   Future<void> _runStream(
     Stream<SseEvent> events, {
     required String userMessageId,
@@ -775,8 +876,12 @@ class AppController extends ChangeNotifier {
       onError: (Object error, StackTrace stackTrace) {
         if (generation != _streamGeneration) return;
         terminalReceived = true;
-        _markCurrentAssistantFailed(error.toString());
-        if (error case ApiException apiError) _setError(apiError);
+        final apiError = error is ApiException ? error : null;
+        _markCurrentAssistantFailed(
+          apiError?.message ?? error.toString(),
+          toolErrorCode: apiError?.code ?? 'network',
+        );
+        if (apiError != null) _setError(apiError);
         if (!completer.isCompleted) completer.complete();
         _notify();
       },
@@ -785,7 +890,7 @@ class AppController extends ChangeNotifier {
           const message = 'The response stream ended before completion.';
           errorCode = 'network';
           errorMessage = message;
-          _markCurrentAssistantFailed(message);
+          _markCurrentAssistantFailed(message, toolErrorCode: 'network');
           _notify();
         }
         if (!completer.isCompleted) completer.complete();
@@ -799,6 +904,7 @@ class AppController extends ChangeNotifier {
     _streamCompleter = null;
     streaming = false;
     streamStage = null;
+    _startToolApprovalPolling();
     _notify();
   }
 
@@ -831,6 +937,30 @@ class AppController extends ChangeNotifier {
         break;
       case 'status':
         streamStage = data['stage'] as String? ?? streamStage;
+        break;
+      case 'tool_call':
+        _recordToolCall(data);
+        streamStage = 'using_tools';
+        break;
+      case 'tool_result':
+        _recordToolResult(data);
+        streamStage = 'using_tools';
+        break;
+      case 'tool_approval_required':
+        terminal = true;
+        final assistantId = data['assistant_message_id'] as String?;
+        if (assistantId != null &&
+            _streamAssistantId != null &&
+            assistantId != _streamAssistantId) {
+          _replaceMessageId(
+            _streamAssistantId!,
+            assistantId,
+            status: 'pending',
+          );
+          _streamAssistantId = assistantId;
+        }
+        _recordToolApproval(data);
+        streamStage = 'approval_required';
         break;
       case 'title':
         final title = data['title'] as String?;
@@ -867,12 +997,13 @@ class AppController extends ChangeNotifier {
       case 'error':
         terminal = true;
         final message = data['message'] as String? ?? 'Generation failed.';
-        errorCode =
+        final eventErrorCode =
             (data['error'] as String?) ??
             (data['code'] as String?) ??
             'generation_failed';
+        errorCode = eventErrorCode;
         errorMessage = message;
-        _markCurrentAssistantFailed(message);
+        _markCurrentAssistantFailed(message, toolErrorCode: eventErrorCode);
         break;
       default:
         break;
@@ -901,6 +1032,164 @@ class AppController extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  void _recordToolCall(JsonMap data) {
+    final toolName = data['tool_name'] as String? ?? 'Tool';
+    final connectionName = _toolConnectionName(data);
+    final toolCallId = _toolEventId(data);
+    _mutateCurrentAssistantActivities((current) {
+      if (toolCallId != null) {
+        final index = current.indexWhere(
+          (item) => item.id == toolCallId || item.toolCallId == toolCallId,
+        );
+        if (index >= 0) {
+          current[index] = current[index].copyWith(
+            id: toolCallId,
+            toolCallId: toolCallId,
+            connectionName: connectionName,
+            toolName: toolName,
+            status: 'calling',
+          );
+          return current;
+        }
+      }
+      current.add(
+        ToolActivity(
+          id: toolCallId ?? 'stream-tool-${_streamToolSequence++}',
+          toolCallId: toolCallId,
+          connectionName: connectionName,
+          toolName: toolName,
+          status: 'calling',
+        ),
+      );
+      return current;
+    });
+  }
+
+  void _recordToolResult(JsonMap data) {
+    final toolName = data['tool_name'] as String? ?? 'Tool';
+    final connectionName = _toolConnectionName(data);
+    final toolCallId = _toolEventId(data);
+    final rawStatus = data['outcome_unknown'] == true
+        ? 'outcome_unknown'
+        : data['status'] as String?;
+    final status = switch (rawStatus) {
+      'completed' || 'success' || 'succeeded' => 'succeeded',
+      'outcome_unknown' => 'outcome_unknown',
+      _ => 'failed',
+    };
+    _mutateCurrentAssistantActivities((current) {
+      var index = toolCallId == null
+          ? -1
+          : current.indexWhere(
+              (item) => item.id == toolCallId || item.toolCallId == toolCallId,
+            );
+      if (index < 0) {
+        index = current.lastIndexWhere(
+          (item) =>
+              item.status == 'calling' &&
+              (connectionName == null || item.connectionName == connectionName),
+        );
+      }
+      if (index >= 0) {
+        current[index] = current[index].copyWith(
+          id: toolCallId,
+          toolCallId: toolCallId,
+          connectionName: connectionName,
+          toolName: toolName,
+          status: status,
+          errorCode: data['error_code'] as String?,
+        );
+      } else {
+        current.add(
+          ToolActivity(
+            id: toolCallId ?? 'stream-tool-${_streamToolSequence++}',
+            toolCallId: toolCallId,
+            connectionName: connectionName,
+            toolName: toolName,
+            status: status,
+            errorCode: data['error_code'] as String?,
+          ),
+        );
+      }
+      return current;
+    });
+  }
+
+  void _recordToolApproval(JsonMap data) {
+    final approvalId =
+        (data['approval_id'] as String?) ??
+        (data['id'] as String?) ??
+        'approval-${_streamToolSequence++}';
+    final toolCallId = _toolEventId(data);
+    final toolName = data['tool_name'] as String? ?? 'Tool';
+    final connectionName = _toolConnectionName(data);
+    _mutateCurrentAssistantActivities((current) {
+      var index = toolCallId == null
+          ? -1
+          : current.indexWhere(
+              (item) => item.id == toolCallId || item.toolCallId == toolCallId,
+            );
+      if (index < 0) {
+        index = current.lastIndexWhere(
+          (item) =>
+              item.status == 'calling' &&
+              (connectionName == null || item.connectionName == connectionName),
+        );
+      }
+      final activity = ToolActivity(
+        id: toolCallId ?? approvalId,
+        toolCallId: toolCallId,
+        connectionName: connectionName,
+        toolName: toolName,
+        status: 'approval_required',
+      );
+      if (index >= 0) {
+        current[index] = activity;
+      } else {
+        current.add(activity);
+      }
+      return current;
+    });
+    _patchCurrentAssistant(
+      status: data['status'] as String? ?? 'pending',
+      toolApproval: ToolApproval(
+        id: approvalId,
+        toolCallId: toolCallId,
+        connectionName: connectionName,
+        toolName: toolName,
+        arguments: data['arguments'],
+        status: 'pending',
+        expiresAt: DateTime.tryParse(data['expires_at'] as String? ?? ''),
+      ),
+      clearError: true,
+    );
+  }
+
+  String? _toolEventId(JsonMap data) =>
+      (data['tool_call_id'] as String?) ?? (data['id'] as String?);
+
+  String? _toolConnectionName(JsonMap data) =>
+      (data['connection_display_name'] as String?) ??
+      (data['connection_name'] as String?);
+
+  void _mutateCurrentAssistantActivities(
+    List<ToolActivity> Function(List<ToolActivity>) mutate,
+  ) {
+    final assistantId = _streamAssistantId;
+    if (assistantId == null) return;
+    messages = messages
+        .map(
+          (item) => item.id == assistantId
+              ? item.copyWith(
+                  toolActivities: mutate(
+                    item.toolActivities.toList(growable: true),
+                  ),
+                )
+              : item,
+        )
+        .toList(growable: false);
+  }
+
   Future<void> stopStreaming() async {
     final subscription = _streamSubscription;
     if (subscription == null) return;
@@ -912,6 +1201,7 @@ class AppController extends ChangeNotifier {
       completer.complete();
     }
     _streamCompleter = null;
+    _resolveCallingToolActivities(status: 'cancelled');
     _patchCurrentAssistant(status: 'cancelled');
     streaming = false;
     streamStage = null;
@@ -940,6 +1230,114 @@ class AppController extends ChangeNotifier {
     } catch (_) {
       // The streamed answer is already usable; a later manual reload can retry.
     }
+  }
+
+  Future<void> _refreshActiveMessages({
+    required int generation,
+    required String workspaceId,
+    required String conversationId,
+  }) async {
+    try {
+      final loaded = await _api.listMessages(conversationId);
+      if (!_isCurrentConversation(generation, workspaceId, conversationId)) {
+        return;
+      }
+      messages = loaded;
+      _notify();
+    } on ApiException catch (error) {
+      if (error.isTerminalSession &&
+          _isCurrentConversation(generation, workspaceId, conversationId)) {
+        _setError(error);
+      }
+    } catch (_) {
+      // Approval refresh is best effort; scheduled polls can retry.
+    }
+  }
+
+  Future<void> _pollToolApprovalOutcome({
+    required int generation,
+    required String workspaceId,
+    required String conversationId,
+    required int pollToken,
+  }) async {
+    var attempt = 0;
+    while (hasPendingToolTurn) {
+      final delay =
+          _toolApprovalPollDelays[attempt.clamp(
+            0,
+            _toolApprovalPollDelays.length - 1,
+          )];
+      await _waitForToolApprovalPoll(delay);
+      if (pollToken != _toolApprovalPollToken ||
+          !_isCurrentConversation(generation, workspaceId, conversationId)) {
+        return;
+      }
+      await _refreshActiveMessages(
+        generation: generation,
+        workspaceId: workspaceId,
+        conversationId: conversationId,
+      );
+      if (pollToken != _toolApprovalPollToken || !hasPendingToolTurn) return;
+      attempt += 1;
+    }
+  }
+
+  void _startToolApprovalPolling() {
+    final conversation = activeConversation;
+    final workspaceId = currentWorkspace?.id;
+    if (conversation == null || workspaceId == null || !hasPendingToolTurn) {
+      return;
+    }
+    if (_toolApprovalPollContextGeneration == _contextGeneration &&
+        _toolApprovalPollConversationId == conversation.id) {
+      return;
+    }
+    _cancelToolApprovalPolling();
+    final pollToken = _toolApprovalPollToken;
+    _toolApprovalPollContextGeneration = _contextGeneration;
+    _toolApprovalPollConversationId = conversation.id;
+    unawaited(
+      _pollToolApprovalOutcome(
+        generation: _contextGeneration,
+        workspaceId: workspaceId,
+        conversationId: conversation.id,
+        pollToken: pollToken,
+      ).whenComplete(() {
+        if (pollToken == _toolApprovalPollToken) {
+          _toolApprovalPollContextGeneration = null;
+          _toolApprovalPollConversationId = null;
+        }
+      }),
+    );
+  }
+
+  Future<void> _waitForToolApprovalPoll(Duration delay) {
+    final completer = Completer<void>();
+    _toolApprovalPollDelayCompleter = completer;
+    _toolApprovalPollTimer = Timer(delay, () {
+      if (identical(_toolApprovalPollDelayCompleter, completer)) {
+        _toolApprovalPollDelayCompleter = null;
+        _toolApprovalPollTimer = null;
+      }
+      if (!completer.isCompleted) completer.complete();
+    });
+    return completer.future;
+  }
+
+  void _cancelToolApprovalPolling() {
+    _toolApprovalPollToken += 1;
+    _toolApprovalPollTimer?.cancel();
+    _toolApprovalPollTimer = null;
+    final completer = _toolApprovalPollDelayCompleter;
+    _toolApprovalPollDelayCompleter = null;
+    if (completer != null && !completer.isCompleted) completer.complete();
+    _toolApprovalPollContextGeneration = null;
+    _toolApprovalPollConversationId = null;
+  }
+
+  bool _messageHasPendingToolTurn(ChatMessage message) {
+    if (message.toolApproval == null) return false;
+    return message.status == 'pending' || message.status == 'streaming';
   }
 
   Future<void> _pollForTitle(String conversationId) async {
@@ -1005,6 +1403,14 @@ class AppController extends ChangeNotifier {
       generation == _contextGeneration &&
       currentWorkspace?.id == workspaceId;
 
+  bool _isCurrentConversation(
+    int generation,
+    String workspaceId,
+    String conversationId,
+  ) =>
+      _isCurrentContext(generation, workspaceId) &&
+      activeConversation?.id == conversationId;
+
   void _replaceConversation(
     Conversation conversation, {
     bool insertIfMissing = true,
@@ -1029,6 +1435,24 @@ class AppController extends ChangeNotifier {
   void _replaceMessage(String id, ChatMessage replacement) {
     messages = messages
         .map((item) => item.id == id ? replacement : item)
+        .toList(growable: false);
+  }
+
+  void _updateToolApprovalStatus(
+    String messageId,
+    String approvalId,
+    String status,
+  ) {
+    messages = messages
+        .map((item) {
+          final approval = item.toolApproval;
+          if (item.id != messageId ||
+              approval == null ||
+              approval.id != approvalId) {
+            return item;
+          }
+          return item.copyWith(toolApproval: approval.copyWith(status: status));
+        })
         .toList(growable: false);
   }
 
@@ -1070,6 +1494,9 @@ class AppController extends ChangeNotifier {
   void _patchCurrentAssistant({
     String? status,
     List<Citation>? citations,
+    List<ToolActivity>? toolActivities,
+    ToolApproval? toolApproval,
+    bool clearToolApproval = false,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -1080,6 +1507,9 @@ class AppController extends ChangeNotifier {
               ? item.copyWith(
                   status: status,
                   citations: citations,
+                  toolActivities: toolActivities,
+                  toolApproval: toolApproval,
+                  clearToolApproval: clearToolApproval,
                   errorMessage: errorMessage,
                   clearError: clearError,
                 )
@@ -1088,8 +1518,31 @@ class AppController extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  void _markCurrentAssistantFailed(String message) {
+  void _markCurrentAssistantFailed(String message, {String? toolErrorCode}) {
+    _resolveCallingToolActivities(
+      status: toolErrorCode == 'mcp_tool_outcome_unknown'
+          ? 'outcome_unknown'
+          : 'failed',
+      errorCode: toolErrorCode,
+    );
     _patchCurrentAssistant(status: 'failed', errorMessage: message);
+  }
+
+  void _resolveCallingToolActivities({
+    required String status,
+    String? errorCode,
+  }) {
+    _mutateCurrentAssistantActivities((current) {
+      for (var index = 0; index < current.length; index += 1) {
+        final activity = current[index];
+        if (activity.status != 'calling') continue;
+        current[index] = activity.copyWith(
+          status: status,
+          errorCode: errorCode,
+        );
+      }
+      return current;
+    });
   }
 
   String _clientId(String role) =>
@@ -1183,6 +1636,8 @@ class AppController extends ChangeNotifier {
     conversationLoading = false;
     sending = false;
     streaming = false;
+    decidingToolApprovalId = null;
+    _cancelToolApprovalPolling();
     _streamAssistantId = null;
     _streamUserId = null;
     streamStage = null;
@@ -1196,6 +1651,7 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _cancelToolApprovalPolling();
     unawaited(_streamSubscription?.cancel());
     _api.close();
     super.dispose();

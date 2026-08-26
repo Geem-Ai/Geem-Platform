@@ -754,6 +754,7 @@ def test_mid_loop_access_loss_forces_tool_free_safe_synthesis() -> None:
             model,
             system_prompt,
             tools,
+            json_response=False,
             max_tokens=None,
             timeout_seconds=None,
         ) -> AgentProviderResult:

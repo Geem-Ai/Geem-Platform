@@ -23,6 +23,7 @@ class ToolCapableChatProvider(Protocol):
         model: str,
         system_prompt: str,
         tools: Sequence[Mapping[str, Any]],
+        json_response: bool = False,
         max_tokens: int | None = None,
         timeout_seconds: float | None = None,
     ) -> AgentProviderResult: ...

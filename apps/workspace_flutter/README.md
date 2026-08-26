@@ -18,8 +18,10 @@ The app currently provides:
 - Persisted chat history, pinned and recent sections, and a favorites filter.
 - Favorite/unfavorite, pin/unpin, rename, and delete conversation actions.
 - Styled streaming GFM Markdown answers, Workspace Web-matched thinking
-  typewriter/caret, stop, retry, citations,
+  typewriter/caret, stop, retry, document and MCP tool citations,
   safe external links, and asynchronously generated conversation titles.
+- MCP tool activity, exact-argument write approvals, and asynchronous approval
+  result refresh inside Workspace chat.
 - Responsive desktop/tablet shell and mobile drawer without sample prompts.
 
 This is intentionally a **text-chat-only** client. It does not currently

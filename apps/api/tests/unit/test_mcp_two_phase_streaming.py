@@ -5,6 +5,8 @@ import time
 import uuid
 from types import SimpleNamespace
 
+import pytest
+
 from app.agent.schemas import (
     AgentAssistantResponseMessage,
     AgentFunctionCall,
@@ -17,6 +19,7 @@ from app.conversations import turn as turn_module
 from app.conversations.invocation import ChatInvocationContext
 from app.conversations.turn import ChatTurnExecutor
 from app.core.config import get_settings
+from app.core.errors import AppError, ErrorCategory
 from app.mcp.executor import (
     ToolLoopResult,
     ToolLoopStreamEvent,
@@ -44,12 +47,17 @@ def _settings():
 
 
 class _TwoRoundProvider:
-    def __init__(self, *, delay: float = 0.0) -> None:
+    def __init__(self, *, delay: float = 0.0, final_content: str = "Final answer") -> None:
         self.delay = delay
+        self.final_content = final_content
         self.messages: list[list[dict]] = []
+        self.json_responses: list[bool] = []
+        self.tool_sets: list[list[dict]] = []
 
     def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
         self.messages.append(list(messages))
+        self.json_responses.append(bool(_kwargs.get("json_response")))
+        self.tool_sets.append(list(_kwargs.get("tools") or []))
         if self.delay:
             time.sleep(self.delay)
         if len(self.messages) == 1:
@@ -73,7 +81,7 @@ class _TwoRoundProvider:
             )
         return AgentProviderResult(
             message=AgentAssistantResponseMessage(
-                content="Final answer",
+                content=self.final_content,
                 tool_calls=None,
             ),
             finish_reason="stop",
@@ -83,12 +91,17 @@ class _TwoRoundProvider:
 
 
 class _RecordingDispatcher:
-    def __init__(self, *, delay: float = 0.0) -> None:
+    def __init__(self, *, delay: float = 0.0, is_error: bool = False) -> None:
         self.delay = delay
         self.calls = 0
         self.normalized = NormalizedToolResult(
-            model_content="<untrusted_mcp_tool_result>safe</untrusted_mcp_tool_result>",
-            is_error=False,
+            model_content=(
+                "<untrusted_mcp_tool_result>repository not found"
+                "</untrusted_mcp_tool_result>"
+                if is_error
+                else "<untrusted_mcp_tool_result>safe</untrusted_mcp_tool_result>"
+            ),
+            is_error=is_error,
             transport_bytes=12,
             content_types=("text",),
             unsupported_blocks=(),
@@ -105,14 +118,50 @@ class _RecordingDispatcher:
         }
 
 
+class _RecordingDocumentRag:
+    def __init__(self) -> None:
+        self.generation_calls: list[dict] = []
+
+    @staticmethod
+    def _validate_citations(result, _allowed_ids, _context_chunks):
+        return {
+            "answer": result.get("answer_markdown") or "",
+            "citations": [],
+            "insufficient_context": bool(result.get("insufficient_context")),
+            "model": result.get("model"),
+        }
+
+    def _record_generation_usage(
+        self,
+        validated,
+        payload,
+        *,
+        operation_type,
+        scope,
+        usage_context,
+    ) -> None:
+        self.generation_calls.append(
+            {
+                "validated": dict(validated),
+                "payload": dict(payload),
+                "operation_type": operation_type,
+                "scope": scope,
+                "usage_context": usage_context,
+            }
+        )
+
+
 def _tool_loop(
     provider: _TwoRoundProvider,
     dispatcher: _RecordingDispatcher,
+    *,
+    general: bool = True,
 ) -> tuple[ToolLoopTurnExecutor, SimpleNamespace, ChatInvocationContext]:
+    rag = SimpleNamespace() if general else _RecordingDocumentRag()
     executor = ToolLoopTurnExecutor(
         SimpleNamespace(),  # type: ignore[arg-type]
         settings=_settings(),
-        rag=SimpleNamespace(),  # type: ignore[arg-type]
+        rag=rag,  # type: ignore[arg-type]
         provider=provider,  # type: ignore[arg-type]
         dispatcher=dispatcher,  # type: ignore[arg-type]
     )
@@ -122,22 +171,23 @@ def _tool_loop(
         scope=None,
         allowed_ids=set(),
         context_chunks=[],
-        general=True,
+        general=general,
     )
     executor._prepare = lambda **_kwargs: prepared  # type: ignore[method-assign]
     executor._record_intermediate_usage = (  # type: ignore[method-assign]
         lambda *_args, **_kwargs: None
     )
-    executor._finalize = (  # type: ignore[method-assign]
-        lambda result, **_kwargs: ToolLoopResult(
-            answer=result.message.content or "",
-            citations=[],
-            insufficient_context=False,
-            model=result.provider_model,
-            usage={},
-            billed_chat_tokens=0,
+    if general:
+        executor._finalize = (  # type: ignore[method-assign]
+            lambda result, **_kwargs: ToolLoopResult(
+                answer=result.message.content or "",
+                citations=[],
+                insufficient_context=False,
+                model=result.provider_model,
+                usage={},
+                billed_chat_tokens=0,
+            )
         )
-    )
     tool = SimpleNamespace(
         llm_tool_name="mcp_read",
         tool_name="lookup_customer",
@@ -261,6 +311,109 @@ def test_synchronous_tool_loop_callers_remain_supported() -> None:
 
     assert result.answer == "Final answer"
     assert dispatcher.calls == 1
+
+
+def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None:
+    provider = _TwoRoundProvider(
+        final_content=(
+            "```json\n"
+            '{"answer_markdown":"Seven commits found.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+            "\n```"
+        )
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    usage_context = SimpleNamespace()
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="list commits",
+        invocation=invocation,
+        usage_context=usage_context,  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert provider.json_responses == [True, True]
+    assert result.answer == "Seven commits found."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
+    rag = executor.rag
+    assert isinstance(rag, _RecordingDocumentRag)
+    assert len(rag.generation_calls) == 1
+    assert rag.generation_calls[0]["operation_type"] == "mcp_final_synthesis"
+    assert rag.generation_calls[0]["usage_context"] is usage_context
+
+
+def test_remote_tool_error_forces_one_tool_free_synthesis_without_citation() -> None:
+    provider = _TwoRoundProvider(
+        final_content=(
+            '{"answer_markdown":"The repository was not found.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+        )
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="list commits",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert provider.json_responses == [True, True]
+    assert provider.tool_sets[0]
+    assert provider.tool_sets[1] == []
+    assert result.answer == "The repository was not found."
+    assert result.citations == []
+
+
+@pytest.mark.parametrize(
+    "final_content",
+    ["", "plain prose", '["not", "an object"]'],
+)
+def test_document_tool_loop_rejects_invalid_synthesis(final_content: str) -> None:
+    provider = _TwoRoundProvider(final_content=final_content)
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    with pytest.raises(AppError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="list commits",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    assert raised.value.category == ErrorCategory.GENERATION_FAILED
+    assert provider.json_responses == [True, True]
+    rag = executor.rag
+    assert isinstance(rag, _RecordingDocumentRag)
+    assert rag.generation_calls == []
 
 
 def test_public_answer_stream_suppresses_tool_details_but_keeps_heartbeats(

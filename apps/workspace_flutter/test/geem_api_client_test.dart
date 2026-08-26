@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geem_workspace/src/services/api_exception.dart';
 import 'package:geem_workspace/src/services/credential_store.dart';
 import 'package:geem_workspace/src/services/geem_api_client.dart';
 import 'package:http/http.dart' as http;
@@ -211,5 +212,145 @@ void main() {
 
     expect(logoutRefreshToken, 'refresh-b');
     expect(credentials.refreshToken, isNull);
+  });
+
+  test('posts an MCP tool approval in the active workspace', () async {
+    final credentials = _MemoryCredentialStore();
+    var approvalCalls = 0;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/auth/login') {
+        return _tokenResponse('access-a', 'refresh-a');
+      }
+      if (request.url.path ==
+          '/api/conversations/conversation-1/tool-approvals/approval-1') {
+        approvalCalls += 1;
+        expect(request.method, 'POST');
+        expect(request.headers['authorization'], 'Bearer access-a');
+        expect(request.headers['x-workspace-id'], 'workspace-1');
+        expect(jsonDecode(request.body), {'decision': 'approve'});
+        return http.Response(
+          jsonEncode({'id': 'approval-1', 'status': 'approved'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('Not found', 404);
+    });
+    final api = GeemApiClient(
+      baseUrl: 'https://api.example.test',
+      credentials: credentials,
+      client: client,
+    )..workspaceId = 'workspace-1';
+    addTearDown(api.close);
+    await api.login('member@example.com', 'password');
+
+    final status = await api.decideToolApproval(
+      'conversation-1',
+      'approval-1',
+      'approve',
+    );
+
+    expect(status, 'approved');
+    expect(approvalCalls, 1);
+  });
+
+  test('does not refresh the session for an MCP auth-required 401', () async {
+    final credentials = _MemoryCredentialStore();
+    var approvalCalls = 0;
+    var refreshCalls = 0;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/auth/login') {
+        return _tokenResponse('access-a', 'refresh-a');
+      }
+      if (request.url.path == '/api/auth/refresh') {
+        refreshCalls += 1;
+        return _tokenResponse('access-b', 'refresh-b');
+      }
+      if (request.url.path ==
+          '/api/conversations/conversation-1/tool-approvals/approval-1') {
+        approvalCalls += 1;
+        return http.Response(
+          jsonEncode({
+            'code': 'mcp_auth_required',
+            'message': 'The MCP server requires authentication.',
+          }),
+          401,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('Not found', 404);
+    });
+    final api = GeemApiClient(
+      baseUrl: 'https://api.example.test',
+      credentials: credentials,
+      client: client,
+    )..workspaceId = 'workspace-1';
+    addTearDown(api.close);
+    await api.login('member@example.com', 'password');
+
+    await expectLater(
+      api.decideToolApproval('conversation-1', 'approval-1', 'approve'),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.status, 'status', 401)
+            .having((error) => error.code, 'code', 'mcp_auth_required'),
+      ),
+    );
+
+    expect(approvalCalls, 1);
+    expect(refreshCalls, 0);
+    expect(credentials.refreshToken, 'refresh-a');
+  });
+
+  test('does not refresh an MCP auth-required stream response', () async {
+    final credentials = _MemoryCredentialStore();
+    var refreshCalls = 0;
+    var streamCalls = 0;
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/auth/login') {
+        return _tokenResponse('access-a', 'refresh-a');
+      }
+      if (request.url.path == '/api/auth/refresh') {
+        refreshCalls += 1;
+        return _tokenResponse('access-b', 'refresh-b');
+      }
+      return http.Response('Not found', 404);
+    });
+    final streamClient = MockClient((request) async {
+      streamCalls += 1;
+      expect(
+        request.url.path,
+        '/api/conversations/conversation-1/messages/stream',
+      );
+      return http.Response(
+        jsonEncode({
+          'code': 'mcp_auth_required',
+          'message': 'The MCP server requires authentication.',
+        }),
+        401,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final api = GeemApiClient(
+      baseUrl: 'https://api.example.test',
+      credentials: credentials,
+      client: client,
+      streamClientFactory: () => streamClient,
+    )..workspaceId = 'workspace-1';
+    addTearDown(api.close);
+    await api.login('member@example.com', 'password');
+
+    await expectLater(
+      api.streamMessage('conversation-1', 'Hello').drain<void>(),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.status, 'status', 401)
+            .having((error) => error.code, 'code', 'mcp_auth_required'),
+      ),
+    );
+
+    expect(streamCalls, 1);
+    expect(refreshCalls, 0);
+    expect(credentials.refreshToken, 'refresh-a');
   });
 }

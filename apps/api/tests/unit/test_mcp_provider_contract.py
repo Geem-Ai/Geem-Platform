@@ -55,6 +55,7 @@ def test_mcp_provider_round_disables_retries_and_obeys_remaining_deadline() -> N
         model="test/tool-model",
         system_prompt="locked policy",
         tools=[],
+        json_response=True,
         timeout_seconds=3.25,
     )
 
@@ -63,3 +64,4 @@ def test_mcp_provider_round_disables_retries_and_obeys_remaining_deadline() -> N
     assert client.options["timeout"] == 3.25
     assert client.payload["parallel_tool_calls"] is False
     assert client.payload["model"] == "test/tool-model"
+    assert client.payload["response_format"] == {"type": "json_object"}
