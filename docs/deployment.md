@@ -217,7 +217,7 @@ services:
         condition: service_completed_successfully
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
       interval: 10s
@@ -283,6 +283,73 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps
 curl -sS http://127.0.0.1:8000/api/health/ready
 ```
+
+### Phase 13 tenant-outbound egress boundary
+
+The canonical production procedure is the
+[Phase 13 MCP configuration and isolation runbook](./integrations/mcp-connectors.md).
+It includes the required Beat-specific feature override, persistent `mcp`
+profile startup, production credential/host-port hardening, positive datastore
+controls, UAT exclusion, PKI rotation, and release gates. The base + tunnel
+commands below are insufficient for production without the runbook's final
+hardening overlay; treat them as a topology summary only.
+
+Do not enable `MCP_CONNECTOR_ENABLED` until the dedicated egress boundary is
+provisioned. Tenant-derived MCP and OAuth URLs must never be fetched directly
+by FastAPI or an ordinary Celery worker.
+
+1. Provision a dedicated internal CA plus gateway server and API/worker client
+   certificates under a host secret directory. Required names and permissions
+   are documented in `infra/mcp-egress/pki/README.md`; no key is committed.
+2. Set `MCP_EGRESS_PKI_DIR` to that directory. Set the application gateway URL
+   to `https://mcp-egress-gateway:8443` and the gateway-only proxy URL to
+   `http://mcp-egress-proxy:3128`.
+3. Add every deployment/VPC/container CIDR to `MCP_EGRESS_BLOCKED_NETWORKS`.
+   Standard private, loopback, link-local, CGNAT, metadata, mapped, multicast,
+   and reserved ranges are denied independently in code and proxy config.
+4. Start and verify the isolated profile before enabling the connector:
+
+```bash
+cd /www/wwwroot/geem/infra
+docker compose --env-file ../.env --profile mcp -f docker-compose.yml -f docker-compose.tunnel.yml \
+  up -d --build mcp-egress-proxy mcp-egress-gateway
+docker compose --env-file ../.env --profile mcp -f docker-compose.yml -f docker-compose.tunnel.yml \
+  ps mcp-egress-proxy mcp-egress-gateway
+```
+
+Before enabling `MCP_CONNECTOR_ENABLED`, run the deployed-boundary smoke gate
+against the same Compose file and environment. It checks the real mTLS listener,
+the absence of direct public routes, datastore isolation, and the proxy's
+independent private-address denial:
+
+```bash
+MCP_SMOKE_COMPOSE_FILE="$PWD/docker-compose.yml" \
+MCP_SMOKE_ENV_FILE="$PWD/../.env" \
+./mcp-egress/verify-isolation.sh
+```
+
+The command must pass in every release environment; static Compose tests do not
+replace this live gate.
+
+The gateway belongs only to the internal `mcp_egress_control` and
+`mcp_proxy_control` networks. It does not share `application_data` with
+Postgres, Redis, Qdrant, or MinIO and has no direct public network. Only the
+deny-private forward proxy bridges `mcp_proxy_control` to `public_egress`.
+The gateway receives no application `.env`, database URL, Redis URL, provider
+key, or credential-encryption key. Its HTTPS listener requires a trusted client
+certificate and disables request access logs.
+
+The API and ordinary worker are attached only to internal networks. Their
+ordinary outbound HTTPS uses `app-egress-proxy`, whose checked-in allowlist is
+limited to Geem's fixed OpenRouter, billing, Drive/OneDrive, and OpenWA
+adapters. A new or changed fixed-provider hostname requires an explicit proxy
+policy review; tenant-supplied hosts are never added there. Raw SMTP is not
+given a public route—production email must use an internal SMTP relay reachable
+on an application-internal network (or a separately reviewed mail boundary).
+
+`MCP_ALLOW_PRIVATE_EGRESS=true` is a local/test-only escape hatch for explicit
+fixtures. Application and gateway startup reject it in every deployed
+environment. Keep the production value false.
 
 You can do the same from aaPanel **Docker** → Compose / project, as long as the project directory is `infra/` and the env file path `../.env` still resolves.
 

@@ -44,6 +44,8 @@ import {
   friendlyDisplayError,
 } from '@/services/api/errors';
 import { queryKeys } from '@/services/api/query-keys';
+import { usePermissions } from '@/features/authz/usePermissions';
+import { WorkspacePermission } from '@/features/authz/permissions';
 import {
   useDeleteConnectionPermanent,
   useDisconnectConnection,
@@ -132,6 +134,7 @@ export function WhatsAppConnectionCard({
   onResumeConnect?: (connection: WhatsAppConnection) => void;
 }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id ?? '';
@@ -386,6 +389,19 @@ export function WhatsAppConnectionCard({
             />
           </div>
         </div>
+
+        {expertId ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2" data-testid="whatsapp-mcp-summary">
+            <p className="text-xs font-medium">{t('apps.whatsapp.connection.mcpSummaryTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('apps.whatsapp.connection.mcpSummary', { expert: selectedExpertLabel })}</p>
+            <p className="text-xs text-muted-foreground">{t('apps.whatsapp.connection.mcpDirectOnly')}</p>
+            <p className="text-xs text-muted-foreground">{t('apps.whatsapp.connection.mcpDisclosure')}</p>
+            <div className="flex flex-wrap gap-2">
+              {canManage ? <Button asChild type="button" variant="outline" size="sm"><a href={`/experts/${expertId}/edit`}>{t('apps.whatsapp.connection.manageMcpTools')}</a></Button> : null}
+              {can(WorkspacePermission.MCP_TOOLS_APPROVE_EXTERNAL) ? <Button asChild type="button" variant="outline" size="sm"><a href="/apps/mcp/external-approvals">{t('apps.whatsapp.connection.externalApprovals')}</a></Button> : null}
+            </div>
+          </div>
+        ) : null}
 
         {!canManage ? (
           <p className="text-sm text-muted-foreground" data-testid="whatsapp-member-readonly">

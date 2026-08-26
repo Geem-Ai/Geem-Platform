@@ -120,6 +120,18 @@ READ_TIME_AUDIT_METADATA_ALLOWLIST = frozenset(
         "test_mode",
         "workspace_id",
         "workspace_slug",
+        "connection_id",
+        "tool_id",
+        "grant_id",
+        "definition_hash",
+        "classification",
+        "credential_epoch",
+        "surface_kind",
+        "surface_binding_id",
+        "approval_id",
+        "delivery_id",
+        "decision",
+        "resolution",
     }
 )
 

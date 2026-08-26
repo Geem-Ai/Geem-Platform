@@ -1,6 +1,8 @@
 import type { ApiErrorCode } from '@/services/api/errors';
 import type {
   Citation,
+  ChatToolActivity,
+  ChatToolApproval,
   ConversationMessage,
   MessageAttachment,
   MessageRole,
@@ -22,6 +24,8 @@ export type ChatUiMessage = {
   content: string;
   citations: Citation[];
   attachments?: ChatUiAttachment[];
+  toolActivities?: ChatToolActivity[];
+  toolApproval?: ChatToolApproval | null;
   status: MessageStatus | string;
   created_at: string;
   errorMessage?: string | null;
@@ -45,6 +49,8 @@ export function toChatUiMessage(msg: ConversationMessage): ChatUiMessage {
     content: msg.content,
     citations: msg.citations ?? [],
     attachments: mapAttachments(msg.attachments),
+    toolActivities: msg.tool_activities ?? [],
+    toolApproval: msg.tool_approval ?? null,
     status: msg.status,
     created_at: msg.created_at,
   };

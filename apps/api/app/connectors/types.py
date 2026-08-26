@@ -8,9 +8,11 @@ import enum
 class ConnectorKind(str, enum.Enum):
     KNOWLEDGE_SOURCE = "knowledge_source"
     CHANNEL = "channel"
+    TOOL_SOURCE = "tool_source"
 
 
 class ConnectorAuthMode(str, enum.Enum):
+    NONE = "none"
     OAUTH2 = "oauth2"
     API_KEY = "api_key"
     CUSTOM = "custom"

@@ -111,6 +111,21 @@ export type ApiErrorCode =
   | 'connector_sync_not_supported'
   | 'connector_sync_in_progress'
   | 'connector_sync_not_found'
+  | 'mcp_protocol_unsupported'
+  | 'mcp_server_unreachable'
+  | 'mcp_auth_required'
+  | 'mcp_reauthorization_required'
+  | 'mcp_tool_not_granted'
+  | 'mcp_tool_set_changed'
+  | 'mcp_tool_incompatible'
+  | 'mcp_tool_result_unsupported'
+  | 'mcp_tool_call_failed'
+  | 'mcp_tool_outcome_unknown'
+  | 'mcp_tool_limit_reached'
+  | 'mcp_external_approval_required'
+  | 'mcp_external_turn_pending'
+  | 'mcp_external_delivery_unknown'
+  | 'egress_target_blocked'
   | 'google_drive_not_configured'
   | 'google_drive_authorization_failed'
   | 'google_drive_reauthorization_required'
@@ -272,6 +287,21 @@ const KNOWN_CODES = new Set<string>([
   'connector_sync_not_supported',
   'connector_sync_in_progress',
   'connector_sync_not_found',
+  'mcp_protocol_unsupported',
+  'mcp_server_unreachable',
+  'mcp_auth_required',
+  'mcp_reauthorization_required',
+  'mcp_tool_not_granted',
+  'mcp_tool_set_changed',
+  'mcp_tool_incompatible',
+  'mcp_tool_result_unsupported',
+  'mcp_tool_call_failed',
+  'mcp_tool_outcome_unknown',
+  'mcp_tool_limit_reached',
+  'mcp_external_approval_required',
+  'mcp_external_turn_pending',
+  'mcp_external_delivery_unknown',
+  'egress_target_blocked',
   'google_drive_not_configured',
   'google_drive_authorization_failed',
   'google_drive_reauthorization_required',
@@ -487,6 +517,21 @@ export function errorMessageKey(code: string): string {
     connector_sync_not_supported: 'errors.connectorSyncNotSupported',
     connector_sync_in_progress: 'errors.connectorSyncInProgress',
     connector_sync_not_found: 'errors.connectorSyncNotFound',
+    mcp_protocol_unsupported: 'errors.mcpProtocolUnsupported',
+    mcp_server_unreachable: 'errors.mcpServerUnreachable',
+    mcp_auth_required: 'errors.mcpAuthRequired',
+    mcp_reauthorization_required: 'errors.mcpReauthorizationRequired',
+    mcp_tool_not_granted: 'errors.mcpToolNotGranted',
+    mcp_tool_set_changed: 'errors.mcpToolSetChanged',
+    mcp_tool_incompatible: 'errors.mcpToolIncompatible',
+    mcp_tool_result_unsupported: 'errors.mcpToolResultUnsupported',
+    mcp_tool_call_failed: 'errors.mcpToolCallFailed',
+    mcp_tool_outcome_unknown: 'errors.mcpToolOutcomeUnknown',
+    mcp_tool_limit_reached: 'errors.mcpToolLimitReached',
+    mcp_external_approval_required: 'errors.mcpExternalApprovalRequired',
+    mcp_external_turn_pending: 'errors.mcpExternalTurnPending',
+    mcp_external_delivery_unknown: 'errors.mcpExternalDeliveryUnknown',
+    egress_target_blocked: 'errors.egressTargetBlocked',
     google_drive_not_configured: 'errors.googleDriveNotConfigured',
     google_drive_authorization_failed: 'errors.googleDriveAuthorizationFailed',
     google_drive_reauthorization_required: 'errors.googleDriveReauthorizationRequired',

@@ -37,6 +37,12 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
+def _stream_item(item: dict) -> str:
+    if item.get("event") == "keepalive":
+        return ": keepalive\n\n"
+    return _sse(str(item["event"]), item.get("data") or {})
+
+
 @router.post("", response_model=ConversationOut, status_code=201)
 def create_conversation(
     body: ConversationCreateRequest,
@@ -181,7 +187,7 @@ async def stream_conversation_message(
                 content=content,
                 attachment_id=attachment_id,
             ):
-                yield _sse(item["event"], item["data"])
+                yield _stream_item(item)
         except AppError as exc:
             yield _sse(
                 "error",
@@ -234,7 +240,7 @@ async def retry_conversation_message(
                 conversation_id=conversation_id,
                 assistant_message_id=assistant_message_id,
             ):
-                yield _sse(item["event"], item["data"])
+                yield _stream_item(item)
         except AppError as exc:
             yield _sse(
                 "error",

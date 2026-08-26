@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from functools import lru_cache
 from typing import Literal
@@ -346,6 +347,44 @@ class Settings(BaseSettings):
     openwa_api_key: str = Field(default="", repr=False, exclude=True)
     openwa_timeout_seconds: float = 30.0
 
+    # Phase 13 — paid remote MCP connector host. The feature and every Expert
+    # grant remain default closed. Tenant-derived HTTP uses only the internal
+    # mTLS gateway; ordinary API/worker code never receives a forward-proxy URL.
+    mcp_connector_enabled: bool = False
+    mcp_supported_protocol_versions: str = "2026-07-28,2025-11-25,2024-11-05"
+    mcp_client_metadata_url: str = ""
+    mcp_egress_gateway_url: str = ""
+    mcp_egress_proxy_url: str = ""
+    mcp_egress_client_cert_file: str = ""
+    mcp_egress_client_key_file: str = ""
+    mcp_egress_ca_cert_file: str = ""
+    mcp_egress_blocked_networks: str = ""
+    mcp_allow_private_egress: bool = False
+    mcp_egress_max_request_bytes: int = Field(default=65_536, gt=0, le=1_048_576)
+    mcp_egress_max_response_bytes: int = Field(default=65_536, gt=0, le=1_048_576)
+    mcp_egress_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    mcp_egress_read_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    mcp_egress_total_timeout_seconds: float = Field(default=30.0, gt=0, le=180)
+    mcp_legacy_session_ttl_seconds: int = Field(default=300, gt=0)
+    mcp_max_legacy_sessions: int = Field(default=64, gt=0)
+    mcp_max_tool_iterations: int = Field(default=5, gt=0)
+    mcp_max_tools_per_expert: int = Field(default=32, gt=0)
+    mcp_max_discovered_tools: int = Field(default=512, gt=0)
+    mcp_tool_inventory_ttl_seconds: int = Field(default=300, gt=0)
+    mcp_tool_call_timeout_seconds: int = Field(default=20, gt=0)
+    mcp_total_turn_timeout_seconds: int = Field(default=120, gt=0)
+    mcp_tool_result_max_bytes: int = Field(default=32_768, gt=0)
+    mcp_tool_result_max_chars: int = Field(default=8_000, gt=0)
+    mcp_max_redirects: int = Field(default=3, ge=0, le=10)
+    mcp_tool_approval_ttl_seconds: int = Field(default=900, gt=0)
+    mcp_max_external_pending_per_workspace: int = Field(default=100, gt=0)
+    # A model change is not implicitly MCP-ready. Both configured models must
+    # explicitly retain native function calling with parallel calls disabled.
+    mcp_tool_provider_capability_matrix: str = (
+        '{"qwen/qwen3.8-max":["function_calling","parallel_tool_calls_false"],'
+        '"openai/gpt-5.6-terra":["function_calling","parallel_tool_calls_false"]}'
+    )
+
     # Phase 14 — paid client-owned Agent API. Both the operational switch and
     # each Expert's explicit JSONB opt-in default closed.
     client_agent_api_enabled: bool = False
@@ -578,6 +617,22 @@ class Settings(BaseSettings):
         )
 
     @property
+    def mcp_supported_protocol_version_list(self) -> tuple[str, ...]:
+        return tuple(
+            value.strip()
+            for value in self.mcp_supported_protocol_versions.split(",")
+            if value.strip()
+        )
+
+    @property
+    def mcp_egress_blocked_network_list(self) -> tuple[str, ...]:
+        return tuple(
+            value.strip()
+            for value in self.mcp_egress_blocked_networks.split(",")
+            if value.strip()
+        )
+
+    @property
     def reserved_slugs(self) -> frozenset[str]:
         extras = {s.strip().lower() for s in self.reserved_workspace_slugs.split(",") if s.strip()}
         # Always reserve the platform-knowledge slug even if env overrides the setting.
@@ -687,6 +742,153 @@ _REQUIRED_AGENT_PROVIDER_CAPABILITIES = frozenset(
     }
 )
 
+_MCP_PROTOCOL_VERSION_ALLOWLIST = frozenset(
+    {"2026-07-28", "2025-11-25", "2024-11-05"}
+)
+_REQUIRED_MCP_PROVIDER_CAPABILITIES = frozenset(
+    {"function_calling", "parallel_tool_calls_false"}
+)
+
+
+def assert_mcp_settings(settings: Settings) -> None:
+    """Fail closed when Phase 13's gateway/provider boundary is incomplete."""
+
+    if settings.mcp_allow_private_egress and not settings.is_local:
+        raise RuntimeError(
+            "MCP_ALLOW_PRIVATE_EGRESS may only be true when APP_ENV is local/test."
+        )
+    if not settings.mcp_connector_enabled:
+        return
+
+    from urllib.parse import urlsplit
+
+    try:
+        gateway = urlsplit((settings.mcp_egress_gateway_url or "").strip())
+        gateway.port
+    except ValueError as exc:
+        raise RuntimeError("MCP_EGRESS_GATEWAY_URL has an invalid port.") from exc
+    if (
+        gateway.scheme != "https"
+        or not gateway.hostname
+        or gateway.username
+        or gateway.password
+        or gateway.path not in {"", "/"}
+        or gateway.query
+        or gateway.fragment
+    ):
+        raise RuntimeError(
+            "MCP_CONNECTOR_ENABLED requires an internal HTTPS MCP_EGRESS_GATEWAY_URL."
+        )
+    if not settings.is_local:
+        gateway_host = gateway.hostname.lower().rstrip(".")
+        if gateway_host != "mcp-egress-gateway" and not gateway_host.endswith(
+            (".internal", ".svc", ".svc.cluster.local")
+        ):
+            raise RuntimeError(
+                "MCP_EGRESS_GATEWAY_URL must name the internal gateway service."
+            )
+    if not settings.is_local:
+        try:
+            proxy = urlsplit((settings.mcp_egress_proxy_url or "").strip())
+            proxy.port
+        except ValueError as exc:
+            raise RuntimeError("MCP_EGRESS_PROXY_URL has an invalid port.") from exc
+        if (
+            proxy.scheme != "http"
+            or not proxy.hostname
+            or proxy.username
+            or proxy.password
+            or proxy.path not in {"", "/"}
+            or proxy.query
+            or proxy.fragment
+        ):
+            raise RuntimeError(
+                "MCP_CONNECTOR_ENABLED requires MCP_EGRESS_PROXY_URL outside local/test."
+            )
+        proxy_host = proxy.hostname.lower().rstrip(".")
+        if proxy_host != "mcp-egress-proxy" and not proxy_host.endswith(
+            (".internal", ".svc", ".svc.cluster.local")
+        ):
+            raise RuntimeError(
+                "MCP_EGRESS_PROXY_URL must name the internal egress proxy service."
+            )
+    for name, path in (
+        ("MCP_EGRESS_CLIENT_CERT_FILE", settings.mcp_egress_client_cert_file),
+        ("MCP_EGRESS_CLIENT_KEY_FILE", settings.mcp_egress_client_key_file),
+        ("MCP_EGRESS_CA_CERT_FILE", settings.mcp_egress_ca_cert_file),
+    ):
+        if not (path or "").strip():
+            raise RuntimeError(f"MCP_CONNECTOR_ENABLED requires {name}.")
+        if not settings.is_local and not (
+            os.path.isfile(path) and os.access(path, os.R_OK)
+        ):
+            raise RuntimeError(
+                f"MCP_CONNECTOR_ENABLED requires readable mounted {name}."
+            )
+
+    versions = settings.mcp_supported_protocol_version_list
+    if (
+        not versions
+        or len(versions) != len(set(versions))
+        or versions[0] != "2026-07-28"
+        or not set(versions).issubset(_MCP_PROTOCOL_VERSION_ALLOWLIST)
+    ):
+        raise RuntimeError(
+            "MCP_SUPPORTED_PROTOCOL_VERSIONS must start with 2026-07-28 and contain "
+            "only the reviewed Phase 13 protocol revisions without duplicates."
+        )
+    metadata_url = (settings.mcp_client_metadata_url or "").strip()
+    if metadata_url:
+        metadata = urlsplit(metadata_url)
+        if (
+            metadata.scheme != "https"
+            or not metadata.hostname
+            or metadata.username
+            or metadata.password
+            or metadata.fragment
+        ):
+            raise RuntimeError("MCP_CLIENT_METADATA_URL must be a public HTTPS URL.")
+    if settings.mcp_egress_total_timeout_seconds < (
+        settings.mcp_egress_connect_timeout_seconds
+    ):
+        raise RuntimeError(
+            "MCP_EGRESS_TOTAL_TIMEOUT_SECONDS must cover the connect timeout."
+        )
+    if settings.mcp_total_turn_timeout_seconds < settings.mcp_tool_call_timeout_seconds:
+        raise RuntimeError(
+            "MCP_TOTAL_TURN_TIMEOUT_SECONDS must cover MCP_TOOL_CALL_TIMEOUT_SECONDS."
+        )
+
+    primary = (settings.openrouter_chat_model or "").strip()
+    fallback = (settings.openrouter_chat_fallback_model or "").strip()
+    if not (settings.openrouter_api_key or "").strip():
+        raise RuntimeError(
+            "MCP_CONNECTOR_ENABLED requires OPENROUTER_API_KEY to be configured."
+        )
+    if not primary or not fallback:
+        raise RuntimeError(
+            "MCP_CONNECTOR_ENABLED requires both configured chat provider models."
+        )
+    try:
+        raw_matrix = json.loads(settings.mcp_tool_provider_capability_matrix or "{}")
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("MCP_TOOL_PROVIDER_CAPABILITY_MATRIX must be a JSON object.") from exc
+    if not isinstance(raw_matrix, dict):
+        raise RuntimeError("MCP_TOOL_PROVIDER_CAPABILITY_MATRIX must be a JSON object.")
+    for model in (primary, fallback):
+        declared = raw_matrix.get(model)
+        capabilities = (
+            {str(value).strip() for value in declared if str(value).strip()}
+            if isinstance(declared, list)
+            else set()
+        )
+        missing = sorted(_REQUIRED_MCP_PROVIDER_CAPABILITIES - capabilities)
+        if missing:
+            raise RuntimeError(
+                f"MCP provider model {model!r} is not readiness-approved; "
+                f"missing capabilities: {', '.join(missing)}."
+            )
+
 
 def assert_agent_provider_settings(settings: Settings) -> None:
     """Fail closed when an enabled Agent provider matrix is incomplete."""
@@ -771,6 +973,7 @@ def get_settings() -> Settings:
     settings = Settings()
     assert_secure_settings(settings)
     assert_usage_scale_settings(settings)
+    assert_mcp_settings(settings)
     assert_agent_provider_settings(settings)
     assert_otel_settings(settings)
     return settings

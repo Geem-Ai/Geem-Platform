@@ -49,6 +49,7 @@ def acquire_runtime_admission_fences(
     *,
     workspace_id: uuid.UUID,
     app_slugs: Iterable[str],
+    surface_target_keys: Iterable[str] = (),
 ) -> None:
     """Acquire all shared admission fences in one preliminary statement."""
     slugs = tuple(sorted({_normalize_slug(slug) for slug in app_slugs}))
@@ -63,6 +64,14 @@ def acquire_runtime_admission_fences(
             _fence_key(f"workspace-app:{workspace_id}:{slug}"),
         )
         for slug in slugs
+    )
+    targets = tuple(sorted({_normalize_target_key(key) for key in surface_target_keys}))
+    locks.extend(
+        (
+            "shared",
+            _fence_key(f"surface:{workspace_id}:{target}"),
+        )
+        for target in targets
     )
     try:
         _execute_lock_statement(db, locks)
@@ -101,6 +110,34 @@ def acquire_workspace_app_runtime_mutation_fence(
     )
 
 
+def acquire_surface_target_runtime_mutation_fences(
+    db: Session,
+    *,
+    workspace_id: uuid.UUID,
+    surface_target_keys: Iterable[str],
+) -> None:
+    """Serialize restrictive audience/account mutations with paid dispatch.
+
+    Exact target keys are server-derived identifiers such as
+    ``widget:<uuid>`` or ``whatsapp:<connection>:<binding>``. Multiple keys
+    are acquired lexically in one statement to avoid lock-order inversions.
+    """
+
+    targets = tuple(sorted({_normalize_target_key(key) for key in surface_target_keys}))
+    if not targets:
+        raise ValueError("At least one exact surface target key is required.")
+    _execute_lock_statement(
+        db,
+        [
+            (
+                "exclusive",
+                _fence_key(f"surface:{workspace_id}:{target}"),
+            )
+            for target in targets
+        ],
+    )
+
+
 def _execute_lock_statement(db: Session, locks: list[tuple[str, int]]) -> None:
     if not locks:
         return
@@ -130,6 +167,13 @@ def _normalize_slug(raw: str) -> str:
     if not slug:
         raise ValueError("App slug is required.")
     return slug
+
+
+def _normalize_target_key(raw: str) -> str:
+    key = (raw or "").strip().lower()
+    if not key or len(key) > 512 or any(ch.isspace() for ch in key):
+        raise ValueError("A bounded exact surface target key is required.")
+    return key
 
 
 def _fence_key(value: str) -> int:

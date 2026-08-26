@@ -185,6 +185,49 @@ class OpenRouterChatProvider:
             payload["model"] = fallback
             return self._call_agent(fallback, payload, declared_names=names)
 
+    def answer_with_tools(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        model: str,
+        system_prompt: str,
+        tools: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> AgentProviderResult:
+        """Run one Geem-owned MCP loop round on one preselected model.
+
+        Unlike ``complete_for_agent`` this boundary never attempts a fallback:
+        model selection happens before the bounded turn reservation, parallel
+        calls are disabled, and a provider failure consumes no hidden N+2 call.
+        """
+
+        selected = (model or "").strip()
+        if not selected:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "A reviewed tool-capable model is required.",
+            )
+        payload = self._agent_payload(
+            selected,
+            messages,
+            system_prompt=system_prompt,
+            tools=tools,
+            tool_choice="auto",
+            stream=False,
+            temperature=None,
+            top_p=None,
+            max_tokens=max_tokens,
+            parallel_tool_calls=False,
+        )
+        return self._call_agent(
+            selected,
+            payload,
+            declared_names=_agent_declared_names(tools),
+            timeout_seconds=timeout_seconds,
+            max_attempts=1,
+        )
+
     def stream_for_agent(
         self,
         messages: Sequence[Mapping[str, Any]],
@@ -314,12 +357,15 @@ class OpenRouterChatProvider:
         payload: dict[str, Any],
         *,
         declared_names: frozenset[str],
+        timeout_seconds: float | None = None,
+        max_attempts: int = 5,
     ) -> AgentProviderResult:
         body, meta, status = self.client.request(
             "POST",
             "/chat/completions",
             json_body=payload,
-            timeout=120.0,
+            timeout=max(0.001, float(timeout_seconds or 120.0)),
+            max_attempts=max(1, int(max_attempts)),
         )
         if status >= 400 or not isinstance(body, dict):
             raise _agent_provider_error(

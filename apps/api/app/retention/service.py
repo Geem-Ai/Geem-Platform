@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.api_keys.models import ApiKey
@@ -235,6 +235,10 @@ class RetentionPurgeService:
             return False
 
         workspace_id = conversation.workspace_id
+        self._purge_mcp_conversation_rows(
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+        )
         self.db.execute(
             delete(Message).where(Message.conversation_id == conversation_id)
         )
@@ -317,6 +321,10 @@ class RetentionPurgeService:
             if expert is None:
                 return False
 
+        self._purge_mcp_expert_rows(
+            workspace_id=workspace_id,
+            expert_id=expert_id,
+        )
         self.db.execute(
             update(WidgetInstance)
             .where(
@@ -365,6 +373,131 @@ class RetentionPurgeService:
         )
         return True
 
+    def _purge_mcp_conversation_rows(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+    ) -> None:
+        """Remove retained MCP children before a Conversation parent."""
+
+        from app.mcp.runtime_models import (
+            McpPendingToolCall,
+            McpSurfaceDelivery,
+            McpToolInvocation,
+            McpWidgetTurnReceipt,
+        )
+        from app.mcp.teardown import McpConnectionTeardownService
+
+        McpConnectionTeardownService(
+            self.db, settings=self.settings
+        ).terminalize_conversation_runtime(
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+        )
+        self.db.execute(
+            delete(McpSurfaceDelivery).where(
+                McpSurfaceDelivery.workspace_id == workspace_id,
+                McpSurfaceDelivery.conversation_id == conversation_id,
+            )
+        )
+        self.db.execute(
+            delete(McpWidgetTurnReceipt).where(
+                McpWidgetTurnReceipt.workspace_id == workspace_id,
+                McpWidgetTurnReceipt.conversation_id == conversation_id,
+            )
+        )
+        self.db.execute(
+            delete(McpPendingToolCall).where(
+                McpPendingToolCall.workspace_id == workspace_id,
+                McpPendingToolCall.conversation_id == conversation_id,
+            )
+        )
+        self.db.execute(
+            delete(McpToolInvocation).where(
+                McpToolInvocation.workspace_id == workspace_id,
+                McpToolInvocation.conversation_id == conversation_id,
+            )
+        )
+        self.db.flush()
+
+    def _purge_mcp_expert_rows(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        expert_id: uuid.UUID,
+    ) -> None:
+        """Remove retained MCP grant chains before an Expert parent."""
+
+        from app.mcp.models import McpToolGrant
+        from app.mcp.runtime_models import (
+            McpPendingToolCall,
+            McpSurfaceDelivery,
+            McpToolInvocation,
+            McpToolSurfaceBinding,
+            McpWidgetTurnReceipt,
+        )
+        from app.mcp.teardown import McpConnectionTeardownService
+
+        grant_ids = select(McpToolGrant.id).where(
+            McpToolGrant.workspace_id == workspace_id,
+            McpToolGrant.expert_id == expert_id,
+        )
+        surface_ids = select(McpToolSurfaceBinding.id).where(
+            McpToolSurfaceBinding.workspace_id == workspace_id,
+            McpToolSurfaceBinding.expert_id == expert_id,
+        )
+        pending_ids = select(McpPendingToolCall.id).where(
+            McpPendingToolCall.workspace_id == workspace_id,
+            McpPendingToolCall.mcp_tool_grant_id.in_(grant_ids),
+        )
+        McpConnectionTeardownService(
+            self.db, settings=self.settings
+        ).terminalize_expert_runtime(
+            workspace_id=workspace_id,
+            expert_id=expert_id,
+        )
+        self.db.execute(
+            delete(McpSurfaceDelivery).where(
+                McpSurfaceDelivery.workspace_id == workspace_id,
+                or_(
+                    McpSurfaceDelivery.mcp_tool_surface_binding_id.in_(surface_ids),
+                    McpSurfaceDelivery.mcp_pending_tool_call_id.in_(pending_ids),
+                ),
+            )
+        )
+        self.db.execute(
+            delete(McpWidgetTurnReceipt).where(
+                McpWidgetTurnReceipt.workspace_id == workspace_id,
+                McpWidgetTurnReceipt.expert_id == expert_id,
+            )
+        )
+        self.db.execute(
+            delete(McpPendingToolCall).where(
+                McpPendingToolCall.workspace_id == workspace_id,
+                McpPendingToolCall.mcp_tool_grant_id.in_(grant_ids),
+            )
+        )
+        self.db.execute(
+            delete(McpToolInvocation).where(
+                McpToolInvocation.workspace_id == workspace_id,
+                McpToolInvocation.expert_id == expert_id,
+            )
+        )
+        self.db.execute(
+            delete(McpToolSurfaceBinding).where(
+                McpToolSurfaceBinding.workspace_id == workspace_id,
+                McpToolSurfaceBinding.expert_id == expert_id,
+            )
+        )
+        self.db.execute(
+            delete(McpToolGrant).where(
+                McpToolGrant.workspace_id == workspace_id,
+                McpToolGrant.expert_id == expert_id,
+            )
+        )
+        self.db.flush()
+
     # ------------------------------------------------------------------
     # Workspace
     # ------------------------------------------------------------------
@@ -390,7 +523,17 @@ class RetentionPurgeService:
 
         with start_span("workspace.purge", workspace_id=str(workspace_id)):
             self._retire_access(workspace_id)
-            self._retire_connectors(workspace_id)
+            mcp_revocations = self._retire_connectors(workspace_id)
+            self._purge_mcp_runtime_rows(workspace_id)
+            # Connector retirement is independently retry-safe. Commit the
+            # local deny/deletion before any best-effort tenant-derived HTTP.
+            self.db.commit()
+            if mcp_revocations:
+                from app.mcp.teardown import McpConnectionTeardownService
+
+                McpConnectionTeardownService(
+                    self.db, settings=self.settings
+                ).revoke_after_commit(mcp_revocations)
             self._retire_widgets_and_attachments(workspace_id)
             self._purge_workspace_conversations(workspace_id, now=now)
             self._purge_workspace_experts(workspace_id, now=now)
@@ -440,21 +583,114 @@ class RetentionPurgeService:
         )
         self.db.flush()
 
-    def _retire_connectors(self, workspace_id: uuid.UUID) -> None:
+    def _retire_connectors(self, workspace_id: uuid.UUID) -> list:
+        from app.mcp.teardown import McpConnectionTeardownService
+
         creds = ConnectorCredentialService(self.db, settings=self.settings)
         repo = ConnectorRepository(self.db)
+        mcp_teardown = McpConnectionTeardownService(
+            self.db, settings=self.settings
+        )
+        mcp_revocations = []
         rows = list(
             self.db.scalars(
                 select(AppConnection).where(AppConnection.workspace_id == workspace_id)
             )
         )
         for row in rows:
-            creds.clear_all_secrets(row)
-            row.status = ConnectionStatus.REVOKED.value
-            row.disconnected_at = row.disconnected_at or _now()
-            row.health = ConnectionHealth.UNKNOWN.value
+            if row.connector_key == "mcp_remote":
+                snapshot = mcp_teardown.teardown_connection(
+                    row,
+                    actor_id=None,
+                    target_status=ConnectionStatus.REVOKED.value,
+                )
+                if snapshot is not None:
+                    mcp_revocations.append(snapshot)
+                # MCP runtime ledgers use RESTRICT FKs so the connection must
+                # remain until _purge_mcp_runtime_rows removes its children in
+                # proof-safe order.
+                continue
+            else:
+                creds.clear_all_secrets(row)
+                row.status = ConnectionStatus.REVOKED.value
+                row.disconnected_at = row.disconnected_at or _now()
+                row.health = ConnectionHealth.UNKNOWN.value
             self.db.flush()
             repo.purge_connection(row)
+        return mcp_revocations
+
+    def _purge_mcp_runtime_rows(self, workspace_id: uuid.UUID) -> None:
+        """Hard-delete MCP operational state in explicit RESTRICT-FK order.
+
+        Immutable security audit and usage counters deliberately do not appear
+        here. They remain attached to the retained Workspace tombstone after
+        the tenant runtime graph has been removed.
+        """
+
+        from app.mcp.models import McpServerTool, McpToolGrant
+        from app.mcp.runtime_models import (
+            McpPendingToolCall,
+            McpSurfaceDelivery,
+            McpToolInvocation,
+            McpToolSurfaceBinding,
+            McpWidgetTurnReceipt,
+        )
+        from app.mcp.teardown import McpConnectionTeardownService
+
+        McpConnectionTeardownService(
+            self.db, settings=self.settings
+        ).terminalize_workspace_runtime(workspace_id=workspace_id)
+
+        # Delivery rows can reference both a pending call and a surface.
+        self.db.execute(
+            delete(McpSurfaceDelivery).where(
+                McpSurfaceDelivery.workspace_id == workspace_id
+            )
+        )
+        # Receipts protect messages, conversations and Widget bindings.
+        self.db.execute(
+            delete(McpWidgetTurnReceipt).where(
+                McpWidgetTurnReceipt.workspace_id == workspace_id
+            )
+        )
+        # Pending calls and invocations both protect grant/runtime parents.
+        self.db.execute(
+            delete(McpPendingToolCall).where(
+                McpPendingToolCall.workspace_id == workspace_id
+            )
+        )
+        self.db.execute(
+            delete(McpToolInvocation).where(
+                McpToolInvocation.workspace_id == workspace_id
+            )
+        )
+        self.db.execute(
+            delete(McpToolSurfaceBinding).where(
+                McpToolSurfaceBinding.workspace_id == workspace_id
+            )
+        )
+        self.db.execute(
+            delete(McpToolGrant).where(McpToolGrant.workspace_id == workspace_id)
+        )
+        self.db.execute(
+            delete(McpServerTool).where(McpServerTool.workspace_id == workspace_id)
+        )
+        self.db.flush()
+
+        repo = ConnectorRepository(self.db)
+        connections = list(
+            self.db.scalars(
+                select(AppConnection)
+                .where(
+                    AppConnection.workspace_id == workspace_id,
+                    AppConnection.connector_key == "mcp_remote",
+                )
+                .order_by(AppConnection.id)
+                .with_for_update()
+            )
+        )
+        for connection in connections:
+            repo.purge_connection(connection)
 
     def _retire_widgets_and_attachments(self, workspace_id: uuid.UUID) -> None:
         from app.storage.minio_storage import MinioObjectStorage

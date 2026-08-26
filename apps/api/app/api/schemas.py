@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 
 class DocumentCreateResponse(BaseModel):
@@ -95,15 +97,65 @@ class QueryRequest(BaseModel):
 
 
 class Citation(BaseModel):
-    """Metadata-safe citation contract for API responses and message persistence."""
+    """Metadata-safe chunk/tool citation contract.
+
+    The default chunk discriminator is intentionally omitted on serialization
+    so pre-MCP Conversation/API/SSE payloads stay byte-compatible.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
-    chunk_id: uuid.UUID
-    document_id: uuid.UUID
-    document_title: str
-    page: int
-    snippet: str
+    kind: Literal["chunk", "tool"] = "chunk"
+    chunk_id: uuid.UUID | None = None
+    document_id: uuid.UUID | None = None
+    document_title: str | None = None
+    page: int | None = None
+    snippet: str | None = None
+    connection_display_name: str | None = None
+    tool_name: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_shape(self) -> "Citation":
+        if self.kind == "chunk":
+            if (
+                self.chunk_id is None
+                or self.document_id is None
+                or not (self.document_title or "").strip()
+                or self.page is None
+                or self.snippet is None
+            ):
+                raise ValueError("Chunk citations require complete document metadata.")
+            if self.connection_display_name is not None or self.tool_name is not None:
+                raise ValueError("Chunk citations cannot contain tool metadata.")
+        else:
+            if not (self.connection_display_name or "").strip() or not (
+                self.tool_name or ""
+            ).strip():
+                raise ValueError("Tool citations require a connection display name and tool name.")
+            if any(
+                value is not None
+                for value in (
+                    self.chunk_id,
+                    self.document_id,
+                    self.document_title,
+                    self.page,
+                    self.snippet,
+                )
+            ):
+                raise ValueError("Tool citations cannot contain chunk metadata.")
+        return self
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        payload = handler(self)
+        if self.kind == "chunk":
+            payload.pop("kind", None)
+            payload.pop("connection_display_name", None)
+            payload.pop("tool_name", None)
+        else:
+            for key in ("chunk_id", "document_id", "document_title", "page", "snippet"):
+                payload.pop(key, None)
+        return {key: value for key, value in payload.items() if value is not None}
 
 
 class QueryResponse(BaseModel):

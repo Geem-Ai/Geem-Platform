@@ -132,4 +132,94 @@ export const queryKeys = {
     workspaceQueryKey(workspaceId, 'apps', 'connection', appSlug, connectionId),
   connectionSyncRuns: (workspaceId: string, connectionId: string) =>
     workspaceQueryKey(workspaceId, 'apps', 'sync-runs', connectionId),
+  chatWidget: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'chat-widget', 'instance'),
+  mcpUsage: (workspaceId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'mcp', 'usage'),
+  mcpServers: (
+    workspaceId: string,
+    params?: { limit?: number; offset?: number },
+  ) =>
+    params
+      ? workspaceQueryKey(workspaceId, 'apps', 'mcp', 'servers', params)
+      : workspaceQueryKey(workspaceId, 'apps', 'mcp', 'servers'),
+  mcpServer: (workspaceId: string, connectionId: string) =>
+    workspaceQueryKey(workspaceId, 'apps', 'mcp', 'servers', connectionId),
+  mcpServerAuthStatus: (workspaceId: string, connectionId: string) =>
+    workspaceQueryKey(
+      workspaceId,
+      'apps',
+      'mcp',
+      'servers',
+      connectionId,
+      'auth-status',
+    ),
+  mcpTools: (
+    workspaceId: string,
+    connectionId: string,
+    params?: { limit?: number; offset?: number },
+  ) =>
+    params
+      ? workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'servers',
+          connectionId,
+          'tools',
+          params,
+        )
+      : workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'servers',
+          connectionId,
+          'tools',
+        ),
+  expertMcpGrants: (workspaceId: string, expertId: string) =>
+    workspaceQueryKey(workspaceId, 'experts', expertId, 'mcp-grants'),
+  expertMcpSurfaceBindings: (workspaceId: string, expertId: string) =>
+    workspaceQueryKey(
+      workspaceId,
+      'experts',
+      expertId,
+      'mcp-surface-bindings',
+    ),
+  mcpExternalApprovals: (
+    workspaceId: string,
+    params?: { limit?: number; offset?: number },
+  ) =>
+    params
+      ? workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'external-approvals',
+          params,
+        )
+      : workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'external-approvals',
+        ),
+  mcpExternalDeliveries: (
+    workspaceId: string,
+    params?: { status?: string; limit?: number; offset?: number },
+  ) =>
+    params
+      ? workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'external-deliveries',
+          params,
+        )
+      : workspaceQueryKey(
+          workspaceId,
+          'apps',
+          'mcp',
+          'external-deliveries',
+        ),
 };

@@ -329,6 +329,7 @@ class WorkspaceService:
         from app.connectors.types import ConnectionHealth, ConnectionStatus
         from app.conversations.models import Conversation
         from app.experts.models import Expert, ExpertType
+        from app.mcp.teardown import McpConnectionTeardownService
         from app.widgets.models import WidgetInstance, WidgetInstanceStatus
         from app.workspaces.models import WorkspaceInvitation
 
@@ -360,10 +361,24 @@ class WorkspaceService:
             .values(revoked_at=stamp)
         )
         creds = ConnectorCredentialService(self.db, settings=self.settings)
+        mcp_teardown = McpConnectionTeardownService(
+            self.db, settings=self.settings
+        )
+        mcp_revocations = []
         connections = list(
             self.db.scalars(select(AppConnection).where(AppConnection.workspace_id == workspace.id))
         )
         for row in connections:
+            if row.connector_key == "mcp_remote":
+                snapshot = mcp_teardown.teardown_connection(
+                    row,
+                    actor_id=actor_id,
+                    target_status=ConnectionStatus.REVOKED.value,
+                    at=stamp,
+                )
+                if snapshot is not None:
+                    mcp_revocations.append(snapshot)
+                continue
             creds.clear_all_secrets(row)
             row.status = ConnectionStatus.REVOKED.value
             row.disconnected_at = stamp
@@ -406,6 +421,7 @@ class WorkspaceService:
             allowlist=frozenset({"slug", "status"}),
         )
         self.db.commit()
+        mcp_teardown.revoke_after_commit(mcp_revocations)
         security_log(
             "workspace.soft_deleted",
             workspace_id=str(workspace.id),

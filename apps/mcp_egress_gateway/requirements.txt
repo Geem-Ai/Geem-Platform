@@ -1,0 +1,6 @@
+# Runtime is intentionally tiny and exact-pinned. The official Tier-1 MCP SDK
+# owns protocol framing, negotiation, sessions, and result models; application
+# code calls the gateway façade and never handwrites MCP JSON-RPC.
+fastapi==0.141.1
+mcp==2.0.0
+uvicorn==0.52.4

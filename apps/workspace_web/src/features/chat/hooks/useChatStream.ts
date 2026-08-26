@@ -17,6 +17,9 @@ import type {
   ChatMessageStartEvent,
   ChatStreamErrorEvent,
   ChatTitleEvent,
+  ChatToolApprovalRequiredEvent,
+  ChatToolCallEvent,
+  ChatToolResultEvent,
   Citation,
   Conversation,
 } from '@/services/api/types';
@@ -183,7 +186,7 @@ export function useChatStream({
 
   /** Sync when persisted history arrives / changes (e.g. after reload). */
   const historyFingerprint = initialMessages
-    .map((m) => `${m.id}:${m.status}:${m.created_at}:${m.content.length}:${m.citations.length}`)
+    .map((m) => `${m.id}:${m.status}:${m.created_at}:${m.content.length}:${m.citations.length}:${m.toolActivities?.map((a) => `${a.id}-${a.status}`).join(',') ?? ''}:${m.toolApproval?.status ?? ''}`)
     .join('|');
 
   useEffect(() => {
@@ -337,6 +340,50 @@ export function useChatStream({
               : m,
           ),
         );
+        return;
+      }
+
+      if (event === 'tool_call') {
+        const payload = data as ChatToolCallEvent;
+        const id = payload.tool_call_id || payload.id || payload.tool_name;
+        const connectionName = payload.connection_display_name || payload.connection_name || null;
+        setMessages((prev) => prev.map((m) => {
+          if (m.clientId !== ctx.assistantClientId && m.id !== ctx.assistantClientId) return m;
+          const current = m.toolActivities ?? [];
+          const next = { id, tool_call_id: payload.tool_call_id ?? null, connection_name: connectionName, tool_name: payload.tool_name, status: 'calling' as const };
+          return { ...m, toolActivities: current.some((item) => item.id === id) ? current.map((item) => item.id === id ? { ...item, ...next } : item) : [...current, next] };
+        }));
+        return;
+      }
+
+      if (event === 'tool_result') {
+        const payload = data as ChatToolResultEvent;
+        const id = payload.tool_call_id || payload.id || payload.tool_name;
+        const rawStatus = payload.outcome_unknown ? 'outcome_unknown' : payload.status;
+        const status = rawStatus === 'completed' || rawStatus === 'success' || rawStatus === 'succeeded' ? 'succeeded' : rawStatus === 'outcome_unknown' ? 'outcome_unknown' : 'failed';
+        setMessages((prev) => prev.map((m) => {
+          if (m.clientId !== ctx.assistantClientId && m.id !== ctx.assistantClientId) return m;
+          const current = m.toolActivities ?? [];
+          const next = { id, tool_call_id: payload.tool_call_id ?? null, connection_name: payload.connection_display_name || payload.connection_name || null, tool_name: payload.tool_name, status, error_code: payload.error_code ?? null };
+          return { ...m, toolActivities: current.some((item) => item.id === id) ? current.map((item) => item.id === id ? { ...item, ...next } : item) : [...current, next] };
+        }));
+        return;
+      }
+
+      if (event === 'tool_approval_required') {
+        const payload = data as ChatToolApprovalRequiredEvent;
+        const id = payload.tool_call_id || payload.id || payload.tool_name;
+        const connectionName = payload.connection_display_name || payload.connection_name || null;
+        setMessages((prev) => prev.map((m) => {
+          if (m.clientId !== ctx.assistantClientId && m.id !== ctx.assistantClientId) return m;
+          const current = m.toolActivities ?? [];
+          const activity = { id, tool_call_id: payload.tool_call_id ?? null, connection_name: connectionName, tool_name: payload.tool_name, status: 'approval_required' as const };
+          return {
+            ...m,
+            toolActivities: current.some((item) => item.id === id) ? current.map((item) => item.id === id ? { ...item, ...activity } : item) : [...current, activity],
+            toolApproval: { id: payload.approval_id || payload.id || id, tool_call_id: payload.tool_call_id ?? null, connection_name: connectionName, tool_name: payload.tool_name, arguments: payload.arguments ?? null, status: 'pending', expires_at: payload.expires_at ?? null },
+          };
+        }));
         return;
       }
 
@@ -642,6 +689,8 @@ export function useChatStream({
                 clientId: assistantClientId,
                 content: '',
                 citations: [],
+                toolActivities: [],
+                toolApproval: null,
                 status: 'streaming',
                 errorMessage: null,
               }

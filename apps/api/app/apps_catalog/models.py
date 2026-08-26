@@ -223,6 +223,9 @@ class AppInstallation(Base):
 
     __tablename__ = "app_installations"
     __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_app_installations_workspace_id"
+        ),
         UniqueConstraint("workspace_id", "app_id", name="uq_app_installations_workspace_app"),
         Index("ix_app_installations_workspace_status", "workspace_id", "status"),
         Index("ix_app_installations_app_id", "app_id"),

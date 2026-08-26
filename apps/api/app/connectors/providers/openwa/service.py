@@ -141,6 +141,8 @@ class OpenWAChannelService:
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
+        if connection_id is not None:
+            self._fence_mcp_channel_source(workspace.id, connection_id)
 
         base = self.connections.start_connection(
             workspace=workspace,
@@ -156,6 +158,12 @@ class OpenWAChannelService:
             installation=installation,
             for_update=True,
         )
+        binding = self._ensure_channel_binding(row)
+        from app.mcp.surfaces import stale_channel_surface_bindings
+
+        # Starting/replacing a provider session changes the reviewed source
+        # principal even when the visible phone number later stays the same.
+        stale_channel_surface_bindings(self.db, binding, row)
 
         creds = dict(self.credentials.get_credentials(row) or {})
         connect_mode = self._normalize_connect_mode(connect_mode)
@@ -202,7 +210,6 @@ class OpenWAChannelService:
             connect_mode=connect_mode,
         )
         self._clear_last_error(row)
-        binding = self._ensure_channel_binding(row)
         # Keep Geem lifecycle aligned with OpenWA — do not leave ACTIVE+qr_ready.
         mapping = map_openwa_status(started.status)
         if mapping.ready:
@@ -354,6 +361,7 @@ class OpenWAChannelService:
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
+        self._fence_mcp_channel_source(workspace.id, connection_id)
         row = self._require_connection_row(
             workspace_id=workspace.id,
             connection_id=connection_id,
@@ -361,6 +369,22 @@ class OpenWAChannelService:
             for_update=True,
         )
         binding = self._ensure_channel_binding(row)
+        source_changes = bool(
+            (expert_id is not ... and expert_id != binding.expert_id)
+            or (
+                auto_reply_enabled is not None
+                and auto_reply_enabled != binding.auto_reply_enabled
+            )
+            or (
+                respond_to_groups is not None
+                and respond_to_groups != binding.respond_to_groups
+            )
+            or (enabled is not None and enabled != binding.enabled)
+        )
+        if source_changes:
+            from app.mcp.surfaces import stale_channel_surface_bindings
+
+            stale_channel_surface_bindings(self.db, binding, row)
         if expert_id is not ...:
             if expert_id is None:
                 binding.expert_id = None
@@ -433,6 +457,7 @@ class OpenWAChannelService:
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=True
         )
+        self._fence_mcp_channel_source(workspace.id, connection_id)
         row = self._require_connection_row(
             workspace_id=workspace.id,
             connection_id=connection_id,
@@ -453,6 +478,10 @@ class OpenWAChannelService:
                 binding=binding,
                 can_manage=True,
             )
+
+        from app.mcp.surfaces import stale_channel_surface_bindings
+
+        stale_channel_surface_bindings(self.db, binding, row)
 
         creds = dict(self.credentials.get_credentials(row) or {})
         session_id = str(creds.get("session_id") or "").strip()
@@ -574,6 +603,7 @@ class OpenWAChannelService:
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=False
         )
+        self._fence_mcp_channel_source(workspace.id, connection_id)
         row = self._require_connection_row(
             workspace_id=workspace.id,
             connection_id=connection_id,
@@ -587,6 +617,9 @@ class OpenWAChannelService:
             )
 
         binding = self._ensure_channel_binding(row)
+        from app.mcp.surfaces import stale_channel_surface_bindings
+
+        stale_channel_surface_bindings(self.db, binding, row)
         creds = dict(self.credentials.get_credentials(row) or {})
         sync_state = dict(self.credentials.get_sync_state(row) or {})
         if row.status != ConnectionStatus.DISCONNECTED.value:
@@ -658,6 +691,7 @@ class OpenWAChannelService:
         app, installation = self._require_app_installation(
             workspace.id, app_slug=app_slug, require_active_access=False
         )
+        self._fence_mcp_channel_source(workspace.id, connection_id)
         row = self._require_connection_row(
             workspace_id=workspace.id,
             connection_id=connection_id,
@@ -878,10 +912,12 @@ class OpenWAChannelService:
         provider_status: str | None,
         last_error: str | None = None,
     ) -> None:
+        self._fence_mcp_channel_source(workspace_id, connection_id)
         row = self.repo.get_connection(workspace_id, connection_id, for_update=True)
         if row is None or row.connector_key != CONNECTOR_KEY:
             return
         app = self._app_for_connection(row)
+        binding = self._ensure_channel_binding(row)
         session = None
         try:
             session = self._fetch_current_session(row)
@@ -889,9 +925,37 @@ class OpenWAChannelService:
             if exc.category != ErrorCategory.OPENWA_SESSION_NOT_FOUND:
                 raise
         if session is not None:
+            mapping = map_openwa_status(session.status)
+            next_status = (
+                row.status
+                if row.status
+                in {
+                    ConnectionStatus.DISCONNECTED.value,
+                    ConnectionStatus.REVOKED.value,
+                }
+                else mapping.connection_status
+            )
+            next_account = str(session.phone or "").strip() or row.external_account_id
+            if next_status != row.status or next_account != row.external_account_id:
+                from app.mcp.surfaces import stale_channel_surface_bindings
+
+                stale_channel_surface_bindings(self.db, binding, row)
             self._sync_connection_from_session(row=row, app_slug=app.slug, session=session)
             return
         mapping = map_openwa_status(provider_status)
+        next_status = (
+            row.status
+            if row.status
+            in {
+                ConnectionStatus.DISCONNECTED.value,
+                ConnectionStatus.REVOKED.value,
+            }
+            else mapping.connection_status
+        )
+        if next_status != row.status:
+            from app.mcp.surfaces import stale_channel_surface_bindings
+
+            stale_channel_surface_bindings(self.db, binding, row)
         self._set_provider_metadata(row, provider_status=mapping.provider_status)
         self._apply_non_ready_status(
             row,
@@ -917,6 +981,33 @@ class OpenWAChannelService:
                 "OpenWA connector is not available.",
                 details={"connector_key": CONNECTOR_KEY},
             )
+
+    def _fence_mcp_channel_source(
+        self,
+        workspace_id: uuid.UUID,
+        connection_id: uuid.UUID,
+    ) -> None:
+        """Take the exact restrictive fence before any source row lock."""
+
+        binding_id = self.db.scalar(
+            select(ChannelBinding.id).where(
+                ChannelBinding.workspace_id == workspace_id,
+                ChannelBinding.app_connection_id == connection_id,
+            )
+        )
+        if binding_id is None:
+            return
+        from app.apps_catalog.runtime_locks import (
+            acquire_surface_target_runtime_mutation_fences,
+        )
+
+        acquire_surface_target_runtime_mutation_fences(
+            self.db,
+            workspace_id=workspace_id,
+            surface_target_keys=(
+                f"whatsapp:{connection_id}:{binding_id}",
+            ),
+        )
 
     def _client(self) -> OpenWAClient:
         return self.client_factory(settings=self.settings)

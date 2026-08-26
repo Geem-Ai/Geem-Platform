@@ -25,6 +25,9 @@ from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace
 from app.observability.attributes import mark_span_error
 from app.observability.tracing import start_span
+from app.mcp.executor import RuntimeResolvedTool, ToolLoopTurnExecutor
+from app.mcp.resolver import McpGrantResolver
+from app.mcp.surfaces import McpSurfaceResolver
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,24 @@ class ChatTurnExecutor:
             actor_id=actor_id,
         )
 
+    def select_mcp_tools(
+        self,
+        *,
+        invocation: ChatInvocationContext,
+        expert_id: uuid.UUID,
+    ) -> list[RuntimeResolvedTool]:
+        """Explicit source selector; zero candidates performs no paid lookup."""
+
+        if not self.settings.mcp_connector_enabled:
+            return []
+        if invocation.source in {"workspace", "api"}:
+            return list(McpGrantResolver(self.db, settings=self.settings).resolve(
+                invocation, expert_id
+            ))
+        return list(McpSurfaceResolver(self.db, self.settings).resolve(
+            invocation, expert_id
+        ))
+
     def execute(
         self,
         *,
@@ -72,6 +93,7 @@ class ChatTurnExecutor:
         invocation: ChatInvocationContext,
         meter: MeteredWorkspaceGeneration,
         history: list[dict[str, str]] | None = None,
+        mcp_tools: list[RuntimeResolvedTool] | None = None,
     ) -> dict[str, Any]:
         usage_ctx = meter.context()
         with start_span(
@@ -79,14 +101,52 @@ class ChatTurnExecutor:
             expert_id=str(expert_id),
             workspace_id=str(workspace.id),
         ):
-            result = self.expert_query.query_for_workspace(
-                workspace=workspace,
-                expert_id=expert_id,
-                question=question,
-                history=history,
-                usage_context=usage_ctx,
-                actor_id=invocation.api_key_id,
+            selected = (
+                mcp_tools
+                if mcp_tools is not None
+                else self.select_mcp_tools(invocation=invocation, expert_id=expert_id)
             )
+            if selected:
+                knowledge = self.expert_query.resolve_knowledge_for_workspace(
+                    workspace=workspace,
+                    expert_id=expert_id,
+                    actor_id=invocation.api_key_id,
+                )
+                loop = ToolLoopTurnExecutor(
+                    self.db,
+                    settings=self.settings,
+                    rag=self.expert_query._rag,
+                ).execute(
+                    knowledge=knowledge,
+                    expert_id=expert_id,
+                    question=question,
+                    invocation=invocation,
+                    usage_context=usage_ctx,
+                    tools=selected,
+                    history=history,
+                )
+                result = loop.as_payload()
+                if loop.pending is not None:
+                    if not meter.closed:
+                        meter.release()
+                    return {
+                        **result,
+                        "answer": (
+                            "This request is awaiting approval from a workspace operator."
+                            if loop.pending.external
+                            else "This tool call is awaiting your approval."
+                        ),
+                        "billed_tokens": usage_ctx.extra_billed_tokens,
+                    }
+            else:
+                result = self.expert_query.query_for_workspace(
+                    workspace=workspace,
+                    expert_id=expert_id,
+                    question=question,
+                    history=history,
+                    usage_context=usage_ctx,
+                    actor_id=invocation.api_key_id,
+                )
             citations = ConversationService.normalize_citations(result.get("citations") or [])
             billed = settled_tokens_from_payload(
                 self.settings, result, extra_billed=usage_ctx.extra_billed_tokens
@@ -109,6 +169,7 @@ class ChatTurnExecutor:
         invocation: ChatInvocationContext,
         meter: MeteredWorkspaceGeneration,
         request_id: str,
+        mcp_tools: list[RuntimeResolvedTool] | None = None,
     ) -> Iterator[dict[str, Any]]:
         usage_ctx = meter.context()
         accumulated = ""
@@ -126,6 +187,78 @@ class ChatTurnExecutor:
                 },
             }
             try:
+                selected = (
+                    mcp_tools
+                    if mcp_tools is not None
+                    else self.select_mcp_tools(
+                        invocation=invocation, expert_id=expert_id
+                    )
+                )
+                if selected:
+                    knowledge = self.expert_query.resolve_knowledge_for_workspace(
+                        workspace=workspace,
+                        expert_id=expert_id,
+                        actor_id=invocation.api_key_id,
+                    )
+                    yield {"event": "status", "data": {"stage": "using_tools"}}
+                    loop_executor = ToolLoopTurnExecutor(
+                        self.db,
+                        settings=self.settings,
+                        rag=self.expert_query._rag,
+                    )
+                    loop = None
+                    for lifecycle in loop_executor.execute_events(
+                        knowledge=knowledge,
+                        expert_id=expert_id,
+                        question=question,
+                        invocation=invocation,
+                        usage_context=usage_ctx,
+                        tools=selected,
+                    ):
+                        if lifecycle.event == "complete":
+                            loop = lifecycle.result
+                        elif lifecycle.event == "keepalive":
+                            # OpenAI-compatible public answer streaming never
+                            # receives Geem tool lifecycle details.
+                            yield {"event": "keepalive", "data": {}}
+                    if loop is None:
+                        raise AppError(
+                            ErrorCategory.GENERATION_FAILED,
+                            "The MCP tool loop did not complete.",
+                        )
+                    if loop.pending is not None:
+                        if not meter.closed:
+                            meter.release()
+                        yield {
+                            "event": "error",
+                            "data": {
+                                "code": ErrorCategory.MCP_EXTERNAL_APPROVAL_REQUIRED.value,
+                                "error": ErrorCategory.MCP_EXTERNAL_APPROVAL_REQUIRED.value,
+                                "message": "This MCP tool call is awaiting approval.",
+                            },
+                        }
+                        return
+                    answer = loop.answer
+                    if answer:
+                        yield {"event": "delta", "data": {"content": answer}}
+                    payload = loop.as_payload()
+                    billed = settled_tokens_from_payload(
+                        self.settings,
+                        payload,
+                        extra_billed=usage_ctx.extra_billed_tokens,
+                    )
+                    meter.settle(payload)
+                    settled = True
+                    yield {
+                        "event": "message_complete",
+                        "data": {
+                            "request_id": request_id,
+                            "answer": answer,
+                            "citations": loop.citations,
+                            "usage": {"billed_tokens": billed},
+                        },
+                    }
+                    return
                 for item in self.expert_query.query_stream_for_workspace(
                     workspace=workspace,
                     expert_id=expert_id,

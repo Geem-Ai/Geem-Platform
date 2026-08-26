@@ -174,6 +174,10 @@ export function ChatPage() {
     messages.length === 0 &&
     !hasPendingFirstMessage &&
     !isStreaming;
+  const toolTurnPending = messages.some((message) =>
+    message.toolApproval &&
+    ['pending', 'approved', 'executing'].includes(message.toolApproval.status),
+  );
 
   return (
     <div
@@ -199,12 +203,17 @@ export function ChatPage() {
           {errorCode && isQuotaErrorCode(errorCode) ? (
             <QuotaAlert code={errorCode} />
           ) : null}
+          {toolTurnPending ? (
+            <p className="text-xs text-muted-foreground text-center" role="status">
+              {t('chat.tools.composerPaused')}
+            </p>
+          ) : null}
           <ChatComposer
             variant="compact"
             onSubmit={(q, opts) => void send(q, opts)}
             onStop={abort}
             isStreaming={isStreaming}
-            disabled={!conversationId || conversationQuery.isError}
+            disabled={!conversationId || conversationQuery.isError || toolTurnPending}
             autoFocus
           />
         </div>

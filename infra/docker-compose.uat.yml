@@ -29,6 +29,9 @@ services:
       APP_ROOT_DOMAIN: geem.dm
       APP_ADMIN_HOST: admin-uat.geem.ai
       CORS_ORIGINS: *uat-cors-origins
+    depends_on:
+      mcp-egress-gateway:
+        condition: service_started
 
   worker:
     environment:
@@ -47,6 +50,24 @@ services:
       APP_ROOT_DOMAIN: geem.dm
       APP_ADMIN_HOST: admin-uat.geem.ai
       CORS_ORIGINS: *uat-cors-origins
+
+  mcp-egress-gateway:
+    # UAT enables MCP as a product surface, so do not require an easy-to-miss
+    # Compose profile flag. The API dependency also pulls this service in when
+    # the UAT systemd unit starts an explicit service list.
+    profiles: !reset []
+    environment:
+      APP_ENV: local
+      EGRESS_FORWARD_PROXY_URL: ""
+    networks: !override
+      - mcp_egress_control
+      - public_egress
+
+  # The base gateway depends on this service. UAT uses direct public egress,
+  # but clearing the profile keeps the merged dependency graph valid and makes
+  # restarts deterministic.
+  mcp-egress-proxy:
+    profiles: !reset []
 
   workspace_web:
     environment:
@@ -85,3 +106,6 @@ services:
         condition: service_started
       dashboard_web:
         condition: service_started
+    networks:
+      - application_ingress
+      - public_egress

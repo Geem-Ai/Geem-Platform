@@ -91,6 +91,10 @@ class OAuthStatePayload:
     connection_id: uuid.UUID | None = None
     return_path: str | None = None
     code_verifier: str | None = None
+    # Encrypted-at-rest is unnecessary for one-time Redis state, but this
+    # server-only binding is never returned publicly and must contain no token
+    # or client secret. It binds issuer/resource/client/scopes across callback.
+    binding: dict[str, Any] | None = None
     created_at: float = 0.0
 
     def to_public_dict(self) -> dict[str, Any]:
@@ -109,6 +113,7 @@ class OAuthStatePayload:
         return {
             **self.to_public_dict(),
             "code_verifier": self.code_verifier,
+            "binding": self.binding,
             "created_at": self.created_at,
         }
 
@@ -127,6 +132,11 @@ class OAuthStatePayload:
             ),
             return_path=data.get("return_path"),
             code_verifier=data.get("code_verifier"),
+            binding=(
+                dict(data["binding"])
+                if isinstance(data.get("binding"), dict)
+                else None
+            ),
             created_at=float(data.get("created_at") or 0),
         )
 
@@ -166,6 +176,7 @@ class ConnectorOAuthStateService:
         return_path: str | None = None,
         code_verifier: str | None = None,
         include_pkce: bool = False,
+        binding: dict[str, Any] | None = None,
     ) -> OAuthStatePayload:
         safe_return = validate_oauth_return_path(return_path)
         state = secrets.token_urlsafe(32)
@@ -181,9 +192,15 @@ class ConnectorOAuthStateService:
             connection_id=connection_id,
             return_path=safe_return,
             code_verifier=verifier,
+            binding=dict(binding or {}),
             created_at=time.time(),
         )
         raw = json.dumps(payload.to_storage_dict(), separators=(",", ":"))
+        if len(raw.encode("utf-8")) > 16_384:
+            raise AppError(
+                ErrorCategory.CONNECTOR_OAUTH_STATE_INVALID,
+                "OAuth state binding is too large.",
+            )
         self._store(state, raw)
         return payload
 

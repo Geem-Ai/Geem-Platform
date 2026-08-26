@@ -11,6 +11,8 @@
     "continue": "متابعة",
     "download": "تنزيل",
     "delete": "حذف",
+    "previous": "السابق",
+    "next": "التالي",
     "moreInfoAbout": "عن {{label}}"
   },
   "nav": {
@@ -37,6 +39,7 @@
       "experts": "الخبراء",
       "storage": "التخزين",
       "apps": "التطبيقات",
+      "mcp_tools": "أدوات MCP",
       "members": "الأعضاء",
       "roles": "الأدوار",
       "api_keys": "مفاتيح API",
@@ -133,6 +136,12 @@
       "connect": {
         "name": "ربط التطبيقات",
         "description": "ربط حسابات التطبيقات الخارجية أو فصلها."
+      }
+    },
+    "mcp_tools": {
+      "approve_external": {
+        "name": "الموافقة على استدعاءات الأدوات الخارجية",
+        "description": "الموافقة على استدعاءات الكتابة عبر MCP أو رفضها عند طلبها من الويدجت العامة وواتساب."
       }
     },
     "members": {
@@ -426,6 +435,31 @@
     "loadingHistory": "جارٍ تحميل المحادثة…",
     "loadingExperts": "جارٍ تحميل الخبراء…",
     "scrollToBottom": "الانتقال إلى الأسفل",
+    "tools": {
+      "approvalRequired": "الموافقة مطلوبة",
+      "exactArguments": "الوسائط الدقيقة",
+      "approvalDisclosure": "تؤدي الموافقة إلى إرسال هذه الوسائط إلى خادم MCP الخارجي المتصل. وافق فقط إذا كنت تثق بالخادم وتقصد هذا الإجراء.",
+      "approveOnce": "موافقة لمرة واحدة",
+      "deny": "رفض",
+      "approved": "تمت الموافقة على استدعاء الأداة",
+      "denied": "تم رفض استدعاء الأداة",
+      "outcomeUnknown": "قد يكون الخادم الخارجي قد نفّذ الإجراء، لكن تعذّر على Geem تأكيد النتيجة. تحقق من النظام الخارجي قبل إعادة المحاولة.",
+      "composerPaused": "أكمل الموافقة المعلّقة على الأداة قبل إرسال رسالة أخرى.",
+      "status": {
+        "calling": "قيد التشغيل",
+        "succeeded": "مكتمل",
+        "failed": "فشل",
+        "outcome_unknown": "النتيجة غير معروفة",
+        "approval_required": "الموافقة مطلوبة"
+      },
+      "approvalStatus": {
+        "approved": "تمت الموافقة — جارٍ التحقق من التنفيذ",
+        "denied": "مرفوض",
+        "expired": "انتهت صلاحية الموافقة",
+        "executing": "قيد التشغيل",
+        "completed": "مكتمل"
+      }
+    },
     "samplePrompts": {
       "p01": "ما الحد الأقصى لفترة التجربة وفق نظام العمل السعودي؟",
       "p02": "كيف يُحسب مكافأة نهاية الخدمة عند استقالة الموظف؟",
@@ -515,8 +549,62 @@
       "generating": "جارٍ التوليد…",
       "success": "تم توليد تعليمات النظام"
     },
+    "editSections": "إعدادات الخبير",
+    "configurationTab": "الإعدادات",
     "advancedSettings": "إعدادات متقدمة",
     "advancedSettingsHint": "تتحكم هذه القيم في كيفية إيجاد الخبير للمقاطع في معرفته قبل الإجابة.",
+    "mcp": {
+      "tab": "أدوات MCP",
+      "securityDisclosure": "يقتصر وصول الأدوات على هذا الخبير. تُرسل الوسائط وبيانات المحادثة ذات الصلة إلى الخادم الخارجي المحدد عند تشغيل الأداة.",
+      "addGrant": "منح أداة",
+      "addGrantHint": "اختر أداة مكتشفة ومتوافقة وحدد صراحةً مواضع استخدامها من قِبل الخبير.",
+      "server": "خادم MCP",
+      "tool": "الأداة",
+      "selectServer": "اختر خادماً",
+      "selectTool": "اختر أداة",
+      "workspaceChat": "محادثة مساحة العمل",
+      "publicApi": "واجهة API العامة",
+      "unattendedWrite": "السماح بكتابة API دون إشراف",
+      "outboundAck": "أفهم أن البيانات ستُرسل إلى هذا الخادم الخارجي",
+      "unattendedAck": "أفهم أن الكتابة دون إشراف قد تغيّر بيانات خارجية من دون موافقة تفاعلية",
+      "apiWarning": "استخدام API العام غير تفاعلي. تظل أدوات الكتابة محظورة ما لم تُفعّل الكتابة دون إشراف ويُقرّ بخطرها بشكل منفصل.",
+      "unknownClassificationWarning": "يجب على المسؤول تصنيف هذه الأداة قبل منحها بأمان.",
+      "grant": "منح الأداة",
+      "grantAdded": "تم منح الأداة",
+      "grantRevoked": "تم إلغاء منح الأداة",
+      "revoke": "إلغاء",
+      "currentGrants": "المنح الحالية",
+      "noGrants": "لا توجد أدوات MCP ممنوحة لهذا الخبير.",
+      "loadError": "تعذّر تحميل منح أدوات MCP.",
+      "grants": "منح الخبير",
+      "grantHint": "اختر خبير مساحة عمل لمراجعة وصوله إلى هذه الأدوات أو تغييره.",
+      "expert": "خبير مساحة العمل",
+      "selectExpert": "اختر خبيراً",
+      "grantStateWarning": "حالة هذا المنح {{state}} ولا يمكن تشغيله حتى تتم مراجعته.",
+      "surfaceBindings": "ارتباطات الواجهات العامة الدقيقة",
+      "surfaceBindingsHint": "لا ينطبق المنح على كل الواجهات العامة. اربطه بنسخة ويدجت محددة أو اتصال واتساب محدد.",
+      "selectGrant": "اختر أداة ممنوحة",
+      "surface": "الواجهة",
+      "chatWidget": "ويدجت الدردشة",
+      "whatsapp": "واتساب",
+      "exactTarget": "الهدف الدقيق",
+      "selectTarget": "اختر هدفاً محدداً",
+      "writePolicy": "سياسة الكتابة",
+      "writeDeny": "حظر الكتابة",
+      "operatorApproval": "موافقة مشغّل مساحة العمل",
+      "publicRiskAck": "أفهم أن المستخدمين العامين يمكنهم تشغيل الأداة وأن الكتابة تتطلب مشغّل مساحة العمل",
+      "bindSurface": "ربط الواجهة",
+      "bindingAdded": "تمت إضافة ارتباط الواجهة",
+      "bindingRevoked": "تم إلغاء ارتباط الواجهة",
+      "surfaceKind": {
+        "chat_widget": "ويدجت الدردشة",
+        "whatsapp_openwa": "واتساب"
+      },
+      "writePolicyValue": {
+        "deny": "الكتابة محظورة",
+        "workspace_operator_approval": "موافقة المشغّل"
+      }
+    },
     "clientAgent": {
       "label": "السماح بواجهة وكيل العميل",
       "description": "اسمح لمفاتيح API التي تحمل نطاق Agents AI باستخدام خبير مساحة العمل عبر واجهة حلقة الوكيل التي يديرها العميل.",
@@ -1352,6 +1440,132 @@
       "manageExperts": "الخبراء",
       "documentation": "دليل التكامل"
     },
+    "mcp": {
+      "title": "خوادم MCP",
+      "description": "اربط خوادم Model Context Protocol البعيدة، وراجع أدواتها، وامنح كل خبير القدرات التي يحتاجها فقط.",
+      "comingSoonTitle": "موصلات MCP قريباً",
+      "comingSoonHint": "ستظهر الخطط وعناصر التحكم الآمنة بالخوادم هنا عند نشر التطبيق.",
+      "securityTitle": "الأدوات الخارجية وبيانات الاعتماد المشتركة",
+      "securityHint": "خوادم MCP أنظمة خارجية. تغادر وسائط الأدوات وبيانات المحادثة ذات الصلة Geem عند تشغيل الأداة. بيانات الاعتماد وهويات OAuth موارد مشتركة لمساحة العمل.",
+      "noTierSwitch": "لا يمكن تغيير الخطة ذاتياً. جدّد الخطة الحالية أو تواصل مع الدعم إذا احتجت مستوى مختلفاً.",
+      "manageServers": "إدارة خوادم MCP",
+      "connectionsUsage": "اتصالات الخوادم",
+      "toolCallsUsage": "استدعاءات الأدوات اليوم",
+      "usageValue": "{{used}} / {{limit}}",
+      "toolCallsProgress": "استخدام استدعاءات MCP اليومي",
+      "resetsAt": "تُعاد التهيئة في {{date}}",
+      "usageLoadError": "تعذّر تحميل وصول MCP واستخدامه.",
+      "addServer": "إضافة خادم MCP",
+      "addServerHint": "أدخل عنوان HTTPS العام الأساسي للخادم واختر طريقة مصادقة مساحة العمل.",
+      "displayName": "اسم العرض",
+      "serverUrl": "عنوان الخادم",
+      "publicHttpsOnly": "يُسمح بنقاط HTTPS العامة فقط. تُحظر الأهداف الخاصة والمحلية وlink-local والبيانات الوصفية وإعادات التوجيه المحظورة.",
+      "authMode": "المصادقة",
+      "staticKind": "نوع بيانات الاعتماد",
+      "headerName": "اسم الترويسة",
+      "secret": "السر",
+      "secretWriteOnly": "الأسرار للكتابة فقط ولا يمكن عرضها مرة أخرى بعد الإرسال.",
+      "oauthStrategy": "تسجيل OAuth",
+      "clientId": "معرّف العميل",
+      "clientSecret": "سر العميل",
+      "sharedAccountTitle": "إقرار حساب مساحة العمل المشترك",
+      "sharedAccountDisclosure": "أفهم أن بيانات الاعتماد والحساب الخارجي مشتركان بين الأعضاء المخولين في مساحة العمل.",
+      "connecting": "جارٍ الربط…",
+      "serverAdded": "تمت إضافة خادم MCP",
+      "serverDeleted": "تم حذف خادم MCP",
+      "deleteConfirm": "حذف {{name}}؟ لن تعود منح أدواته قابلة للاستخدام.",
+      "deleteServer": "حذف الخادم",
+      "emptyTitle": "لا توجد خوادم MCP",
+      "emptyHint": "أضف خادم MCP بعيداً موثوقاً لاكتشاف أدوات خبراء مساحة العمل.",
+      "authentication": "المصادقة",
+      "account": "الهوية الخارجية",
+      "protocol": "البروتوكول",
+      "health": "الحالة الصحية",
+      "sessionMode": "وضع الجلسة",
+      "sharedWorkspaceAccount": "بيانات اعتماد مشتركة لمساحة العمل",
+      "reauthorizationWarning": "تغيّر وصول OAuth أو الهوية الخارجية. أعد التفويض وراجع المنح المتأثرة قبل استخدام الأدوات مجدداً.",
+      "reauthorize": "إعادة التفويض",
+      "manageTools": "إدارة الأدوات",
+      "oauthConnected": "اكتمل تفويض OAuth. جارٍ تحديث صحة الاتصال والهوية.",
+      "oauthReturned": "عاد OAuth بالحالة: {{status}}",
+      "backToServers": "العودة إلى خوادم MCP",
+      "serverDetails": "تفاصيل خادم MCP",
+      "discoverTools": "تحديث مخزون الأدوات",
+      "discoveryComplete": "اكتمل الاكتشاف: شوهدت {{count}} أداة",
+      "tools": "الأدوات المكتشفة",
+      "toolsHint": "راجع التوافق والاسم المستعار الثابت والتصنيف وحالة التغيّر ومنح الخبراء قبل تفعيل الأداة.",
+      "noTools": "لم تُكتشف أدوات. حدّث مخزون الأدوات.",
+      "classification": "التصنيف",
+      "classificationUpdated": "تم تحديث تصنيف الأداة",
+      "pagination": "{{from}}–{{to}} من {{total}}",
+      "auth": {
+        "none": "دون مصادقة",
+        "static": "بيانات اعتماد ثابتة",
+        "oauth": "OAuth",
+        "bearer": "رمز Bearer",
+        "header": "ترويسة مخصصة مسموح بها"
+      },
+      "oauth": {
+        "cimd": "مستند بيانات معرّف العميل",
+        "preRegistered": "عميل مسجّل مسبقاً",
+        "dynamic": "تسجيل عميل ديناميكي"
+      },
+      "classifications": {
+        "read_only": "للقراءة فقط",
+        "write": "كتابة",
+        "unknown": "غير معروف"
+      },
+      "status": {
+        "pending": "معلّق",
+        "active": "نشط",
+        "connected": "متصل",
+        "healthy": "سليم",
+        "degraded": "متدهور",
+        "unhealthy": "غير سليم",
+        "error": "خطأ",
+        "disconnected": "غير متصل",
+        "reauthorization_required": "إعادة التفويض مطلوبة"
+      },
+      "compatibility": {
+        "compatible": "متوافق",
+        "unsupported_schema": "مخطط غير مدعوم",
+        "unsupported_capability": "قدرة غير مدعومة",
+        "malformed": "تعريف غير صالح"
+      },
+      "toolStatus": {
+        "active": "نشط",
+        "stale": "تغيّر التعريف",
+        "withdrawn": "مسحوب"
+      },
+      "externalApprovals": {
+        "title": "موافقات الأدوات الخارجية",
+        "description": "راجع استدعاءات الكتابة المعلّقة من ارتباطات ويدجت الدردشة وواتساب الدقيقة، ثم طابق عمليات التسليم ذات النتيجة غير المعروفة.",
+        "pending": "الموافقات المعلّقة",
+        "empty": "لا توجد استدعاءات أدوات خارجية تنتظر الموافقة.",
+        "toolCall": "استدعاء أداة خارجية",
+        "surface": "الواجهة الدقيقة",
+        "sender": "مقدم الطلب",
+        "expires": "تنتهي الصلاحية",
+        "exactArguments": "الوسائط الدقيقة",
+        "disclosure": "تؤدي الموافقة إلى إرسال هذه الوسائط وبيانات المحادثة ذات الصلة إلى خادم MCP الخارجي. تحقق من مقدم الطلب والهدف والتغيير المقصود.",
+        "approve": "موافقة لمرة واحدة",
+        "deny": "رفض",
+        "approved": "تمت الموافقة على استدعاء الأداة",
+        "denied": "تم رفض استدعاء الأداة",
+        "unknownDeliveries": "نتائج تسليم غير معروفة",
+        "unknownHint": "لا تعد المحاولة بلا تحقق. افحص المزود أو محادثة العميل ثم سجل ما إذا أُرسل الرد.",
+        "noUnknownDeliveries": "لا توجد عمليات تسليم تحتاج إلى مطابقة.",
+        "confirmSent": "تأكيد الإرسال",
+        "cancelDelivery": "تعليم كملغى",
+        "reconciled": "تمت مطابقة التسليم",
+        "status": {
+          "pending": "معلّق",
+          "approved": "موافق عليه",
+          "denied": "مرفوض",
+          "expired": "منتهي"
+        }
+      }
+    },
     "installedEmptyTitle": "لا توجد تطبيقات مثبتة",
     "installedEmptyHint": "تصفح المتجر لتثبيت تطبيقات مجانية لهذه المساحة.",
     "connections": {
@@ -1495,6 +1709,18 @@
       "agents-scale": {
         "name": "Agents Scale",
         "description": "أعلى سعة إطلاق لأحمال وكلاء العميل الأكبر."
+      },
+      "mcp-starter": {
+        "name": "MCP Starter",
+        "description": "اتصال خادم MCP واحد و200 استدعاء أداة مقبول يومياً بالتوقيت العالمي."
+      },
+      "mcp-team": {
+        "name": "MCP Team",
+        "description": "حتى ثلاثة اتصالات خوادم MCP و1,000 استدعاء أداة مقبول يومياً بالتوقيت العالمي."
+      },
+      "mcp-scale": {
+        "name": "MCP Scale",
+        "description": "حتى عشرة اتصالات خوادم MCP و5,000 استدعاء أداة مقبول يومياً بالتوقيت العالمي."
       }
     },
     "entitlements": {
@@ -1502,6 +1728,7 @@
       "widgets": "{{count}} ويدجت",
       "sessions": "{{count}} جلسات",
       "agent_requests_daily": "{{count}} طلب وكيل / يوم بالتوقيت العالمي",
+      "tool_calls_daily": "{{count}} استدعاء أداة MCP / يوم بالتوقيت العالمي",
       "other": "{{key}}: {{value}}"
     },
     "payment": {
@@ -1565,6 +1792,11 @@
         "name": "Agents AI",
         "shortDescription": "أضف استرجاع Geem وجولات النموذج إلى حلقات الوكيل التي يديرها العميل.",
         "description": "استخدم نقطة نهاية Agents AI المتوافقة مع OpenAI من بيئة الوكيل لديك. ينفّذ تطبيقك الأدوات، بينما توفر Geem سياسة الخبير وسياق الاسترجاع وجولات النموذج."
+      },
+      "mcp-connectors": {
+        "name": "موصلات MCP",
+        "shortDescription": "اربط خوادم MCP البعيدة الموثوقة بخبراء مساحة العمل.",
+        "description": "اكتشف أدوات MCP البعيدة وصنّفها وامنحها لكل خبير، واشترط الموافقة الصريحة للكتابة عبر الواجهات العامة. بيانات الاعتماد والهويات الخارجية موارد مشتركة لمساحة العمل."
       }
     },
     "chatWidget": {
@@ -1603,7 +1835,11 @@
       "close": "إغلاق",
       "statusActive": "نشط",
       "statusDisabled": "معطّل",
-      "needsExpert": "اختر خبيراً قبل تضمين الويدجت في موقعك."
+      "needsExpert": "اختر خبيراً قبل تضمين الويدجت في موقعك.",
+      "mcpSummaryTitle": "أدوات MCP لهذا الويدجت",
+      "mcpSummary": "لا يمكن تشغيل سوى الأدوات المرتبطة صراحةً بهذا الويدجت المحدد للخبير {{expert}}. منح الأداة للخبير وحده لا يعرضها للعامة.",
+      "mcpOriginRequirement": "تتطلب أدوات MCP نطاق HTTPS واحداً دقيقاً على الأقل، ويظهر للزوار إفصاح عن الخدمة الخارجية.",
+      "manageMcpTools": "إدارة أدوات MCP للخبير"
     },
     "toasts": {
       "installed": "تم تثبيت {{name}}",
@@ -1673,6 +1909,12 @@
         "readOnly": "يمكن للأعضاء عرض إعدادات اتصال واتساب فقط دون تعديلها.",
         "saveDisabledHint": "غيّر إعداداً لحفظ التغييرات.",
         "unsaved": "تغييرات غير محفوظة",
+        "mcpSummaryTitle": "أدوات MCP لهذا الرقم",
+        "mcpSummary": "لا يمكن تشغيل سوى الأدوات المرتبطة صراحةً باتصال واتساب المحدد هذا للخبير {{expert}}.",
+        "mcpDirectOnly": "تتوفر أدوات MCP في المحادثات المباشرة فقط. تظل المجموعات والحالات والبث بلا أدوات.",
+        "mcpDisclosure": "عند أول استخدام للأداة، يُبلّغ المرسل أن بيانات الرسالة ذات الصلة قد تُرسل إلى خدمة خارجية. تتطلب أدوات الكتابة مشغّل مساحة العمل.",
+        "manageMcpTools": "إدارة أدوات MCP للخبير",
+        "externalApprovals": "فتح قائمة الموافقات",
         "statusHint": {
           "connecting": "ما زال واتساب قيد الربط. تابع لإكمال الإعداد.",
           "waitingForQr": "امسح رمز QR في واتساب لإكمال الربط.",
@@ -1804,6 +2046,21 @@
     "connectorSyncNotSupported": "هذا الموصّل لا يدعم المزامنة",
     "connectorSyncInProgress": "تجري مزامنة بالفعل",
     "connectorSyncNotFound": "تشغيل المزامنة غير موجود",
+    "mcpProtocolUnsupported": "يستخدم خادم MCP إصدار بروتوكول غير مدعوم.",
+    "mcpServerUnreachable": "تعذّر الوصول إلى خادم MCP بأمان.",
+    "mcpAuthRequired": "المصادقة مطلوبة لخادم MCP هذا.",
+    "mcpReauthorizationRequired": "أعد تفويض خادم MCP وراجع منح أدواته.",
+    "mcpToolNotGranted": "هذه الأداة غير ممنوحة للخبير أو الواجهة المحددة.",
+    "mcpToolSetChanged": "تغيّر تعريف أداة الخادم. راجع المنح ووافق عليه مجدداً.",
+    "mcpToolIncompatible": "تعريف الأداة غير متوافق مع Geem.",
+    "mcpToolResultUnsupported": "أعادت أداة MCP نتيجة غير مدعومة.",
+    "mcpToolCallFailed": "فشل استدعاء أداة MCP الخارجية.",
+    "mcpToolOutcomeUnknown": "نتيجة الأداة الخارجية غير معروفة. تحقق من النظام الخارجي قبل إعادة المحاولة.",
+    "mcpToolLimitReached": "تم بلوغ الحد اليومي لاستدعاءات أدوات MCP.",
+    "mcpExternalApprovalRequired": "يجب أن يوافق مشغّل مساحة العمل على استدعاء أداة الكتابة الخارجية.",
+    "mcpExternalTurnPending": "توجد جولة أداة معلّقة بالفعل لهذه المحادثة الخارجية.",
+    "mcpExternalDeliveryUnknown": "نتيجة تسليم الرد غير معروفة وتتطلب المطابقة.",
+    "egressTargetBlocked": "هدف الشبكة الخارجية محظور وفق سياسة خروج Geem.",
     "googleDriveNotConfigured": "Google Drive غير مضبوط على هذا الخادم",
     "googleDriveAuthorizationFailed": "فشل تفويض Google Drive",
     "googleDriveReauthorizationRequired": "يلزم إعادة التفويض لـ Google Drive",

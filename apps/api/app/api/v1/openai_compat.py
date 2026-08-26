@@ -333,6 +333,11 @@ def iter_completion_sse(
         data = item.get("data") or {}
         if event == "message_start":
             continue
+        if event in {"status", "keepalive"}:
+            # OpenAI-compatible clients ignore SSE comments. Keep the public
+            # connection alive without exposing Geem's tool lifecycle schema.
+            yield ": keepalive\n\n"
+            continue
         if event == "delta":
             text = data.get("content") or ""
             if not text:

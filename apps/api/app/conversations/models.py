@@ -32,6 +32,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -71,6 +72,9 @@ PREVIEW_CONTENT_MAX_CHARS = 240
 class Conversation(Base, SoftDeleteMixin):
     __tablename__ = "conversations"
     __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_conversations_workspace_id"
+        ),
         Index(
             "ix_conversations_workspace_user_updated",
             "workspace_id",
@@ -142,6 +146,9 @@ class Conversation(Base, SoftDeleteMixin):
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "id", name="uq_messages_conversation_id"
+        ),
         Index("ix_messages_conversation_created", "conversation_id", "created_at"),
         Index("ix_messages_conversation_id", "conversation_id"),
     )
@@ -154,7 +161,8 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    # Metadata-safe citations only (chunk_id, document_id, document_title, page, snippet).
+    # Metadata-safe citations only. Chunk rows keep their legacy shape; MCP tool
+    # rows carry kind=tool plus display-name/tool-name and never a server URL.
     citations: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )

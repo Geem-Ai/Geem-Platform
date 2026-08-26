@@ -136,6 +136,7 @@ MAX_EXPERT_DESCRIPTION_LENGTH = 2_000
 class Expert(Base, SoftDeleteMixin):
     __tablename__ = "experts"
     __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_experts_workspace_id"),
         CheckConstraint(
             "(type = 'workspace' AND workspace_id IS NOT NULL) OR "
             "(type = 'platform' AND workspace_id IS NULL)",

@@ -37,6 +37,18 @@ class ChatInvocationContext:
     request_id: str | None = None
     connection_id: uuid.UUID | None = None
     widget_id: uuid.UUID | None = None
+    # Exact server-resolved WidgetConversationBinding or
+    # ChannelConversationBinding. Legacy Widget JSON intentionally omits this
+    # and therefore remains tool-free.
+    source_binding_id: uuid.UUID | None = None
+    # Keyed digest only; raw visitor/sender identifiers never enter MCP rows.
+    external_principal_fingerprint: str | None = None
+    # Normalized exact Widget Origin. It is accepted only on the v2 audience-
+    # bound session route and is never populated by the legacy JSON endpoint.
+    initiating_origin: str | None = None
+    # Audience-bound keyed digest of the opaque Widget turn handle. The raw
+    # handle exists only in the visitor response and is never persisted.
+    external_turn_handle_digest: str | None = None
 
     def __post_init__(self) -> None:
         if self.source == SOURCE_API:
@@ -116,6 +128,8 @@ class ChatInvocationContext:
         conversation_id: uuid.UUID | None = None,
         message_id: uuid.UUID | None = None,
         request_id: str | None = None,
+        source_binding_id: uuid.UUID | None = None,
+        external_principal_fingerprint: str | None = None,
     ) -> ChatInvocationContext:
         return cls(
             workspace_id=workspace_id,
@@ -127,6 +141,8 @@ class ChatInvocationContext:
             message_id=message_id,
             request_id=request_id,
             connection_id=connection_id,
+            source_binding_id=source_binding_id,
+            external_principal_fingerprint=external_principal_fingerprint,
         )
 
     @classmethod
@@ -139,6 +155,10 @@ class ChatInvocationContext:
         conversation_id: uuid.UUID | None = None,
         message_id: uuid.UUID | None = None,
         request_id: str | None = None,
+        source_binding_id: uuid.UUID | None = None,
+        external_principal_fingerprint: str | None = None,
+        initiating_origin: str | None = None,
+        external_turn_handle_digest: str | None = None,
     ) -> ChatInvocationContext:
         return cls(
             workspace_id=workspace_id,
@@ -150,6 +170,10 @@ class ChatInvocationContext:
             message_id=message_id,
             request_id=request_id,
             widget_id=widget_id,
+            source_binding_id=source_binding_id,
+            external_principal_fingerprint=external_principal_fingerprint,
+            initiating_origin=initiating_origin,
+            external_turn_handle_digest=external_turn_handle_digest,
         )
 
     def to_usage_context(self) -> GenerationUsageContext:

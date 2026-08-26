@@ -8,9 +8,11 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -32,6 +34,23 @@ class WidgetInstance(Base):
 
     __tablename__ = "widget_instances"
     __table_args__ = (
+        CheckConstraint(
+            "mcp_source_epoch >= 1", name="ck_widget_instances_mcp_source_epoch"
+        ),
+        CheckConstraint(
+            "mcp_source_principal_fingerprint IS NULL OR "
+            "char_length(mcp_source_principal_fingerprint) = 64",
+            name="ck_widget_instances_mcp_principal_digest",
+        ),
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_widget_instances_workspace_id"
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "expert_id",
+            "id",
+            name="uq_widget_instances_workspace_expert_id",
+        ),
         UniqueConstraint(
             "workspace_id",
             "app_installation_id",
@@ -79,6 +98,13 @@ class WidgetInstance(Base):
     )
     # null or [] = allow any origin; non-empty = exact origin allowlist
     allowed_origins: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    # Incremented whenever the reviewed MCP audience/Expert/state tuple changes.
+    mcp_source_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    mcp_source_principal_fingerprint: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -90,6 +116,21 @@ class WidgetConversationBinding(Base):
 
     __tablename__ = "widget_conversation_bindings"
     __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "widget_instance_id",
+            "conversation_id",
+            "expert_id",
+            name="uq_widget_conv_exact_chain",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            "widget_instance_id",
+            "conversation_id",
+            "expert_id",
+            name="uq_widget_conv_exact_receipt_chain",
+        ),
         UniqueConstraint(
             "widget_instance_id",
             "session_id",

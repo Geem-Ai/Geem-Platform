@@ -32,6 +32,8 @@ import { isAgentsAiApp, isChatWidgetApp } from '@/services/api/apps';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { AgentsAiPanel } from '../agents-ai/AgentsAiPanel';
+import { McpAppPanel } from '../mcp/components/McpAppPanel';
+import { MCP_CONNECTORS_APP_SLUG } from '@/services/api/mcp';
 
 const SHEET_PANEL = floatingSheetPanel(
   'sm:w-[min(100%-2.5rem,36rem)]',
@@ -109,6 +111,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
   const defaultTab = !installed && showPlans ? 'plans' : 'connections';
   const chatWidget = isChatWidgetApp(app);
   const agentsAi = isAgentsAiApp(app);
+  const mcp = app?.slug === MCP_CONNECTORS_APP_SLUG;
   const [widgetOpen, setWidgetOpen] = useState(false);
 
   return (
@@ -200,6 +203,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                   </div>
 
                   {agentsAi ? <AgentsAiPanel app={app} /> : null}
+                  {mcp ? <McpAppPanel app={app} /> : null}
 
                   {installed && chatWidget ? (
                     <div className="space-y-3" data-testid="chat-widget-panel">
@@ -222,7 +226,7 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
                     </div>
                   ) : null}
 
-                  {installed && !app.connector && !chatWidget && !agentsAi ? (
+                  {installed && !app.connector && !chatWidget && !agentsAi && !mcp ? (
                     <div
                       role="note"
                       className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
@@ -233,7 +237,9 @@ export function AppDetailSheet({ slug, open, onOpenChange }: AppDetailSheetProps
 
                   <AppSubscriptionStatus app={app} canManage={canManage} />
 
-                  {useConnectorTabs ? (
+                  {mcp ? (
+                    <AppPlansSection app={app} canManage={canManage} />
+                  ) : useConnectorTabs ? (
                     <Tabs
                       key={`${app.slug}-${defaultTab}`}
                       defaultValue={defaultTab}

@@ -21,6 +21,7 @@ export const WorkspacePermission = {
   APPS_VIEW: 'apps.view',
   APPS_MANAGE: 'apps.manage',
   APPS_CONNECT: 'apps.connect',
+  MCP_TOOLS_APPROVE_EXTERNAL: 'mcp_tools.approve_external',
   MEMBERS_VIEW: 'members.view',
   MEMBERS_INVITE: 'members.invite',
   MEMBERS_UPDATE_ROLE: 'members.update_role',

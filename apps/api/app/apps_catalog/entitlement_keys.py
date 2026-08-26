@@ -24,12 +24,20 @@ _SLUG_ENTITLEMENTS: dict[str, tuple[AppEntitlementKeySpec, ...]] = {
     "agents-ai": (
         AppEntitlementKeySpec("agent_requests_daily", "integer", "requests/day"),
     ),
+    "mcp-connectors": (
+        AppEntitlementKeySpec("connections", "integer", "connections"),
+        AppEntitlementKeySpec("tool_calls_daily", "integer", "tool calls/day"),
+    ),
 }
 
 _CONNECTOR_ENTITLEMENTS: dict[str, tuple[AppEntitlementKeySpec, ...]] = {
     "openwa": (AppEntitlementKeySpec("connections", "integer", "connections"),),
     "google_drive": (AppEntitlementKeySpec("connections", "integer", "connections"),),
     "microsoft_onedrive": (AppEntitlementKeySpec("connections", "integer", "connections"),),
+    "mcp_remote": (
+        AppEntitlementKeySpec("connections", "integer", "connections"),
+        AppEntitlementKeySpec("tool_calls_daily", "integer", "tool calls/day"),
+    ),
 }
 
 

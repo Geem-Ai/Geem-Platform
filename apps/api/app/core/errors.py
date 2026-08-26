@@ -183,6 +183,23 @@ class ErrorCategory(StrEnum):
     CONNECTOR_WEBHOOK_UNAUTHORIZED = "connector_webhook_unauthorized"
     CONNECTOR_INVALID_TRANSITION = "connector_invalid_transition"
 
+    # Remote MCP client/host (Phase 13)
+    MCP_PROTOCOL_UNSUPPORTED = "mcp_protocol_unsupported"
+    MCP_SERVER_UNREACHABLE = "mcp_server_unreachable"
+    MCP_AUTH_REQUIRED = "mcp_auth_required"
+    MCP_REAUTHORIZATION_REQUIRED = "mcp_reauthorization_required"
+    MCP_TOOL_NOT_GRANTED = "mcp_tool_not_granted"
+    MCP_TOOL_SET_CHANGED = "mcp_tool_set_changed"
+    MCP_TOOL_INCOMPATIBLE = "mcp_tool_incompatible"
+    MCP_TOOL_RESULT_UNSUPPORTED = "mcp_tool_result_unsupported"
+    MCP_TOOL_CALL_FAILED = "mcp_tool_call_failed"
+    MCP_TOOL_OUTCOME_UNKNOWN = "mcp_tool_outcome_unknown"
+    MCP_TOOL_LIMIT_REACHED = "mcp_tool_limit_reached"
+    MCP_EXTERNAL_APPROVAL_REQUIRED = "mcp_external_approval_required"
+    MCP_EXTERNAL_TURN_PENDING = "mcp_external_turn_pending"
+    MCP_EXTERNAL_DELIVERY_UNKNOWN = "mcp_external_delivery_unknown"
+    EGRESS_TARGET_BLOCKED = "egress_target_blocked"
+
     # Google Drive (Phase 9D)
     GOOGLE_DRIVE_NOT_CONFIGURED = "google_drive_not_configured"
     GOOGLE_DRIVE_AUTHORIZATION_FAILED = "google_drive_authorization_failed"
@@ -385,6 +402,22 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "connector_webhook_invalid": 400,
     "connector_webhook_unauthorized": 401,
     "connector_invalid_transition": 409,
+    # Phase 13 — Remote MCP tools / isolated egress
+    "mcp_protocol_unsupported": 422,
+    "mcp_server_unreachable": 502,
+    "mcp_auth_required": 401,
+    "mcp_reauthorization_required": 403,
+    "mcp_tool_not_granted": 403,
+    "mcp_tool_set_changed": 409,
+    "mcp_tool_incompatible": 422,
+    "mcp_tool_result_unsupported": 422,
+    "mcp_tool_call_failed": 502,
+    "mcp_tool_outcome_unknown": 409,
+    "mcp_tool_limit_reached": 429,
+    "mcp_external_approval_required": 409,
+    "mcp_external_turn_pending": 409,
+    "mcp_external_delivery_unknown": 409,
+    "egress_target_blocked": 403,
     # Phase 9D — Google Drive
     "google_drive_not_configured": 409,
     # 403 — authenticated Geem session; provider OAuth failed (SPA must not logout).

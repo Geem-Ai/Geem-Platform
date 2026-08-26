@@ -40,6 +40,8 @@ from app.usage.ai_usage import AiUsageService
 from app.usage.attribution import GenerationUsageContext
 from app.usage.weights import settled_tokens_from_payload
 from app.workspaces.models import Workspace, WorkspaceMembership
+from app.mcp.executor import ToolLoopTurnExecutor
+from app.mcp.resolver import McpGrantResolver
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +125,7 @@ class ChatOrchestrator:
                 )
 
             # Revalidate Expert access + readiness on every turn (grants can change).
-            self.expert_query.resolve_knowledge(
+            knowledge = self.expert_query.resolve_knowledge(
                 workspace=workspace,
                 membership=membership,
                 actor=actor,
@@ -158,11 +160,27 @@ class ChatOrchestrator:
             )
             self.repo.create_message(assistant)
             conversation.updated_at = now + timedelta(microseconds=1000)
+            self.db.flush()
+            invocation = self._workspace_invocation(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
+            mcp_tools = list(
+                McpGrantResolver(self.db, settings=self.settings).resolve(
+                    invocation,
+                    conversation.expert_id,
+                )
+            )
             self._reserve_turn(
                 workspace=workspace,
                 actor=actor,
                 conversation=conversation,
                 assistant=assistant,
+                reservation_multiplier=(
+                    self.settings.mcp_max_tool_iterations + 1 if mcp_tools else 1
+                ),
             )
             self.db.commit()
             turn_committed = True
@@ -200,6 +218,110 @@ class ChatOrchestrator:
             )
 
             try:
+                if mcp_tools:
+                    yield {"event": "status", "data": {"stage": "using_tools"}}
+                    loop_executor = ToolLoopTurnExecutor(
+                        self.db,
+                        settings=self.settings,
+                        rag=self.expert_query._rag,
+                    )
+                    loop = None
+                    for lifecycle in loop_executor.execute_events(
+                        knowledge=knowledge,
+                        expert_id=conversation.expert_id,
+                        question=question,
+                        invocation=invocation,
+                        usage_context=usage_ctx,
+                        tools=mcp_tools,
+                        history=history,
+                        attachment=turn_attachment,
+                    ):
+                        if lifecycle.event == "complete":
+                            loop = lifecycle.result
+                        else:
+                            yield {
+                                "event": lifecycle.event,
+                                "data": lifecycle.data,
+                            }
+                    if loop is None:
+                        raise AppError(
+                            ErrorCategory.GENERATION_FAILED,
+                            "The MCP tool loop did not complete.",
+                        )
+                    if loop.pending is not None:
+                        pending_copy = "This tool call is awaiting your approval."
+                        assistant.content = pending_copy
+                        assistant.citations = []
+                        assistant.status = MessageStatus.PENDING.value
+                        assistant.updated_at = datetime.now(timezone.utc)
+                        conversation.updated_at = assistant.updated_at
+                        self._settle_usage(
+                            workspace.id,
+                            request_id,
+                            usage_ctx.extra_billed_tokens,
+                        )
+                        self.db.commit()
+                        usage_closed = True
+                        settled = True
+                        yield {
+                            "event": "tool_approval_required",
+                            "data": {
+                                "approval_id": str(loop.pending.id),
+                                "tool_call_id": loop.pending.tool_call_id,
+                                "connection_name": loop.pending.connection_name,
+                                "tool_name": loop.pending.tool_name,
+                                "arguments": loop.pending.arguments,
+                                "expires_at": loop.pending.expires_at.isoformat(),
+                                "conversation_id": str(conversation.id),
+                                "assistant_message_id": str(assistant.id),
+                                "status": MessageStatus.PENDING.value,
+                            },
+                        }
+                        return
+
+                    answer = loop.answer
+                    citations = ConversationService.normalize_citations(loop.citations)
+                    loop_payload = loop.as_payload()
+                    self._complete_and_settle(
+                        conversation,
+                        assistant,
+                        content=answer,
+                        citations=citations,
+                        usage_event_id=None,
+                        workspace_id=workspace.id,
+                        request_id=request_id,
+                        actual_tokens=self._actual_tokens(
+                            loop_payload,
+                            extra_billed=usage_ctx.extra_billed_tokens,
+                        ),
+                    )
+                    usage_closed = True
+                    settled = True
+                    if answer:
+                        yield {"event": "replace", "data": {"text": answer}}
+                    final_data = redact_public_models(
+                        {
+                            **loop_payload,
+                            "conversation_id": str(conversation.id),
+                            "user_message_id": str(user_msg.id),
+                            "assistant_message_id": str(assistant.id),
+                            "status": MessageStatus.COMPLETED.value,
+                            "citations": citations,
+                        }
+                    )
+                    yield {"event": "final", "data": final_data}
+                    yield {
+                        "event": "message_complete",
+                        "data": {
+                            "conversation_id": str(conversation.id),
+                            "user_message_id": str(user_msg.id),
+                            "assistant_message_id": str(assistant.id),
+                            "status": MessageStatus.COMPLETED.value,
+                            "citations": citations,
+                        },
+                    }
+                    return
+
                 for item in self.expert_query.query_stream(
                     workspace=workspace,
                     membership=membership,
@@ -423,7 +545,7 @@ class ChatOrchestrator:
             question = user_msg.content.strip()
 
             # Revalidate Expert on every retry.
-            self.expert_query.resolve_knowledge(
+            knowledge = self.expert_query.resolve_knowledge(
                 workspace=workspace,
                 membership=membership,
                 actor=actor,
@@ -443,11 +565,27 @@ class ChatOrchestrator:
             )
             self.repo.create_message(assistant)
             conversation.updated_at = now
+            self.db.flush()
+            invocation = self._workspace_invocation(
+                workspace=workspace,
+                actor=actor,
+                conversation=conversation,
+                assistant=assistant,
+            )
+            mcp_tools = list(
+                McpGrantResolver(self.db, settings=self.settings).resolve(
+                    invocation,
+                    conversation.expert_id,
+                )
+            )
             self._reserve_turn(
                 workspace=workspace,
                 actor=actor,
                 conversation=conversation,
                 assistant=assistant,
+                reservation_multiplier=(
+                    self.settings.mcp_max_tool_iterations + 1 if mcp_tools else 1
+                ),
             )
             self.db.commit()
             turn_committed = True
@@ -483,6 +621,109 @@ class ChatOrchestrator:
             )
 
             try:
+                if mcp_tools:
+                    yield {"event": "status", "data": {"stage": "using_tools"}}
+                    loop_executor = ToolLoopTurnExecutor(
+                        self.db,
+                        settings=self.settings,
+                        rag=self.expert_query._rag,
+                    )
+                    loop = None
+                    for lifecycle in loop_executor.execute_events(
+                        knowledge=knowledge,
+                        expert_id=conversation.expert_id,
+                        question=question,
+                        invocation=invocation,
+                        usage_context=usage_ctx,
+                        tools=mcp_tools,
+                        history=history,
+                    ):
+                        if lifecycle.event == "complete":
+                            loop = lifecycle.result
+                        else:
+                            yield {
+                                "event": lifecycle.event,
+                                "data": lifecycle.data,
+                            }
+                    if loop is None:
+                        raise AppError(
+                            ErrorCategory.GENERATION_FAILED,
+                            "The MCP tool loop did not complete.",
+                        )
+                    if loop.pending is not None:
+                        pending_copy = "This tool call is awaiting your approval."
+                        assistant.content = pending_copy
+                        assistant.citations = []
+                        assistant.status = MessageStatus.PENDING.value
+                        assistant.updated_at = datetime.now(timezone.utc)
+                        conversation.updated_at = assistant.updated_at
+                        self._settle_usage(
+                            workspace.id,
+                            request_id,
+                            usage_ctx.extra_billed_tokens,
+                        )
+                        self.db.commit()
+                        usage_closed = True
+                        settled = True
+                        yield {
+                            "event": "tool_approval_required",
+                            "data": {
+                                "approval_id": str(loop.pending.id),
+                                "tool_call_id": loop.pending.tool_call_id,
+                                "connection_name": loop.pending.connection_name,
+                                "tool_name": loop.pending.tool_name,
+                                "arguments": loop.pending.arguments,
+                                "expires_at": loop.pending.expires_at.isoformat(),
+                                "conversation_id": str(conversation.id),
+                                "assistant_message_id": str(assistant.id),
+                                "status": MessageStatus.PENDING.value,
+                            },
+                        }
+                        return
+
+                    answer = loop.answer
+                    citations = ConversationService.normalize_citations(loop.citations)
+                    loop_payload = loop.as_payload()
+                    self._complete_and_settle(
+                        conversation,
+                        assistant,
+                        content=answer,
+                        citations=citations,
+                        usage_event_id=None,
+                        workspace_id=workspace.id,
+                        request_id=request_id,
+                        actual_tokens=self._actual_tokens(
+                            loop_payload,
+                            extra_billed=usage_ctx.extra_billed_tokens,
+                        ),
+                    )
+                    usage_closed = True
+                    settled = True
+                    if answer:
+                        yield {"event": "replace", "data": {"text": answer}}
+                    final_data = redact_public_models(
+                        {
+                            **loop_payload,
+                            "conversation_id": str(conversation.id),
+                            "user_message_id": str(user_msg.id),
+                            "assistant_message_id": str(assistant.id),
+                            "status": MessageStatus.COMPLETED.value,
+                            "citations": citations,
+                        }
+                    )
+                    yield {"event": "final", "data": final_data}
+                    yield {
+                        "event": "message_complete",
+                        "data": {
+                            "conversation_id": str(conversation.id),
+                            "user_message_id": str(user_msg.id),
+                            "assistant_message_id": str(assistant.id),
+                            "status": MessageStatus.COMPLETED.value,
+                            "citations": citations,
+                        },
+                    }
+                    return
+
                 for item in self.expert_query.query_stream(
                     workspace=workspace,
                     membership=membership,
@@ -644,6 +885,23 @@ class ChatOrchestrator:
             request_id=str(assistant.id),
         ).to_usage_context()
 
+    def _workspace_invocation(
+        self,
+        *,
+        workspace: Workspace,
+        actor: User,
+        conversation: Conversation,
+        assistant: Message,
+    ) -> ChatInvocationContext:
+        return ChatInvocationContext.workspace_user(
+            workspace_id=workspace.id,
+            user_id=actor.id,
+            expert_id=conversation.expert_id,
+            conversation_id=conversation.id,
+            message_id=assistant.id,
+            request_id=str(assistant.id),
+        )
+
     def _reserve_turn(
         self,
         *,
@@ -651,11 +909,13 @@ class ChatOrchestrator:
         actor: User,
         conversation: Conversation,
         assistant: Message,
+        reservation_multiplier: int = 1,
     ) -> None:
         AiUsageService(self.db, self.settings).reserve_ai_usage(
             workspace.id,
             str(assistant.id),
-            self.settings.effective_ai_usage_reservation_tokens,
+            self.settings.effective_ai_usage_reservation_tokens
+            * max(1, int(reservation_multiplier)),
             conversation_id=conversation.id,
             message_id=assistant.id,
             user_id=actor.id,

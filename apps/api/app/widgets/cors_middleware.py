@@ -26,26 +26,62 @@ from app.widgets.origins import origin_allowed, request_origin
 _PREFIX = "/api/public/widgets/"
 _WIDGET_RE = re.compile(
     r"^/api/public/widgets/"
-    r"(?P<widget_id>[0-9a-fA-F-]{36})"
-    r"/(bootstrap|messages)/?$"
+    r"(?P<widget_id>"
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r")"
+    r"/(?P<route>bootstrap|messages/stream|messages|tool-turns/status)/?$"
 )
 
+_PRIVATE_ROUTES = frozenset({"messages", "messages/stream", "tool-turns/status"})
+_PRIVATE_NO_STORE_HEADERS = {
+    "Cache-Control": "private, no-store, max-age=0",
+    "Pragma": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+}
 
-def _cors_headers(origin: str | None) -> dict[str, str]:
-    if not origin:
-        return {
+_ROUTE_RULES: dict[str, tuple[str, frozenset[str]]] = {
+    "bootstrap": ("GET", frozenset()),
+    "messages": ("POST", frozenset({"content-type"})),
+    "messages/stream": ("POST", frozenset({"accept", "content-type"})),
+    "tool-turns/status": (
+        "POST",
+        frozenset({"content-type", "x-geem-widget-session"}),
+    ),
+}
+
+_CANONICAL_HEADER_NAMES = {
+    "accept": "Accept",
+    "content-type": "Content-Type",
+    "x-geem-widget-session": "X-Geem-Widget-Session",
+}
+
+
+def _cors_headers(
+    origin: str | None,
+    *,
+    method: str,
+    allowed_headers: frozenset[str],
+) -> dict[str, str]:
+    headers = (
+        {
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Methods": f"{method}, OPTIONS",
             "Access-Control-Max-Age": "86400",
         }
-    return {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Max-Age": "86400",
-        "Vary": "Origin",
-    }
+        if not origin
+        else {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": f"{method}, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+            "Vary": "Origin",
+        }
+    )
+    if allowed_headers:
+        headers["Access-Control-Allow-Headers"] = ", ".join(
+            _CANONICAL_HEADER_NAMES[value] for value in sorted(allowed_headers)
+        )
+    return headers
 
 
 def _resolve_cors_origin(
@@ -83,7 +119,16 @@ class PublicWidgetCorsMiddleware(BaseHTTPMiddleware):
                 return Response(status_code=404)
             return await call_next(request)
 
-        widget_id = uuid.UUID(match.group("widget_id"))
+        try:
+            widget_id = uuid.UUID(match.group("widget_id"))
+        except ValueError:
+            # Do not let middleware path parsing turn an ordinary invalid path
+            # into an uncaught 500 before FastAPI can return its normal 404/422.
+            if request.method == "OPTIONS":
+                return Response(status_code=404)
+            return await call_next(request)
+        route_name = match.group("route")
+        route_method, allowed_headers = _ROUTE_RULES[route_name]
         origin_header = request.headers.get("origin")
         referer = request.headers.get("referer")
         acao, status = _resolve_cors_origin(
@@ -95,10 +140,39 @@ class PublicWidgetCorsMiddleware(BaseHTTPMiddleware):
                 return Response(status_code=404)
             if status == "deny":
                 return Response(status_code=403)
-            return Response(status_code=204, headers=_cors_headers(acao or origin_header))
+            requested_method = request.headers.get("access-control-request-method")
+            if requested_method != route_method:
+                return Response(status_code=405)
+            requested_headers = {
+                value.strip().lower()
+                for value in request.headers.get(
+                    "access-control-request-headers", ""
+                ).split(",")
+                if value.strip()
+            }
+            if not requested_headers.issubset(allowed_headers):
+                return Response(status_code=403)
+            return Response(
+                status_code=204,
+                headers=_cors_headers(
+                    acao or origin_header,
+                    method=route_method,
+                    allowed_headers=allowed_headers,
+                ),
+            )
 
         response = await call_next(request)
+        if route_name in _PRIVATE_ROUTES:
+            # Apply on success and on validation/AppError responses.  Public
+            # turn handles, signed session tokens, and visitor answers must not
+            # be retained or replayed by a browser/intermediary cache.
+            for key, value in _PRIVATE_NO_STORE_HEADERS.items():
+                response.headers[key] = value
         if status == "ok":
-            for key, value in _cors_headers(acao or origin_header).items():
+            for key, value in _cors_headers(
+                acao or origin_header,
+                method=route_method,
+                allowed_headers=allowed_headers,
+            ).items():
                 response.headers[key] = value
         return response

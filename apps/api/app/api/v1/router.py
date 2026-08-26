@@ -45,6 +45,7 @@ from app.experts.service import ExpertService
 from app.rate_limits.service import ApiRateLimiter
 from app.usage.metered import MeteredWorkspaceGeneration
 from app.workspaces.models import Workspace
+from app.mcp.executor import RuntimeResolvedTool
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,17 @@ def chat_completions(
         request_id=turn_id,
     )
 
+    # Preserve the legacy one-reservation path exactly when there are no
+    # eligible grants.  A tool-capable turn reserves every possible model
+    # iteration plus the required final synthesis before any provider call.
+    mcp_tools = executor.select_mcp_tools(
+        invocation=invocation,
+        expert_id=expert_id,
+    )
+    reservation_multiplier = (
+        executor.settings.mcp_max_tool_iterations + 1 if mcp_tools else 1
+    )
+
     meter = MeteredWorkspaceGeneration(
         db,
         workspace_id=workspace.id,
@@ -163,6 +175,7 @@ def chat_completions(
         message_id=None,
         api_key_id=principal.api_key_id,
         request_id=turn_id,
+        reservation_multiplier=reservation_multiplier,
     )
     try:
         meter.reserve()
@@ -191,6 +204,7 @@ def chat_completions(
             created=created,
             rate_headers=rate_headers,
             started=started,
+            mcp_tools=mcp_tools,
         )
 
     try:
@@ -200,6 +214,7 @@ def chat_completions(
             question=question,
             invocation=invocation,
             meter=meter,
+            mcp_tools=mcp_tools,
         )
     except Exception:
         meter.release()
@@ -288,6 +303,7 @@ def _stream_completions(
     created: int,
     rate_headers: dict[str, str],
     started: float,
+    mcp_tools: list[RuntimeResolvedTool],
 ) -> StreamingResponse:
     def generate() -> Iterator[str]:
         db = SessionLocal()
@@ -315,6 +331,7 @@ def _stream_completions(
                     invocation=invocation,
                     meter=meter,
                     request_id=request_id,
+                    mcp_tools=mcp_tools,
                 ),
                 turn_id=request_id,
                 model=model,

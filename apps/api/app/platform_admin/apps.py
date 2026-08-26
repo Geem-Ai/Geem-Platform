@@ -28,6 +28,7 @@ from app.apps_catalog.models import (
     AppStatus,
     CatalogApp,
 )
+from app.apps_catalog.mcp_product import MCP_CONNECTORS_APP_SLUG
 from app.apps_catalog.repository import AppCatalogRepository
 from app.apps_catalog.publication import validate_product_publish_ready
 from app.apps_catalog.runtime_locks import acquire_app_runtime_mutation_fence
@@ -1258,11 +1259,10 @@ class PlatformAdminAppsService:
         return self.repo.app_has_commercial_history(app.id)
 
     def _billing_type_locked(self, app: CatalogApp) -> bool:
-        # Agents AI's paid, non-connector subscription identity is part of its
-        # public contract. It must not be changed around the product-specific
-        # publication validator, including while the seeded row is still
-        # coming soon and commercial plan values are being prepared.
-        if app.slug == AGENTS_AI_APP_SLUG:
+        # Paid launch-product billing identities are part of their public
+        # contracts. They cannot change around the product-specific publication
+        # validator while signed plan values are being prepared.
+        if app.slug in {AGENTS_AI_APP_SLUG, MCP_CONNECTORS_APP_SLUG}:
             return True
         if self._is_seeded(app):
             return False

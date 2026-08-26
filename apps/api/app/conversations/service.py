@@ -11,11 +11,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import Citation
 from app.audit import AuditAction, AuditEntityType, record_audit
 from app.common.security_log import security_log
+from app.common.crypto import decrypt_json
+from app.connectors.models import AppConnection
 from app.conversations.models import (
     PREVIEW_CONTENT_MAX_CHARS,
     Conversation,
@@ -28,14 +31,20 @@ from app.conversations.repository import ConversationRepository
 from app.conversations.schemas import (
     ConversationExpertSummary,
     ConversationOut,
+    MessageAttachmentOut,
     MessageOut,
     MessagePreviewOut,
+    MessageToolActivityOut,
+    MessageToolApprovalOut,
 )
+from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.experts.access import ExpertAccessService
 from app.experts.models import Expert, ExpertType
 from app.experts.policy import ExpertAction
 from app.identity.models import User
+from app.mcp.models import McpServerTool, McpToolGrant
+from app.mcp.runtime_models import McpPendingToolCall, McpToolInvocation
 from app.workspaces.models import Workspace, WorkspaceMembership
 
 
@@ -226,7 +235,19 @@ class ConversationService:
         messages = self.repo.list_messages(
             conversation.id, limit=limit, offset=offset
         )
-        return [self._message_out(m) for m in messages]
+        activities, approvals = self._message_mcp_metadata(
+            workspace_id=workspace.id,
+            actor_id=actor.id,
+            messages=messages,
+        )
+        return [
+            self._message_out(
+                message,
+                tool_activities=activities.get(message.id, []),
+                tool_approval=approvals.get(message.id),
+            )
+            for message in messages
+        ]
 
     # ------------------------------------------------------------------
     # Message helpers (for Phase 4B + tests) — not exposed as public write API yet
@@ -289,7 +310,7 @@ class ConversationService:
     def normalize_citations(
         citations: list[dict[str, Any]] | list[Citation] | None,
     ) -> list[dict[str, Any]]:
-        """Persist only the Phase 3 metadata-safe citation contract."""
+        """Persist only the metadata-safe chunk/tool citation contract."""
         if not citations:
             return []
         out: list[dict[str, Any]] = []
@@ -425,12 +446,24 @@ class ConversationService:
         )
 
     @staticmethod
-    def _message_out(message: Message) -> MessageOut:
+    def _message_out(
+        message: Message,
+        *,
+        tool_activities: list[MessageToolActivityOut] | None = None,
+        tool_approval: MessageToolApprovalOut | None = None,
+    ) -> MessageOut:
         citations: list[Citation] = []
         for item in message.citations or []:
             try:
                 citations.append(Citation.model_validate(item))
             except ValidationError:
+                continue
+        attachments = []
+        for item in message.attachments or []:
+            try:
+                attachments.append(MessageAttachmentOut.model_validate(item))
+            except ValidationError:
+                # Channel-only metadata is intentionally not exposed as a file.
                 continue
         # ``usage_event_id`` is a logical UUID only. Do not join ``usage_events``
         # here — the telemetry row may have been dropped by partition retention.
@@ -440,8 +473,126 @@ class ConversationService:
             role=message.role,
             content=message.content,
             citations=citations,
+            attachments=attachments,
+            tool_activities=tool_activities or [],
+            tool_approval=tool_approval,
             status=message.status,
             usage_event_id=message.usage_event_id,
             created_at=message.created_at,
             updated_at=message.updated_at,
         )
+
+    def _message_mcp_metadata(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        messages: list[Message],
+    ) -> tuple[
+        dict[uuid.UUID, list[MessageToolActivityOut]],
+        dict[uuid.UUID, MessageToolApprovalOut],
+    ]:
+        """Load safe MCP history metadata in two bounded, tenant-scoped queries."""
+
+        message_ids = [message.id for message in messages if message.id is not None]
+        if not message_ids:
+            return {}, {}
+
+        activities: dict[uuid.UUID, list[MessageToolActivityOut]] = {}
+        rows = self.db.execute(
+            select(McpToolInvocation, McpServerTool, AppConnection)
+            .join(
+                McpServerTool,
+                (McpServerTool.workspace_id == McpToolInvocation.workspace_id)
+                & (McpServerTool.id == McpToolInvocation.mcp_server_tool_id),
+            )
+            .join(
+                AppConnection,
+                (AppConnection.workspace_id == McpToolInvocation.workspace_id)
+                & (AppConnection.id == McpToolInvocation.app_connection_id),
+            )
+            .where(
+                McpToolInvocation.workspace_id == workspace_id,
+                McpToolInvocation.message_id.in_(message_ids),
+                McpToolInvocation.invocation_source == "workspace",
+                McpToolInvocation.initiated_by_user_id == actor_id,
+            )
+            .order_by(McpToolInvocation.created_at, McpToolInvocation.id)
+        ).all()
+        for invocation, tool, connection in rows:
+            if invocation.message_id is None:
+                continue
+            status = (
+                "calling"
+                if invocation.status in {"admitted", "dispatching"}
+                else invocation.status
+            )
+            activities.setdefault(invocation.message_id, []).append(
+                MessageToolActivityOut(
+                    id=invocation.id,
+                    tool_call_id=invocation.model_tool_call_id,
+                    connection_name=connection.display_name or "MCP server",
+                    tool_name=tool.tool_name,
+                    status=status,
+                    error_code=invocation.error_code,
+                )
+            )
+
+        approvals: dict[uuid.UUID, MessageToolApprovalOut] = {}
+        pending_rows = self.db.execute(
+            select(McpPendingToolCall, McpToolGrant, McpServerTool, AppConnection)
+            .join(
+                McpToolGrant,
+                (McpToolGrant.workspace_id == McpPendingToolCall.workspace_id)
+                & (McpToolGrant.id == McpPendingToolCall.mcp_tool_grant_id),
+            )
+            .join(
+                McpServerTool,
+                (McpServerTool.workspace_id == McpToolGrant.workspace_id)
+                & (McpServerTool.id == McpToolGrant.mcp_server_tool_id),
+            )
+            .join(
+                AppConnection,
+                (AppConnection.workspace_id == McpToolGrant.workspace_id)
+                & (AppConnection.id == McpToolGrant.app_connection_id),
+            )
+            .where(
+                McpPendingToolCall.workspace_id == workspace_id,
+                McpPendingToolCall.message_id.in_(message_ids),
+                McpPendingToolCall.initiated_by_user_id == actor_id,
+                McpPendingToolCall.mcp_tool_surface_binding_id.is_(None),
+            )
+            .order_by(McpPendingToolCall.created_at, McpPendingToolCall.id)
+        ).all()
+        settings = get_settings()
+        for pending, _grant, tool, connection in pending_rows:
+            arguments = None
+            if pending.arguments_encrypted is not None:
+                try:
+                    value = decrypt_json(
+                        pending.arguments_encrypted,
+                        settings=settings,
+                    )
+                    arguments = value if isinstance(value, dict) else None
+                except Exception:  # corrupt ciphertext stays redacted
+                    arguments = None
+            approvals[pending.message_id] = MessageToolApprovalOut(
+                id=pending.id,
+                tool_call_id=pending.model_tool_call_id,
+                connection_name=connection.display_name or "MCP server",
+                tool_name=tool.tool_name,
+                arguments=arguments,
+                status=pending.status,
+                expires_at=pending.expires_at,
+            )
+            if pending.status in {"pending", "approved", "executing"}:
+                activities.setdefault(pending.message_id, []).append(
+                    MessageToolActivityOut(
+                        id=pending.id,
+                        tool_call_id=pending.model_tool_call_id,
+                        connection_name=connection.display_name or "MCP server",
+                        tool_name=tool.tool_name,
+                        status="approval_required",
+                    )
+                )
+        return activities, approvals

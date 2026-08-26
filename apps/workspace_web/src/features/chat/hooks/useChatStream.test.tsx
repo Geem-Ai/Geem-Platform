@@ -131,6 +131,21 @@ describe('useChatStream', () => {
     expect(assistants[0]?.status).toBe('completed');
   });
 
+  it('keeps tool activity and exact approval arguments in the assistant turn', async () => {
+    streamMock.mockImplementation(async (_id: string, _content: string, handlers: { onEvent?: (event: string, data: unknown) => void }) => {
+      handlers.onEvent?.('message_start', { conversation_id: 'c1', user_message_id: 'u1', assistant_message_id: 'a1' });
+      handlers.onEvent?.('tool_call', { tool_call_id: 'call-1', connection_display_name: 'CRM', tool_name: 'update_customer' });
+      handlers.onEvent?.('tool_approval_required', { approval_id: 'approval-1', tool_call_id: 'call-1', connection_display_name: 'CRM', tool_name: 'update_customer', arguments: { customer_id: 7, tier: 'gold' } });
+      handlers.onEvent?.('final', { answer: 'Approval required.', assistant_message_id: 'a1', user_message_id: 'u1', citations: [], status: 'completed' });
+    });
+
+    const { result } = renderHook(() => useChatStream({ workspaceId: 'ws1', conversationId: 'c1', initialMessages: [] }), { wrapper: createWrapper() });
+    await act(async () => { await result.current.send('Update the customer'); });
+    const assistant = result.current.messages.find((message) => message.role === 'assistant');
+    expect(assistant?.toolActivities).toEqual([expect.objectContaining({ id: 'call-1', status: 'approval_required' })]);
+    expect(assistant?.toolApproval).toEqual(expect.objectContaining({ id: 'approval-1', arguments: { customer_id: 7, tier: 'gold' }, status: 'pending' }));
+  });
+
   it('invokes AbortController and marks assistant cancelled', async () => {
     let capturedSignal: AbortSignal | undefined;
     let rejectStream: ((err: unknown) => void) | undefined;

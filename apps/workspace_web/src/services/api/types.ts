@@ -117,12 +117,43 @@ export type DocumentDetail = DocumentSummary & {
   job_id: string | null;
 };
 
-export type Citation = {
+export type ChunkCitation = {
+  kind?: 'chunk';
   chunk_id: string;
   document_id: string;
   document_title: string;
   page: number;
   snippet: string;
+};
+
+export type ToolCitation = {
+  kind: 'tool';
+  tool_call_id?: string | null;
+  connection_name?: string | null;
+  connection_display_name?: string | null;
+  tool_name: string;
+  tool_title?: string | null;
+};
+
+export type Citation = ChunkCitation | ToolCitation;
+
+export type ChatToolActivity = {
+  id: string;
+  tool_call_id?: string | null;
+  connection_name?: string | null;
+  tool_name: string;
+  status: 'calling' | 'succeeded' | 'failed' | 'outcome_unknown' | 'approval_required' | string;
+  error_code?: string | null;
+};
+
+export type ChatToolApproval = {
+  id: string;
+  tool_call_id?: string | null;
+  connection_name?: string | null;
+  tool_name: string;
+  arguments: Record<string, unknown> | unknown[] | null;
+  status: 'pending' | 'approved' | 'denied' | 'expired' | 'executing' | 'completed' | string;
+  expires_at?: string | null;
 };
 
 export type QueryResponse = {
@@ -275,6 +306,8 @@ export type ConversationMessage = {
   content: string;
   citations: Citation[];
   attachments?: MessageAttachment[];
+  tool_activities?: ChatToolActivity[];
+  tool_approval?: ChatToolApproval | null;
   status: MessageStatus | string;
   usage_event_id: string | null;
   created_at: string;
@@ -327,4 +360,24 @@ export type ChatStreamErrorEvent = {
   user_message_id?: string | null;
   assistant_message_id?: string | null;
   status?: MessageStatus | string;
+};
+
+export type ChatToolCallEvent = {
+  id?: string;
+  tool_call_id?: string;
+  connection_name?: string | null;
+  connection_display_name?: string | null;
+  tool_name: string;
+};
+
+export type ChatToolResultEvent = ChatToolCallEvent & {
+  status?: string;
+  outcome_unknown?: boolean;
+  error_code?: string | null;
+};
+
+export type ChatToolApprovalRequiredEvent = ChatToolCallEvent & {
+  approval_id?: string;
+  arguments?: Record<string, unknown> | unknown[] | null;
+  expires_at?: string | null;
 };

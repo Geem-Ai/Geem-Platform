@@ -24,10 +24,12 @@ import {
   floatingSheetPanel,
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import { InstructionsEditor } from './InstructionsEditor';
 import { RagConfigFields } from './RagConfigFields';
 import { ClientAgentToggle } from './ClientAgentToggle';
+import { McpExpertToolsPanel } from '@/features/apps/mcp/components/McpExpertToolsPanel';
 import { useAgentsAiUsage } from '@/features/apps/hooks/useAppsQueries';
 import { useCreateExpert, useUpdateExpert } from '../hooks/useExpertMutations';
 import { useExpert } from '../hooks/useExpert';
@@ -243,32 +245,39 @@ export function ExpertFormSheet({
                     </CardContent>
                   </Card>
 
-                  {!isCreate && (
-                    <Card className="rounded-md">
-                      <CardHeader className="min-h-[38px] bg-accent/50">
-                        <CardTitle className="text-sm">{t('experts.advancedSettings')}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-4">
-                        <div className="space-y-5">
-                          <RagConfigFields
-                            value={ragConfig}
-                            onChange={setRagConfig}
-                            disabled={pending}
-                          />
-                          <div className="border-t border-border pt-5">
-                            <ClientAgentToggle
-                              checked={clientAgentEnabled}
-                              onCheckedChange={setClientAgentEnabled}
-                              usage={agentsAiUsageQuery.data}
-                              accessLoading={agentsAiUsageQuery.isLoading}
-                              accessError={agentsAiUsageQuery.isError}
-                              pending={pending}
-                            />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+                  {!isCreate && expertId ? (
+                    <Tabs defaultValue="configuration" className="gap-4" data-testid="expert-edit-tabs">
+                      <TabsList aria-label={t('experts.editSections')}>
+                        <TabsTrigger value="configuration">{t('experts.configurationTab')}</TabsTrigger>
+                        <TabsTrigger value="mcp">{t('experts.mcp.tab')}</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="configuration">
+                        <Card className="rounded-md">
+                          <CardHeader className="min-h-[38px] bg-accent/50">
+                            <CardTitle className="text-sm">{t('experts.advancedSettings')}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-4">
+                            <div className="space-y-5">
+                              <RagConfigFields value={ragConfig} onChange={setRagConfig} disabled={pending} />
+                              <div className="border-t border-border pt-5">
+                                <ClientAgentToggle
+                                  checked={clientAgentEnabled}
+                                  onCheckedChange={setClientAgentEnabled}
+                                  usage={agentsAiUsageQuery.data}
+                                  accessLoading={agentsAiUsageQuery.isLoading}
+                                  accessError={agentsAiUsageQuery.isError}
+                                  pending={pending}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="mcp">
+                        <McpExpertToolsPanel expertId={expertId} />
+                      </TabsContent>
+                    </Tabs>
+                  ) : null}
                 </div>
               </ScrollArea>
             )}

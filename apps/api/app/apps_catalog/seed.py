@@ -25,6 +25,11 @@ from app.apps_catalog.models import (
     AppStatus,
     CatalogApp,
 )
+from app.apps_catalog.mcp_product import (
+    MCP_CONNECTOR_KEY,
+    MCP_CONNECTOR_KIND,
+    MCP_CONNECTORS_APP_SLUG,
+)
 from app.apps_catalog.publication import validate_product_publish_ready
 from app.apps_catalog.repository import AppCatalogRepository
 from app.apps_catalog.runtime_locks import acquire_app_runtime_mutation_fence
@@ -296,6 +301,28 @@ APP_SPECS: tuple[AppSpec, ...] = (
         plans=AGENTS_AI_PLANS,
         preserve_status=True,
     ),
+    # Phase 13 intentionally seeds only the stable product identity. Commercial
+    # prices must be signed and installed as exact Plan rows before publication;
+    # never manufacture zero or placeholder plans in a production seed.
+    AppSpec(
+        slug=MCP_CONNECTORS_APP_SLUG,
+        name="MCP Connectors",
+        short_description="Connect reviewed remote MCP tools to Geem Experts.",
+        description=(
+            "Attach compatible public-HTTPS MCP servers, review individual tools, "
+            "and let Geem invoke approved tools from explicitly enabled surfaces. "
+            "Remote tools use a Workspace-shared external service account."
+        ),
+        category_slug="automation",
+        billing_type=AppBillingType.SUBSCRIPTION.value,
+        status=AppStatus.COMING_SOON.value,
+        is_featured=False,
+        sort_order=60,
+        connector_key=MCP_CONNECTOR_KEY,
+        connector_kind=MCP_CONNECTOR_KIND,
+        plans=(),
+        preserve_status=True,
+    ),
 )
 
 # One-time slug renames so re-seed migrates existing rows instead of duplicating.
@@ -317,7 +344,7 @@ def seed_app_catalog(
 
     apps: list[CatalogApp] = []
     for spec in APP_SPECS:
-        guarded_product_mutation = _seeds_agents_ai_commercial_authority(spec)
+        guarded_product_mutation = _seeds_guarded_product_authority(spec)
         if guarded_product_mutation:
             # A signed Agents AI seed mutates the same global plan/quota
             # authority read by paid admission. Hold the App-wide exclusive
@@ -352,10 +379,12 @@ def ensure_app_catalog(
     return seed_app_catalog(db, settings=settings)
 
 
-def _seeds_agents_ai_commercial_authority(spec: AppSpec) -> bool:
-    """Return true when Agents AI plan specs are present in the seed payload."""
+def _seeds_guarded_product_authority(spec: AppSpec) -> bool:
+    """Return true for product rows with signed plans guarded by publication validators."""
 
-    return spec.slug == AGENTS_AI_APP_SLUG and bool(spec.plans)
+    if spec.slug in {AGENTS_AI_APP_SLUG, MCP_CONNECTORS_APP_SLUG}:
+        return bool(spec.plans)
+    return False
 
 
 def _validate_seeded_product_after_mutation(

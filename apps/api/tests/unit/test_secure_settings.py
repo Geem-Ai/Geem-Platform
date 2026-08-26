@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.config import Settings, assert_secure_settings
+from app.core.config import Settings, assert_mcp_settings, assert_secure_settings
 
 
 def test_assert_secure_settings_allows_local_default_secret() -> None:
@@ -180,3 +180,94 @@ def test_assert_secure_settings_allows_smtp_without_cert_verify(caplog) -> None:
     with caplog.at_level("WARNING", logger="app.core.config"):
         assert_secure_settings(settings)
     assert "SMTP_TLS_VERIFY is false" in caplog.text
+
+
+def _mcp_ready_settings(**overrides) -> Settings:
+    values = {
+        "_env_file": None,
+        "app_env": "test",
+        "mcp_connector_enabled": True,
+        "mcp_egress_gateway_url": "https://mcp-egress-gateway:8443",
+        "mcp_egress_client_cert_file": "/run/secrets/mcp-egress/client.crt",
+        "mcp_egress_client_key_file": "/run/secrets/mcp-egress/client.key",
+        "mcp_egress_ca_cert_file": "/run/secrets/mcp-egress/ca.crt",
+        "openrouter_api_key": "test-provider-key",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_mcp_settings_are_default_closed_and_ready_shape_passes() -> None:
+    disabled = Settings(_env_file=None)
+    assert disabled.mcp_connector_enabled is False
+    assert_mcp_settings(disabled)
+
+    ready = _mcp_ready_settings()
+    assert ready.mcp_supported_protocol_version_list == (
+        "2026-07-28",
+        "2025-11-25",
+        "2024-11-05",
+    )
+    assert_mcp_settings(ready)
+
+
+def test_mcp_private_egress_is_never_allowed_outside_local() -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        mcp_connector_enabled=False,
+        mcp_allow_private_egress=True,
+    )
+    with pytest.raises(RuntimeError, match="MCP_ALLOW_PRIVATE_EGRESS"):
+        assert_mcp_settings(settings)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "match"),
+    [
+        ({"mcp_egress_gateway_url": "http://gateway:8443"}, "MCP_EGRESS_GATEWAY_URL"),
+        ({"mcp_egress_client_key_file": ""}, "MCP_EGRESS_CLIENT_KEY_FILE"),
+        (
+            {"mcp_supported_protocol_versions": "2025-11-25,2026-07-28"},
+            "MCP_SUPPORTED_PROTOCOL_VERSIONS",
+        ),
+        (
+            {"mcp_tool_provider_capability_matrix": "{}"},
+            "not readiness-approved",
+        ),
+    ],
+)
+def test_enabled_mcp_settings_fail_closed(overrides, match: str) -> None:
+    with pytest.raises(RuntimeError, match=match):
+        assert_mcp_settings(_mcp_ready_settings(**overrides))
+
+
+def test_nonlocal_enabled_mcp_requires_dedicated_forward_proxy() -> None:
+    settings = _mcp_ready_settings(
+        app_env="production",
+        mcp_egress_proxy_url="",
+    )
+    with pytest.raises(RuntimeError, match="MCP_EGRESS_PROXY_URL"):
+        assert_mcp_settings(settings)
+
+
+def test_nonlocal_enabled_mcp_rejects_public_gateway_host() -> None:
+    settings = _mcp_ready_settings(
+        app_env="production",
+        mcp_egress_gateway_url="https://public.example.com:8443",
+        mcp_egress_proxy_url="http://mcp-egress-proxy:3128",
+    )
+    with pytest.raises(RuntimeError, match="internal gateway service"):
+        assert_mcp_settings(settings)
+
+
+def test_nonlocal_enabled_mcp_requires_readable_mtls_mounts(tmp_path) -> None:
+    settings = _mcp_ready_settings(
+        app_env="production",
+        mcp_egress_proxy_url="http://mcp-egress-proxy:3128",
+        mcp_egress_client_cert_file=str(tmp_path / "missing-client.crt"),
+        mcp_egress_client_key_file=str(tmp_path / "missing-client.key"),
+        mcp_egress_ca_cert_file=str(tmp_path / "missing-ca.crt"),
+    )
+    with pytest.raises(RuntimeError, match="readable mounted"):
+        assert_mcp_settings(settings)

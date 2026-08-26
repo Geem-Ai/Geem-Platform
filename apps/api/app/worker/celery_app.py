@@ -14,10 +14,12 @@ from app.connectors.providers.microsoft_onedrive import (
     register_microsoft_onedrive_connector,
 )
 from app.connectors.providers.openwa import register_openwa_connector
+from app.connectors.providers.mcp_remote import register_mcp_remote_connector
 
 register_google_drive_connector()
 register_microsoft_onedrive_connector()
 register_openwa_connector()
+register_mcp_remote_connector()
 
 celery_app = Celery(
     "arabic_rag",
@@ -52,6 +54,26 @@ celery_app.conf.update(
             "task": "purge_expired_widget_messages",
             "schedule": 900.0,  # every 15 minutes
             "kwargs": {"limit": 500},
+        },
+        "recover-mcp-widget-turn-receipts": {
+            "task": "recover_mcp_widget_turn_receipts",
+            "schedule": 30.0,
+            "kwargs": {"limit": 100},
+        },
+        "recover-mcp-approval-state": {
+            "task": "recover_mcp_approval_state",
+            "schedule": 30.0,
+            "kwargs": {"limit": 100},
+        },
+        "recover-mcp-surface-deliveries": {
+            "task": "recover_mcp_surface_deliveries",
+            "schedule": 30.0,
+            "kwargs": {"limit": 100},
+        },
+        "poll-mcp-connections": {
+            "task": "poll_mcp_connections",
+            "schedule": 120.0,
+            "kwargs": {"limit": 100},
         },
         # Google Drive changes.watch channels expire ~daily; renew when within 24h.
         "renew-google-drive-watches": {

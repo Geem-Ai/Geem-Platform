@@ -229,6 +229,11 @@ class ConnectorConnectionService:
                 ErrorCategory.CONNECTOR_NOT_SUPPORTED,
                 "This app does not support external connections.",
             )
+        if app.connector_key == "mcp_remote":
+            raise AppError(
+                ErrorCategory.CONNECTOR_NOT_SUPPORTED,
+                "Use the dedicated MCP server connection lifecycle.",
+            )
         if not self.registry.is_available(app.connector_key):
             raise AppError(
                 ErrorCategory.CONNECTOR_NOT_AVAILABLE,
@@ -498,6 +503,11 @@ class ConnectorConnectionService:
         row = self.repo.get_connection(workspace.id, connection_id, for_update=True)
         if row is None or (installation and row.app_installation_id != installation.id):
             raise AppError(ErrorCategory.CONNECTOR_NOT_FOUND, "Connection not found.")
+        if row.connector_key == "mcp_remote":
+            raise AppError(
+                ErrorCategory.CONNECTOR_NOT_SUPPORTED,
+                "Use the dedicated MCP server connection lifecycle.",
+            )
         if row.status == ConnectionStatus.DISCONNECTED.value:
             raise AppError(
                 ErrorCategory.CONNECTOR_ALREADY_DISCONNECTED,

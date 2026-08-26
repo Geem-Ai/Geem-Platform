@@ -11,8 +11,10 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -43,6 +45,25 @@ class AppConnection(Base):
 
     __tablename__ = "app_connections"
     __table_args__ = (
+        CheckConstraint(
+            "mcp_credential_epoch >= 1",
+            name="ck_app_connections_mcp_credential_epoch",
+        ),
+        CheckConstraint(
+            "mcp_discovery_generation >= 0",
+            name="ck_app_connections_mcp_discovery_generation",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_app_connections_workspace_id",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "app_installation_id"],
+            ["app_installations.workspace_id", "app_installations.id"],
+            name="fk_app_connections_workspace_installation",
+            ondelete="RESTRICT",
+        ),
         Index("ix_app_connections_workspace_installation", "workspace_id", "app_installation_id"),
         Index("ix_app_connections_workspace_connector", "workspace_id", "connector_key"),
         Index("ix_app_connections_workspace_status", "workspace_id", "status"),
@@ -89,6 +110,34 @@ class AppConnection(Base):
     webhook_routing_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     credentials_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Phase 13B — safe, queryable MCP protocol/identity state. Canonical
+    # endpoint/resource URLs and all usable credentials remain inside the
+    # encrypted credential blob above.
+    mcp_protocol_version: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    mcp_session_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    mcp_capabilities: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    mcp_credential_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    mcp_principal_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    mcp_discovery_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    mcp_inventory_refreshed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    mcp_reauthorization_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     connected_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -313,6 +362,30 @@ class ChannelBinding(Base):
 
     __tablename__ = "channel_bindings"
     __table_args__ = (
+        CheckConstraint(
+            "mcp_source_epoch >= 1", name="ck_channel_bindings_mcp_source_epoch"
+        ),
+        CheckConstraint(
+            "mcp_source_principal_fingerprint IS NULL OR "
+            "char_length(mcp_source_principal_fingerprint) = 64",
+            name="ck_channel_bindings_mcp_principal_digest",
+        ),
+        UniqueConstraint(
+            "workspace_id", "id", name="uq_channel_bindings_workspace_id"
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "expert_id",
+            "id",
+            name="uq_channel_bindings_workspace_expert_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "app_connection_id",
+            "expert_id",
+            "id",
+            name="uq_channel_bindings_exact_chain",
+        ),
         UniqueConstraint("app_connection_id", name="uq_channel_bindings_connection"),
         Index(
             "ix_channel_bindings_workspace_connection",
@@ -346,6 +419,13 @@ class ChannelBinding(Base):
     respond_to_groups: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Exact MCP source identity/config epoch; ordinary WhatsApp remains unchanged.
+    mcp_source_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    mcp_source_principal_fingerprint: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -357,6 +437,13 @@ class ChannelConversationBinding(Base):
 
     __tablename__ = "channel_conversation_bindings"
     __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "app_connection_id",
+            "conversation_id",
+            "expert_id",
+            name="uq_channel_conv_exact_chain",
+        ),
         UniqueConstraint(
             "app_connection_id",
             "external_chat_id",

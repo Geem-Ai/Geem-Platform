@@ -37,6 +37,8 @@ class WorkspacePermission(StrEnum):
     APPS_MANAGE = "apps.manage"
     APPS_CONNECT = "apps.connect"
 
+    MCP_TOOLS_APPROVE_EXTERNAL = "mcp_tools.approve_external"
+
     MEMBERS_VIEW = "members.view"
     MEMBERS_INVITE = "members.invite"
     MEMBERS_UPDATE_ROLE = "members.update_role"
@@ -103,6 +105,7 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _spec(WorkspacePermission.APPS_VIEW, "apps"),
     _spec(WorkspacePermission.APPS_MANAGE, "apps"),
     _spec(WorkspacePermission.APPS_CONNECT, "apps"),
+    _spec(WorkspacePermission.MCP_TOOLS_APPROVE_EXTERNAL, "mcp_tools"),
     _spec(WorkspacePermission.MEMBERS_VIEW, "members"),
     _spec(WorkspacePermission.MEMBERS_INVITE, "members"),
     _spec(WorkspacePermission.MEMBERS_UPDATE_ROLE, "members"),
@@ -165,6 +168,7 @@ ADMIN_PERMISSION_KEYS: frozenset[str] = MEMBER_PERMISSION_KEYS | frozenset(
         WorkspacePermission.EXPERTS_UPDATE.value,
         WorkspacePermission.EXPERTS_DELETE.value,
         WorkspacePermission.EXPERTS_MANAGE_KNOWLEDGE.value,
+        WorkspacePermission.MCP_TOOLS_APPROVE_EXTERNAL.value,
         WorkspacePermission.APPS_MANAGE.value,
         WorkspacePermission.APPS_CONNECT.value,
         WorkspacePermission.MEMBERS_INVITE.value,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -89,6 +90,9 @@ class WidgetBootstrapOut(BaseModel):
     position: str
     primary_color: str
     text_color: str
+    mcp_tools_enabled: bool = False
+    tool_transport: Literal["fetch_sse"] | None = None
+    mcp_public_audience_disclosure: str | None = None
 
 
 class WidgetMessageIn(BaseModel):
@@ -102,3 +106,32 @@ class WidgetMessageOut(BaseModel):
 
     answer: str
     session_id: str | None = None
+
+
+class WidgetMcpTurnIn(BaseModel):
+    message: str = Field(..., min_length=1, max_length=8000)
+    client_turn_id: str = Field(
+        ...,
+        min_length=32,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        repr=False,
+    )
+    session_token: str | None = Field(None, max_length=2048, repr=False)
+
+
+class WidgetMcpTurnStatusIn(BaseModel):
+    turn_handle: str = Field(
+        ...,
+        min_length=32,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        repr=False,
+    )
+
+
+class WidgetMcpTurnStatusOut(BaseModel):
+    turn_handle: str = Field(repr=False)
+    status: str
+    answer: str | None = None
+    session_token: str | None = Field(None, repr=False)

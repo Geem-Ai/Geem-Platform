@@ -21,6 +21,8 @@ import {
 import { CitationList } from './CitationList';
 import { MessageRenderer } from './MessageRenderer';
 import { ThinkingStatus } from './ThinkingStatus';
+import { ToolActivityList } from './ToolActivityList';
+import { ToolApprovalCard } from './ToolApprovalCard';
 import type { ChatUiMessage } from '../types';
 
 interface ChatMessageProps {
@@ -123,16 +125,14 @@ export function ChatMessage({
               ) : null}
             </div>
           ) : failed && !message.content ? (
-            <p
-              className="text-destructive leading-7"
-              role="alert"
-              data-testid={quotaFailed ? 'chat-quota-error' : undefined}
-              data-error-code={message.errorCode ?? undefined}
-            >
-              {failedLabel}
-            </p>
+            <>
+              <ToolActivityList activities={message.toolActivities ?? []} />
+              <p className="text-destructive leading-7" role="alert" data-testid={quotaFailed ? 'chat-quota-error' : undefined} data-error-code={message.errorCode ?? undefined}>{failedLabel}</p>
+              {message.toolApproval ? <ToolApprovalCard approval={message.toolApproval} /> : null}
+            </>
           ) : (
             <>
+              <ToolActivityList activities={message.toolActivities ?? []} />
               {message.content ? (
                 <MessageRenderer content={message.content} />
               ) : isStreaming ? (
@@ -170,6 +170,7 @@ export function ChatMessage({
                   isPlatform={isPlatformExpert}
                 />
               )}
+              {message.toolApproval ? <ToolApprovalCard approval={message.toolApproval} /> : null}
             </>
           )}
 

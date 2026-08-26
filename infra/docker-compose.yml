@@ -18,6 +18,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - application_data
 
   redis:
     image: redis:7-alpine
@@ -29,6 +31,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - application_data
 
   qdrant:
     image: qdrant/qdrant:v1.13.2
@@ -41,6 +45,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - application_data
 
   minio:
     image: minio/minio:latest
@@ -54,6 +60,8 @@ services:
     ports:
       - "9100:9000"
       - "9101:9001"
+    networks:
+      - application_data
 
   minio-init:
     image: minio/mc:latest
@@ -68,6 +76,8 @@ services:
       mc anonymous set none local/rag-documents;
       exit 0;
       "
+    networks:
+      - application_data
 
   api:
     build:
@@ -81,10 +91,25 @@ services:
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
       MINIO_ENDPOINT: minio:9000
+      MCP_EGRESS_GATEWAY_URL: ${MCP_EGRESS_GATEWAY_URL:-https://mcp-egress-gateway:8443}
+      MCP_EGRESS_CLIENT_CERT_FILE: /run/secrets/mcp-egress/client.crt
+      MCP_EGRESS_CLIENT_KEY_FILE: /run/secrets/mcp-egress/client.key
+      MCP_EGRESS_CA_CERT_FILE: /run/secrets/mcp-egress/ca.crt
+      HTTP_PROXY: http://app-egress-proxy:3128
+      HTTPS_PROXY: http://app-egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,api,postgres,redis,qdrant,minio,mcp-egress-gateway
     ports:
       - "8000:8000"
     volumes:
       - ../apps/api:/app
+    secrets:
+      - source: mcp_egress_client_cert
+        target: /run/secrets/mcp-egress/client.crt
+      - source: mcp_egress_client_key
+        target: /run/secrets/mcp-egress/client.key
+        mode: 0400
+      - source: mcp_egress_ca_cert
+        target: /run/secrets/mcp-egress/ca.crt
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,9 +121,11 @@ services:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
+      app-egress-proxy:
+        condition: service_started
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
       interval: 10s
@@ -106,6 +133,11 @@ services:
       retries: 10
       # Alembic (incl. usage_events partition swap) runs before uvicorn.
       start_period: 180s
+    networks:
+      - application_data
+      - application_ingress
+      - application_provider_control
+      - mcp_egress_control
 
   worker:
     build:
@@ -119,8 +151,23 @@ services:
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
       MINIO_ENDPOINT: minio:9000
+      MCP_EGRESS_GATEWAY_URL: ${MCP_EGRESS_GATEWAY_URL:-https://mcp-egress-gateway:8443}
+      MCP_EGRESS_CLIENT_CERT_FILE: /run/secrets/mcp-egress/client.crt
+      MCP_EGRESS_CLIENT_KEY_FILE: /run/secrets/mcp-egress/client.key
+      MCP_EGRESS_CA_CERT_FILE: /run/secrets/mcp-egress/ca.crt
+      HTTP_PROXY: http://app-egress-proxy:3128
+      HTTPS_PROXY: http://app-egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,api,postgres,redis,qdrant,minio,mcp-egress-gateway
     volumes:
       - ../apps/api:/app
+    secrets:
+      - source: mcp_egress_client_cert
+        target: /run/secrets/mcp-egress/client.crt
+      - source: mcp_egress_client_key
+        target: /run/secrets/mcp-egress/client.key
+        mode: 0400
+      - source: mcp_egress_ca_cert
+        target: /run/secrets/mcp-egress/ca.crt
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,7 +179,36 @@ services:
         condition: service_started
       api:
         condition: service_healthy
+      app-egress-proxy:
+        condition: service_started
     command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
+    networks:
+      - application_data
+      - application_provider_control
+      - mcp_egress_control
+
+  # Datastore-capable services have no direct public route. This proxy exposes
+  # only operator-reviewed fixed providers; tenant MCP/OAuth hosts use the
+  # separate mTLS gateway and cannot be added at runtime here.
+  app-egress-proxy:
+    build:
+      context: ./app-egress/proxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - application_provider_control
+      - public_egress
+    read_only: true
+    tmpfs:
+      - /run:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+      - /var/log/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+      - /var/spool/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
 
   # Dedicated Beat (Phase 11C/11D). No OTEL collector is required for this stack.
   beat:
@@ -157,6 +233,8 @@ services:
       api:
         condition: service_healthy
     command: celery -A app.worker.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
+    networks:
+      - application_data
 
   workspace_web:
     build:
@@ -177,6 +255,8 @@ services:
       api:
         condition: service_started
     command: npm run dev -- --host 0.0.0.0 --port 5174
+    networks:
+      - application_ingress
 
   dashboard_web:
     build:
@@ -194,6 +274,8 @@ services:
       api:
         condition: service_started
     command: npm run dev -- --host 0.0.0.0 --port 5175
+    networks:
+      - application_ingress
 
   landpage_web:
     build:
@@ -208,9 +290,124 @@ services:
       - ../apps/landpage_web:/app
       - /app/node_modules
     command: npm run dev
+    networks:
+      - application_ingress
+
+  # Phase 13A — the application can reach this mTLS listener only over an
+  # internal control network. The gateway is deliberately absent from
+  # application_data, receives no ../.env, and has no direct public network.
+  mcp-egress-gateway:
+    profiles: ["mcp"]
+    build:
+      context: ..
+      dockerfile: apps/mcp_egress_gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Fail-safe default: Compose interpolation does not inherit ../.env.
+      # UAT explicitly overrides this to local below.
+      APP_ENV: ${MCP_EGRESS_APP_ENV:-production}
+      EGRESS_BIND_HOST: 0.0.0.0
+      EGRESS_BIND_PORT: 8443
+      EGRESS_SERVER_CERT_FILE: /run/secrets/mcp-egress/server.crt
+      EGRESS_SERVER_KEY_FILE: /run/secrets/mcp-egress/server.key
+      EGRESS_CLIENT_CA_FILE: /run/secrets/mcp-egress/ca.crt
+      EGRESS_FORWARD_PROXY_URL: http://mcp-egress-proxy:3128
+      EGRESS_ALLOW_PRIVATE: ${MCP_ALLOW_PRIVATE_EGRESS:-false}
+      EGRESS_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:-}
+      EGRESS_SUPPORTED_PROTOCOL_VERSIONS: ${MCP_SUPPORTED_PROTOCOL_VERSIONS:-2026-07-28,2025-11-25,2024-11-05}
+      EGRESS_MAX_REDIRECTS: ${MCP_MAX_REDIRECTS:-3}
+      EGRESS_MAX_DISCOVERED_TOOLS: ${MCP_MAX_DISCOVERED_TOOLS:-512}
+      EGRESS_MAX_TOOL_PAGES: ${MCP_MAX_TOOL_PAGES:-64}
+      EGRESS_LEGACY_SESSION_TTL_SECONDS: ${MCP_LEGACY_SESSION_TTL_SECONDS:-300}
+      EGRESS_MAX_LEGACY_SESSIONS: ${MCP_MAX_LEGACY_SESSIONS:-64}
+      EGRESS_MAX_CONCURRENT_OPERATIONS: ${MCP_MAX_CONCURRENT_OPERATIONS:-128}
+      EGRESS_MAX_REQUEST_BYTES: ${MCP_EGRESS_MAX_REQUEST_BYTES:-65536}
+      EGRESS_MAX_RESPONSE_BYTES: ${MCP_EGRESS_MAX_RESPONSE_BYTES:-65536}
+      EGRESS_CONNECT_TIMEOUT_SECONDS: ${MCP_EGRESS_CONNECT_TIMEOUT_SECONDS:-5}
+      EGRESS_READ_TIMEOUT_SECONDS: ${MCP_EGRESS_READ_TIMEOUT_SECONDS:-20}
+      EGRESS_TOTAL_TIMEOUT_SECONDS: ${MCP_EGRESS_TOTAL_TIMEOUT_SECONDS:-30}
+    secrets:
+      - source: mcp_egress_server_cert
+        target: /run/secrets/mcp-egress/server.crt
+      - source: mcp_egress_server_key
+        target: /run/secrets/mcp-egress/server.key
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: mcp_egress_ca_cert
+        target: /run/secrets/mcp-egress/ca.crt
+    depends_on:
+      - mcp-egress-proxy
+    networks:
+      - mcp_egress_control
+      - mcp_proxy_control
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+
+  # The only component attached to both the internal proxy-control network and
+  # a public-egress network. Squid accepts CONNECT to validated IPs only, denies
+  # private/metadata ranges independently, and disables URL/body access logs.
+  mcp-egress-proxy:
+    profiles: ["mcp"]
+    build:
+      context: ./mcp-egress/proxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - mcp_proxy_control
+      - public_egress
+    read_only: true
+    tmpfs:
+      - /run:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+      - /var/log/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+      - /var/spool/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   minio_data:
+
+secrets:
+  mcp_egress_ca_cert:
+    file: ${MCP_EGRESS_PKI_DIR:-./mcp-egress/pki}/ca/ca.crt
+  mcp_egress_server_cert:
+    file: ${MCP_EGRESS_PKI_DIR:-./mcp-egress/pki}/server/server.crt
+  mcp_egress_server_key:
+    file: ${MCP_EGRESS_PKI_DIR:-./mcp-egress/pki}/server/server.key
+  mcp_egress_client_cert:
+    file: ${MCP_EGRESS_PKI_DIR:-./mcp-egress/pki}/client/client.crt
+  mcp_egress_client_key:
+    file: ${MCP_EGRESS_PKI_DIR:-./mcp-egress/pki}/client/client.key
+
+networks:
+  # Application datastores are reachable only by trusted application services.
+  application_data:
+    internal: true
+  # Ingress/UI traffic is internal; cloudflared bridges it from public_egress.
+  application_ingress:
+    internal: true
+  # API/worker can reach only the fixed-provider proxy on this network.
+  application_provider_control:
+    internal: true
+  # API/worker -> gateway only; no public default route.
+  mcp_egress_control:
+    internal: true
+  # Gateway -> dedicated proxy only; no public default route.
+  mcp_proxy_control:
+    internal: true
+  # Only dedicated proxies and tunnel ingress attach to this public route.
+  public_egress:

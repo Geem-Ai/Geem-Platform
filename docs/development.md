@@ -320,7 +320,7 @@ Use this when you want a debugger, `pytest` against real services, or faster UI 
    pip install -r requirements.txt
    alembic upgrade head
    python -m app.identity.bootstrap   # optional
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --no-access-log
    ```
 
    In a second terminal:

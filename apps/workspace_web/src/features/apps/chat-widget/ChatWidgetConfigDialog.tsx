@@ -64,7 +64,7 @@ export function ChatWidgetConfigDialog({
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id ?? '';
   const widgetQuery = useQuery({
-    queryKey: ['chat-widget', workspaceId, app.slug],
+    queryKey: queryKeys.chatWidget(workspaceId),
     queryFn: getChatWidget,
     enabled: open && Boolean(workspaceId),
   });
@@ -116,7 +116,7 @@ export function ChatWidgetConfigDialog({
         allowed_origins: textToOrigins(originsText),
       }),
     onSuccess: (data) => {
-      queryClient.setQueryData(['chat-widget', workspaceId, app.slug], data);
+      queryClient.setQueryData(queryKeys.chatWidget(workspaceId), data);
       toast.success(t('apps.chatWidget.saved'));
     },
     onError: (err) => {
@@ -223,6 +223,14 @@ export function ChatWidgetConfigDialog({
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       {t('apps.chatWidget.needsExpert')}
                     </p>
+                  ) : null}
+                  {expertId ? (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2" data-testid="chat-widget-mcp-summary">
+                      <p className="text-xs font-medium">{t('apps.chatWidget.mcpSummaryTitle')}</p>
+                      <p className="text-xs text-muted-foreground">{t('apps.chatWidget.mcpSummary', { expert: selectedExpert?.name || expertId })}</p>
+                      <p className="text-xs text-muted-foreground">{t('apps.chatWidget.mcpOriginRequirement')}</p>
+                      {canManage ? <Button asChild type="button" variant="outline" size="sm"><a href={`/experts/${expertId}/edit`}>{t('apps.chatWidget.manageMcpTools')}</a></Button> : null}
+                    </div>
                   ) : null}
                 </section>
 

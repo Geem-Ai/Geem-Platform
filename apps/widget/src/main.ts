@@ -11,12 +11,33 @@ type Bootstrap = {
   position: string;
   primary_color: string;
   text_color: string;
+  mcp_tools_enabled?: boolean;
+  tool_transport?: 'fetch_sse' | null;
+  mcp_public_audience_disclosure?: string | null;
 };
 
 type MessageOut = {
   answer: string;
   session_id?: string | null;
 };
+
+type McpTurnOut = {
+  turn_handle: string;
+  status: 'accepted' | 'running' | 'pending' | 'completed' | 'failed' | 'outcome_unknown';
+  answer?: string | null;
+  session_token?: string | null;
+};
+
+type StoredMcpTurn = {
+  message: string;
+  client_turn_id: string;
+  turn_handle?: string;
+  session_token?: string;
+};
+
+const MCP_ACTIVE_STATUSES = new Set(['accepted', 'running', 'pending']);
+const MCP_POLL_INTERVAL_MS = 2_000;
+const MCP_POLL_TIMEOUT_MS = 20 * 60 * 1_000;
 
 const THINKING_EN = [
   'Geem is thinking…',
@@ -261,6 +282,8 @@ async function boot() {
   const text = bootstrap.text_color || '#f2f2f2';
   const side = bootstrap.position === 'bottom-left' ? 'left' : 'right';
   const thinkingStatuses = rtl ? THINKING_AR : THINKING_EN;
+  const mcpEnabled =
+    bootstrap.mcp_tools_enabled === true && bootstrap.tool_transport === 'fetch_sse';
 
   const style = document.createElement('style');
   style.textContent = css();
@@ -338,6 +361,18 @@ async function boot() {
   messages.className = 'geem-messages';
   panel.appendChild(messages);
 
+  function setBotBubble(el: HTMLElement, textContent: string) {
+    const md = document.createElement('div');
+    md.className = 'geem-md';
+    md.innerHTML = renderMarkdown(textContent);
+    md.querySelectorAll('a[href]').forEach((anchor) => {
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    });
+    el.replaceChildren(md);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
   function addBubble(textContent: string, kind: 'bot' | 'user') {
     const el = document.createElement('div');
     el.className = `geem-bubble ${kind}`;
@@ -345,20 +380,16 @@ async function boot() {
       el.style.background = primary;
       el.textContent = textContent;
     } else {
-      const md = document.createElement('div');
-      md.className = 'geem-md';
-      md.innerHTML = renderMarkdown(textContent);
-      md.querySelectorAll('a[href]').forEach((anchor) => {
-        anchor.setAttribute('target', '_blank');
-        anchor.setAttribute('rel', 'noopener noreferrer');
-      });
-      el.appendChild(md);
+      setBotBubble(el, textContent);
     }
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
     return el;
   }
 
+  if (mcpEnabled && bootstrap.mcp_public_audience_disclosure) {
+    addBubble(bootstrap.mcp_public_audience_disclosure, 'bot');
+  }
   if (bootstrap.greeting) addBubble(bootstrap.greeting, 'bot');
 
   const composer = document.createElement('form');
@@ -394,12 +425,17 @@ async function boot() {
   let open = false;
   let busy = false;
   const sessionStorageKey = `geem-widget-session:${widgetId}`;
+  const mcpSessionStorageKey = `geem-widget-mcp-session:${widgetId}`;
+  const mcpTurnsStorageKey = `geem-widget-mcp-turns:${widgetId}`;
   // Server mints HMAC-signed session_id; never invent a bare UUID client-side.
   let sessionId = '';
+  let mcpSessionToken = '';
   try {
     sessionId = window.sessionStorage.getItem(sessionStorageKey) || '';
+    mcpSessionToken = window.sessionStorage.getItem(mcpSessionStorageKey) || '';
   } catch {
     sessionId = '';
+    mcpSessionToken = '';
   }
 
   function persistSession(next: string) {
@@ -413,6 +449,73 @@ async function boot() {
     } catch {
       /* private mode / blocked storage — in-memory only */
     }
+  }
+
+  function persistMcpSession(next: string) {
+    mcpSessionToken = next;
+    try {
+      if (next) {
+        window.sessionStorage.setItem(mcpSessionStorageKey, next);
+      } else {
+        window.sessionStorage.removeItem(mcpSessionStorageKey);
+      }
+    } catch {
+      /* private mode / blocked storage — in-memory only */
+    }
+  }
+
+  function isStoredMcpTurn(value: unknown): value is StoredMcpTurn {
+    if (!value || typeof value !== 'object') return false;
+    const turn = value as Partial<StoredMcpTurn>;
+    const noncePattern = /^[A-Za-z0-9_-]{32,128}$/;
+    return (
+      typeof turn.message === 'string' &&
+      turn.message.length > 0 &&
+      turn.message.length <= 8_000 &&
+      typeof turn.client_turn_id === 'string' &&
+      noncePattern.test(turn.client_turn_id) &&
+      (turn.turn_handle === undefined ||
+        (typeof turn.turn_handle === 'string' && noncePattern.test(turn.turn_handle))) &&
+      (turn.session_token === undefined ||
+        (typeof turn.session_token === 'string' && turn.session_token.length <= 2_048))
+    );
+  }
+
+  function loadMcpTurns(): StoredMcpTurn[] {
+    try {
+      const raw = window.sessionStorage.getItem(mcpTurnsStorageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed.filter(isStoredMcpTurn).slice(-32) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function storeMcpTurns(turns: StoredMcpTurn[]) {
+    try {
+      if (turns.length > 0) {
+        window.sessionStorage.setItem(mcpTurnsStorageKey, JSON.stringify(turns.slice(-32)));
+      } else {
+        window.sessionStorage.removeItem(mcpTurnsStorageKey);
+      }
+    } catch {
+      /* private mode / blocked storage — in-memory retry still works */
+    }
+  }
+
+  function persistMcpTurn(turn: StoredMcpTurn) {
+    const turns = loadMcpTurns().filter(
+      (candidate) => candidate.client_turn_id !== turn.client_turn_id,
+    );
+    turns.push(turn);
+    storeMcpTurns(turns);
+  }
+
+  function clearMcpTurn(clientTurnId: string) {
+    storeMcpTurns(
+      loadMcpTurns().filter((turn) => turn.client_turn_id !== clientTurnId),
+    );
   }
 
   function setOpen(next: boolean) {
@@ -438,6 +541,202 @@ async function boot() {
     });
   }
 
+  function newClientTurnId(): string {
+    const webCrypto = window.crypto;
+    if (!webCrypto || typeof webCrypto.getRandomValues !== 'function') {
+      throw new Error('secure random source unavailable');
+    }
+    if (typeof webCrypto.randomUUID === 'function') {
+      return webCrypto.randomUUID();
+    }
+    const bytes = new Uint8Array(16);
+    webCrypto.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  }
+
+  function mcpFallback(status: McpTurnOut['status']): string {
+    if (status === 'pending') {
+      return rtl
+        ? 'طلبك بانتظار موافقة مسؤول مساحة العمل.'
+        : 'Your request is awaiting workspace approval.';
+    }
+    if (status === 'accepted' || status === 'running') {
+      return rtl ? 'لا يزال طلبك قيد المعالجة.' : 'Your request is still being processed.';
+    }
+    if (status === 'outcome_unknown') {
+      return rtl
+        ? 'تعذّر تأكيد نتيجة الطلب.'
+        : 'The request outcome could not be confirmed.';
+    }
+    return rtl ? 'تعذّر الرد.' : 'No reply.';
+  }
+
+  function isMcpActive(status: McpTurnOut['status']): boolean {
+    return MCP_ACTIVE_STATUSES.has(status);
+  }
+
+  function delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  async function postMcpMessage(
+    textContent: string,
+    sid: string,
+    clientTurnId: string,
+  ): Promise<McpTurnOut> {
+    const res = await fetch(`${base}/api/public/widgets/${widgetId}/messages/stream`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: textContent,
+        client_turn_id: clientTurnId,
+        session_token: sid || null,
+      }),
+    });
+    if (!res.ok) throw new Error(`mcp-message ${res.status}`);
+    if (!res.body) throw new Error('mcp-message missing stream');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let latest: McpTurnOut | null = null;
+    const consume = (frame: string) => {
+      const data = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .join('\n');
+      if (!data) return;
+      const parsed = JSON.parse(data) as McpTurnOut;
+      latest = parsed;
+      if (parsed.session_token && parsed.session_token !== mcpSessionToken) {
+        persistMcpSession(parsed.session_token);
+      }
+      if (parsed.turn_handle && parsed.session_token) {
+        persistMcpTurn({
+          message: textContent,
+          client_turn_id: clientTurnId,
+          turn_handle: parsed.turn_handle,
+          session_token: parsed.session_token,
+        });
+      }
+    };
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        consume(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf('\n\n');
+      }
+      if (done) break;
+    }
+    if (buffer.trim()) consume(buffer);
+    if (!latest) throw new Error('mcp-message empty stream');
+    return latest;
+  }
+
+  async function fetchMcpTurnStatus(turn: StoredMcpTurn): Promise<McpTurnOut> {
+    if (!turn.turn_handle || !turn.session_token) {
+      throw new Error('mcp-turn incomplete receipt');
+    }
+    const res = await fetch(
+      `${base}/api/public/widgets/${widgetId}/tool-turns/status`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Geem-Widget-Session': turn.session_token,
+        },
+        body: JSON.stringify({ turn_handle: turn.turn_handle }),
+      },
+    );
+    if (!res.ok) throw new Error(`mcp-status ${res.status}`);
+    const data = (await res.json()) as McpTurnOut;
+    if (data.session_token && data.session_token !== mcpSessionToken) {
+      persistMcpSession(data.session_token);
+    }
+    return data;
+  }
+
+  async function watchMcpTurn(
+    initial: McpTurnOut,
+    stored: StoredMcpTurn,
+    bubble: HTMLElement,
+  ): Promise<void> {
+    let current = initial;
+    let turn: StoredMcpTurn = {
+      ...stored,
+      turn_handle: current.turn_handle,
+      session_token: current.session_token || stored.session_token,
+    };
+    persistMcpTurn(turn);
+    setBotBubble(bubble, current.answer || mcpFallback(current.status));
+    if (!isMcpActive(current.status)) {
+      clearMcpTurn(turn.client_turn_id);
+      return;
+    }
+
+    const deadline = Date.now() + MCP_POLL_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await delay(MCP_POLL_INTERVAL_MS);
+      try {
+        current = await fetchMcpTurnStatus(turn);
+      } catch {
+        // A transient status failure must not discard the durable receipt.
+        continue;
+      }
+      turn = {
+        ...turn,
+        turn_handle: current.turn_handle,
+        session_token: current.session_token || turn.session_token,
+      };
+      persistMcpTurn(turn);
+      setBotBubble(bubble, current.answer || mcpFallback(current.status));
+      if (!isMcpActive(current.status)) {
+        clearMcpTurn(turn.client_turn_id);
+        return;
+      }
+    }
+  }
+
+  async function recoverMcpTurn(stored: StoredMcpTurn): Promise<void> {
+    addBubble(stored.message, 'user');
+    const bubble = addBubble(
+      rtl ? 'جارٍ استعادة حالة طلبك…' : 'Restoring your request status…',
+      'bot',
+    );
+    try {
+      const current =
+        stored.turn_handle && stored.session_token
+          ? await fetchMcpTurnStatus(stored)
+          : await postMcpMessage(
+              stored.message,
+              stored.session_token || mcpSessionToken,
+              stored.client_turn_id,
+            );
+      await watchMcpTurn(current, stored, bubble);
+    } catch {
+      setBotBubble(
+        bubble,
+        rtl
+          ? 'تعذّر التحقق من حالة طلبك الآن. أعد تحميل الصفحة للمحاولة مجددًا.'
+          : 'Unable to check your request now. Reload the page to try again.',
+      );
+    }
+  }
+
+  if (mcpEnabled) {
+    loadMcpTurns().forEach((turn) => {
+      void recoverMcpTurn(turn);
+    });
+  }
+
   composer.addEventListener('submit', async (event) => {
     event.preventDefault();
     const textContent = input.value.trim();
@@ -449,6 +748,37 @@ async function boot() {
     input.disabled = true;
     const thinking = startThinking(messages, thinkingStatuses);
     try {
+      if (mcpEnabled) {
+        const clientTurnId = newClientTurnId();
+        const stored: StoredMcpTurn = {
+          message: textContent,
+          client_turn_id: clientTurnId,
+        };
+        // Persist before the first network byte so a disconnect/reload replays
+        // the same logical receipt instead of creating another tool turn.
+        persistMcpTurn(stored);
+        let data: McpTurnOut;
+        try {
+          data = await postMcpMessage(textContent, mcpSessionToken, clientTurnId);
+        } catch {
+          // Retry the same logical ID. The server receipt returns the original
+          // conversation/turn instead of invoking the loop a second time.
+          data = await postMcpMessage(textContent, mcpSessionToken, clientTurnId);
+        }
+        thinking.stop();
+        const bubble = addBubble(data.answer || mcpFallback(data.status), 'bot');
+        const accepted: StoredMcpTurn = {
+          ...stored,
+          turn_handle: data.turn_handle,
+          session_token: data.session_token || mcpSessionToken,
+        };
+        if (isMcpActive(data.status)) {
+          void watchMcpTurn(data, accepted, bubble);
+        } else {
+          clearMcpTurn(clientTurnId);
+        }
+        return;
+      }
       let res = await postMessage(textContent, sessionId);
       // Stale bare UUID / bad HMAC from an older tab → drop and start a fresh server session.
       if (res.status === 422 && sessionId) {

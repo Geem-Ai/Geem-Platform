@@ -565,7 +565,12 @@ class AppInstallationService:
 
         # Future phases attach connector cleanup hooks here (9C+).
         # Uninstall must NOT revoke licenses or cancel subscriptions.
-        self._run_uninstall_hooks(workspace_id=workspace.id, installation=row, app=app)
+        mcp_revocations = self._run_uninstall_hooks(
+            workspace_id=workspace.id,
+            installation=row,
+            app=app,
+            actor_id=actor_id,
+        )
 
         now = datetime.now(timezone.utc)
         row.status = AppInstallationStatus.UNINSTALLED.value
@@ -581,6 +586,12 @@ class AppInstallationService:
             allowlist=frozenset({"app_slug"}),
         )
         self.db.commit()
+        if mcp_revocations:
+            from app.mcp.teardown import McpConnectionTeardownService
+
+            McpConnectionTeardownService(
+                self.db, settings=self.settings
+            ).revoke_after_commit(mcp_revocations)
         loaded = self.repo.get_installation_for_workspace(workspace.id, row.id)
         assert loaded is not None
         security_log(
@@ -741,16 +752,28 @@ class AppInstallationService:
         workspace_id: uuid.UUID,
         installation: AppInstallation,
         app: CatalogApp,
-    ) -> None:
+        actor_id: uuid.UUID,
+    ) -> list:
         """Best-effort connector cleanup on uninstall (keeps licenses/subscriptions)."""
+        if app.connector_key == "mcp_remote":
+            from app.mcp.teardown import McpConnectionTeardownService
+
+            return McpConnectionTeardownService(
+                self.db, settings=self.settings
+            ).teardown_installation(
+                workspace_id=workspace_id,
+                installation_id=installation.id,
+                actor_id=actor_id,
+            )
         if app.connector_key != "openwa":
-            return
+            return []
         from app.connectors.providers.openwa.service import OpenWAChannelService
 
         OpenWAChannelService(self.db).remove_webhooks_for_installation(
             workspace_id=workspace_id,
             installation_id=installation.id,
         )
+        return []
 
     @staticmethod
     def _require_tenant(workspace: Workspace) -> None:

@@ -262,6 +262,22 @@ describe('ChatMessage citations + retry', () => {
 });
 
 describe('CitationList', () => {
+  it('renders tool citations without exposing raw tool output', () => {
+    withI18n(
+      <CitationList
+        citations={[{
+          kind: 'tool',
+          tool_call_id: 'call-1',
+          connection_name: 'Shared CRM',
+          tool_name: 'find_customer',
+          tool_title: 'Find customer',
+        }]}
+      />,
+    );
+    expect(screen.getByTestId('tool-citation-item')).toHaveTextContent('Find customer');
+    expect(screen.getByTestId('tool-citation-item')).toHaveTextContent('Shared CRM');
+  });
+
   it('renders after reload-shaped citation payloads', () => {
     withI18n(
       <CitationList

@@ -40,6 +40,9 @@ import { StoragePage } from '@/features/storage/pages/StoragePage';
 import { AppsPage } from '@/features/apps/pages/AppsPage';
 import { AppPaymentResultPage } from '@/features/apps/pages/AppPaymentResultPage';
 import { InstalledAppsPage } from '@/features/apps/pages/InstalledAppsPage';
+import { McpServersPage } from '@/features/apps/mcp/pages/McpServersPage';
+import { McpServerDetailPage } from '@/features/apps/mcp/pages/McpServerDetailPage';
+import { McpExternalApprovalsPage } from '@/features/apps/mcp/pages/McpExternalApprovalsPage';
 
 function HomeRedirect() {
   const { ready, can, permissions } = usePermissions();
@@ -128,7 +131,21 @@ export function AppRouter() {
               <Route path="apps" element={<AppsPage />} />
               <Route path="apps/installed" element={<InstalledAppsPage />} />
               <Route path="apps/payment/result" element={<AppPaymentResultPage />} />
+              <Route path="apps/mcp" element={<McpServersPage />} />
+              <Route path="apps/mcp/:connectionId" element={<McpServerDetailPage />} />
               <Route path="apps/:slug" element={<AppsPage />} />
+            </Route>
+            <Route
+              element={
+                <RequirePermission
+                  permission={WorkspacePermission.MCP_TOOLS_APPROVE_EXTERNAL}
+                />
+              }
+            >
+              <Route
+                path="apps/mcp/external-approvals"
+                element={<McpExternalApprovalsPage />}
+              />
             </Route>
             <Route
               element={

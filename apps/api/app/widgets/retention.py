@@ -11,6 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.conversations.models import Conversation, ConversationSource, Message
 from app.core.config import Settings, get_settings
+from app.mcp.runtime_models import (
+    McpPendingToolCall,
+    McpSurfaceDelivery,
+    McpWidgetTurnReceipt,
+)
 from app.widgets.models import WidgetConversationBinding
 
 logger = logging.getLogger(__name__)
@@ -30,10 +35,32 @@ class WidgetRetentionService:
 
     def purge_expired_for_conversation(self, conversation_id: uuid.UUID) -> int:
         """Eager path — drop stale messages on this widget thread before history load."""
+        cutoff = self.cutoff
+        self._purge_terminal_receipts(
+            cutoff=cutoff,
+            conversation_id=conversation_id,
+            limit=500,
+        )
         result = self.db.execute(
             delete(Message).where(
                 Message.conversation_id == conversation_id,
-                Message.created_at < self.cutoff,
+                Message.created_at < cutoff,
+                ~exists(
+                    select(McpPendingToolCall.id).where(
+                        McpPendingToolCall.message_id == Message.id
+                    )
+                ),
+                ~exists(
+                    select(McpWidgetTurnReceipt.id).where(
+                        (McpWidgetTurnReceipt.user_message_id == Message.id)
+                        | (McpWidgetTurnReceipt.assistant_message_id == Message.id)
+                    )
+                ),
+                ~exists(
+                    select(McpSurfaceDelivery.id).where(
+                        McpSurfaceDelivery.assistant_message_id == Message.id
+                    )
+                ),
             )
         )
         deleted = int(result.rowcount or 0)
@@ -44,6 +71,7 @@ class WidgetRetentionService:
     def purge_expired(self, *, limit: int = 500) -> dict[str, int]:
         """Periodic sweep — expire old widget messages, then empty conversations."""
         cutoff = self.cutoff
+        self._purge_terminal_receipts(cutoff=cutoff, limit=limit)
         widget_conv_ids = (
             select(Conversation.id)
             .where(Conversation.source == ConversationSource.WIDGET.value)
@@ -56,6 +84,22 @@ class WidgetRetentionService:
                 .where(
                     Message.conversation_id.in_(widget_conv_ids),
                     Message.created_at < cutoff,
+                    ~exists(
+                        select(McpPendingToolCall.id).where(
+                            McpPendingToolCall.message_id == Message.id
+                        )
+                    ),
+                    ~exists(
+                        select(McpWidgetTurnReceipt.id).where(
+                            (McpWidgetTurnReceipt.user_message_id == Message.id)
+                            | (McpWidgetTurnReceipt.assistant_message_id == Message.id)
+                        )
+                    ),
+                    ~exists(
+                        select(McpSurfaceDelivery.id).where(
+                            McpSurfaceDelivery.assistant_message_id == Message.id
+                        )
+                    ),
                 )
                 .order_by(Message.created_at.asc())
                 .limit(max(1, int(limit)))
@@ -80,6 +124,50 @@ class WidgetRetentionService:
             "messages_deleted": messages_deleted,
             "conversations_deleted": conversations_deleted,
         }
+
+    def _purge_terminal_receipts(
+        self,
+        *,
+        cutoff: datetime,
+        limit: int,
+        conversation_id: uuid.UUID | None = None,
+    ) -> int:
+        predicates = [
+            McpWidgetTurnReceipt.status.in_(
+                ("completed", "failed", "outcome_unknown")
+            ),
+            McpWidgetTurnReceipt.updated_at < cutoff,
+            ~exists(
+                select(McpPendingToolCall.id).where(
+                    McpPendingToolCall.message_id
+                    == McpWidgetTurnReceipt.assistant_message_id
+                )
+            ),
+            ~exists(
+                select(McpSurfaceDelivery.id).where(
+                    McpSurfaceDelivery.assistant_message_id
+                    == McpWidgetTurnReceipt.assistant_message_id
+                )
+            ),
+        ]
+        if conversation_id is not None:
+            predicates.append(
+                McpWidgetTurnReceipt.conversation_id == conversation_id
+            )
+        ids = list(
+            self.db.scalars(
+                select(McpWidgetTurnReceipt.id)
+                .where(*predicates)
+                .order_by(McpWidgetTurnReceipt.updated_at)
+                .limit(max(1, int(limit)))
+            ).all()
+        )
+        if not ids:
+            return 0
+        result = self.db.execute(
+            delete(McpWidgetTurnReceipt).where(McpWidgetTurnReceipt.id.in_(ids))
+        )
+        return int(result.rowcount or 0)
 
     def _purge_empty_widget_conversations(self, *, limit: int) -> int:
         has_messages = exists(

@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import documents, health, query
+from app.common.validation_errors import public_validation_errors
 from app.api.v1.agent_compat import (
     AgentErrorBoundaryMiddleware,
     agent_aware_http_exception_handler,
@@ -59,9 +60,12 @@ from app.connectors.providers.microsoft_onedrive import (
     register_microsoft_onedrive_connector,
 )
 from app.connectors.providers.openwa import register_openwa_connector
+from app.connectors.providers.mcp_remote import register_mcp_remote_connector
 from app.widgets.cors_middleware import PublicWidgetCorsMiddleware
 from app.widgets.public_router import router as public_widgets_router
 from app.widgets.workspace_router import router as chat_widget_router
+from app.mcp.router import router as mcp_router
+from app.mcp.runtime_router import router as mcp_runtime_router
 
 setup_logging()
 settings = get_settings()
@@ -70,6 +74,7 @@ settings = get_settings()
 register_google_drive_connector()
 register_microsoft_onedrive_connector()
 register_openwa_connector()
+register_mcp_remote_connector()
 
 _docs_enabled = settings.is_local
 
@@ -141,9 +146,13 @@ app.include_router(api_usage_router)
 app.include_router(api_keys_router)
 app.include_router(apps_catalog_router)
 app.include_router(apps_connections_router)
+# Exact MCP OAuth callback/CIMD routes must be registered before the generic
+# ``/api/connectors/oauth/{connector_key}/callback`` route.
+app.include_router(mcp_router)
 app.include_router(connectors_router)
 app.include_router(chat_widget_router)
 app.include_router(public_widgets_router)
+app.include_router(mcp_runtime_router)
 app.include_router(agent_router)
 app.include_router(public_v1_router)
 app.include_router(platform_router)
@@ -227,7 +236,8 @@ async def request_validation_handler(
     if is_openai_compat_path(request.url.path):
         return openai_validation_response(exc)
     return JSONResponse(
-        status_code=422, content={"detail": jsonable_encoder(exc.errors())}
+        status_code=422,
+        content={"detail": jsonable_encoder(public_validation_errors(exc.errors()))},
     )
 
 

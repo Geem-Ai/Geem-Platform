@@ -6,7 +6,14 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from app.api.schemas import Citation
 from app.conversations.models import MAX_CONVERSATION_TITLE_LENGTH
@@ -99,6 +106,25 @@ class MessageAttachmentOut(BaseModel):
     byte_size: int = 0
 
 
+class MessageToolActivityOut(BaseModel):
+    id: uuid.UUID
+    tool_call_id: str | None = None
+    connection_name: str | None = None
+    tool_name: str
+    status: str
+    error_code: str | None = None
+
+
+class MessageToolApprovalOut(BaseModel):
+    id: uuid.UUID
+    tool_call_id: str | None = None
+    connection_name: str | None = None
+    tool_name: str
+    arguments: dict[str, Any] | None = None
+    status: str
+    expires_at: datetime | None = None
+
+
 class MessageOut(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID
@@ -106,6 +132,8 @@ class MessageOut(BaseModel):
     content: str
     citations: list[Citation] = Field(default_factory=list)
     attachments: list[MessageAttachmentOut] = Field(default_factory=list)
+    tool_activities: list[MessageToolActivityOut] = Field(default_factory=list)
+    tool_approval: MessageToolApprovalOut | None = None
     status: str
     usage_event_id: uuid.UUID | None = None
     created_at: datetime
@@ -119,6 +147,17 @@ class MessageOut(BaseModel):
         if value is None:
             return []
         return value
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_mcp_metadata(self, handler: Any) -> dict[str, Any]:
+        """Keep pre-MCP message history byte-compatible when no MCP data exists."""
+
+        payload = handler(self)
+        if not self.tool_activities:
+            payload.pop("tool_activities", None)
+        if self.tool_approval is None:
+            payload.pop("tool_approval", None)
+        return payload
 
 
 class ConversationOut(BaseModel):

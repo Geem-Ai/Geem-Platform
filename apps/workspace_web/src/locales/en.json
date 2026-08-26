@@ -11,6 +11,8 @@
     "continue": "Continue",
     "download": "Download",
     "delete": "Delete",
+    "previous": "Previous",
+    "next": "Next",
     "moreInfoAbout": "About {{label}}"
   },
   "nav": {
@@ -37,6 +39,7 @@
       "experts": "Experts",
       "storage": "Storage",
       "apps": "Apps",
+      "mcp_tools": "MCP tools",
       "members": "Members",
       "roles": "Roles",
       "api_keys": "API keys",
@@ -133,6 +136,12 @@
       "connect": {
         "name": "Connect apps",
         "description": "Connect or disconnect external app accounts."
+      }
+    },
+    "mcp_tools": {
+      "approve_external": {
+        "name": "Approve external tool calls",
+        "description": "Approve or deny MCP write calls requested from public widgets and WhatsApp."
       }
     },
     "members": {
@@ -426,6 +435,31 @@
     "loadingHistory": "Loading conversation…",
     "loadingExperts": "Loading experts…",
     "scrollToBottom": "Scroll to bottom",
+    "tools": {
+      "approvalRequired": "Approval required",
+      "exactArguments": "Exact arguments",
+      "approvalDisclosure": "Approving sends these arguments to the connected external MCP server. Approve only if you trust the server and intended this action.",
+      "approveOnce": "Approve once",
+      "deny": "Deny",
+      "approved": "Tool call approved",
+      "denied": "Tool call denied",
+      "outcomeUnknown": "The external server may have completed this action, but Geem could not confirm the outcome. Check the external system before retrying.",
+      "composerPaused": "Finish the pending tool approval before sending another message.",
+      "status": {
+        "calling": "Running",
+        "succeeded": "Completed",
+        "failed": "Failed",
+        "outcome_unknown": "Outcome unknown",
+        "approval_required": "Approval required"
+      },
+      "approvalStatus": {
+        "approved": "Approved — execution is being checked",
+        "denied": "Denied",
+        "expired": "Approval expired",
+        "executing": "Running",
+        "completed": "Completed"
+      }
+    },
     "samplePrompts": {
       "p01": "What is the maximum probation period under Saudi Labor Law?",
       "p02": "How is end-of-service award calculated for a resigning employee?",
@@ -515,8 +549,62 @@
       "generating": "Generating…",
       "success": "System instructions generated"
     },
+    "editSections": "Expert settings",
+    "configurationTab": "Configuration",
     "advancedSettings": "Advanced settings",
     "advancedSettingsHint": "Controls how this Expert finds passages in its knowledge before answering.",
+    "mcp": {
+      "tab": "MCP tools",
+      "securityDisclosure": "Tool access is scoped to this Expert. Arguments and relevant conversation data are sent to the selected external server when a tool runs.",
+      "addGrant": "Grant a tool",
+      "addGrantHint": "Choose one discovered, compatible tool and explicitly select where the Expert may use it.",
+      "server": "MCP server",
+      "tool": "Tool",
+      "selectServer": "Select a server",
+      "selectTool": "Select a tool",
+      "workspaceChat": "Workspace chat",
+      "publicApi": "Public API",
+      "unattendedWrite": "Allow unattended API writes",
+      "outboundAck": "I understand data will be sent to this external server",
+      "unattendedAck": "I understand unattended writes can change external data without an interactive approval",
+      "apiWarning": "Public API use is unattended. Write tools remain blocked unless unattended writes are separately enabled and acknowledged.",
+      "unknownClassificationWarning": "An admin must classify this tool before it can be safely granted.",
+      "grant": "Grant tool",
+      "grantAdded": "Tool granted",
+      "grantRevoked": "Tool grant revoked",
+      "revoke": "Revoke",
+      "currentGrants": "Current grants",
+      "noGrants": "No MCP tools are granted to this Expert.",
+      "loadError": "MCP tool grants could not be loaded.",
+      "grants": "Expert grants",
+      "grantHint": "Select a Workspace Expert to review or change its access to these tools.",
+      "expert": "Workspace Expert",
+      "selectExpert": "Select an Expert",
+      "grantStateWarning": "This grant is {{state}} and cannot run until it is reviewed.",
+      "surfaceBindings": "Exact public surface bindings",
+      "surfaceBindingsHint": "A grant does not apply to every public surface. Bind it to one exact widget instance or WhatsApp connection.",
+      "selectGrant": "Select a granted tool",
+      "surface": "Surface",
+      "chatWidget": "Chat Widget",
+      "whatsapp": "WhatsApp",
+      "exactTarget": "Exact target",
+      "selectTarget": "Select an exact target",
+      "writePolicy": "Write policy",
+      "writeDeny": "Deny writes",
+      "operatorApproval": "Workspace operator approval",
+      "publicRiskAck": "I understand public users can trigger this tool and that writes require a workspace operator",
+      "bindSurface": "Bind surface",
+      "bindingAdded": "Surface binding added",
+      "bindingRevoked": "Surface binding revoked",
+      "surfaceKind": {
+        "chat_widget": "Chat Widget",
+        "whatsapp_openwa": "WhatsApp"
+      },
+      "writePolicyValue": {
+        "deny": "Writes denied",
+        "workspace_operator_approval": "Operator approval"
+      }
+    },
     "clientAgent": {
       "label": "Allow client agent API",
       "description": "Let API keys with the Agents AI scope use this Workspace Expert through the client-owned agent loop API.",
@@ -1340,6 +1428,132 @@
       "manageExperts": "Experts",
       "documentation": "Integrator documentation"
     },
+    "mcp": {
+      "title": "MCP servers",
+      "description": "Connect remote Model Context Protocol servers, review their tools, and grant only the capabilities each Expert needs.",
+      "comingSoonTitle": "MCP Connectors is coming soon",
+      "comingSoonHint": "Plans and secure server controls will appear here when this app is published.",
+      "securityTitle": "External tools and shared credentials",
+      "securityHint": "MCP servers are external systems. Tool arguments and relevant conversation data leave Geem when a tool runs. Credentials and OAuth identities are shared workspace resources.",
+      "noTierSwitch": "Plan changes are not self-service. Renew the current plan or contact support if you need a different tier.",
+      "manageServers": "Manage MCP servers",
+      "connectionsUsage": "Server connections",
+      "toolCallsUsage": "Tool calls today",
+      "usageValue": "{{used}} / {{limit}}",
+      "toolCallsProgress": "Daily MCP tool-call usage",
+      "resetsAt": "Resets at {{date}}",
+      "usageLoadError": "MCP access and usage could not be loaded.",
+      "addServer": "Add MCP server",
+      "addServerHint": "Enter the server’s canonical public HTTPS URL and choose how this workspace authenticates.",
+      "displayName": "Display name",
+      "serverUrl": "Server URL",
+      "publicHttpsOnly": "Only public HTTPS endpoints are allowed. Private, loopback, link-local, metadata, and redirect targets are blocked.",
+      "authMode": "Authentication",
+      "staticKind": "Credential type",
+      "headerName": "Header name",
+      "secret": "Secret",
+      "secretWriteOnly": "Secrets are write-only and cannot be viewed again after submission.",
+      "oauthStrategy": "OAuth registration",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "sharedAccountTitle": "Shared workspace account acknowledgement",
+      "sharedAccountDisclosure": "I understand this credential and external account are shared by authorized members of this workspace.",
+      "connecting": "Connecting…",
+      "serverAdded": "MCP server added",
+      "serverDeleted": "MCP server deleted",
+      "deleteConfirm": "Delete {{name}}? Its tool grants will no longer be usable.",
+      "deleteServer": "Delete server",
+      "emptyTitle": "No MCP servers",
+      "emptyHint": "Add a trusted remote MCP server to discover tools for your Workspace Experts.",
+      "authentication": "Authentication",
+      "account": "External identity",
+      "protocol": "Protocol",
+      "health": "Health",
+      "sessionMode": "Session mode",
+      "sharedWorkspaceAccount": "Shared workspace credential",
+      "reauthorizationWarning": "OAuth access or the external identity changed. Reauthorize and review affected grants before using tools again.",
+      "reauthorize": "Reauthorize",
+      "manageTools": "Manage tools",
+      "oauthConnected": "OAuth authorization completed. Connection health and identity are being refreshed.",
+      "oauthReturned": "OAuth returned with status: {{status}}",
+      "backToServers": "Back to MCP servers",
+      "serverDetails": "MCP server details",
+      "discoverTools": "Refresh tool inventory",
+      "discoveryComplete": "Discovery completed: {{count}} tools seen",
+      "tools": "Discovered tools",
+      "toolsHint": "Review compatibility, stable model alias, classification, drift state, and Expert grants before enabling a tool.",
+      "noTools": "No tools have been discovered. Refresh the tool inventory.",
+      "classification": "Classification",
+      "classificationUpdated": "Tool classification updated",
+      "pagination": "{{from}}–{{to}} of {{total}}",
+      "auth": {
+        "none": "No authentication",
+        "static": "Static credential",
+        "oauth": "OAuth",
+        "bearer": "Bearer token",
+        "header": "Custom allowlisted header"
+      },
+      "oauth": {
+        "cimd": "Client ID metadata document",
+        "preRegistered": "Pre-registered client",
+        "dynamic": "Dynamic client registration"
+      },
+      "classifications": {
+        "read_only": "Read-only",
+        "write": "Write",
+        "unknown": "Unknown"
+      },
+      "status": {
+        "pending": "Pending",
+        "active": "Active",
+        "connected": "Connected",
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "unhealthy": "Unhealthy",
+        "error": "Error",
+        "disconnected": "Disconnected",
+        "reauthorization_required": "Reauthorization required"
+      },
+      "compatibility": {
+        "compatible": "Compatible",
+        "unsupported_schema": "Unsupported schema",
+        "unsupported_capability": "Unsupported capability",
+        "malformed": "Malformed definition"
+      },
+      "toolStatus": {
+        "active": "Active",
+        "stale": "Definition changed",
+        "withdrawn": "Withdrawn"
+      },
+      "externalApprovals": {
+        "title": "External tool approvals",
+        "description": "Review pending write calls from exact Chat Widget and WhatsApp bindings, then reconcile deliveries whose provider outcome is unknown.",
+        "pending": "Pending approvals",
+        "empty": "No external tool calls are waiting for approval.",
+        "toolCall": "External tool call",
+        "surface": "Exact surface",
+        "sender": "Requester",
+        "expires": "Expires",
+        "exactArguments": "Exact arguments",
+        "disclosure": "Approving sends these arguments and relevant conversation data to the external MCP server. Verify the requester, target, and intended change.",
+        "approve": "Approve once",
+        "deny": "Deny",
+        "approved": "Tool call approved",
+        "denied": "Tool call denied",
+        "unknownDeliveries": "Unknown delivery outcomes",
+        "unknownHint": "Do not retry blindly. Check the provider or customer conversation, then record whether the reply was sent.",
+        "noUnknownDeliveries": "No deliveries need reconciliation.",
+        "confirmSent": "Confirm sent",
+        "cancelDelivery": "Mark cancelled",
+        "reconciled": "Delivery reconciled",
+        "status": {
+          "pending": "Pending",
+          "approved": "Approved",
+          "denied": "Denied",
+          "expired": "Expired"
+        }
+      }
+    },
     "installedEmptyTitle": "No installed apps",
     "installedEmptyHint": "Browse the App Store to install free apps for this workspace.",
     "connections": {
@@ -1483,6 +1697,18 @@
       "agents-scale": {
         "name": "Agents Scale",
         "description": "Highest launch capacity for larger client-owned agent workloads."
+      },
+      "mcp-starter": {
+        "name": "MCP Starter",
+        "description": "One MCP server connection and 200 admitted tool calls per UTC day."
+      },
+      "mcp-team": {
+        "name": "MCP Team",
+        "description": "Up to three MCP server connections and 1,000 admitted tool calls per UTC day."
+      },
+      "mcp-scale": {
+        "name": "MCP Scale",
+        "description": "Up to ten MCP server connections and 5,000 admitted tool calls per UTC day."
       }
     },
     "entitlements": {
@@ -1490,6 +1716,7 @@
       "widgets": "{{count}} widgets",
       "sessions": "{{count}} sessions",
       "agent_requests_daily": "{{count}} agent requests / UTC day",
+      "tool_calls_daily": "{{count}} MCP tool calls / UTC day",
       "other": "{{key}}: {{value}}"
     },
     "payment": {
@@ -1553,6 +1780,11 @@
         "name": "Agents AI",
         "shortDescription": "Add Geem RAG and model rounds to client-owned agent loops.",
         "description": "Use the OpenAI-compatible Agents AI endpoint from your own agent runtime. Your application executes tools; Geem supplies Expert policy, retrieval context, and model rounds."
+      },
+      "mcp-connectors": {
+        "name": "MCP Connectors",
+        "shortDescription": "Connect trusted remote MCP servers to Workspace Experts.",
+        "description": "Discover remote MCP tools, classify and grant them per Expert, and require explicit approval for writes on public surfaces. Credentials and external identities are shared workspace resources."
       }
     },
     "chatWidget": {
@@ -1591,7 +1823,11 @@
       "close": "Close",
       "statusActive": "Active",
       "statusDisabled": "Disabled",
-      "needsExpert": "Choose an Expert before embedding the widget on your site."
+      "needsExpert": "Choose an Expert before embedding the widget on your site.",
+      "mcpSummaryTitle": "MCP tools for this widget",
+      "mcpSummary": "Only tools explicitly bound to this exact widget for {{expert}} can run. An Expert-wide grant alone does not expose a tool publicly.",
+      "mcpOriginRequirement": "MCP tools require at least one exact HTTPS allowed origin and show visitors an external-service disclosure.",
+      "manageMcpTools": "Manage Expert MCP tools"
     },
     "toasts": {
       "installed": "{{name}} installed",
@@ -1661,6 +1897,12 @@
         "readOnly": "Members can view WhatsApp connection settings but cannot change them.",
         "saveDisabledHint": "Change a setting to save.",
         "unsaved": "Unsaved changes",
+        "mcpSummaryTitle": "MCP tools for this number",
+        "mcpSummary": "Only tools explicitly bound to this exact WhatsApp connection for {{expert}} can run.",
+        "mcpDirectOnly": "MCP tools are available only in direct chats. Group, status, and broadcast conversations remain tool-free.",
+        "mcpDisclosure": "On first tool use, the sender is told that relevant message data may be sent to an external service. Write tools require a workspace operator.",
+        "manageMcpTools": "Manage Expert MCP tools",
+        "externalApprovals": "Open approval queue",
         "statusHint": {
           "connecting": "WhatsApp is still linking. Continue to finish setup.",
           "waitingForQr": "Scan the QR code in WhatsApp to finish linking.",
@@ -1792,6 +2034,21 @@
     "connectorSyncNotSupported": "This connector does not support sync",
     "connectorSyncInProgress": "A sync is already in progress",
     "connectorSyncNotFound": "Sync run not found",
+    "mcpProtocolUnsupported": "This MCP server uses an unsupported protocol version.",
+    "mcpServerUnreachable": "The MCP server could not be reached safely.",
+    "mcpAuthRequired": "Authentication is required for this MCP server.",
+    "mcpReauthorizationRequired": "Reauthorize this MCP server and review its tool grants.",
+    "mcpToolNotGranted": "This tool is not granted to the selected Expert or surface.",
+    "mcpToolSetChanged": "The server’s tool definition changed. Review and approve the grant again.",
+    "mcpToolIncompatible": "This tool definition is not compatible with Geem.",
+    "mcpToolResultUnsupported": "The MCP tool returned an unsupported result.",
+    "mcpToolCallFailed": "The external MCP tool call failed.",
+    "mcpToolOutcomeUnknown": "The external tool outcome is unknown. Check the external system before retrying.",
+    "mcpToolLimitReached": "The daily MCP tool-call limit has been reached.",
+    "mcpExternalApprovalRequired": "A workspace operator must approve this external write tool call.",
+    "mcpExternalTurnPending": "This external conversation already has a pending tool turn.",
+    "mcpExternalDeliveryUnknown": "The reply delivery outcome is unknown and requires reconciliation.",
+    "egressTargetBlocked": "This external network target is blocked by Geem’s egress policy.",
     "googleDriveNotConfigured": "Google Drive is not configured on this server",
     "googleDriveAuthorizationFailed": "Google Drive authorization failed",
     "googleDriveReauthorizationRequired": "Reauthorization required for Google Drive",

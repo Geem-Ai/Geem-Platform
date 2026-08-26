@@ -84,6 +84,14 @@ from app.connectors.models import (  # noqa: E402
 )
 from app.widgets.models import WidgetConversationBinding, WidgetInstance  # noqa: E402
 from app.audit.models import AuditLog  # noqa: E402
+from app.mcp.models import McpServerTool, McpToolGrant  # noqa: E402
+from app.mcp.runtime_models import (  # noqa: E402
+    McpPendingToolCall,
+    McpSurfaceDelivery,
+    McpToolInvocation,
+    McpToolSurfaceBinding,
+    McpWidgetTurnReceipt,
+)
 
 __all__ = [
     "Document",
@@ -137,6 +145,13 @@ __all__ = [
     "WidgetInstance",
     "WidgetConversationBinding",
     "AuditLog",
+    "McpServerTool",
+    "McpToolGrant",
+    "McpToolInvocation",
+    "McpPendingToolCall",
+    "McpToolSurfaceBinding",
+    "McpSurfaceDelivery",
+    "McpWidgetTurnReceipt",
 ]
 
 

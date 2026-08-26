@@ -32,6 +32,7 @@ class MeteredWorkspaceGeneration:
         message_id: uuid.UUID | None = None,
         api_key_id: uuid.UUID | None = None,
         request_id: str | None = None,
+        reservation_multiplier: int = 1,
         settings: Settings | None = None,
     ) -> None:
         self.db = db
@@ -43,6 +44,7 @@ class MeteredWorkspaceGeneration:
         self.message_id = message_id
         self.api_key_id = api_key_id
         self.request_id = (request_id or str(uuid.uuid4())).strip()
+        self.reservation_multiplier = max(1, int(reservation_multiplier))
         self._closed = False
         self._context = GenerationUsageContext(
             workspace_id=workspace_id,
@@ -65,7 +67,8 @@ class MeteredWorkspaceGeneration:
         AiUsageService(self.db, self.settings).reserve_ai_usage(
             self.workspace_id,
             self.request_id,
-            self.settings.effective_ai_usage_reservation_tokens,
+            self.settings.effective_ai_usage_reservation_tokens
+            * self.reservation_multiplier,
             conversation_id=self.conversation_id,
             message_id=self.message_id,
             user_id=self.user_id,
@@ -86,7 +89,8 @@ class MeteredWorkspaceGeneration:
         AiUsageService(self.db, self.settings).reserve_ai_usage(
             self.workspace_id,
             self.request_id,
-            self.settings.effective_ai_usage_reservation_tokens,
+            self.settings.effective_ai_usage_reservation_tokens
+            * self.reservation_multiplier,
             conversation_id=self.conversation_id,
             message_id=self.message_id,
             user_id=self.user_id,
