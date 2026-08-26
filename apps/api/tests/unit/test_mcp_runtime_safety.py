@@ -18,7 +18,7 @@ from app.agent.schemas import (
     AgentToolCall,
     AgentUsage,
 )
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
 from app.conversations.invocation import ChatInvocationContext
 from app.mcp.executor import (
@@ -32,6 +32,7 @@ from app.mcp.gateway_client import (
     HttpMcpGatewayClient,
     McpToolCallRequest,
     _gateway_error_category,
+    _safe_gateway_message,
 )
 from app.mcp.public_tokens import (
     channel_external_principal_fingerprint,
@@ -331,6 +332,7 @@ def test_gateway_explicit_pre_dispatch_timeout_is_not_reclassified_unknown() -> 
     ("code", "expected"),
     [
         ("mcp_tool_inventory_too_large", ErrorCategory.MCP_TOOL_LIMIT_REACHED),
+        ("mcp_response_too_large", ErrorCategory.MCP_RESPONSE_TOO_LARGE),
         ("mcp_arguments_too_large", ErrorCategory.MCP_TOOL_INCOMPATIBLE),
         ("mcp_session_binding_mismatch", ErrorCategory.MCP_PROTOCOL_UNSUPPORTED),
         ("mcp_session_target_mismatch", ErrorCategory.MCP_PROTOCOL_UNSUPPORTED),
@@ -343,6 +345,25 @@ def test_gateway_maps_bounded_inventory_argument_and_session_errors(
     code: str, expected: ErrorCategory
 ) -> None:
     assert _gateway_error_category(code, outcome_unknown=False) == expected
+
+
+def test_gateway_reports_oversized_response_without_calling_it_unsupported() -> None:
+    category = _gateway_error_category(
+        "mcp_response_too_large", outcome_unknown=False
+    )
+
+    assert category == ErrorCategory.MCP_RESPONSE_TOO_LARGE
+    assert _safe_gateway_message(category) == (
+        "The MCP server response exceeds the configured limit."
+    )
+
+
+def test_api_default_response_budget_supports_large_tool_inventories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MCP_EGRESS_MAX_RESPONSE_BYTES", raising=False)
+
+    assert Settings(_env_file=None).mcp_egress_max_response_bytes == 262_144
 
 
 def test_widget_session_and_turn_tokens_are_audience_bound_and_bounded() -> None:

@@ -47,6 +47,7 @@ from app.mcp.constants import (
     MCP_CONNECTIONS_ENTITLEMENT,
     MCP_CONNECTOR_KEY,
     MCP_CONNECTORS_APP_SLUG,
+    MCP_LISTED_CONNECTION_STATUSES,
 )
 from app.mcp.gateway import (
     McpDiscoveryRequest,
@@ -545,7 +546,7 @@ class McpServerService:
     ) -> McpServerOut:
         repo = McpRepository(self.db)
         row = repo.get_connection(workspace_id, connection_id)
-        if row is None:
+        if row is None or row.status not in MCP_LISTED_CONNECTION_STATUSES:
             raise AppError(ErrorCategory.CONNECTOR_NOT_FOUND, "MCP server not found.")
         return _redacted_server_out(
             self.db,
@@ -598,12 +599,18 @@ class McpServerService:
         connection_id: uuid.UUID,
         limit: int,
         offset: int,
+        q: str | None = None,
     ) -> McpToolListOut:
         repo = McpRepository(self.db)
-        if repo.get_connection(workspace_id, connection_id) is None:
+        row = repo.get_connection(workspace_id, connection_id)
+        if row is None or row.status not in MCP_LISTED_CONNECTION_STATUSES:
             raise AppError(ErrorCategory.CONNECTOR_NOT_FOUND, "MCP server not found.")
         rows, total = repo.list_tools(
-            workspace_id, connection_id, limit=limit, offset=offset
+            workspace_id,
+            connection_id,
+            limit=limit,
+            offset=offset,
+            q=q,
         )
         return McpToolListOut(
             items=[_tool_out(row) for row in rows],

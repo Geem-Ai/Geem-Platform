@@ -322,7 +322,7 @@ def _settings(**overrides: object) -> GatewaySettings:
         "app_env": "test",
         "allow_private_egress": False,
         "max_request_bytes": 65_536,
-        "max_response_bytes": 65_536,
+        "max_response_bytes": 262_144,
         "max_discovered_tools": 512,
         "read_timeout_seconds": 2.0,
         "total_timeout_seconds": 3.0,
@@ -601,6 +601,44 @@ def test_paginated_list_cursor_and_call_inventory_walk_use_sdk() -> None:
         "tools/list",
         "tools/call",
     ]
+
+
+def test_default_budget_accepts_tool_inventory_larger_than_64_kib() -> None:
+    wire = McpWireFixture(
+        tools=[
+            {
+                "name": "large-schema",
+                "description": "d" * 70_000,
+                "inputSchema": {"type": "object"},
+            }
+        ]
+    )
+
+    response = _client(wire).post("/v1/mcp", json=_request("tools_list"))
+
+    assert response.status_code == 200, response.text
+    assert len(response.content) > 65_536
+    assert response.json()["tools"][0]["name"] == "large-schema"
+
+
+def test_tool_inventory_above_configured_budget_remains_rejected() -> None:
+    wire = McpWireFixture(
+        tools=[
+            {
+                "name": "oversized-schema",
+                "description": "d" * 70_000,
+                "inputSchema": {"type": "object"},
+            }
+        ]
+    )
+
+    response = _client(
+        wire,
+        settings=_settings(max_response_bytes=65_536),
+    ).post("/v1/mcp", json=_request("tools_list"))
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "mcp_response_too_large"
 
 
 def test_tool_lookup_has_a_hard_page_cap() -> None:

@@ -114,11 +114,13 @@ export type ApiErrorCode =
   | 'mcp_protocol_unsupported'
   | 'mcp_server_unreachable'
   | 'mcp_auth_required'
+  | 'mcp_oauth_client_registration_failed'
   | 'mcp_reauthorization_required'
   | 'mcp_tool_not_granted'
   | 'mcp_tool_set_changed'
   | 'mcp_tool_incompatible'
   | 'mcp_tool_result_unsupported'
+  | 'mcp_response_too_large'
   | 'mcp_tool_call_failed'
   | 'mcp_tool_outcome_unknown'
   | 'mcp_tool_limit_reached'
@@ -290,11 +292,13 @@ const KNOWN_CODES = new Set<string>([
   'mcp_protocol_unsupported',
   'mcp_server_unreachable',
   'mcp_auth_required',
+  'mcp_oauth_client_registration_failed',
   'mcp_reauthorization_required',
   'mcp_tool_not_granted',
   'mcp_tool_set_changed',
   'mcp_tool_incompatible',
   'mcp_tool_result_unsupported',
+  'mcp_response_too_large',
   'mcp_tool_call_failed',
   'mcp_tool_outcome_unknown',
   'mcp_tool_limit_reached',
@@ -520,11 +524,14 @@ export function errorMessageKey(code: string): string {
     mcp_protocol_unsupported: 'errors.mcpProtocolUnsupported',
     mcp_server_unreachable: 'errors.mcpServerUnreachable',
     mcp_auth_required: 'errors.mcpAuthRequired',
+    mcp_oauth_client_registration_failed:
+      'errors.mcpOauthClientRegistrationFailed',
     mcp_reauthorization_required: 'errors.mcpReauthorizationRequired',
     mcp_tool_not_granted: 'errors.mcpToolNotGranted',
     mcp_tool_set_changed: 'errors.mcpToolSetChanged',
     mcp_tool_incompatible: 'errors.mcpToolIncompatible',
     mcp_tool_result_unsupported: 'errors.mcpToolResultUnsupported',
+    mcp_response_too_large: 'errors.mcpResponseTooLarge',
     mcp_tool_call_failed: 'errors.mcpToolCallFailed',
     mcp_tool_outcome_unknown: 'errors.mcpToolOutcomeUnknown',
     mcp_tool_limit_reached: 'errors.mcpToolLimitReached',

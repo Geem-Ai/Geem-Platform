@@ -281,6 +281,7 @@ def list_mcp_server_tools(
     connection_id: uuid.UUID,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(default=None, max_length=200),
     access: DocumentAccess = Depends(get_document_access),
     db: Session = Depends(get_db),
 ) -> McpToolListOut:
@@ -290,6 +291,7 @@ def list_mcp_server_tools(
         connection_id=connection_id,
         limit=limit,
         offset=offset,
+        q=q,
     )
 
 

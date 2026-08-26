@@ -361,7 +361,13 @@ class Settings(BaseSettings):
     mcp_egress_blocked_networks: str = ""
     mcp_allow_private_egress: bool = False
     mcp_egress_max_request_bytes: int = Field(default=65_536, gt=0, le=1_048_576)
-    mcp_egress_max_response_bytes: int = Field(default=65_536, gt=0, le=1_048_576)
+    # Tool inventories include every tool's JSON Schema. Large providers such
+    # as GitHub legitimately exceed 64 KiB in a single tools/list page, while
+    # a 256 KiB default keeps upstream memory use bounded. Operators may raise
+    # it to the enforced 1 MiB ceiling for unusually large servers.
+    mcp_egress_max_response_bytes: int = Field(
+        default=262_144, gt=0, le=1_048_576
+    )
     mcp_egress_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
     mcp_egress_read_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     mcp_egress_total_timeout_seconds: float = Field(default=30.0, gt=0, le=180)

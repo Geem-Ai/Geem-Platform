@@ -513,7 +513,7 @@ def _gateway_error_category(code: str, *, outcome_unknown: bool) -> ErrorCategor
         "mcp_pagination_invalid": ErrorCategory.MCP_TOOL_SET_CHANGED,
         "mcp_tool_inventory_too_large": ErrorCategory.MCP_TOOL_LIMIT_REACHED,
         "mcp_arguments_too_large": ErrorCategory.MCP_TOOL_INCOMPATIBLE,
-        "mcp_response_too_large": ErrorCategory.MCP_TOOL_RESULT_UNSUPPORTED,
+        "mcp_response_too_large": ErrorCategory.MCP_RESPONSE_TOO_LARGE,
         "mcp_session_binding_mismatch": ErrorCategory.MCP_PROTOCOL_UNSUPPORTED,
         "mcp_session_target_mismatch": ErrorCategory.MCP_PROTOCOL_UNSUPPORTED,
         "mcp_session_not_found": ErrorCategory.MCP_SERVER_UNREACHABLE,
@@ -532,6 +532,9 @@ def _safe_gateway_message(category: ErrorCategory) -> str:
         ErrorCategory.MCP_SERVER_UNREACHABLE: "The MCP server could not be reached.",
         ErrorCategory.MCP_TOOL_INCOMPATIBLE: "The MCP tool uses an unsupported capability.",
         ErrorCategory.MCP_TOOL_RESULT_UNSUPPORTED: "The MCP tool returned an unsupported result.",
+        ErrorCategory.MCP_RESPONSE_TOO_LARGE: (
+            "The MCP server response exceeds the configured limit."
+        ),
         ErrorCategory.MCP_TOOL_SET_CHANGED: "The MCP server tool inventory changed.",
         ErrorCategory.MCP_TOOL_LIMIT_REACHED: "The MCP server advertised too many tools.",
         ErrorCategory.MCP_TOOL_OUTCOME_UNKNOWN: "The MCP tool outcome could not be confirmed.",

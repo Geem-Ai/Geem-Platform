@@ -15,7 +15,12 @@ from app.core.config import Settings
 from app.core.errors import AppError, ErrorCategory
 from app.db.session import get_db
 from app.documents.dependencies import DocumentAccess, get_document_access
-from app.mcp.router import create_expert_mcp_grant, create_mcp_server, list_mcp_servers
+from app.mcp.router import (
+    create_expert_mcp_grant,
+    create_mcp_server,
+    list_mcp_server_tools,
+    list_mcp_servers,
+)
 from app.mcp.schemas import McpGrantCreateIn, McpServerCreateIn
 from app.mcp.surfaces import McpApprovalListOut
 from app.workspaces.permissions import WorkspacePermission
@@ -86,6 +91,45 @@ def test_browse_permission_dispatches_to_scoped_service(monkeypatch) -> None:
         "list",
         {"workspace_id": access.workspace.id, "limit": 25, "offset": 5},
     )
+
+
+def test_tool_search_dispatches_to_workspace_scoped_service(monkeypatch) -> None:
+    sentinel = object()
+    calls: list[dict] = []
+
+    class _Service:
+        def __init__(self, _db) -> None:
+            pass
+
+        def list_tools(self, **kwargs):
+            calls.append(kwargs)
+            return sentinel
+
+    monkeypatch.setattr(router_module, "McpServerService", _Service)
+    connection_id = uuid.uuid4()
+    db = SimpleNamespace()
+    access = _access(WorkspacePermission.APPS_VIEW)
+
+    assert (
+        list_mcp_server_tools(
+            connection_id,
+            25,
+            50,
+            "pull request",
+            access,
+            db,
+        )
+        is sentinel
+    )
+    assert calls == [
+        {
+            "workspace_id": access.workspace.id,
+            "connection_id": connection_id,
+            "limit": 25,
+            "offset": 50,
+            "q": "pull request",
+        }
+    ]
 
 
 def test_generic_connector_start_cannot_create_malformed_mcp_row() -> None:

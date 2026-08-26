@@ -571,6 +571,14 @@ def test_gateway_defaults_to_fail_closed_production(monkeypatch) -> None:
     assert GatewaySettings.from_env().app_env == "production"
 
 
+def test_gateway_default_response_budget_supports_large_tool_inventories(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("EGRESS_MAX_RESPONSE_BYTES", raising=False)
+
+    assert GatewaySettings.from_env().max_response_bytes == 262_144
+
+
 @pytest.mark.parametrize(
     "proxy_url",
     [

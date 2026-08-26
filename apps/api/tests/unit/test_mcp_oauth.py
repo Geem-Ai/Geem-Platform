@@ -355,6 +355,7 @@ def test_dynamic_registration_is_issuer_bound_and_no_redirects() -> None:
     assert registration_call["follow_redirects"] is False
     registration = json.loads(registration_call["body"])
     assert registration["application_type"] == "web"
+    assert registration["token_endpoint_auth_method"] == "none"
     assert registration["redirect_uris"] == [
         "https://api.geem.example/api/connectors/oauth/mcp_remote/callback"
     ]
@@ -363,6 +364,199 @@ def test_dynamic_registration_is_issuer_bound_and_no_redirects() -> None:
     ]
     assert states.created is not None
     assert states.created["binding"]["issuer"] == "https://auth.example.com"
+
+
+def test_dynamic_registration_uses_confidential_method_when_required() -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    responses = _discovery_responses()
+    metadata = json.loads(responses[2].body)
+    metadata.update(
+        {
+            "registration_endpoint": "https://auth.example.com/register",
+            "client_id_metadata_document_supported": False,
+            "token_endpoint_auth_methods_supported": [
+                "client_secret_basic",
+                "client_secret_post",
+            ],
+        }
+    )
+    responses[2] = _json_response(200, metadata)
+    responses.append(
+        _json_response(
+            201,
+            {
+                "client_id": "registered-client",
+                "client_secret": "registered-secret",
+                "token_endpoint_auth_method": "client_secret_basic",
+            },
+        )
+    )
+    gateway = _Gateway(responses)
+    service = McpOAuthService(settings=_settings(), gateway=gateway)
+
+    flow = service._discover_flow(snapshot, requested_scopes=None)
+
+    registration_call = gateway.calls[-1]
+    assert json.loads(registration_call["body"])["token_endpoint_auth_method"] == (
+        "client_secret_basic"
+    )
+    assert flow.registration.client_id == "registered-client"
+    assert flow.registration.client_secret == "registered-secret"
+    assert flow.registration.token_endpoint_auth_method == "client_secret_basic"
+
+
+def test_dynamic_registration_uses_standard_basic_default_when_metadata_omits_methods() -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    responses = _discovery_responses()
+    metadata = json.loads(responses[2].body)
+    metadata.update(
+        {
+            "registration_endpoint": "https://auth.example.com/register",
+            "client_id_metadata_document_supported": False,
+        }
+    )
+    metadata.pop("token_endpoint_auth_methods_supported")
+    responses[2] = _json_response(200, metadata)
+    responses.append(
+        _json_response(
+            201,
+            {
+                "client_id": "registered-client",
+                "client_secret": "registered-secret",
+            },
+        )
+    )
+    gateway = _Gateway(responses)
+    service = McpOAuthService(settings=_settings(), gateway=gateway)
+
+    flow = service._discover_flow(snapshot, requested_scopes=None)
+
+    registration = json.loads(gateway.calls[-1]["body"])
+    assert registration["token_endpoint_auth_method"] == "client_secret_basic"
+    assert flow.registration.token_endpoint_auth_method == "client_secret_basic"
+
+
+def test_dynamic_registration_rejection_has_provider_specific_category() -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    responses = _discovery_responses()
+    metadata = json.loads(responses[2].body)
+    metadata.update(
+        {
+            "registration_endpoint": "https://auth.example.com/register",
+            "client_id_metadata_document_supported": False,
+        }
+    )
+    responses[2] = _json_response(200, metadata)
+    responses.append(OAuthHttpResponse(status_code=403, headers={}, body=b""))
+    gateway = _Gateway(responses)
+    service = McpOAuthService(settings=_settings(), gateway=gateway)
+
+    with pytest.raises(AppError) as caught:
+        service._discover_flow(snapshot, requested_scopes=None)
+
+    assert caught.value.category == ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED
+    assert [call["method"] for call in gateway.calls] == ["POST", "GET", "GET", "POST"]
+
+
+@pytest.mark.parametrize(
+    ("status_code", "category"),
+    [
+        (429, ErrorCategory.RATE_LIMITED),
+        (503, ErrorCategory.MCP_SERVER_UNREACHABLE),
+    ],
+)
+def test_dynamic_registration_transient_failure_is_retryable(
+    status_code: int,
+    category: ErrorCategory,
+) -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    responses = _discovery_responses()
+    metadata = json.loads(responses[2].body)
+    metadata.update(
+        {
+            "registration_endpoint": "https://auth.example.com/register",
+            "client_id_metadata_document_supported": False,
+        }
+    )
+    responses[2] = _json_response(200, metadata)
+    responses.append(OAuthHttpResponse(status_code=status_code, headers={}, body=b"redacted"))
+    service = McpOAuthService(settings=_settings(), gateway=_Gateway(responses))
+
+    with pytest.raises(AppError) as caught:
+        service._discover_flow(snapshot, requested_scopes=None)
+
+    assert caught.value.category == category
+    assert caught.value.retryable is True
+
+
+@pytest.mark.parametrize(
+    "registration_response",
+    [
+        OAuthHttpResponse(status_code=201, headers={}, body=b"not-json"),
+        _json_response(
+            201,
+            {
+                "client_id": "registered-client",
+                "token_endpoint_auth_method": "client_secret_basic",
+            },
+        ),
+    ],
+    ids=["malformed-json", "missing-confidential-secret"],
+)
+def test_dynamic_registration_invalid_success_uses_provider_specific_category(
+    registration_response: OAuthHttpResponse,
+) -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    responses = _discovery_responses()
+    metadata = json.loads(responses[2].body)
+    metadata.update(
+        {
+            "registration_endpoint": "https://auth.example.com/register",
+            "client_id_metadata_document_supported": False,
+            "token_endpoint_auth_methods_supported": ["client_secret_basic"],
+        }
+    )
+    responses[2] = _json_response(200, metadata)
+    responses.append(registration_response)
+    service = McpOAuthService(settings=_settings(), gateway=_Gateway(responses))
+
+    with pytest.raises(AppError) as caught:
+        service._discover_flow(snapshot, requested_scopes=None)
+
+    assert caught.value.category == ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED
+
+
+def test_start_authorization_marks_discovery_failure_before_reraising() -> None:
+    snapshot = _snapshot(strategy="dynamic_registration")
+    service = McpOAuthService(settings=_settings())
+    marked: list[AppError] = []
+    service._admit_start = MethodType(  # type: ignore[method-assign]
+        lambda _self, **_kwargs: snapshot,
+        service,
+    )
+
+    def _fail_discovery(_self, *_args, **_kwargs):
+        raise AppError(
+            ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED,
+            "provider rejected registration",
+        )
+
+    service._discover_flow = MethodType(_fail_discovery, service)  # type: ignore[method-assign]
+    service._mark_start_failure = MethodType(  # type: ignore[method-assign]
+        lambda _self, *, snapshot, error: marked.append(error),
+        service,
+    )
+
+    with pytest.raises(AppError) as caught:
+        service.start_authorization(
+            workspace_id=snapshot.workspace_id,
+            actor_id=snapshot.actor_id,
+            connection_id=snapshot.connection_id,
+            return_path=None,
+        )
+
+    assert caught.value.category == ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED
+    assert marked == [caught.value]
 
 
 def test_token_exchange_uses_pkce_and_resource_and_rejects_scope_widening() -> None:

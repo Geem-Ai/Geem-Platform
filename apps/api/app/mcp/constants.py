@@ -7,11 +7,25 @@ from app.apps_catalog.mcp_product import (
     MCP_CONNECTOR_KEY,
     MCP_CONNECTORS_APP_SLUG,
 )
+from app.connectors.types import ConnectionStatus
 
 MCP_NORMALIZATION_VERSION = "mcp-tool-definition-v1"
 MCP_TOOL_ALIAS_MAX_LENGTH = 64
 MCP_TOOL_NAME_MAX_LENGTH = 256
 MCP_TOOL_DESCRIPTOR_MAX_BYTES = 262_144
+
+# Tenant inventory is intentionally limited to nonterminal connections. Keep
+# this product visibility policy separate from connector entitlement accounting
+# so a future quota-policy change cannot resurrect retired MCP servers.
+MCP_LISTED_CONNECTION_STATUSES = frozenset(
+    {
+        ConnectionStatus.PENDING.value,
+        ConnectionStatus.CONNECTING.value,
+        ConnectionStatus.ACTIVE.value,
+        ConnectionStatus.DEGRADED.value,
+        ConnectionStatus.ERROR.value,
+    }
+)
 
 # Generic MCP static authentication deliberately accepts a very small contract.
 # Additional proprietary headers require a reviewed connector adapter.
@@ -73,6 +87,7 @@ __all__ = [
     "MCP_CONNECTOR_KEY",
     "MCP_CONNECTORS_APP_SLUG",
     "MCP_FORBIDDEN_AUTH_HEADERS",
+    "MCP_LISTED_CONNECTION_STATUSES",
     "MCP_NORMALIZATION_VERSION",
     "MCP_STATIC_HEADER_ALLOWLIST",
     "MCP_TOOL_ALIAS_MAX_LENGTH",

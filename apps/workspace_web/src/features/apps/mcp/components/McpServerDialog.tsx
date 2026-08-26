@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type {
   McpAuthMode,
   McpOauthStrategy,
+  McpServer,
   McpServerCreateInput,
 } from '@/services/api/mcp';
 import { useCreateMcpServer, useStartMcpOauth } from '../hooks/useMcpQueries';
@@ -48,6 +49,7 @@ export function McpServerDialog({
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [sharedAccountAck, setSharedAccountAck] = useState(false);
+  const submitLockRef = useRef(false);
   const pending = create.isPending || oauth.isPending;
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export function McpServerDialog({
     setClientId('');
     setClientSecret('');
     setSharedAccountAck(false);
+    submitLockRef.current = false;
     create.reset();
     oauth.reset();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -96,30 +99,47 @@ export function McpServerDialog({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!serverUrl.trim() || !sharedAccountAck) return;
+    if (!serverUrl.trim() || !sharedAccountAck || submitLockRef.current) return;
+    submitLockRef.current = true;
+    const requiresOauth = authMode === 'oauth';
+    let server: McpServer;
     try {
-      const server = await create.mutateAsync(buildInput());
-      // Secrets stay only in component memory and are cleared before navigation.
-      setSecret('');
-      setClientSecret('');
-      if (server.authorization_url) {
-        window.location.assign(server.authorization_url);
-        return;
-      }
-      if (authMode === 'oauth') {
+      server = await create.mutateAsync(buildInput());
+    } catch (error) {
+      submitLockRef.current = false;
+      const code = error instanceof ApiError ? error.code : 'unknown';
+      toast.error(t(errorMessageKey(code)));
+      return;
+    }
+
+    // Creation is committed before the separate OAuth bootstrap request. Close
+    // and clear the create form as soon as that durable boundary is crossed so
+    // an OAuth-provider rejection cannot accidentally create a duplicate row.
+    setSecret('');
+    setClientSecret('');
+    onOpenChange(false);
+    if (server.authorization_url) {
+      window.location.assign(server.authorization_url);
+      return;
+    }
+    if (requiresOauth) {
+      try {
         const result = await oauth.mutateAsync({
           connectionId: server.id,
           returnPath: '/apps/mcp',
         });
         window.location.assign(result.authorization_url);
-        return;
+      } catch (error) {
+        const code = error instanceof ApiError ? error.code : 'unknown';
+        toast.error(
+          t('apps.mcp.serverAddedAuthFailed', {
+            reason: t(errorMessageKey(code)),
+          }),
+        );
       }
-      toast.success(t('apps.mcp.serverAdded'));
-      onOpenChange(false);
-    } catch (error) {
-      const code = error instanceof ApiError ? error.code : 'unknown';
-      toast.error(t(errorMessageKey(code)));
+      return;
     }
+    toast.success(t('apps.mcp.serverAdded'));
   }
 
   const staticInvalid =

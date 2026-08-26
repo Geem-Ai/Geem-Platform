@@ -58,7 +58,9 @@ class GatewaySettings:
     )
     max_redirects: int = 3
     max_request_bytes: int = 65_536
-    max_response_bytes: int = 65_536
+    # A tools/list response contains the JSON Schema for every advertised
+    # tool. Real-world inventories can exceed 64 KiB without being malformed.
+    max_response_bytes: int = 262_144
     max_header_bytes: int = 16_384
     max_headers: int = 64
     max_discovered_tools: int = 512
@@ -109,7 +111,7 @@ class GatewaySettings:
                 "EGRESS_MAX_REQUEST_BYTES", 65_536, minimum=1, maximum=1_048_576
             ),
             max_response_bytes=_env_int(
-                "EGRESS_MAX_RESPONSE_BYTES", 65_536, minimum=1, maximum=1_048_576
+                "EGRESS_MAX_RESPONSE_BYTES", 262_144, minimum=1, maximum=1_048_576
             ),
             max_header_bytes=_env_int(
                 "EGRESS_MAX_HEADER_BYTES", 16_384, minimum=1_024, maximum=65_536

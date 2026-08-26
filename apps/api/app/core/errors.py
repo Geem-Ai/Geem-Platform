@@ -187,11 +187,13 @@ class ErrorCategory(StrEnum):
     MCP_PROTOCOL_UNSUPPORTED = "mcp_protocol_unsupported"
     MCP_SERVER_UNREACHABLE = "mcp_server_unreachable"
     MCP_AUTH_REQUIRED = "mcp_auth_required"
+    MCP_OAUTH_CLIENT_REGISTRATION_FAILED = "mcp_oauth_client_registration_failed"
     MCP_REAUTHORIZATION_REQUIRED = "mcp_reauthorization_required"
     MCP_TOOL_NOT_GRANTED = "mcp_tool_not_granted"
     MCP_TOOL_SET_CHANGED = "mcp_tool_set_changed"
     MCP_TOOL_INCOMPATIBLE = "mcp_tool_incompatible"
     MCP_TOOL_RESULT_UNSUPPORTED = "mcp_tool_result_unsupported"
+    MCP_RESPONSE_TOO_LARGE = "mcp_response_too_large"
     MCP_TOOL_CALL_FAILED = "mcp_tool_call_failed"
     MCP_TOOL_OUTCOME_UNKNOWN = "mcp_tool_outcome_unknown"
     MCP_TOOL_LIMIT_REACHED = "mcp_tool_limit_reached"
@@ -406,11 +408,15 @@ HTTP_STATUS_BY_CATEGORY: dict[str, int] = {
     "mcp_protocol_unsupported": 422,
     "mcp_server_unreachable": 502,
     "mcp_auth_required": 401,
+    # Provider-side client admission failure; this is not an expired Geem
+    # session and must never trigger the SPA's session-refresh path.
+    "mcp_oauth_client_registration_failed": 403,
     "mcp_reauthorization_required": 403,
     "mcp_tool_not_granted": 403,
     "mcp_tool_set_changed": 409,
     "mcp_tool_incompatible": 422,
     "mcp_tool_result_unsupported": 422,
+    "mcp_response_too_large": 422,
     "mcp_tool_call_failed": 502,
     "mcp_tool_outcome_unknown": 409,
     "mcp_tool_limit_reached": 429,

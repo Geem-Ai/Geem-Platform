@@ -408,13 +408,22 @@ def test_oauth_disconnect_commits_local_deny_before_best_effort_revocation(
             return True
 
     probe = _RevocationProbe()
-    McpServerService(db, oauth=probe).delete_server(  # type: ignore[arg-type]
+    service = McpServerService(db, oauth=probe)  # type: ignore[arg-type]
+    service.delete_server(
         workspace_id=chain.workspace.id,
         actor_id=chain.user.id,
         connection_id=chain.connection.id,
     )
 
+    inventory = service.list_servers(
+        workspace_id=chain.workspace.id,
+        limit=100,
+        offset=0,
+    )
+
     assert probe.called is True
+    assert inventory.items == []
+    assert inventory.total == 0
     assert chain.connection.credentials_encrypted is None
     assert chain.connection.mcp_principal_fingerprint is None
     assert chain.connection.mcp_reauthorization_required is False

@@ -93,11 +93,15 @@ export function useMcpAuthStatus(
 
 export function useMcpTools(
   connectionId: string | undefined,
-  params: { limit?: number; offset?: number } = {},
+  params: { limit?: number; offset?: number; q?: string } = {},
   enabled = true,
 ) {
   const workspaceId = useWorkspaceId();
-  const scoped = { limit: params.limit ?? 50, offset: params.offset ?? 0 };
+  const scoped = {
+    limit: params.limit ?? 50,
+    offset: params.offset ?? 0,
+    q: params.q?.trim() ?? '',
+  };
   return useQuery({
     queryKey: queryKeys.mcpTools(workspaceId, connectionId ?? '', scoped),
     queryFn: () => listMcpTools(connectionId!, scoped),
@@ -136,6 +140,9 @@ export function useDiscoverMcpTools() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.mcpServer(workspaceId, connectionId),
         }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.experts(workspaceId),
+        }),
       ]);
     },
   });
@@ -153,14 +160,21 @@ export function useUpdateMcpToolClassification(connectionId: string) {
       classification: McpToolClassification;
     }) => updateMcpToolClassification(toolId, classification),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.mcpTools(workspaceId, connectionId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mcpTools(workspaceId, connectionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.experts(workspaceId),
+        }),
+      ]);
     },
   });
 }
 
 export function useStartMcpOauth() {
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       connectionId,
@@ -169,6 +183,19 @@ export function useStartMcpOauth() {
       connectionId: string;
       returnPath?: string;
     }) => startMcpOauth(connectionId, returnPath),
+    onSettled: async (_result, _error, { connectionId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mcpServers(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mcpServer(workspaceId, connectionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mcpServerAuthStatus(workspaceId, connectionId),
+        }),
+      ]);
+    },
   });
 }
 

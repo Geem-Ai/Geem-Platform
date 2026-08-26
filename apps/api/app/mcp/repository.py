@@ -5,12 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.connectors.models import AppConnection
+from app.documents.repository import ilike_contains_pattern
 from app.experts.models import Expert
-from app.mcp.constants import MCP_CONNECTOR_KEY
+from app.mcp.constants import MCP_CONNECTOR_KEY, MCP_LISTED_CONNECTION_STATUSES
 from app.mcp.models import McpServerTool, McpToolGrant
 from app.mcp.runtime_models import McpToolSurfaceBinding
 from app.mcp.types import McpGrantState, McpToolStatus
@@ -54,6 +55,7 @@ class McpRepository:
         where = (
             AppConnection.workspace_id == workspace_id,
             AppConnection.connector_key == MCP_CONNECTOR_KEY,
+            AppConnection.status.in_(tuple(MCP_LISTED_CONNECTION_STATUSES)),
         )
         total = int(
             self.db.scalar(select(func.count()).select_from(AppConnection).where(*where))
@@ -92,19 +94,33 @@ class McpRepository:
         *,
         limit: int,
         offset: int,
+        q: str | None = None,
     ) -> tuple[list[McpServerTool], int]:
-        where = (
+        filters = [
             McpServerTool.workspace_id == workspace_id,
             McpServerTool.app_connection_id == connection_id,
-        )
+        ]
+        needle = (q or "").strip()
+        if needle:
+            pattern = ilike_contains_pattern(needle)
+            filters.append(
+                or_(
+                    McpServerTool.title.ilike(pattern, escape="\\"),
+                    McpServerTool.tool_name.ilike(pattern, escape="\\"),
+                    McpServerTool.llm_tool_name.ilike(pattern, escape="\\"),
+                    McpServerTool.description.ilike(pattern, escape="\\"),
+                )
+            )
         total = int(
-            self.db.scalar(select(func.count()).select_from(McpServerTool).where(*where))
+            self.db.scalar(
+                select(func.count()).select_from(McpServerTool).where(*filters)
+            )
             or 0
         )
         rows = list(
             self.db.scalars(
                 select(McpServerTool)
-                .where(*where)
+                .where(*filters)
                 .order_by(McpServerTool.tool_name, McpServerTool.id)
                 .limit(limit)
                 .offset(offset)

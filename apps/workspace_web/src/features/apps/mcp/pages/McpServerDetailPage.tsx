@@ -1,19 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, ShieldAlert, Wrench } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Search, ShieldAlert, Wrench, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WorkspacePermission } from '@/features/authz/permissions';
 import { usePermissions } from '@/features/authz/usePermissions';
 import { useExperts } from '@/features/experts/hooks/useExperts';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
-import type { McpTool, McpToolClassification } from '@/services/api/mcp';
+import type { McpGrant, McpTool, McpToolClassification } from '@/services/api/mcp';
 import {
   useCreateExpertMcpGrant,
   useDiscoverMcpTools,
@@ -35,12 +36,20 @@ export function McpServerDetailPage() {
   const { connectionId = '' } = useParams<{ connectionId: string }>();
   const { can } = usePermissions();
   const [offset, setOffset] = useState(0);
+  const [toolSearchInput, setToolSearchInput] = useState('');
+  const [toolSearch, setToolSearch] = useState('');
   const [expertId, setExpertId] = useState('');
   const [allowWorkspaceChat, setAllowWorkspaceChat] = useState(true);
   const [allowPublicApi, setAllowPublicApi] = useState(false);
   const [outboundAck, setOutboundAck] = useState(false);
+  const [savingGrantToolId, setSavingGrantToolId] = useState<string | null>(null);
+  const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null);
   const serverQuery = useMcpServer(connectionId);
-  const toolsQuery = useMcpTools(connectionId, { limit: PAGE_SIZE, offset });
+  const toolsQuery = useMcpTools(connectionId, {
+    limit: PAGE_SIZE,
+    offset,
+    q: toolSearch,
+  });
   const expertsQuery = useExperts();
   const grantsQuery = useExpertMcpGrants(expertId || undefined);
   const discover = useDiscoverMcpTools();
@@ -56,6 +65,22 @@ export function McpServerDetailPage() {
   );
   const server = serverQuery.data;
   const tools = toolsQuery.data?.items ?? [];
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const next = toolSearchInput.trim();
+      if (next === toolSearch) return;
+      setOffset(0);
+      setToolSearch(next);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [toolSearch, toolSearchInput]);
+
+  function clearToolSearch() {
+    setToolSearchInput('');
+    setToolSearch('');
+    setOffset(0);
+  }
 
   async function refreshDiscovery() {
     try {
@@ -75,15 +100,10 @@ export function McpServerDetailPage() {
     }
   }
 
-  async function toggleGrant(tool: McpTool) {
+  async function saveGrant(tool: McpTool, existingGrant?: McpGrant) {
     if (!expertId) return;
-    const existing = grantedToolIds.get(tool.id);
+    setSavingGrantToolId(tool.id);
     try {
-      if (existing) {
-        await revokeGrant.mutateAsync(existing.id);
-        toast.success(t('experts.mcp.grantRevoked'));
-        return;
-      }
       await createGrant.mutateAsync({
         tool_id: tool.id,
         allow_workspace_chat: allowWorkspaceChat,
@@ -91,9 +111,29 @@ export function McpServerDetailPage() {
         unattended_write_allowed: false,
         outbound_data_acknowledged: outboundAck,
       });
-      toast.success(t('experts.mcp.grantAdded'));
+      if (!existingGrant) {
+        toast.success(t('experts.mcp.grantAdded'));
+      } else if (existingGrant.state === 'active') {
+        toast.success(t('experts.mcp.grantUpdated'));
+      } else {
+        toast.success(t('experts.mcp.grantReapproved'));
+      }
     } catch (error) {
       toast.error(t(errorMessageKey(error instanceof ApiError ? error.code : 'unknown')));
+    } finally {
+      setSavingGrantToolId(null);
+    }
+  }
+
+  async function revokeToolGrant(grant: McpGrant) {
+    setRevokingGrantId(grant.id);
+    try {
+      await revokeGrant.mutateAsync(grant.id);
+      toast.success(t('experts.mcp.grantRevoked'));
+    } catch (error) {
+      toast.error(t(errorMessageKey(error instanceof ApiError ? error.code : 'unknown')));
+    } finally {
+      setRevokingGrantId(null);
     }
   }
 
@@ -135,7 +175,7 @@ export function McpServerDetailPage() {
 
       {canUpdateExperts ? (
         <Card data-testid="mcp-grant-controls">
-          <CardHeader><div><h2 className="font-semibold">{t('experts.mcp.grants')}</h2><p className="text-xs text-muted-foreground">{t('experts.mcp.grantHint')}</p></div></CardHeader>
+          <CardHeader><div><h2 className="font-semibold">{t('experts.mcp.grantOptions')}</h2><p className="text-xs text-muted-foreground">{t('experts.mcp.grantOptionsHint')}</p></div></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2"><Label>{t('experts.mcp.expert')}</Label><Select value={expertId} onValueChange={setExpertId}><SelectTrigger data-testid="mcp-expert-select"><SelectValue placeholder={t('experts.mcp.selectExpert')} /></SelectTrigger><SelectContent>{workspaceExperts.map((expert) => <SelectItem key={expert.id} value={expert.id}>{expert.name}</SelectItem>)}</SelectContent></Select></div>
@@ -151,15 +191,67 @@ export function McpServerDetailPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="mcp-tools-heading">
-        <div><h2 id="mcp-tools-heading" className="text-lg font-semibold">{t('apps.mcp.tools')}</h2><p className="text-sm text-muted-foreground">{t('apps.mcp.toolsHint')}</p></div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div><h2 id="mcp-tools-heading" className="text-lg font-semibold">{t('apps.mcp.tools')}</h2><p className="text-sm text-muted-foreground">{t('apps.mcp.toolsHint')}</p></div>
+          <div className="relative w-full sm:w-64 shrink-0">
+            <Search className="pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              value={toolSearchInput}
+              onChange={(event) => setToolSearchInput(event.target.value)}
+              placeholder={t('apps.mcp.toolsSearchPlaceholder')}
+              aria-label={t('apps.mcp.toolsSearchPlaceholder')}
+              data-testid="mcp-tools-search"
+              className="ps-8 pe-8"
+              maxLength={200}
+            />
+            {toolSearchInput ? (
+              <button
+                type="button"
+                onClick={clearToolSearch}
+                className="absolute end-2 top-1/2 -translate-y-1/2 rounded-sm text-muted-foreground hover:text-foreground"
+                aria-label={t('apps.mcp.clearToolsSearch')}
+                data-testid="mcp-tools-search-clear"
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        </div>
         {toolsQuery.isLoading ? <div className="h-36 rounded-xl bg-muted animate-pulse" /> : null}
-        {!toolsQuery.isLoading && tools.length === 0 ? <Card><CardContent className="p-8 text-center text-sm text-muted-foreground"><Wrench className="size-7 mx-auto mb-2" aria-hidden />{t('apps.mcp.noTools')}</CardContent></Card> : null}
+        {!toolsQuery.isLoading && tools.length === 0 ? <Card><CardContent className="p-8 text-center text-sm text-muted-foreground"><Wrench className="size-7 mx-auto mb-2" aria-hidden />{toolSearch ? t('apps.mcp.noToolsMatch', { query: toolSearch }) : t('apps.mcp.noTools')}</CardContent></Card> : null}
         {tools.map((tool) => {
-          const existingGrant = grantedToolIds.get(tool.id);
+          const grantRecord = grantedToolIds.get(tool.id);
+          const existingGrant = grantRecord?.state === 'revoked' ? undefined : grantRecord;
           const incompatible = tool.compatibility_status !== 'compatible';
           const stale = tool.status !== 'active';
+          const unclassified = tool.classification === 'unknown';
+          const reauthorizationRequired = Boolean(
+            server?.reauthorization_required || server?.auth?.reauthorization_required,
+          );
+          const savingGrant = savingGrantToolId === tool.id;
+          const revokingGrant = existingGrant ? revokingGrantId === existingGrant.id : false;
+          const grantAction = !existingGrant
+            ? 'grant'
+            : existingGrant.state === 'active'
+              ? 'saveGrantChanges'
+              : 'reapprove';
+          const pendingGrantAction = !existingGrant
+            ? 'granting'
+            : existingGrant.state === 'active'
+              ? 'savingGrantChanges'
+              : 'reapproving';
+          const grantActionDisabled =
+            incompatible
+            || stale
+            || unclassified
+            || reauthorizationRequired
+            || (!allowWorkspaceChat && !allowPublicApi)
+            || !outboundAck
+            || Boolean(grantsQuery.isLoading)
+            || createGrant.isPending
+            || revokeGrant.isPending;
           return (
-            <Card key={tool.id} data-testid="mcp-tool-card">
+            <Card key={tool.id} data-testid="mcp-tool-card" aria-busy={savingGrant || revokingGrant}>
               <CardHeader className="py-3">
                 <div className="min-w-0"><h3 className="font-semibold truncate" dir="auto">{toolLabel(tool)}</h3><p className="font-mono text-xs text-muted-foreground truncate" dir="ltr">{tool.tool_name} · {tool.llm_tool_name}</p></div>
                 <div className="flex gap-1.5"><Badge variant={incompatible ? 'destructive' : 'success'} appearance="light" size="sm">{t(`apps.mcp.compatibility.${tool.compatibility_status}`, { defaultValue: tool.compatibility_status })}</Badge>{stale ? <Badge variant="warning" appearance="light" size="sm">{t(`apps.mcp.toolStatus.${tool.status}`, { defaultValue: tool.status })}</Badge> : null}</div>
@@ -169,7 +261,38 @@ export function McpServerDetailPage() {
                 {incompatible && tool.compatibility_reason ? <div className="flex gap-2 text-xs text-destructive"><ShieldAlert className="size-4 shrink-0" aria-hidden />{tool.compatibility_reason}</div> : null}
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-1"><Label>{t('apps.mcp.classification')}</Label><Select value={tool.classification} disabled={!canManageApps || classify.isPending} onValueChange={(value) => void updateClassification(tool, value as McpToolClassification)}><SelectTrigger className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="read_only">{t('apps.mcp.classifications.read_only')}</SelectItem><SelectItem value="write">{t('apps.mcp.classifications.write')}</SelectItem><SelectItem value="unknown">{t('apps.mcp.classifications.unknown')}</SelectItem></SelectContent></Select></div>
-                  {canUpdateExperts && expertId ? <Button type="button" size="sm" variant={existingGrant ? 'destructive' : 'outline'} disabled={incompatible || stale || (!existingGrant && !outboundAck) || createGrant.isPending || revokeGrant.isPending} onClick={() => void toggleGrant(tool)}>{existingGrant ? t('experts.mcp.revoke') : t('experts.mcp.grant')}</Button> : null}
+                  {canUpdateExperts && expertId ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={existingGrant ? 'primary' : 'outline'}
+                        disabled={grantActionDisabled}
+                        onClick={() => void saveGrant(tool, existingGrant)}
+                        aria-label={t('experts.mcp.toolGrantActionLabel', {
+                          action: t(`experts.mcp.${grantAction}`),
+                          tool: toolLabel(tool),
+                        })}
+                      >
+                        {t(`experts.mcp.${savingGrant ? pendingGrantAction : grantAction}`)}
+                      </Button>
+                      {existingGrant ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={createGrant.isPending || revokeGrant.isPending}
+                          onClick={() => void revokeToolGrant(existingGrant)}
+                          aria-label={t('experts.mcp.toolGrantActionLabel', {
+                            action: t('experts.mcp.revoke'),
+                            tool: toolLabel(tool),
+                          })}
+                        >
+                          {t(`experts.mcp.${revokingGrant ? 'revoking' : 'revoke'}`)}
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 {existingGrant && existingGrant.state !== 'active' ? <p className="text-xs text-destructive">{t('experts.mcp.grantStateWarning', { state: existingGrant.state })}</p> : null}
               </CardContent>

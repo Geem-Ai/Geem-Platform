@@ -13,6 +13,7 @@ import {
   listMcpTools,
   updateMcpToolClassification,
 } from './mcp';
+import { errorMessageKey, isKnownApiErrorCode } from './errors';
 import { queryKeys } from './query-keys';
 
 describe('MCP API', () => {
@@ -36,6 +37,15 @@ describe('MCP API', () => {
     apiRequestMock.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 25 });
     await listMcpTools('server/1', { limit: 25, offset: 25 });
     expect(apiRequestMock).toHaveBeenCalledWith('/api/apps/mcp/servers/server%2F1/tools?limit=25&offset=25');
+
+    await listMcpTools('server/1', {
+      limit: 25,
+      offset: 0,
+      q: '  pull request  ',
+    });
+    expect(apiRequestMock).toHaveBeenLastCalledWith(
+      '/api/apps/mcp/servers/server%2F1/tools?limit=25&offset=0&q=pull+request',
+    );
 
     await updateMcpToolClassification('tool/1', 'write');
     expect(apiRequestMock).toHaveBeenLastCalledWith('/api/apps/mcp/tools/tool%2F1', {
@@ -68,5 +78,12 @@ describe('MCP API', () => {
     expect(queryKeys.expertMcpGrants('ws-2', 'expert-1')).toEqual([
       'workspace', 'ws-2', 'experts', 'expert-1', 'mcp-grants',
     ]);
+  });
+
+  it('recognizes an oversized MCP response as a dedicated error', () => {
+    expect(isKnownApiErrorCode('mcp_response_too_large')).toBe(true);
+    expect(errorMessageKey('mcp_response_too_large')).toBe(
+      'errors.mcpResponseTooLarge',
+    );
   });
 });

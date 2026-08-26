@@ -347,7 +347,10 @@ MCP_EGRESS_BLOCKED_NETWORKS=10.42.0.0/16,172.30.0.0/16
 MCP_ALLOW_PRIVATE_EGRESS=false
 
 MCP_EGRESS_MAX_REQUEST_BYTES=65536
-MCP_EGRESS_MAX_RESPONSE_BYTES=65536
+# Tool inventories include tool JSON Schemas and can be substantially larger
+# than individual runtime results. This 256 KiB default remains bounded; the
+# gateway enforces an absolute 1 MiB ceiling for operator overrides.
+MCP_EGRESS_MAX_RESPONSE_BYTES=262144
 MCP_EGRESS_CONNECT_TIMEOUT_SECONDS=5
 MCP_EGRESS_READ_TIMEOUT_SECONDS=20
 MCP_EGRESS_TOTAL_TIMEOUT_SECONDS=30

@@ -11,6 +11,7 @@ import { WorkspacePermission } from '@/features/authz/permissions';
 import { usePermissions } from '@/features/authz/usePermissions';
 import { ApiError, errorMessageKey } from '@/services/api/errors';
 import type { McpServer } from '@/services/api/mcp';
+import { DeleteMcpServerDialog } from '../components/DeleteMcpServerDialog';
 import { McpServerDialog } from '../components/McpServerDialog';
 import { McpUsageSummary } from '../components/McpUsageSummary';
 import {
@@ -18,6 +19,7 @@ import {
   useMcpServers,
   useReauthorizeMcpServer,
 } from '../hooks/useMcpQueries';
+import { displayedServerStatus } from './mcpServerStatus';
 
 function serverName(server: McpServer): string {
   return server.display_name || server.endpoint_host || server.id;
@@ -25,7 +27,7 @@ function serverName(server: McpServer): string {
 
 function statusVariant(status: string) {
   if (status === 'healthy' || status === 'active' || status === 'connected') return 'success' as const;
-  if (status === 'error' || status === 'unhealthy' || status === 'reauthorization_required') return 'destructive' as const;
+  if (status === 'error' || status === 'failed' || status === 'unhealthy' || status === 'reauthorization_required') return 'destructive' as const;
   return 'secondary' as const;
 }
 
@@ -34,22 +36,28 @@ export function McpServersPage() {
   const { can } = usePermissions();
   const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [serverToDelete, setServerToDelete] = useState<McpServer | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const query = useMcpServers({ limit: 100, offset: 0 });
   const remove = useDeleteMcpServer();
   const reauthorize = useReauthorizeMcpServer();
   const canConnect = can(WorkspacePermission.APPS_CONNECT);
-  const canManage = can(WorkspacePermission.APPS_MANAGE);
   const canApproveExternal = can(WorkspacePermission.MCP_TOOLS_APPROVE_EXTERNAL);
   const oauthResult = searchParams.get('oauth') || searchParams.get('status');
   const items = query.data?.items ?? [];
 
   async function removeServer(server: McpServer) {
-    if (!window.confirm(t('apps.mcp.deleteConfirm', { name: serverName(server) }))) return;
     try {
       await remove.mutateAsync(server.id);
+      setServerToDelete(null);
+      setDeleteError(null);
       toast.success(t('apps.mcp.serverDeleted'));
     } catch (error) {
-      toast.error(t(errorMessageKey(error instanceof ApiError ? error.code : 'unknown')));
+      const message = t(
+        errorMessageKey(error instanceof ApiError ? error.code : 'unknown'),
+      );
+      setDeleteError(message);
+      toast.error(message);
     }
   }
 
@@ -141,7 +149,9 @@ export function McpServersPage() {
           const requiresReauthorization = Boolean(
             server.reauthorization_required || server.auth.reauthorization_required,
           );
-          const status = requiresReauthorization ? 'reauthorization_required' : (server.health || server.status);
+          const status = requiresReauthorization
+            ? 'reauthorization_required'
+            : displayedServerStatus(server);
           return (
             <Card key={server.id} data-testid="mcp-server-card">
               <CardHeader className="py-3">
@@ -172,8 +182,20 @@ export function McpServersPage() {
                   {server.auth.mode === 'oauth' && canConnect ? (
                     <Button type="button" size="sm" variant="outline" disabled={reauthorize.isPending} onClick={() => void startReauthorization(server)}>{t('apps.mcp.reauthorize')}</Button>
                   ) : null}
-                  {canManage ? (
-                    <Button type="button" size="sm" variant="destructive" disabled={remove.isPending} onClick={() => void removeServer(server)}>{t('apps.mcp.deleteServer')}</Button>
+                  {canConnect ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={remove.isPending}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setServerToDelete(server);
+                      }}
+                      data-testid={`mcp-delete-server-${server.id}`}
+                    >
+                      {t('apps.mcp.deleteServer')}
+                    </Button>
                   ) : null}
                 </div>
               </CardContent>
@@ -183,6 +205,19 @@ export function McpServersPage() {
       </div>
 
       <McpServerDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <DeleteMcpServerDialog
+        server={serverToDelete}
+        open={serverToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setServerToDelete(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={(server) => void removeServer(server)}
+        isPending={remove.isPending}
+        errorMessage={deleteError}
+      />
     </div>
   );
 }

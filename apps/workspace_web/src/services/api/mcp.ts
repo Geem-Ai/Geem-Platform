@@ -257,10 +257,14 @@ export type McpExternalDeliveryList = {
   offset: number;
 };
 
-function paging(params?: { limit?: number; offset?: number }): string {
+type PagingParams = { limit?: number; offset?: number; q?: string };
+
+function paging(params?: PagingParams): string {
   const query = new URLSearchParams();
   if (params?.limit !== undefined) query.set('limit', String(params.limit));
   if (params?.offset !== undefined) query.set('offset', String(params.offset));
+  const search = params?.q?.trim();
+  if (search) query.set('q', search);
   const value = query.toString();
   return value ? `?${value}` : '';
 }
@@ -321,7 +325,7 @@ export function discoverMcpTools(connectionId: string) {
 
 export function listMcpTools(
   connectionId: string,
-  params?: { limit?: number; offset?: number },
+  params?: PagingParams,
 ) {
   return apiRequest<McpToolList>(
     `/api/apps/mcp/servers/${encodeURIComponent(connectionId)}/tools${paging(params)}`,

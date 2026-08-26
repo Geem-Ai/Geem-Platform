@@ -157,7 +157,7 @@ export const queryKeys = {
   mcpTools: (
     workspaceId: string,
     connectionId: string,
-    params?: { limit?: number; offset?: number },
+    params?: { limit?: number; offset?: number; q?: string },
   ) =>
     params
       ? workspaceQueryKey(

@@ -410,7 +410,14 @@ class McpOAuthService:
             actor_id=actor_id,
             connection_id=connection_id,
         )
-        flow = self._discover_flow(snapshot, requested_scopes=requested_scopes)
+        try:
+            flow = self._discover_flow(snapshot, requested_scopes=requested_scopes)
+        except AppError as exc:
+            # The create transaction has already committed. Persist a safe,
+            # compare-and-set failure state so a rejected provider bootstrap
+            # cannot leave a new connection looking perpetually in progress.
+            self._mark_start_failure(snapshot=snapshot, error=exc)
+            raise
         persisted = self._persist_start(
             snapshot=snapshot,
             flow=flow,
@@ -827,6 +834,44 @@ class McpOAuthService:
         finally:
             db.close()
 
+    def _mark_start_failure(
+        self,
+        *,
+        snapshot: _ConnectionSnapshot,
+        error: AppError,
+    ) -> None:
+        """Best-effort, concurrency-safe persistence for OAuth setup failure."""
+
+        db = self.session_factory()
+        try:
+            row = McpRepository(db).get_connection(
+                snapshot.workspace_id, snapshot.connection_id, for_update=True
+            )
+            if (
+                row is None
+                or row.app_installation_id != snapshot.installation_id
+                or row.auth_mode != ConnectorAuthMode.OAUTH2.value
+                or row.mcp_credential_epoch != snapshot.credential_epoch
+                or row.credentials_encrypted != snapshot.encrypted_credentials
+                or (snapshot.had_principal and not row.mcp_reauthorization_required)
+            ):
+                _rollback(db)
+                return
+            row.status = ConnectionStatus.ERROR.value
+            row.health = ConnectionHealth.FAILED.value
+            row.mcp_reauthorization_required = True
+            row.last_error_code = error.category.value[:128]
+            row.last_error_message = "MCP OAuth authorization could not be started."
+            row.last_error_at = _now()
+            db.commit()
+        except SQLAlchemyError:
+            _rollback(db)
+            # Failure-state persistence must never replace the original safe
+            # provider error returned to the caller.
+            logger.error("mcp_oauth_start_failure_persistence_failed")
+        finally:
+            db.close()
+
     def _discover_flow(
         self,
         snapshot: _ConnectionSnapshot,
@@ -1115,12 +1160,15 @@ class McpOAuthService:
                 ErrorCategory.MCP_AUTH_REQUIRED,
                 "This authorization server does not advertise dynamic client registration.",
             )
+        registration_auth_method = _select_dynamic_registration_auth_method(
+            metadata.token_endpoint_auth_methods_supported
+        )
         registration_body = {
             "client_name": "Geem",
             "redirect_uris": [self._redirect_uri()],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
-            "token_endpoint_auth_method": "none",
+            "token_endpoint_auth_method": registration_auth_method,
             "application_type": "web",
         }
         response = self.gateway.request(
@@ -1136,24 +1184,42 @@ class McpOAuthService:
             ).encode("utf-8"),
             follow_redirects=False,
         )
+        if response.status_code == 429:
+            raise AppError(
+                ErrorCategory.RATE_LIMITED,
+                "The OAuth provider temporarily rate-limited client registration.",
+                retryable=True,
+            )
+        if response.status_code >= 500:
+            raise AppError(
+                ErrorCategory.MCP_SERVER_UNREACHABLE,
+                "The OAuth provider could not complete client registration.",
+                retryable=True,
+            )
         if response.status_code not in {200, 201}:
             raise AppError(
-                ErrorCategory.MCP_AUTH_REQUIRED,
-                "Dynamic OAuth client registration failed.",
+                ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED,
+                "The OAuth provider rejected this MCP client registration.",
             )
-        registered = _json_object(response.body, "dynamic client registration")
-        client_id = _bounded_client_id(registered.get("client_id"))
-        secret = _optional_secret(
-            registered.get("client_secret"), maximum=_CLIENT_SECRET_MAX
-        )
-        advertised_method = str(
-            registered.get("token_endpoint_auth_method") or ""
-        ).strip()
-        method = _select_token_auth_method(
-            secret=secret,
-            supported=metadata.token_endpoint_auth_methods_supported,
-            preferred=advertised_method or None,
-        )
+        try:
+            registered = _json_object(response.body, "dynamic client registration")
+            client_id = _bounded_client_id(registered.get("client_id"))
+            secret = _optional_secret(
+                registered.get("client_secret"), maximum=_CLIENT_SECRET_MAX
+            )
+            advertised_method = str(
+                registered.get("token_endpoint_auth_method") or ""
+            ).strip()
+            method = _select_token_auth_method(
+                secret=secret,
+                supported=metadata.token_endpoint_auth_methods_supported,
+                preferred=advertised_method or registration_auth_method,
+            )
+        except AppError as exc:
+            raise AppError(
+                ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED,
+                "The OAuth provider returned an invalid client registration.",
+            ) from exc
         return _Registration(
             strategy=strategy,
             issuer=metadata.issuer,
@@ -2134,6 +2200,22 @@ def _select_token_auth_method(
     raise AppError(
         ErrorCategory.MCP_AUTH_REQUIRED,
         "The OAuth server does not support the configured client authentication.",
+    )
+
+
+def _select_dynamic_registration_auth_method(supported: tuple[str, ...]) -> str:
+    """Choose the safest client type the authorization server advertises."""
+
+    if not supported:
+        # RFC 8414 defines client_secret_basic as the default when authorization
+        # server metadata omits token_endpoint_auth_methods_supported.
+        return "client_secret_basic"
+    for candidate in ("none", "client_secret_basic", "client_secret_post"):
+        if candidate in supported:
+            return candidate
+    raise AppError(
+        ErrorCategory.MCP_OAUTH_CLIENT_REGISTRATION_FAILED,
+        "The OAuth provider does not support a compatible MCP client type.",
     )
 
 
