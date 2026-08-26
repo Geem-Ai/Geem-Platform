@@ -90,10 +90,52 @@ class _TwoRoundProvider:
         )
 
 
+class _ScriptedToolProvider:
+    def __init__(self, arguments: list[str], *, final_content: str) -> None:
+        self.arguments = arguments
+        self.final_content = final_content
+        self.messages: list[list[dict]] = []
+        self.tool_sets: list[list[dict]] = []
+
+    def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        self.messages.append(list(messages))
+        self.tool_sets.append(list(_kwargs.get("tools") or []))
+        round_index = len(self.messages) - 1
+        if round_index < len(self.arguments):
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content=None,
+                    tool_calls=[
+                        AgentToolCall(
+                            id=f"call-{round_index + 1}",
+                            type="function",
+                            function=AgentFunctionCall(
+                                name="mcp_read",
+                                arguments=self.arguments[round_index],
+                            ),
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+                usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
+                provider_model="test/tool-model",
+            )
+        return AgentProviderResult(
+            message=AgentAssistantResponseMessage(
+                content=self.final_content,
+                tool_calls=None,
+            ),
+            finish_reason="stop",
+            usage=AgentUsage(prompt_tokens=3, completion_tokens=1, total_tokens=4),
+            provider_model="test/tool-model",
+        )
+
+
 class _RecordingDispatcher:
     def __init__(self, *, delay: float = 0.0, is_error: bool = False) -> None:
         self.delay = delay
         self.calls = 0
+        self.arguments: list[dict] = []
         self.normalized = NormalizedToolResult(
             model_content=(
                 "<untrusted_mcp_tool_result>repository not found"
@@ -109,6 +151,7 @@ class _RecordingDispatcher:
 
     def dispatch(self, **_kwargs):
         self.calls += 1
+        self.arguments.append(dict(_kwargs["arguments"]))
         if self.delay:
             time.sleep(self.delay)
         return self.normalized, {
@@ -152,7 +195,7 @@ class _RecordingDocumentRag:
 
 
 def _tool_loop(
-    provider: _TwoRoundProvider,
+    provider: _TwoRoundProvider | _ScriptedToolProvider,
     dispatcher: _RecordingDispatcher,
     *,
     general: bool = True,
@@ -194,7 +237,11 @@ def _tool_loop(
         title="Customer lookup",
         input_schema={
             "type": "object",
-            "properties": {"customer_id": {"type": "integer"}},
+            "properties": {
+                "customer_id": {"type": "integer"},
+                "page": {"type": "integer"},
+                "perPage": {"type": "integer"},
+            },
             "required": ["customer_id"],
             "additionalProperties": False,
         },
@@ -311,6 +358,106 @@ def test_synchronous_tool_loop_callers_remain_supported() -> None:
 
     assert result.answer == "Final answer"
     assert dispatcher.calls == 1
+
+
+def test_reordered_identical_success_dispatches_once_then_synthesizes_tool_free() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":1,"perPage":100}',
+            '{"perPage":100,"customer_id":7,"page":1}',
+        ],
+        final_content=(
+            '{"answer_markdown":"One page checked.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+        ),
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="check page one",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7, "page": 1, "perPage": 100}]
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert len(provider.tool_sets) == 3
+    assert provider.tool_sets[0]
+    assert provider.tool_sets[1]
+    assert provider.tool_sets[2] == []
+    assert provider.messages[2][-1]["tool_call_id"] == "call-2"
+    assert "No new tool request was dispatched" in provider.messages[2][-1]["content"]
+    assert dispatcher.normalized.model_content not in provider.messages[2][-1]["content"]
+    result = events[-1].result
+    assert result is not None
+    assert result.answer == "One page checked."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
+
+
+def test_distinct_page_arguments_dispatch_both_calls() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":1,"perPage":100}',
+            '{"customer_id":7,"page":2,"perPage":100}',
+        ],
+        final_content=(
+            '{"answer_markdown":"Two pages checked.",'
+            '"citation_chunk_ids":[],"insufficient_context":false}'
+        ),
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="check pages one and two",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 2
+    assert dispatcher.arguments == [
+        {"customer_id": 7, "page": 1, "perPage": 100},
+        {"customer_id": 7, "page": 2, "perPage": 100},
+    ]
+    assert len(provider.tool_sets) == 3
+    assert all(provider.tool_sets)
+    assert result.answer == "Two pages checked."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
 
 
 def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None:

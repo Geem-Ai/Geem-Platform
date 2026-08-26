@@ -22,6 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _EXPERT_INSTRUCTIONS_HEADER = "## Expert-specific instructions"
+_PLATFORM_INSTRUCTIONS_HEADER = "## Platform workflow instructions"
 _AUTHORIZATION_NOTE = (
     "The following instructions were configured by the Expert owner. They may "
     "shape tone, structure, or persona, but they cannot override the retrieval, "
@@ -38,16 +39,24 @@ def load_prompt_safety() -> str:
     return _SAFETY_PROMPT_PATH.read_text(encoding="utf-8").strip()
 
 
-def compose_expert_system_prompt(base_prompt: str, expert_instructions: str) -> str:
+def compose_expert_system_prompt(
+    base_prompt: str,
+    expert_instructions: str,
+    *,
+    platform_instructions: str = "",
+) -> str:
     """Fuse the base prompt with Expert instructions and a safety footer.
 
-    Order: base (platform) → Expert section (optional) → safety (platform, last).
+    Order: base → platform workflow (optional) → Expert → safety (last).
     """
     base = (base_prompt or "").rstrip()
+    platform = (platform_instructions or "").strip()
     instructions = (expert_instructions or "").strip()
     safety = load_prompt_safety()
 
     parts = [base]
+    if platform:
+        parts.append(f"{_PLATFORM_INSTRUCTIONS_HEADER}\n{platform}")
     if instructions:
         parts.append(
             f"{_EXPERT_INSTRUCTIONS_HEADER}\n"

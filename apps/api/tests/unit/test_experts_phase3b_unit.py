@@ -18,10 +18,21 @@ from app.storage.scopes import ExpertRagScope
 
 def test_compose_expert_system_prompt_keeps_base_and_instructions() -> None:
     base = "BASE RULES"
-    composed = compose_expert_system_prompt(base, "Be a legal specialist.")
+    composed = compose_expert_system_prompt(
+        base,
+        "Be a legal specialist.",
+        platform_instructions="Use successful tool results as evidence.",
+    )
     assert "BASE RULES" in composed
+    assert "## Platform workflow instructions" in composed
+    assert "Use successful tool results as evidence." in composed
     assert "Be a legal specialist." in composed
-    assert composed.index("BASE RULES") < composed.index("Be a legal specialist.")
+    assert composed.index("BASE RULES") < composed.index(
+        "Use successful tool results as evidence."
+    )
+    assert composed.index("Use successful tool results as evidence.") < composed.index(
+        "Be a legal specialist."
+    )
     # Safety footer is always last (prompt injection / model secrecy)
     assert "Security and confidentiality" in composed
     assert composed.index("Be a legal specialist.") < composed.index(
@@ -31,6 +42,7 @@ def test_compose_expert_system_prompt_keeps_base_and_instructions() -> None:
     empty = compose_expert_system_prompt(base, "")
     assert empty.startswith("BASE RULES")
     assert "Security and confidentiality" in empty
+    assert "## Platform workflow instructions" not in empty
     assert "## Expert-specific instructions" not in empty
     assert compose_expert_system_prompt(base, "   ") == empty
 

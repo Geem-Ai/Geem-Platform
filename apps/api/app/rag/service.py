@@ -528,10 +528,15 @@ class RagService:
         yield {"event": "final", "data": final_data}
 
     def _build_general_expert_chat(
-        self, knowledge: ResolvedExpertKnowledge
+        self,
+        knowledge: ResolvedExpertKnowledge,
+        *,
+        platform_instructions: str = "",
     ) -> OpenRouterChatProvider:
         prompt = compose_expert_system_prompt(
-            load_general_chat_prompt(), knowledge.system_instructions
+            load_general_chat_prompt(),
+            knowledge.system_instructions,
+            platform_instructions=platform_instructions,
         )
         return OpenRouterChatProvider(
             settings=self.settings,
@@ -539,9 +544,16 @@ class RagService:
             client=self.chat.client,
         )
 
-    def _compose_expert_prompt(self, knowledge: ResolvedExpertKnowledge) -> str:
+    def _compose_expert_prompt(
+        self,
+        knowledge: ResolvedExpertKnowledge,
+        *,
+        platform_instructions: str = "",
+    ) -> str:
         return compose_expert_system_prompt(
-            load_system_prompt(), knowledge.system_instructions
+            load_system_prompt(),
+            knowledge.system_instructions,
+            platform_instructions=platform_instructions,
         )
 
     def _build_expert_chat(self, knowledge: ResolvedExpertKnowledge) -> OpenRouterChatProvider:
