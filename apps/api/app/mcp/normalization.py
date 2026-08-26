@@ -25,7 +25,7 @@ from app.mcp.constants import (
     MCP_TOOL_DESCRIPTOR_MAX_BYTES,
     MCP_TOOL_NAME_MAX_LENGTH,
 )
-from app.mcp.types import McpCompatibilityStatus
+from app.mcp.types import MCP_BOOLEAN_ANNOTATION_KEYS, McpCompatibilityStatus
 
 _ALIAS_CHARS = re.compile(r"[^A-Za-z0-9_-]+")
 _HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
@@ -186,6 +186,20 @@ def normalize_tool_definition(
     if not isinstance(annotations, dict):
         annotations = {}
         malformed_reason = malformed_reason or "annotations must be an object."
+    else:
+        malformed_hint = next(
+            (
+                key
+                for key in MCP_BOOLEAN_ANNOTATION_KEYS
+                if key in annotations and not isinstance(annotations[key], bool)
+            ),
+            None,
+        )
+        if malformed_hint is not None:
+            malformed_reason = (
+                malformed_reason
+                or f"annotations.{malformed_hint} must be a boolean."
+            )
 
     compatibility = McpCompatibilityStatus.COMPATIBLE.value
     reason: str | None = None

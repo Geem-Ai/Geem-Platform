@@ -7,6 +7,11 @@ from enum import StrEnum
 from typing import Any
 
 
+MCP_BOOLEAN_ANNOTATION_KEYS = frozenset(
+    {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}
+)
+
+
 class McpAuthMode(StrEnum):
     NONE = "none"
     STATIC = "static"
@@ -59,12 +64,18 @@ def annotations_forbid_read_only(
     """Return whether remote hints explicitly contradict a read-only review.
 
     MCP annotations are untrusted hints and can never authorize a tool.  An
-    explicit mutating/destructive hint can, however, make a read-only
-    classification unsafe, so runtime and management paths fail closed.
+    mutating/destructive hint, or a malformed known safety hint, can make a
+    read-only classification unsafe, so runtime and management paths fail
+    closed.
     """
 
     if not isinstance(annotations, Mapping):
         return False
+    if any(
+        key in annotations and not isinstance(annotations[key], bool)
+        for key in MCP_BOOLEAN_ANNOTATION_KEYS
+    ):
+        return True
     return (
         annotations.get("readOnlyHint") is False
         or annotations.get("destructiveHint") is True
@@ -73,6 +84,7 @@ def annotations_forbid_read_only(
 
 __all__ = [
     "McpAuthMode",
+    "MCP_BOOLEAN_ANNOTATION_KEYS",
     "McpCompatibilityStatus",
     "McpGrantState",
     "McpOAuthRegistrationStrategy",

@@ -15,6 +15,10 @@ from app.core.errors import AppError, ErrorCategory
 from app.mcp.repository import McpGrantRecord
 from app.mcp.resolver import McpGrantResolver
 from app.mcp.services import McpServerService
+from app.mcp.surfaces import (
+    _grant_is_current as _surface_grant_is_current,
+    _provider_schema as _surface_provider_schema,
+)
 from app.mcp.types import (
     McpCompatibilityStatus,
     McpGrantState,
@@ -195,6 +199,8 @@ def test_exact_current_pins_resolve() -> None:
         {"readOnlyHint": False},
         {"destructiveHint": True},
         {"readOnlyHint": False, "destructiveHint": False},
+        {"readOnlyHint": "false"},
+        {"destructiveHint": 1},
     ],
 )
 def test_mutating_annotation_never_resolves_as_read_only(annotations) -> None:
@@ -220,6 +226,28 @@ def test_provider_schema_labels_write_tools_for_explicit_mutation_only() -> None
     assert description.startswith("WRITE TOOL.")
     assert "latest user request explicitly asks" in description
     assert description.endswith("Look up a record")
+
+
+def test_external_surface_rejects_contradictory_read_only_tool() -> None:
+    record = _current_record()
+    record.tool.annotations = {"readOnlyHint": False}
+
+    assert not _surface_grant_is_current(
+        record.grant,
+        record.tool,
+        record.connection,
+        now=datetime.now(timezone.utc),
+        settings=get_settings(),
+    )
+
+
+def test_external_surface_schema_labels_write_tool() -> None:
+    record = _current_record()
+    record.tool.classification = McpToolClassification.WRITE.value
+
+    schema = _surface_provider_schema(record.tool)
+
+    assert schema["function"]["description"].startswith("WRITE TOOL.")
 
 
 def test_classification_rejects_explicit_mutator_as_read_only(monkeypatch) -> None:

@@ -160,10 +160,10 @@ Select a tool labelled WRITE only when the latest user request explicitly asks
 to change external data. Never use a write tool to gather evidence or recover
 from a read-only tool call.
 Do not repeat a successful tool call with identical arguments. For numbered
-pagination, begin at the schema-declared default or minimum page, use the
-largest schema-allowed page size, keep that size fixed, and never revisit or
-skip a page. For cursor pagination, advance only with the returned next cursor
-and never reuse an earlier cursor.
+pagination, begin at the schema-declared default or minimum page. When the
+schema declares a maximum page size, use it and keep that size fixed; never
+revisit or skip a page. For cursor pagination, advance only with the returned
+next cursor and never reuse an earlier cursor.
 In RAG JSON answers, citation_chunk_ids remains document-only and may be empty
 for tool-only evidence; Geem attaches tool citations separately.
 """.strip()

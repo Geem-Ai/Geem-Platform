@@ -428,6 +428,43 @@ def test_reordered_identical_success_dispatches_once_then_synthesizes_tool_free(
     ]
 
 
+def test_repeated_success_at_iteration_ceiling_synthesizes_tool_free() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7}',
+            '{"customer_id":7}',
+        ],
+        final_content="Used the first result.",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+    executor.settings = executor.settings.model_copy(
+        update={"mcp_max_tool_iterations": 1}
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, True, False]
+    assert events[-1].result is not None
+    assert events[-1].result.answer == "Used the first result."
+
+
 def test_distinct_page_arguments_dispatch_both_calls() -> None:
     provider = _ScriptedToolProvider(
         [
@@ -540,7 +577,7 @@ def test_pagination_profile_change_stops_observed_refetch_sequence() -> None:
     ]
 
 
-def test_short_explicit_page_stops_forward_pagination() -> None:
+def test_short_generic_page_does_not_suppress_an_unseen_page() -> None:
     provider = _ScriptedToolProvider(
         [
             '{"customer_id":7,"page":1,"perPage":100}',
@@ -587,9 +624,38 @@ def test_short_explicit_page_stops_forward_pagination() -> None:
         tools=[resolved],  # type: ignore[list-item]
     )
 
-    assert dispatcher.calls == 1
-    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, True, False]
+    assert dispatcher.calls == 2
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, True, True]
     assert result.answer == "One branch found."
+
+
+def test_zero_based_numbered_pages_are_not_mistaken_for_repeats() -> None:
+    provider = _ScriptedToolProvider(
+        [
+            '{"customer_id":7,"page":0,"perPage":100}',
+            '{"customer_id":7,"page":1,"perPage":100}',
+        ],
+        final_content="Both pages used.",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+    resolved.tool.input_schema["properties"]["page"]["minimum"] = 0
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 2
+    assert dispatcher.arguments == [
+        {"customer_id": 7, "page": 0, "perPage": 100},
+        {"customer_id": 7, "page": 1, "perPage": 100},
+    ]
+    assert result.answer == "Both pages used."
 
 
 def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None:

@@ -39,6 +39,24 @@ def test_tool_definition_hash_covers_complete_descriptor() -> None:
     assert first.compatibility_status == McpCompatibilityStatus.COMPATIBLE.value
 
 
+@pytest.mark.parametrize("value", ["false", 0, None, []])
+def test_non_boolean_safety_annotation_is_malformed(value) -> None:
+    normalized = normalize_tool_definition(
+        {
+            "name": "unsafe_hint",
+            "inputSchema": {"type": "object"},
+            "annotations": {"readOnlyHint": value},
+        },
+        connection_id=uuid.uuid4(),
+        protocol_version="2026-07-28",
+    )
+
+    assert normalized.compatibility_status == McpCompatibilityStatus.MALFORMED.value
+    assert normalized.compatibility_reason == (
+        "annotations.readOnlyHint must be a boolean."
+    )
+
+
 def test_remote_schema_reference_is_inventory_visible_but_incompatible() -> None:
     normalized = normalize_tool_definition(
         {"name": "unsafe", "inputSchema": {"$ref": "https://attacker.test/schema"}},
