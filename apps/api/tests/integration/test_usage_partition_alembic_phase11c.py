@@ -76,7 +76,7 @@ def fresh_engine():
 
 
 def test_upgrade_from_phase11b_preserves_rows(mig_engine) -> None:
-    url = str(_mig_url())
+    url = _mig_url().render_as_string(hide_password=False)
     cfg = _alembic_cfg(url)
     command.upgrade(cfg, "0032_usage_daily_workspace")
     ids = {
@@ -175,7 +175,9 @@ def test_upgrade_from_phase11b_preserves_rows(mig_engine) -> None:
 
 
 def test_fresh_database_upgrade_creates_partitions(fresh_engine) -> None:
-    url = str(make_url(get_settings().database_url).set(database=FRESH_DB))
+    url = make_url(get_settings().database_url).set(
+        database=FRESH_DB
+    ).render_as_string(hide_password=False)
     command.upgrade(_alembic_cfg(url), "head")
     with fresh_engine.begin() as conn:
         kind = conn.execute(
