@@ -618,6 +618,162 @@ def test_production_runbooks_support_collision_safe_project_handoff() -> None:
     assert "unrelated host Cloudflared or Apache service" in connector_words
 
 
+def test_disposable_state_exception_is_fail_closed_and_non_destructive() -> None:
+    production = (
+        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
+    ).read_text()
+    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
+    production_words = " ".join(production.split())
+    connector_words = " ".join(connectors.split())
+
+    ordered_gates = (
+        "The state-preserving recovery path is the default",
+        "### Disposable-state exception: no application-data recovery",
+        "Before the initial proof, the integration owner must complete and "
+        "settle the revocation/disablement",
+        "First collect a read-only eligibility proof in audit mode",
+        "Then obtain a signed, bounded pre-proof maintenance authorization",
+        "Under that authorization, activate the named Geem-only ingress hold",
+        "Then repeat the decisive read-only proof",
+        "Before the final waiver is countersigned, a clean-reconstruction "
+        "rehearsal must pass outside production",
+        "Only after the final proof and rehearsal pass may all named owners "
+        "countersign and finalize the waiver",
+        "## 2. Fetch and fast-forward to the approved release",
+    )
+    gate_indexes = [production_words.index(gate) for gate in ordered_gates]
+    assert gate_indexes == sorted(gate_indexes)
+
+    for required_scope in (
+        "one exact host and release",
+        "current and target full Git SHA",
+        "current schema revision",
+        "database/role identity",
+        "maintenance window",
+        "evidence timestamp/checksum",
+        "exact name, Driver, Scope, labels/options inspection fingerprint",
+        "service mount destination",
+    ):
+        assert required_scope in production_words
+
+    assert "initial read-only eligibility proof" in production_words
+    assert "This authorization is not the data-loss waiver" in production_words
+    assert "perform no other mutation" in production_words
+    assert "Any drift before the first stage-2 mutation invalidates" in (
+        production_words
+    )
+    assert "unknown, skipped, or unclassified table blocks the waiver" in (
+        production_words
+    )
+    assert "only test users or no valuable data supports owner attestation" in (
+        production_words
+    )
+    assert "is not proof by itself" in production_words
+    assert "data owner, product/business owner" in production_words
+    assert "security/privacy/records owner" in production_words
+    assert "clean-reconstruction owner" in production_words
+    assert "no integration-cleanup mutation may occur between" in production_words
+    assert "already completed test-integration cleanup" in production_words
+    assert "without depending on data that will be waived" in (
+        production_words
+    )
+    assert "immutable configuration/reconstruction evidence pack" in (
+        production_words
+    )
+    assert (
+        "never put raw secrets or private keys in the ticket" in production_words
+    )
+
+    destructive_ban = production_words.split(
+        "It never authorizes", maxsplit=1
+    )[1].split("A clean reconstruction", maxsplit=1)[0]
+    for destructive_action in (
+        "`compose down -v`",
+        "`rm -v`",
+        "`docker volume rm`",
+        "`docker volume prune`",
+        "`docker system prune`",
+        "a name glob",
+    ):
+        assert destructive_action in destructive_ban
+    assert "does not expose a separate stable, portable object ID" in (
+        production_words
+    )
+    assert "never invent one" in production_words
+    assert "Old volumes stay detached and quarantined" in production_words
+    assert "No volume deletion is part of MODE 2" in production_words
+    assert "each exact volume name and approved inspection fingerprint" in (
+        production_words
+    )
+
+    rehearsal = production_words.split(
+        "Before the final waiver is countersigned", maxsplit=1
+    )[1].split("Only after the final proof", maxsplit=1)[0]
+    rehearsal_order = (
+        "render and validate the merged topology",
+        "start only the four new datastores",
+        "Verify all four exact new name/fingerprint/destination mappings",
+        "before any migration, initialization, or bootstrap write",
+        "Only then run the one-shot empty-schema migration and clean bootstrap",
+        "complete the topology start",
+    )
+    rehearsal_indexes = [rehearsal.index(step) for step in rehearsal_order]
+    assert rehearsal_indexes == sorted(rehearsal_indexes)
+
+    failure_path = production_words.split(
+        "### Disposable-state failure path", maxsplit=1
+    )[1].split("### Security-incident path", maxsplit=1)[0]
+    failure_order = (
+        "Render and validate the merged topology first",
+        "start only the four new datastores",
+        "require its exact new name/fingerprint/destination",
+        "before any migration, initialization, or bootstrap write",
+        "Only then run the one-shot empty-schema migration and clean bootstrap",
+        "complete the topology start",
+    )
+    failure_indexes = [failure_path.index(step) for step in failure_order]
+    assert failure_indexes == sorted(failure_indexes)
+
+    connector_failure = connector_words.split(
+        "When the release used the disposable-state exception", maxsplit=1
+    )[1].split("## Production release checklist", maxsplit=1)[0]
+    connector_failure_order = (
+        "then render and validate",
+        "start only the new datastores",
+        "verify all four exact new name/fingerprint/ destination mappings",
+        "before any migration/bootstrap write",
+        "Only then migrate, clean-bootstrap, complete the topology start",
+    )
+    connector_indexes = [
+        connector_failure.index(step) for step in connector_failure_order
+    ]
+    assert connector_indexes == sorted(connector_indexes)
+
+    assert "Stage 12 must not be its first execution" in production_words
+    assert "exact Geem release containers and their permitted stop/removal/" in (
+        production_words
+    )
+    assert "deployment-owned overlay's four external names" in production_words
+    assert "validator volume arguments" in production_words
+    assert "persistent wrapper inputs" in production_words
+    assert "Finalize a new canonical checksum manifest" in production_words
+    assert "exact new name/fingerprint/destination" in production_words
+    assert "effective encryption identity unchanged" in production_words
+    assert "This is clean reconstruction, not rollback or schema downgrade" in (
+        connector_words
+    )
+    assert "Exactly one data-recovery decision is approved" in production_words
+    assert "Exactly one data-recovery decision passes" in connector_words
+    assert "final countersigned exact disposable-state waiver" in production_words
+    assert "final countersigned exact disposable-state waiver" in connector_words
+    assert "disposable-state-exception-no-application-data-recovery" in connectors
+    assert "disposable-state-failure-path" in connectors
+    assert "only test users is not approval or proof" in connector_words
+    assert (
+        "authorizes no production-volume deletion in MODE 2" in connector_words
+    )
+
+
 def test_failure_test_manifest_is_activated_at_the_canonical_unit_path() -> None:
     production = (
         REPO_ROOT / "docs/integrations/mcp-production-deployment.md"

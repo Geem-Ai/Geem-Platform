@@ -45,19 +45,38 @@ evidence.
 
 ## Cursor execution contract
 
-Cursor may follow this document on the production host, but it must work in two
-separate modes:
+Cursor may follow this document on the production host, but it must work in
+three separately authorized modes:
 
 1. **Audit mode:** read-only discovery, evidence collection, and a proposed
    host-specific change set.
-2. **Execution mode:** mutations only after an operator has reviewed that
-   proposal, supplied every required input, confirmed the backup, and opened a
-   maintenance window.
+2. **Disposable pre-proof maintenance mode:** only when the exception is
+   requested and a signed, bounded pre-proof authorization names the exact
+   Geem-only ingress hold, drain, writer/scheduler quiescence, safe recreator
+   pause, affected legacy container IDs, reversal procedure, owner, and window.
+   It permits only those controls needed to obtain the decisive read-only proof;
+   any ingress/supervisor state change must be exact, reversible, and listed. It
+   permits no Git/source, persistent application/deployment configuration,
+   datastore, volume, release-container, migration, or deployment-artifact
+   mutation.
+3. **Execution mode:** source and deployment mutations only after an operator
+   has reviewed the proposal, supplied every required input, approved the
+   default recovery set or countersigned the final exact disposable-state
+   waiver, and opened the maintenance window.
 
 Cursor must stop and ask the operator when any required value or decision is
 unknown. It must never infer or invent secrets, certificate policy, deployment
 CIDRs, public domains, plan prices, release-candidate infrastructure, remote MCP
 credentials, or external-service identifiers.
+
+Cursor must never infer the disposable-state exception from low row counts,
+absent registered users, or an operator comment. It may enter pre-proof mode
+only from the signed bounded authorization, and may select the execution path
+only from one final countersigned waiver ID whose exact host, current/target
+SHA, schema, database, four volume fingerprints, evidence checksums, rehearsal,
+and maintenance window match the decisive read-only proof. Any unknown table,
+data class, owner, drift, legal/records hold, billing obligation, or incident
+evidence makes the waiver unavailable.
 
 Cursor must not:
 
@@ -75,10 +94,10 @@ Cursor must not:
 - treat the UAT overlay as production isolation evidence; or
 - downgrade the database schema as the normal rollback mechanism.
 
-Stop the deployment if the worktree is dirty or divergent, a backup cannot be
-verified, the production overlay is incomplete, the encryption identity is
-uncertain, a required dependency loses connectivity, or any security probe
-fails.
+Stop the deployment if the worktree is dirty or divergent, neither the default
+recovery set nor every disposable-state gate can be verified, the production
+overlay is incomplete, the encryption identity is uncertain, a required
+dependency loses connectivity, or any security probe fails.
 
 An unexpected secret exposure, successful forbidden network probe, unknown
 image, evidence of unauthorized access, or unexplained production mutation is
@@ -104,7 +123,7 @@ deployment secret manager, not in the ticket.
 | Hardening overlay | Absolute deployment-owned path outside the Git checkout |
 | Deployment topology | The checked-in Cloudflare tunnel plus the required hardening overlay; any other ingress is a stop condition for this release |
 | Public hosts | Exact API, Workspace, Platform Admin, marketing, CIMD, and tunnel hosts |
-| Data backup | New immutable recovery-set ID plus successful PostgreSQL, MinIO, Qdrant, Redis, configuration, and secret-manager restore evidence |
+| Data recovery decision | Either a new immutable recovery-set ID plus successful PostgreSQL, MinIO, Qdrant, Redis, configuration, and secret-manager restore evidence, or the exact-host/exact-release disposable-state authorization defined in stage 1 |
 | Encryption identity | Whether ciphertext currently uses explicit `SECRETS_ENCRYPTION_KEY` or the existing `JWT_SECRET` fallback |
 | Datastore credentials | Existing production identities and the approved rotation plan, if any |
 | PKI | Per-environment CA/leaf issuance owner, secret path, expiry, and rotation owner |
@@ -337,6 +356,49 @@ Store this redacted mapping in the change evidence. An absent, duplicate,
 anonymous, bind-mounted, or unexpected source is a stop condition. The engine
 source can reveal a host path; keep it out of public tickets.
 
+For each of the four exact volume names, record `Name`, `Driver`, `Scope`,
+labels, options, the service mount destination, and an approved inspection
+fingerprint. Calculate that fingerprint from canonical JSON containing exactly
+`Name`, `Driver`, `Scope`, `Labels`, and `Options`; retain the source metadata in
+restricted evidence and put only its checksum in a public ticket. For example,
+run this separately for each already inventoried name:
+
+```bash
+volume_name=<one-exact-inventoried-volume-name>
+docker volume inspect "$volume_name" | python3 -c '
+import hashlib
+import json
+import sys
+
+volumes = json.load(sys.stdin)
+if len(volumes) != 1:
+    raise SystemExit("expected exactly one volume inspection result")
+volume = volumes[0]
+fields = {
+    key: volume.get(key)
+    for key in ("Name", "Driver", "Scope", "Labels", "Options")
+}
+canonical = json.dumps(
+    fields,
+    sort_keys=True,
+    separators=(",", ":"),
+).encode()
+name = fields["Name"]
+driver = fields["Driver"]
+scope = fields["Scope"]
+print(
+    f"name={name} driver={driver} "
+    f"scope={scope} metadata_sha256="
+    f"{hashlib.sha256(canonical).hexdigest()}"
+)
+'
+```
+
+A local Docker volume does not expose a separate stable, portable object ID;
+never invent one. If another approved orchestrator exposes a real immutable
+object ID, record it in addition to—not instead of—the name, metadata, approved
+inspection fingerprint, and service mount destination.
+
 `GEEM_LEGACY_COMPOSE_PROJECT` must equal the project label on the running Geem
 containers. An older unit without `-p` normally derives it from the
 working-directory basename. `GEEM_COMPOSE_PROJECT` is the explicit identity of
@@ -390,10 +452,33 @@ aaPanel/Nginx or another ingress, stop. That topology needs its own reviewed,
 tested release contract; omitting Cloudflared here would leave the internal-only
 application ingress with no approved serving path.
 
+If the operator requests the disposable-state exception, stage 0 also records
+its initial read-only eligibility proof and the exact identities to which a
+waiver would bind. This inventory does not approve the waiver and does not
+replace the decisive proof under the uninterrupted Geem-only hold immediately
+before stage 2. Do not mutate data, stop services, or create a reconstruction
+volume while collecting the initial proof.
+
 ## 1. Create and verify the rollback point
 
-Keep MCP disabled and the App unpublished. Quiesce writes or use the
-organization's consistent snapshot procedure.
+Keep MCP disabled and the App unpublished. The state-preserving recovery path
+is the default. It may be replaced only by the fail-closed disposable-state
+exception later in this stage; a statement that the data is "only test data"
+does not by itself authorize skipping recovery.
+
+For the state-preserving path, record whether the consistency method is an
+approved common online/PITR restore point or an offline capture. An online
+method must document its cross-component consistency and approved cutover RPO.
+For an offline capture, activate the independent Geem-only ingress hold before
+draining and quiescing Geem business writers, schedulers, queues, and safe Geem
+recreator triggers. Keep those controls in force through capture and recovery
+finalization. If any business writer resumes before stage 2, preserve but
+supersede that set and complete a new uniquely identified set. If an
+unauthorized writer resumes after stage 2 or another deployment mutation, stop
+and follow rollback/incident handling; never bless a partially changed state as
+the pre-change recovery point. The later stage-7 handoff revalidates and
+continues an existing offline hold, while permitting only the exact reviewed
+migration/init writes after the documented phase transition.
 
 Create one new recovery set with a unique change/release ID. The staging and
 final paths must both be previously nonexistent, on the same filesystem, and
@@ -525,7 +610,144 @@ operator approval. Do not include secret values. Mark `STATUS` complete, then
 atomically rename the staging directory to `GEEM_BACKUP_FINAL`. Copy/commit the
 set to the approved immutable or WORM backup store and verify its independent
 checksum. Local permissions alone are not immutability. MODE 2 stops until the
-final recovery set and its restore evidence are approved.
+final recovery set and its restore evidence are approved, unless every gate in
+the disposable-state exception below is approved instead.
+
+### Disposable-state exception: no application-data recovery
+
+This exception is scoped to one exact host and release. It replaces only the
+PostgreSQL, MinIO, Qdrant, and Redis dump/snapshot/restore drills; it does not
+weaken image, secret, network, ingress, supervisor, migration, volume-mapping,
+evidence, or protected foreign-asset controls. Cursor cannot infer or approve
+it. Before stage 2, one final waiver record must be countersigned after the
+decisive proof and bind all of these literals:
+
+- host identity, current and target full Git SHA, current schema revision,
+  database/role identity, maintenance window, evidence timestamp/checksum, and
+  each physical volume's exact name, Driver, Scope, labels/options inspection
+  fingerprint, and service mount destination;
+- data owner, product/business owner, security/privacy/records owner, finance
+  owner when any billing data or configuration exists, external-integration
+  owner, change owner, and clean-reconstruction owner; and
+- explicit acceptance that all scoped state, including audit/history, sessions,
+  test integrations, and data in PostgreSQL, MinIO, Qdrant, and Redis, is
+  synthetic/disposable and may be lost irreversibly, with no data-restore
+  promise and no schema-downgrade rollback.
+
+Before the initial proof, the integration owner must complete and settle the
+revocation/disablement of every test OAuth grant, webhook, connection, binding,
+and other externally authoritative test state under a separate cleanup
+authorization. If cleanup cannot depend on the database or waived ciphertext,
+use the previously proven out-of-band provider method and owner. Confirm that
+it created no pending job or ambiguous outcome. If the initial audit discovers
+another active integration, stop, clean it separately, and restart the initial
+proof; no integration-cleanup mutation may occur between the initial and
+decisive proofs or after the decisive proof.
+
+First collect a read-only eligibility proof in audit mode. Then obtain a signed,
+bounded pre-proof maintenance authorization naming the exact host, current and
+target SHA, window, owner, independent Geem-only ingress hold, drain,
+API/worker/Beat/timer/writer quiescence, safe Geem recreator pauses, exact legacy
+container IDs affected, and reviewed reversal procedure. This authorization is
+not the data-loss waiver. It permits only those named controls and forbids Git,
+source, persistent application/deployment configuration, datastore, volume,
+migration, release-container, and deployment-artifact mutation; only the exact
+reversible ingress/supervisor state transitions named above are excepted.
+
+Under that authorization, activate the named Geem-only ingress hold, block
+admissions, drain requests/queues, and quiesce the named legacy writers and
+recreators without invoking an unreviewed legacy `ExecStop`. Then repeat the
+decisive read-only proof. If the proof fails, either select the default recovery
+path or reverse only the pre-proof controls through the authorized procedure;
+perform no other mutation. The proof must:
+
+- enumerate every PostgreSQL user table from the system catalog and classify
+  it explicitly; an unknown, skipped, or unclassified table blocks the waiver;
+- show, through counts and approved test identifiers without PII, that all
+  users, workspaces, memberships, documents, chunks, conversations, messages,
+  attachments, widgets, Experts, API keys, audit/retention records, and other
+  content are zero or restricted to the signed test allowlist;
+- prove there is no real subscription, purchase, invoice, credit/ledger
+  balance, payment obligation, paid App installation/license, production
+  tenant, customer entitlement, or customer-owned configuration;
+- prove there is no active non-test App connection, channel binding, OAuth
+  credential, webhook/sync state, external grant/binding, or externally
+  authoritative state, and that the already completed test-integration cleanup
+  used the approved in-band or out-of-band provider method and settled without
+  depending on data that will be waived;
+- prove there is no pending job, queue item, approval, ingestion, scheduled
+  work, cleanup dependency, ambiguous write, `outcome_unknown`, or
+  delivery-unknown result;
+- inventory MinIO bucket/object/version/delete-marker/retention/legal-hold,
+  Qdrant collection/alias/point, and Redis database/key/queue/session state as
+  counts and booleans only—never names, URLs, tokens, payloads, or values—and
+  classify every nonzero class as synthetic/disposable; and
+- prove there is no legal/records hold, contractual/statutory retention,
+  security incident, fraud/payment investigation, or forensic need. Suspected
+  incident evidence makes this exception unavailable.
+
+Phase-13 queries must tolerate legitimately absent tables but may not treat an
+unknown pre-Phase-13 table as empty. A verbal statement that there are only test
+users or no valuable data supports owner attestation but is not proof by
+itself. Any unknown or mismatch selects the default recovery path or stops.
+
+The waiver still requires a uniquely identified, encrypted, access-controlled,
+immutable configuration/reconstruction evidence pack with a verified checksum.
+It records current/target SHA, approved image digests, Compose identities/file
+order, exact containers/mounts, overlay/wrapper/unit/drop-ins, ingress/proxy/
+firewall/CIDR/DNS policy, release pointers, database-resident bootstrap
+configuration, and the clean-bootstrap inputs. Store `.env` and other
+secret-bearing configuration only in the approved encrypted store, or record
+tested secret-manager recovery/version references. Record recovery authority
+for encryption, JWT, datastore, MinIO, tunnel, OAuth/provider, and PKI secrets;
+never put raw secrets or private keys in the ticket. If any required
+configuration/secret cannot be reconstructed or revoked, the waiver is blocked.
+
+Before the final waiver is countersigned, a clean-reconstruction rehearsal must
+pass outside production using the exact target SHA, approved image digests, and
+configuration-pack checksum. It uses four explicitly named, proven-unused
+disposable volumes and a rehearsal-only external-volume map. Review the changed
+overlay inputs, validator volume arguments, wrapper inputs, and canonical
+checksum-manifest lifecycle, then render and validate the merged topology. With
+ingress held and MCP false, start only the four new datastores and any reviewed
+no-write boundary service; do not start application writers or an initializer.
+Verify all four exact new name/fingerprint/destination mappings before any
+migration, initialization, or bootstrap write. Only then run the one-shot
+empty-schema migration and clean bootstrap, complete the topology start, and
+prove isolation, readiness, controlled reboot, and every applicable release
+gate. It must never attach, alter, or delete a production volume. Bind the
+rehearsal evidence checksum to the waiver.
+
+Only after the final proof and rehearsal pass may all named owners countersign
+and finalize the waiver, binding its ID to the pre-proof authorization, initial
+and decisive proof checksums/timestamps, exact scope, configuration pack, and
+rehearsal. Only then may execution mode and stage 2 begin. Any drift before the
+first stage-2 mutation invalidates the final waiver and requires a new decisive
+proof and countersignature while the hold remains active.
+
+The waiver alone does not authorize deleting, recreating, renaming, or pruning
+a container, network, or volume; the reviewed execution plan must separately
+name every permitted Geem container transition. It never authorizes
+`compose down -v`, `rm -v`, `docker volume rm`, `docker volume prune`,
+`docker system prune`, a name glob, or any action against law-firm,
+`infra_default`, system Cloudflared, or Apache. A clean reconstruction, if later
+necessary, requires a separate post-failure approval naming each exact Geem
+container and four new empty volume names. Old volumes stay detached and
+quarantined. Their eventual deletion requires a later destructive ticket naming
+each exact volume name and approved inspection fingerprint, proving no
+container or foreign asset references it and no legal/incident hold exists,
+and recording the deletion owner/window and explicit irreversible-deletion
+approval. No volume deletion is part of MODE 2.
+
+Record an approved waiver as a **data-loss waiver**, never as a successful
+backup or restore. Keep the effective encryption identity unchanged throughout
+this MODE 2 deployment and any clean reconstruction while old ciphertext is
+quarantined. Any later rotation is a separate reviewed change that preserves
+old-secret recovery authority and binds the old/new identities to their exact
+old/new volume fingerprints. After the final proof, keep Geem admissions,
+legacy business writers/schedulers, and safe Geem recreator triggers blocked
+through cutover. Only the enumerated migration and initialization writes in the
+reviewed plan may run before stage-10 traffic release.
 
 ### Preserve encryption-key continuity
 
@@ -680,6 +902,9 @@ A new, anonymous, duplicate, or empty `<project>_postgres_data`, `redis_data`,
 `minio_data`, or `qdrant_data` volume is a stop condition, not a fresh-install
 opportunity. Prove database role, database name, and the credential identity in
 `DATABASE_URL` still select the existing database without printing values.
+The disposable-state exception does not relax this mapping: MODE 2 continues
+on the four inventoried volumes and must not create, rename, replace, empty, or
+delete a datastore volume.
 
 Any shell program embedded in Compose YAML is parsed once by Compose and again
 inside the container. Escape every container-shell dollar sign as `$$`,
@@ -1120,12 +1345,21 @@ overwrite the live legacy unit or create the permanent checksum manifest yet.
 The manifest can be finalized only after the replacement unit is installed at
 its live path while the legacy unit is inactive.
 
-Enter the approved maintenance window, place ingress in its reviewed
-maintenance state, drain active application/worker work, establish the backup
-consistency barrier, and pause aaPanel, CI, timers, watchers, and every other
-recorded recreator. A legacy systemd unit must become **inactive** before its
-file is replaced; `disable` alone only removes boot links and leaves an active
-unit in control.
+If the default approved online/PITR recovery method kept Geem live, enter the
+maintenance window now: activate the independent Geem-only ingress hold, drain
+application/worker work, and pause the reviewed Geem state-mutating recreators.
+If the default offline method or disposable-state exception already activated
+those controls before stage 2, revalidate and continue the same uninterrupted
+hold; do not describe this as a second maintenance entry. Require the approved
+recovery/waiver evidence, source, container inventory, and volume identities to
+remain unchanged. Keep legacy API, worker, Beat, admissions, timers, watchers,
+aaPanel, CI, and other Geem writers/recreators blocked. This does not authorize
+operating law-firm, system Cloudflared, or Apache. After the exact handoff and
+mount gates pass, permit only the enumerated migration/init writes in this
+procedure until stage-10 release.
+
+A legacy systemd unit must become **inactive** before its file is replaced;
+`disable` alone only removes boot links and leaves an active unit in control.
 
 Review and checksum the actual unit and every existing drop-in first. If its
 `ExecStop` is proven to select only Geem with the exact legacy file set, use the
@@ -1892,6 +2126,12 @@ production-topology RC environment and isolated catalog/database to:
 7. Test write approval, expiry, tamper denial, one-dispatch behavior,
    `outcome_unknown`, delivery-unknown, and reconciliation.
 8. Test zero-grant/zero-binding legacy behavior and a controlled reboot.
+9. If the disposable-state exception is selected, revalidate and attach the
+   pre-stage-2 isolated clean-reconstruction rehearsal evidence to RC sign-off.
+   Stage 12 must not be its first execution. Require the same exact target SHA,
+   image/configuration checksums, four rehearsal-volume fingerprints,
+   overlay/validator/wrapper/manifest inputs, empty-schema bootstrap, isolation,
+   readiness, and controlled-reboot results, with no production volume touched.
 
 | Plan code | Connections | Tool calls/day |
 | --- | ---: | ---: |
@@ -2004,6 +2244,48 @@ Keep that containment in place until a reviewed boundary release is deployed.
 Do not stop the boundary during a routine disable when pending cleanup or OAuth
 revocation still needs it.
 
+### Disposable-state failure path
+
+When this release used the disposable-state exception, routine disable can
+still close MCP and application admission, but there is no promise to restore
+application data or downgrade the schema. If the four retained volumes cannot
+support a safe forward repair, keep Geem offline and open a separate
+clean-reconstruction change. The original waiver alone is not authority to
+execute it.
+
+That separate change must be approved by the clean-reconstruction, release/
+change, datastore, and security/incident owners. Preserve incident and
+configuration evidence; identify the exact Geem release containers and their
+permitted stop/removal/replacement transition; leave every foreign asset
+untouched; and detach/quarantine all four old volume names and fingerprints.
+Name four new, proven-unused external volumes, authorize their explicit
+creation, and record their Driver/Scope/labels/options fingerprints.
+
+Keep the approved target SHA, images, logical networks, service graph,
+configuration/secret-manager references, and effective encryption identity,
+but review the necessary physical-volume-map transition. Update the
+deployment-owned overlay's four external names, the validator volume arguments,
+and the persistent wrapper inputs. Finalize a new canonical checksum manifest
+only after every changed live file/drop-in exists, using the same atomic
+manifest contract. Render and validate the merged topology first. With ingress
+held and MCP false, start only the four new datastores and reviewed no-write
+boundary services; do not start an application writer or initializer. Inspect
+each datastore mount and require its exact new name/fingerprint/destination
+before any migration, initialization, or bootstrap write. Only then run the
+one-shot empty-schema migration and clean bootstrap, complete the topology
+start, and rerun isolation, readiness, reboot, RC, and publication gates before
+traffic release. Do not return to an older schema or image merely to make the
+new empty state start.
+
+Clean reconstruction does not include deletion. Never use `compose down -v`,
+`rm -v`, `docker volume rm`, a volume/system prune, or a glob. Old volumes stay
+quarantined until a later destructive ticket names each exact volume name and
+approved inspection fingerprint, proves it has no container/foreign references
+or legal/incident hold, and records explicit irreversible-deletion approval.
+If the pre-stage-2 clean-reconstruction rehearsal was not successful or any
+required input is unavailable, remain offline and escalate rather than
+improvising.
+
 ### Security-incident path
 
 Use the incident process, not routine rollback, if a container received
@@ -2041,7 +2323,14 @@ to turn MCP off.
 - [ ] Operator input table is complete; no value was guessed.
 - [ ] Current/target full SHAs and the signed registry manifest (top/platform digests) are recorded.
 - [ ] Worktree was clean and the source update was a reviewed fast-forward.
-- [ ] One new immutable PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set passes isolated restores.
+- [ ] Exactly one data-recovery decision is approved: either one new immutable
+  PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set passes isolated
+  restores, or the bounded pre-proof authorization, initial and decisive
+  no-drift proofs, immutable encrypted configuration/reconstruction pack,
+  pre-stage-2 isolated clean-reconstruction rehearsal, and final countersigned
+  exact disposable-state waiver all pass.
+- [ ] A disposable-state waiver, if selected, leaves all four production
+  volumes mapped exactly and authorizes no volume deletion in MODE 2.
 - [ ] Effective encryption identity is unchanged.
 - [ ] Modern Compose accepts the complete merged topology.
 - [ ] Hardening removes dev state and whole-app MinIO env injection, pins images, and preserves physical volumes.

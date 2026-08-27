@@ -259,14 +259,34 @@ unused release name, declare the four recorded datastore volumes external by
 their exact physical names, and leave every foreign container and shared legacy
 network untouched.
 
-Before any production mutation, complete the immutable, fail-closed recovery
-set and isolated restore drills in
+Before any source, configuration, datastore, volume, migration, release-container,
+or deployment-artifact mutation, make exactly one fail-closed data-recovery
+decision in
 [Create and verify the rollback point](./mcp-production-deployment.md#1-create-and-verify-the-rollback-point).
+The default is an immutable recovery set with isolated restore drills.
 PostgreSQL must restore into an empty database; MinIO recovery must include
 versions/delete markers/configuration rather than only `mc mirror`; Qdrant must
 preserve aliases and settings; Redis must use a supported consistent RDB/AOF or
 storage snapshot when its state is required. An artifact that can merely be
 listed or checksummed is not a recovery point.
+
+Only the linked, signed
+[disposable-state exception](./mcp-production-deployment.md#disposable-state-exception-no-application-data-recovery)
+may replace those application-data recovery drills. A statement that the host
+contains only test users is not approval or proof. Before final waiver, the
+separately signed pre-proof authorization may permit only its exact Geem-only
+ingress hold, drain, legacy-writer quiescence, and safe recreator pause; it does
+not authorize changes to source, persistent application/deployment
+configuration, data, volumes, migrations, or release containers. Those exact
+reversible ingress/supervisor state transitions are the sole bounded exception
+to the sentence above. Test-integration revocation/disablement must be separately
+authorized, completed, and settled before the initial proof; discovering another
+active integration restarts that proof. The exception then requires exact-host/
+exact-release eligibility evidence, decisive proof under that hold, immutable
+encrypted configuration/reconstruction pack, owners, pre-mutation isolated
+clean-reconstruction rehearsal, and final countersignature. It does not relax
+the topology, volume, secret, image, migration, ingress, or release gates and
+never authorizes production-volume deletion.
 
 ### 1. Prepare application prerequisites
 
@@ -602,6 +622,9 @@ it must:
   remove every production `build:` fallback;
 - preserve the exact physical PostgreSQL, Redis, Qdrant, and MinIO volume names
   and mount destinations recorded before upgrade;
+- preserve those same four external-volume mappings even when a disposable-state
+  waiver is selected; the waiver cannot create, rename, replace, empty, or
+  delete a production volume;
 - remove every inherited host port publication. The production validator rejects
   host ports on all services, including API, MinIO, every frontend, gateway, and
   both proxies;
@@ -1971,11 +1994,33 @@ Schema downgrade is not an operational feature toggle. Prefer the closed switch
 and catalog state; follow the migration rollback procedure only during a
 reviewed release rollback.
 
+When the release used the disposable-state exception, a damaged or unusable
+application state has no data-restore promise. Keep Geem offline and follow the
+separately approved
+[disposable-state failure path](./mcp-production-deployment.md#disposable-state-failure-path):
+under separate owner approval, quarantine the four old names/fingerprints,
+create four explicitly named and proven-unused empty volumes, review the
+external-volume overlay map, validator arguments, wrapper inputs, canonical
+checksum manifest, and exact release-container replacement, then render and
+validate. With ingress held and MCP false, start only the new datastores and
+reviewed no-write boundaries; verify all four exact new name/fingerprint/
+destination mappings before any migration/bootstrap write. Only then migrate,
+clean-bootstrap, complete the topology start, and rerun every gate. Preserve
+the effective encryption identity. This is clean reconstruction, not rollback
+or schema downgrade. No volume deletion is part of MODE 2; deletion requires a
+later exact-name/fingerprint destructive ticket. Never use `compose down -v`,
+`rm -v`, volume or system prune, or a glob.
+
 ## Production release checklist
 
-- [ ] A new immutable PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set
-  passes isolated restore drills; a dump/mirror/snapshot listing alone is not
-  recovery evidence.
+- [ ] Exactly one data-recovery decision passes: either a new immutable
+  PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set passes isolated
+  restore drills, or the bounded pre-proof authorization, initial/decisive
+  proofs, immutable encrypted configuration/reconstruction pack, pre-mutation
+  isolated clean-reconstruction rehearsal, and final countersigned exact
+  disposable-state waiver all pass.
+- [ ] A disposable-state waiver, if selected, preserves the exact four physical
+  volume mappings and authorizes no production-volume deletion in MODE 2.
 - [ ] The exact release SHA has a signed registry manifest recording immutable
   top-level and host-platform image digests; production has no `build:` fallback.
 - [ ] Dedicated per-environment CA, server identity, and client identity pass
