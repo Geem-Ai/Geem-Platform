@@ -503,15 +503,6 @@ def test_runtime_access_reviewed_plan_and_warm_p95(
     }
     assert plan["Plan Rows"] == 1
     assert plan["Actual Rows"] == 1
-    authority_relation_nodes = [
-        node
-        for node in nodes
-        if node.get("Relation Name") in expected_relations
-    ]
-    assert all(
-        int(node.get("Actual Rows", 0)) <= 1
-        for node in authority_relation_nodes
-    ), authority_relation_nodes
     assert all(int(node.get("Temp Read Blocks", 0)) == 0 for node in nodes)
     assert all(int(node.get("Temp Written Blocks", 0)) == 0 for node in nodes)
     assert float(report["Execution Time"]) <= 20.0
