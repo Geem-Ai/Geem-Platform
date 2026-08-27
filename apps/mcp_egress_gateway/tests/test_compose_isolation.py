@@ -465,9 +465,9 @@ def test_phase13_gate_runs_the_exact_minio_initializer_smoke() -> None:
     assert 'mc anonymous set download "local/$MINIO_BUCKET"' in script
     assert '[ "$public_status" = "200" ]' in script
     assert "compose down --volumes --remove-orphans" in script
-    assert (
-        "http://127.0.0.1:9100/$MINIO_BUCKET/policy-probe.txt" in script
-    )
+    assert "/dev/tcp/minio/9000" in script
+    assert "--entrypoint /usr/bin/timeout minio-init" in script
+    assert "127.0.0.1:9100" not in script
     assert '[ "$anonymous_status" = "403" ]' in script
     assert "sh infra/minio/verify-init.sh" in workflow
 

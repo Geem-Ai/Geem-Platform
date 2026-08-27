@@ -57,15 +57,29 @@ compose run --rm --no-deps --entrypoint /bin/sh minio-init -ec '
     >/dev/null
 ' || fail "could not seed anonymous-policy drift"
 
-public_status=$(curl \
-  --silent \
-  --show-error \
-  --noproxy '*' \
-  --output /dev/null \
-  --write-out '%{http_code}' \
-  --connect-timeout 5 \
-  --max-time 10 \
-  "http://127.0.0.1:9100/$MINIO_BUCKET/policy-probe.txt") \
+anonymous_probe_status() {
+  # application_data is intentionally internal, so host-published ports are
+  # not a portable probe boundary. Use Bash's TCP transport from the exact
+  # pinned mc image on the same internal network, without S3 credentials.
+  compose run --rm --no-deps \
+    --entrypoint /usr/bin/timeout minio-init \
+    -k 2s 10s /usr/bin/bash -ec '
+      exec 3<>/dev/tcp/minio/9000
+      printf "GET /%s/policy-probe.txt HTTP/1.1\r\nHost: minio\r\nConnection: close\r\n\r\n" \
+        "$MINIO_BUCKET" >&3
+      IFS=" " read -r protocol status reason <&3
+      case "$protocol" in
+        HTTP/*) ;;
+        *) exit 1 ;;
+      esac
+      case "$status" in
+        [0-9][0-9][0-9]) printf "%s\n" "$status" ;;
+        *) exit 1 ;;
+      esac
+    '
+}
+
+public_status=$(anonymous_probe_status) \
   || fail "seeded anonymous policy was not reachable"
 [ "$public_status" = "200" ] \
   || fail "could not prove seeded anonymous policy (HTTP $public_status)"
@@ -74,17 +88,9 @@ compose run --rm --no-deps minio-init \
   || fail "idempotent policy-reconciling initializer execution failed"
 
 # Both initializer executions ended with an authenticated `mc stat`, proving
-# the existing bucket remains. Verify independently over the published S3
-# endpoint that the object which was public is private after reconciliation.
-anonymous_status=$(curl \
-  --silent \
-  --show-error \
-  --noproxy '*' \
-  --output /dev/null \
-  --write-out '%{http_code}' \
-  --connect-timeout 5 \
-  --max-time 10 \
-  "http://127.0.0.1:9100/$MINIO_BUCKET/policy-probe.txt") \
+# the existing bucket remains. Verify independently and without credentials
+# that the object which was public is private after reconciliation.
+anonymous_status=$(anonymous_probe_status) \
   || fail "anonymous policy probe did not receive an HTTP response"
 [ "$anonymous_status" = "403" ] \
   || fail "bucket allowed anonymous access (HTTP $anonymous_status)"
