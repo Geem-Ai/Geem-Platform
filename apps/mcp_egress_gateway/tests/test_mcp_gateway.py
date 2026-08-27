@@ -179,6 +179,22 @@ class McpWireFixture:
             if isinstance(call["message"], dict)
         ]
 
+    def wait_for_rpc_prefix(
+        self,
+        expected: list[str],
+        *,
+        timeout_seconds: float = 1.0,
+    ) -> list[str]:
+        """Wait for fire-and-forget SDK notifications to reach the test wire."""
+
+        deadline = time.monotonic() + timeout_seconds
+        methods = self.rpc_methods()
+        while len(methods) < len(expected) and time.monotonic() < deadline:
+            time.sleep(0.005)
+            methods = self.rpc_methods()
+        assert methods[: len(expected)] == expected
+        return methods
+
 
 class AuthFailureWireFixture(McpWireFixture):
     def __init__(self, *, status_code: int, challenge: str) -> None:
@@ -1251,11 +1267,13 @@ def test_auto_fallback_owns_streamable_2025_legacy_revision() -> None:
         assert discovered.json()["negotiated_protocol_version"] == protocol
         handle = discovered.json()["session_handle"]
         assert handle
-        assert wire.rpc_methods()[:3] == [
-            "server/discover",
-            "initialize",
-            "notifications/initialized",
-        ]
+        wire.wait_for_rpc_prefix(
+            [
+                "server/discover",
+                "initialize",
+                "notifications/initialized",
+            ]
+        )
         closed = client.post(
             "/v1/mcp",
             json={
@@ -1290,6 +1308,7 @@ def test_legacy_handle_binding_target_and_expiry_fail_before_tool_dispatch() -> 
         )
         assert discovered.status_code == 200
         handle = discovered.json()["session_handle"]
+        wire.wait_for_rpc_prefix(["initialize", "notifications/initialized"])
         before = list(wire.rpc_methods())
 
         wrong_caller = client.post(
