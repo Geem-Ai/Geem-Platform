@@ -563,6 +563,29 @@ def test_production_runbooks_support_collision_safe_project_handoff() -> None:
     migration = "geem-prod-compose run --rm --no-deps api alembic upgrade head"
     normal_start = "geem-prod-compose up -d --wait --wait-timeout 300"
     assert production.index(migration) < production.index(normal_start)
+    production_words = " ".join(production.split())
+    production_hold = (
+        "Before any release-project start, prove that this control still serves"
+    )
+    production_first_start = "geem-prod-compose up -d \\ postgres redis"
+    production_failure_test = (
+        "Before accepting the supervisor, prove fail-start containment deliberately"
+    )
+    production_reboot = "Perform a controlled reboot in the maintenance plan."
+    production_release = "release the independent ingress maintenance control"
+    assert (
+        production_words.index(production_hold)
+        < production_words.index(production_first_start)
+        < production_words.index(normal_start)
+        < production_words.index(production_failure_test)
+        < production_words.index(production_reboot)
+        < production_words.index(production_release)
+    )
+    assert "unrelated host Cloudflared or Apache service" in production_words
+    assert (
+        "running `cloudflared` container is not an ingress-release event"
+        in production_words
+    )
 
     assert "legacy project label collides with another repository" in connectors
     production_procedure = connectors.split(
@@ -581,6 +604,18 @@ def test_production_runbooks_support_collision_safe_project_handoff() -> None:
     assert production_procedure.index(
         connector_migration
     ) < production_procedure.index(connector_start)
+    connector_words = " ".join(production_procedure.split())
+    connector_hold = "Before the first release-project `geem_compose up`, prove"
+    connector_first_start = "geem_compose up -d \\ postgres redis"
+    assert (
+        connector_words.index(connector_hold)
+        < connector_words.index(connector_first_start)
+        < connector_words.index(connector_migration)
+        < connector_words.index(connector_start)
+    )
+    assert "The final `geem_compose up` starts `cloudflared`" in connector_words
+    assert "a running tunnel is not authorization to release traffic" in connector_words
+    assert "unrelated host Cloudflared or Apache service" in connector_words
 
 
 def test_uat_compose_starts_mcp_gateway_without_profile() -> None:

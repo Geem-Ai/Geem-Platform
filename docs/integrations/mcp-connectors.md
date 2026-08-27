@@ -918,7 +918,22 @@ Pull the exact digest-pinned images from the approved registry manifest. Do not
 build or retag production images on the host. Before start, stream the merged
 JSON into the repository-owned validator in the exact API image. The validator
 gets no deployment environment/`--env-file`, secret, mount, Docker socket, or
-network:
+network.
+
+Before the first release-project `geem_compose up`, prove that the production
+guide's independent ingress maintenance control is active and remains effective
+when the candidate tunnel starts or restarts. It must cover only the approved
+Geem public hosts/tunnel and must not stop, modify, reuse, or route through an
+unrelated host Cloudflared or Apache service. Keep the hold active through the
+partial start, migration, final start, supervisor failure test, controlled
+reboot, and monitoring gates. The final `geem_compose up` starts
+`cloudflared`, but a running tunnel is not authorization to release traffic.
+Release the hold only through the guide's explicit owner-authorized stage-10
+gate. If maintenance depends only on leaving `cloudflared` stopped, stop and
+obtain a reviewed independent ingress hold before using this procedure.
+
+Execute the reviewed pull, validation, partial start, migration, and final
+start in this order:
 
 ```bash
 export GEEM_API_IMAGE=<approved-api-image-at-sha256-digest>

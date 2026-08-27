@@ -1241,7 +1241,23 @@ them to `application_data`. The next command is therefore a controlled,
 volume-preserving datastore container/network transition. It uses the approved
 release project name while retaining the exact external physical volume names
 and production credentials. Run it only after the final CIDR manifest,
-application value, proxy policy, and overlay passed the atomic stage-6 review:
+application value, proxy policy, and overlay passed the atomic stage-6 review.
+
+The ingress maintenance control used for this cutover must be independent of
+the candidate Compose lifecycle and must remain effective when the candidate
+`cloudflared` service starts or restarts. Before any release-project start,
+prove that this control still serves or enforces the reviewed maintenance
+state and record its owner. Scope it only to the approved Geem public
+hosts/tunnel; do not stop, modify, reuse, or route through an unrelated host
+Cloudflared or Apache service. Keep it in force through migration, boundary
+validation, the deliberate supervisor-failure test, the final supervisor
+start, and the controlled reboot. A plan whose only maintenance mechanism is
+keeping the candidate `cloudflared` container stopped cannot safely exercise
+the complete-topology or supervisor commands below; stop and obtain a reviewed
+independent ingress hold instead.
+
+With those prerequisites satisfied, start only the initial datastore and
+boundary services:
 
 ```bash
 geem-prod-compose up -d \
@@ -1281,6 +1297,11 @@ geem-prod-compose run --rm --no-deps api alembic upgrade head
 geem-prod-compose up -d --wait --wait-timeout 300
 geem-prod-compose ps
 ```
+
+The complete-topology command starts the candidate `cloudflared` service. A
+running `cloudflared` container is not an ingress-release event: the independent
+maintenance control above must still prevent production traffic from reaching
+the candidate until its explicit release gate in stage 10.
 
 Now require all nine actual logical networks to exist, with each logical label
 resolving to exactly one project network. Compare every assigned subnet with
@@ -1777,6 +1798,14 @@ including:
 Record the PKI rotation owner and rehearse rotation. Certificates are loaded at
 process start; replacing a host file without recreating gateway, API, and worker
 does not complete rotation.
+
+Only after the post-reboot gates pass, the monitoring destinations and named
+response owners are active, and the change owner explicitly authorizes traffic
+may the operator release the independent ingress maintenance control. Record
+the release timestamp and owner, then verify the approved public origins and
+negative routes while `MCP_CONNECTOR_ENABLED` remains `false`. If production
+traffic was released merely because `cloudflared` started, or before these
+conditions passed, stop the change and follow the incident/rollback plan.
 
 ## 11. Resolve all release blockers
 
