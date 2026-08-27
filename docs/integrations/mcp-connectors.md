@@ -5,6 +5,12 @@ how to configure the paid MCP Connectors App, deploy its isolated outbound
 boundary, connect tenant-owned remote MCP servers, and prove that the boundary
 is working before publication.
 
+For an existing production machine that has not yet pulled or deployed Phase
+13, start with the
+[production-PC upgrade and deployment guide](./mcp-production-deployment.md).
+It adds source pinning, backup, migration/seed, frontend, supervisor, dependency,
+and rollback sequencing around this security and operations runbook.
+
 Geem is the model-owning MCP **client/host**. The remote server executes tools;
 Geem owns model selection, discovery, authorization, the tool loop, metering,
 approvals, and delivery. Phase 13 does not expose Geem as an MCP server, run
@@ -208,8 +214,10 @@ Before turning on MCP, the normal SaaS stack must already have:
 
 - `APP_ENV=production` and `AUTH_REQUIRED=true`;
 - public HTTPS `APP_URL` and `WORKSPACE_WEB_URL` values;
-- a strong `SECRETS_ENCRYPTION_KEY` for connector credentials, OAuth tokens,
-  pending arguments, and resumable loop state;
+- for a fresh install, a strong `SECRETS_ENCRYPTION_KEY` for connector
+  credentials, OAuth tokens, pending arguments, and resumable loop state; an
+  existing installation must preserve its current effective encryption identity
+  unless a separately reviewed decrypt/re-encrypt migration is performed;
 - `OPENROUTER_API_KEY` plus reviewed primary and fallback model IDs;
 - for the direct-WhatsApp release canary, `OPENWA_BASE_URL`, a non-empty
   `OPENWA_API_KEY`, and a reviewed `OPENWA_TIMEOUT_SECONDS`;
@@ -319,6 +327,8 @@ APP_ENV=production
 AUTH_REQUIRED=true
 APP_URL=https://api.geem.ai
 WORKSPACE_WEB_URL=https://hub.geem.ai
+# Fresh install: set a dedicated secret-manager value. Existing upgrade: keep
+# the current effective value; do not replace a JWT_SECRET-derived identity.
 SECRETS_ENCRYPTION_KEY=<secret-manager-value>
 
 OPENROUTER_API_KEY=<secret-manager-value>
@@ -1024,7 +1034,7 @@ docker compose \
   -f docker-compose.yml \
   -f docker-compose.tunnel.yml \
   -f docker-compose.production-hardening.yml \
-  up -d --force-recreate api worker
+  up -d --no-deps --force-recreate api worker
 
 curl --fail --silent --show-error \
   https://api.geem.ai/api/health/ready
@@ -1440,10 +1450,11 @@ reviewed loopback ingress design) and replaces every development credential.
 ## Emergency disable and rollback
 
 For immediate security containment, move the catalog to `coming_soon` or
-unpublish it, set `MCP_CONNECTOR_ENABLED=false`, and force-recreate API and
-worker. Stop the gateway/proxy too if the boundary itself is suspect. Confirm
-that new discovery and dispatch fail closed. This prioritizes containment and
-may leave remote OAuth revocation or pending work for later reconciliation.
+unpublish it, set `MCP_CONNECTOR_ENABLED=false`, and force-recreate only API and
+worker with `--no-deps`. Stop the gateway/proxy too if the boundary itself is
+suspect. Confirm that new discovery and dispatch fail closed. This prioritizes
+containment and may leave remote OAuth revocation or pending work for later
+reconciliation.
 
 For a planned rollback, preserve the gateway long enough to clean up safely:
 
@@ -1452,8 +1463,8 @@ For a planned rollback, preserve the gateway long enough to clean up safely:
    delivery; never replay it.
 3. Revoke external bindings and Expert grants, then remove tenant connections
    that require best-effort remote OAuth revocation.
-4. Set `MCP_CONNECTOR_ENABLED=false` and force-recreate API and worker; Beat is
-   already false.
+4. Set `MCP_CONNECTOR_ENABLED=false` and force-recreate only API and worker with
+   `--no-deps`; Beat is already false.
 5. Confirm readiness and that new discovery/dispatch fails closed.
 6. Stop gateway/proxy if required. Retain PKI and encrypted connection data
    until the rollback decision is final.

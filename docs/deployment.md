@@ -286,8 +286,10 @@ curl -sS http://127.0.0.1:8000/api/health/ready
 
 ### Phase 13 tenant-outbound egress boundary
 
-The canonical production procedure is the
-[Phase 13 MCP configuration and isolation runbook](./integrations/mcp-connectors.md).
+For an existing production machine, begin with the
+[Phase 13 production-PC upgrade and deployment guide](./integrations/mcp-production-deployment.md),
+then follow its mandatory
+[MCP configuration and isolation runbook](./integrations/mcp-connectors.md).
 It includes the required Beat-specific feature override, persistent `mcp`
 profile startup, production credential/host-port hardening, positive datastore
 controls, UAT exclusion, PKI rotation, and release gates. The base + tunnel
