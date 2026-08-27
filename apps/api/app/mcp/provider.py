@@ -28,6 +28,18 @@ class ToolCapableChatProvider(Protocol):
         timeout_seconds: float | None = None,
     ) -> AgentProviderResult: ...
 
+    def answer_without_tools(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        model: str,
+        system_prompt: str,
+        fallback_content: str,
+        json_response: bool = False,
+        max_tokens: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> AgentProviderResult: ...
+
 
 def select_tool_capable_model(settings: Settings) -> str:
     """Choose exactly one reviewed model before reserving a tool-loop turn."""

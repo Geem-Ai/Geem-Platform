@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import time
 import uuid
@@ -79,6 +80,17 @@ class _TwoRoundProvider:
                 usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
                 provider_model="test/tool-model",
             )
+        return self._final_result()
+
+    def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        self.messages.append(list(messages))
+        self.json_responses.append(bool(_kwargs.get("json_response")))
+        self.tool_sets.append([])
+        if self.delay:
+            time.sleep(self.delay)
+        return self._final_result()
+
+    def _final_result(self) -> AgentProviderResult:
         return AgentProviderResult(
             message=AgentAssistantResponseMessage(
                 content=self.final_content,
@@ -121,6 +133,73 @@ class _ScriptedToolProvider:
                 usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
                 provider_model="test/tool-model",
             )
+        return self._final_result()
+
+    def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        self.messages.append(list(messages))
+        self.tool_sets.append([])
+        return self._final_result()
+
+    def _final_result(self) -> AgentProviderResult:
+        return AgentProviderResult(
+            message=AgentAssistantResponseMessage(
+                content=self.final_content,
+                tool_calls=None,
+            ),
+            finish_reason="stop",
+            usage=AgentUsage(prompt_tokens=3, completion_tokens=1, total_tokens=4),
+            provider_model="test/tool-model",
+        )
+
+
+class _NamedScriptedToolProvider:
+    def __init__(
+        self,
+        calls: list[tuple[str, str]],
+        *,
+        final_content: str,
+    ) -> None:
+        self.calls = calls
+        self.final_content = final_content
+        self.call_index = 0
+        self.without_tools_calls = 0
+        self.messages: list[list[dict]] = []
+        self.tool_sets: list[list[dict]] = []
+
+    def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        self.messages.append(list(messages))
+        tool_set = list(_kwargs.get("tools") or [])
+        self.tool_sets.append(tool_set)
+        if tool_set and self.call_index < len(self.calls):
+            tool_name, arguments = self.calls[self.call_index]
+            self.call_index += 1
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content=None,
+                    tool_calls=[
+                        AgentToolCall(
+                            id=f"call-{self.call_index}",
+                            type="function",
+                            function=AgentFunctionCall(
+                                name=tool_name,
+                                arguments=arguments,
+                            ),
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+                usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
+                provider_model="test/tool-model",
+            )
+        return self._final_result()
+
+    def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        self.messages.append(list(messages))
+        self.tool_sets.append([])
+        self.without_tools_calls += 1
+        return self._final_result()
+
+    def _final_result(self) -> AgentProviderResult:
         return AgentProviderResult(
             message=AgentAssistantResponseMessage(
                 content=self.final_content,
@@ -150,6 +229,21 @@ def _normalized_json_result(value) -> NormalizedToolResult:
         ),
         is_error=False,
         transport_bytes=len(encoded.encode("utf-8")),
+        content_types=("text",),
+        unsupported_blocks=(),
+    )
+
+
+def _normalized_error_result(message: str = "lookup failed") -> NormalizedToolResult:
+    encoded = message.encode("utf-8")
+    return NormalizedToolResult(
+        model_content=(
+            "<untrusted_mcp_tool_result>"
+            + message
+            + "</untrusted_mcp_tool_result>"
+        ),
+        is_error=True,
+        transport_bytes=len(encoded),
         content_types=("text",),
         unsupported_blocks=(),
     )
@@ -226,7 +320,7 @@ class _RecordingDocumentRag:
 
 
 def _tool_loop(
-    provider: _TwoRoundProvider | _ScriptedToolProvider,
+    provider: _TwoRoundProvider | _ScriptedToolProvider | _NamedScriptedToolProvider,
     dispatcher: _RecordingDispatcher,
     *,
     general: bool = True,
@@ -307,6 +401,36 @@ def _tool_loop(
         expert_id=expert_id,
     )
     return executor, resolved, invocation
+
+
+def _resolved_variant(
+    resolved: SimpleNamespace,
+    *,
+    alias: str,
+    classification: str,
+) -> SimpleNamespace:
+    variant = copy.deepcopy(resolved)
+    variant.tool.llm_tool_name = alias
+    variant.tool.tool_name = alias
+    variant.tool.title = alias
+    variant.tool.classification = classification
+    variant.provider_tool_schema["function"]["name"] = alias
+    return variant
+
+
+def _tool_schema_names(tool_set: list[dict]) -> list[str]:
+    return [str(schema["function"]["name"]) for schema in tool_set]
+
+
+def _document_answer(answer: str, *, insufficient_context: bool = False) -> str:
+    return json.dumps(
+        {
+            "answer_markdown": answer,
+            "citation_chunk_ids": [],
+            "insufficient_context": insufficient_context,
+        },
+        separators=(",", ":"),
+    )
 
 
 def test_tool_loop_streams_ordered_safe_events_and_periodic_keepalives() -> None:
@@ -402,6 +526,80 @@ def test_synchronous_tool_loop_callers_remain_supported() -> None:
     assert dispatcher.calls == 1
 
 
+def test_late_tool_call_usage_is_recorded_before_deadline_failure() -> None:
+    provider = _TwoRoundProvider(delay=0.1)
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+    executor.settings = executor.settings.model_copy(
+        update={"mcp_total_turn_timeout_seconds": 0.05}
+    )
+    recorded: list[tuple[int, bool]] = []
+    executor._record_intermediate_usage = (  # type: ignore[method-assign]
+        lambda result, **kwargs: recorded.append(
+            (result.usage.total_tokens, bool(kwargs["final"]))
+        )
+    )
+
+    with pytest.raises(AppError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    assert raised.value.category == ErrorCategory.MCP_TOOL_CALL_FAILED
+    assert recorded == [(3, False)]
+    assert dispatcher.calls == 0
+
+
+def test_late_final_answer_usage_is_recorded_before_answer_is_withheld() -> None:
+    class _LateTextProvider:
+        @staticmethod
+        def answer_with_tools(*_args, **_kwargs) -> AgentProviderResult:
+            time.sleep(0.1)
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content="Late answer",
+                    tool_calls=None,
+                ),
+                finish_reason="stop",
+                usage=AgentUsage(prompt_tokens=4, completion_tokens=2, total_tokens=6),
+                provider_model="test/tool-model",
+            )
+
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(  # type: ignore[arg-type]
+        _LateTextProvider(),
+        dispatcher,
+    )
+    executor.settings = executor.settings.model_copy(
+        update={"mcp_total_turn_timeout_seconds": 0.05}
+    )
+    recorded: list[tuple[int, bool]] = []
+    executor._record_intermediate_usage = (  # type: ignore[method-assign]
+        lambda result, **kwargs: recorded.append(
+            (result.usage.total_tokens, bool(kwargs["final"]))
+        )
+    )
+
+    with pytest.raises(AppError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    assert raised.value.category == ErrorCategory.MCP_TOOL_CALL_FAILED
+    assert recorded == [(6, False)]
+    assert dispatcher.calls == 0
+
+
 def test_reordered_identical_success_dispatches_once_then_synthesizes_tool_free() -> None:
     provider = _ScriptedToolProvider(
         [
@@ -458,7 +656,7 @@ def test_reordered_identical_success_dispatches_once_then_synthesizes_tool_free(
     ]
 
 
-def test_repeated_success_at_iteration_ceiling_synthesizes_tool_free() -> None:
+def test_iteration_ceiling_uses_reserved_tool_free_final_round() -> None:
     provider = _ScriptedToolProvider(
         [
             '{"customer_id":7}',
@@ -490,9 +688,64 @@ def test_repeated_success_at_iteration_ceiling_synthesizes_tool_free() -> None:
         "tool_result",
         "complete",
     ]
-    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, True, False]
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, False]
     assert events[-1].result is not None
     assert events[-1].result.answer == "Used the first result."
+
+
+def test_distinct_tool_request_at_iteration_ceiling_finalizes_without_dispatch() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("mcp_read", '{"customer_id":8}'),
+        ],
+        final_content=_document_answer("Used the available first result."),
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    executor.settings = executor.settings.model_copy(
+        update={"mcp_max_tool_iterations": 1}
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="look up both customers",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7}]
+    assert provider.call_index == 1
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    result = events[-1].result
+    assert result is not None
+    assert result.answer == "Used the available first result."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
 
 
 def test_distinct_page_arguments_dispatch_both_calls() -> None:
@@ -815,11 +1068,11 @@ def test_document_tool_loop_requests_json_and_accepts_fenced_synthesis() -> None
     assert rag.generation_calls[0]["usage_context"] is usage_context
 
 
-def test_remote_tool_error_forces_one_tool_free_synthesis_without_citation() -> None:
+def test_remote_read_error_forces_strict_tool_free_clarification() -> None:
     provider = _TwoRoundProvider(
-        final_content=(
-            '{"answer_markdown":"The repository was not found.",'
-            '"citation_chunk_ids":[],"insufficient_context":false}'
+        final_content=_document_answer(
+            "Please provide corrected resource information.",
+            insufficient_context=True,
         )
     )
     dispatcher = _RecordingDispatcher(is_error=True)
@@ -832,7 +1085,7 @@ def test_remote_tool_error_forces_one_tool_free_synthesis_without_citation() -> 
     result = executor.execute(
         knowledge=SimpleNamespace(),  # type: ignore[arg-type]
         expert_id=invocation.expert_id,
-        question="list commits",
+        question="look up the resource",
         invocation=invocation,
         usage_context=SimpleNamespace(),  # type: ignore[arg-type]
         tools=[resolved],  # type: ignore[list-item]
@@ -840,10 +1093,344 @@ def test_remote_tool_error_forces_one_tool_free_synthesis_without_citation() -> 
 
     assert dispatcher.calls == 1
     assert provider.json_responses == [True, True]
-    assert provider.tool_sets[0]
-    assert provider.tool_sets[1] == []
-    assert result.answer == "The repository was not found."
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+    assert result.answer == "Please provide corrected resource information."
     assert result.citations == []
+
+
+def test_executor_normalizes_a_nonconforming_no_tool_provider_result() -> None:
+    class _ViolatingFinalizerProvider(_TwoRoundProvider):
+        def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(list(messages))
+            self.json_responses.append(bool(_kwargs.get("json_response")))
+            self.tool_sets.append([])
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content=None,
+                    tool_calls=[
+                        AgentToolCall(
+                            id="call-illegal",
+                            type="function",
+                            function=AgentFunctionCall(
+                                name="mcp_read",
+                                arguments='{"customer_id":8}',
+                            ),
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+                usage=AgentUsage(prompt_tokens=5, completion_tokens=2, total_tokens=7),
+                provider_model="test/tool-model",
+            )
+
+    provider = _ViolatingFinalizerProvider()
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="look up the resource",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert result.answer.startswith("The connected tool could not complete")
+    assert result.citations == []
+    rag = executor.rag
+    assert isinstance(rag, _RecordingDocumentRag)
+    assert rag.generation_calls[-1]["payload"]["_meta"]["usage"]["total_tokens"] == 7
+
+
+def test_read_error_never_offers_write_or_another_read_tool() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("mcp_read", '{"customer_id":8}'),
+        ],
+        final_content=_document_answer(
+            "Please provide corrected lookup information.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    write_resolved = _resolved_variant(
+        resolved,
+        alias="mcp_write",
+        classification="write",
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="look up the customer",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved, write_resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7}]
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert [
+        event.data.get("status")
+        for event in events
+        if event.event == "tool_result"
+    ] == ["error"]
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read", "mcp_write"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    result = events[-1].result
+    assert result is not None
+    assert result.answer == "Please provide corrected lookup information."
+    assert result.citations == []
+
+
+def test_read_error_does_not_offer_an_exact_or_reordered_retry() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7,"page":1}'),
+            ("mcp_read", '{"page":1,"customer_id":7}'),
+        ],
+        final_content=_document_answer(
+            "Please correct the lookup information.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="look up the resource",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7, "page": 1}]
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert events[-1].result is not None
+    assert events[-1].result.citations == []
+
+
+def test_read_error_does_not_offer_a_distinct_guessed_retry() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("mcp_read", '{"customer_id":8}'),
+            ("mcp_read", '{"customer_id":9}'),
+        ],
+        final_content=_document_answer(
+            "The lookup still failed; please verify the information.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="look up the resource",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7}]
+    assert provider.call_index == 1
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert events[-1].result is not None
+    assert events[-1].result.citations == []
+
+
+def test_write_error_never_opens_another_tool_round() -> None:
+    provider = _NamedScriptedToolProvider(
+        [("mcp_write", '{"customer_id":7}')],
+        final_content=_document_answer(
+            "The requested change failed.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    write_resolved = _resolved_variant(
+        resolved,
+        alias="mcp_write",
+        classification="write",
+    )
+    api_invocation = ChatInvocationContext.api_key(
+        workspace_id=invocation.workspace_id,
+        api_key_id=uuid.uuid4(),
+        expert_id=invocation.expert_id,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=api_invocation.expert_id,
+        question="change the customer",
+        invocation=api_invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[write_resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_write"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert result.citations == []
+
+
+def test_read_error_at_iteration_ceiling_finalizes_without_correction() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("mcp_read", '{"customer_id":8}'),
+        ],
+        final_content=_document_answer(
+            "The lookup failed within the allowed attempt limit.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher(is_error=True)
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    executor.settings = executor.settings.model_copy(
+        update={"mcp_max_tool_iterations": 1}
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="look up the resource",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert provider.call_index == 1
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert result.citations == []
+
+
+def test_earlier_successful_citation_survives_later_read_error() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("mcp_read", '{"customer_id":8}'),
+        ],
+        final_content=_document_answer(
+            "The first result is available; please correct the second lookup.",
+            insufficient_context=True,
+        ),
+    )
+    dispatcher = _RecordingDispatcher()
+    dispatcher.normalized_results = [
+        _normalized_json_result({"customer_id": 7, "status": "active"}),
+        _normalized_error_result(),
+    ]
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="look up both customers",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 2
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
 
 
 @pytest.mark.parametrize(

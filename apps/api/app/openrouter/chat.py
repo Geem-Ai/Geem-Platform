@@ -48,6 +48,33 @@ def parse_answer_json_content(content: str) -> dict[str, Any]:
     }
 
 
+def _valid_no_tool_content(content: str | None, *, json_response: bool) -> bool:
+    if not isinstance(content, str) or not content.strip():
+        return False
+    if not json_response:
+        return True
+    try:
+        text = content.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(parsed, Mapping):
+        return False
+    answer = parsed.get("answer_markdown") or parsed.get("answer")
+    citation_ids = parsed.get("citation_chunk_ids", [])
+    insufficient_context = parsed.get("insufficient_context", False)
+    return bool(
+        isinstance(answer, str)
+        and answer.strip()
+        and isinstance(citation_ids, list)
+        and all(isinstance(item, str) for item in citation_ids)
+        and isinstance(insufficient_context, bool)
+    )
+
+
 def extract_partial_json_string(text: str, field: str) -> str | None:
     """Return the (possibly incomplete) JSON string value for `field`, or None."""
     pattern = f'"{field}"'
@@ -248,6 +275,84 @@ class OpenRouterChatProvider:
             max_attempts=1,
         )
 
+    def answer_without_tools(
+        self,
+        messages: Sequence[Mapping[str, Any]],
+        *,
+        model: str,
+        system_prompt: str,
+        fallback_content: str,
+        json_response: bool = False,
+        max_tokens: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> AgentProviderResult:
+        """Run one fixed-model finalizer that can never return a tool call.
+
+        Some upstream models emit function calls even when no functions are
+        declared. This boundary explicitly disables tools and converts calls,
+        truncated output, or malformed final content into caller-owned
+        deterministic content. The provider's validated usage and identifiers
+        remain attached so the rejected generation is still metered accurately.
+        """
+
+        selected = (model or "").strip()
+        if not selected:
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "A reviewed tool-capable model is required.",
+            )
+        if not isinstance(fallback_content, str) or not fallback_content.strip():
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "The no-tool finalizer requires deterministic fallback content.",
+            )
+        if json_response and not _valid_no_tool_content(
+            fallback_content,
+            json_response=True,
+        ):
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "The no-tool finalizer fallback must match the answer schema.",
+            )
+        payload = self._agent_payload(
+            selected,
+            messages,
+            system_prompt=system_prompt,
+            tools=None,
+            tool_choice="none",
+            stream=False,
+            temperature=None,
+            top_p=None,
+            max_tokens=max_tokens,
+            parallel_tool_calls=None,
+        )
+        # `_agent_payload` normally emits a choice only alongside declarations.
+        # Keep declarations absent while making the no-tool contract explicit.
+        payload["tool_choice"] = "none"
+        if json_response:
+            payload["response_format"] = {"type": "json_object"}
+        result = self._call_agent(
+            selected,
+            payload,
+            declared_names=frozenset(),
+            timeout_seconds=timeout_seconds,
+            max_attempts=1,
+            no_tool_fallback_content=fallback_content,
+        )
+        if _valid_no_tool_content(result.message.content, json_response=json_response):
+            return result
+        return AgentProviderResult(
+            message=AgentAssistantResponseMessage(
+                content=fallback_content,
+                tool_calls=None,
+            ),
+            finish_reason="stop",
+            usage=result.usage,
+            provider_model=result.provider_model,
+            provider_request_id=result.provider_request_id,
+            provider_completion_id=result.provider_completion_id,
+        )
+
     def stream_for_agent(
         self,
         messages: Sequence[Mapping[str, Any]],
@@ -379,6 +484,7 @@ class OpenRouterChatProvider:
         declared_names: frozenset[str],
         timeout_seconds: float | None = None,
         max_attempts: int = 5,
+        no_tool_fallback_content: str | None = None,
     ) -> AgentProviderResult:
         body, meta, status = self.client.request(
             "POST",
@@ -399,6 +505,7 @@ class OpenRouterChatProvider:
             declared_names=declared_names,
             meta=meta,
             fallback_model=model,
+            no_tool_fallback_content=no_tool_fallback_content,
         )
 
     def _call_agent_stream(
@@ -899,6 +1006,7 @@ def validate_agent_provider_response(
     declared_names: frozenset[str],
     meta: Mapping[str, Any] | None = None,
     fallback_model: str | None = None,
+    no_tool_fallback_content: str | None = None,
 ) -> AgentProviderResult:
     """Reject malformed provider output before it reaches the public protocol."""
 
@@ -919,8 +1027,48 @@ def validate_agent_provider_response(
     if finish_reason not in SUPPORTED_AGENT_FINISH_REASONS:
         raise _agent_provider_error("Unsupported Agent finish reason.", model=fallback_model)
 
+    metadata = meta or {}
+    raw_usage = body.get("usage")
+    if raw_usage is None:
+        raw_usage = metadata.get("usage")
+    usage = _validated_agent_usage(raw_usage, model=fallback_model)
+    provider_model = body.get("model")
+    provider_completion_id = body.get("id")
+    resolved_provider_model = (
+        provider_model if isinstance(provider_model, str) else fallback_model
+    )
+    provider_request_id = (
+        metadata.get("request_id")
+        if isinstance(metadata.get("request_id"), str)
+        else None
+    )
+    resolved_completion_id = (
+        provider_completion_id
+        if isinstance(provider_completion_id, str)
+        else metadata.get("openrouter_id")
+        if isinstance(metadata.get("openrouter_id"), str)
+        else None
+    )
+
     raw_calls = message.get("tool_calls")
-    if raw_calls is not None:
+    legacy_function_call = message.get("function_call")
+    invalid_no_tool_output = bool(
+        no_tool_fallback_content is not None
+        and not declared_names
+        and (
+            raw_calls is not None
+            or legacy_function_call is not None
+            or finish_reason != "stop"
+            or not isinstance(message.get("content"), str)
+        )
+    )
+    if invalid_no_tool_output:
+        parsed_message = AgentAssistantResponseMessage(
+            content=no_tool_fallback_content,
+            tool_calls=None,
+        )
+        finish_reason = "stop"
+    elif raw_calls is not None:
         if not isinstance(raw_calls, list) or not raw_calls:
             raise _agent_provider_error("Agent tool_calls must be non-empty.", model=fallback_model)
         if message.get("content") is not None or finish_reason != "tool_calls":
@@ -978,29 +1126,13 @@ def validate_agent_provider_response(
             )
         parsed_message = AgentAssistantResponseMessage(content=content, tool_calls=None)
 
-    metadata = meta or {}
-    raw_usage = body.get("usage")
-    if raw_usage is None:
-        raw_usage = metadata.get("usage")
-    provider_model = body.get("model")
-    provider_completion_id = body.get("id")
     return AgentProviderResult(
         message=parsed_message,
         finish_reason=finish_reason,
-        usage=_validated_agent_usage(raw_usage, model=fallback_model),
-        provider_model=provider_model if isinstance(provider_model, str) else fallback_model,
-        provider_request_id=(
-            metadata.get("request_id")
-            if isinstance(metadata.get("request_id"), str)
-            else None
-        ),
-        provider_completion_id=(
-            provider_completion_id
-            if isinstance(provider_completion_id, str)
-            else metadata.get("openrouter_id")
-            if isinstance(metadata.get("openrouter_id"), str)
-            else None
-        ),
+        usage=usage,
+        provider_model=resolved_provider_model,
+        provider_request_id=provider_request_id,
+        provider_completion_id=resolved_completion_id,
     )
 
 

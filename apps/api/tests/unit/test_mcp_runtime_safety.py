@@ -795,6 +795,41 @@ def test_mid_loop_access_loss_forces_tool_free_safe_synthesis() -> None:
                 provider_model="test/tool-model",
             )
 
+        def answer_without_tools(
+            self,
+            messages,
+            *,
+            model,
+            system_prompt,
+            fallback_content,
+            json_response=False,
+            max_tokens=None,
+            timeout_seconds=None,
+        ) -> AgentProviderResult:
+            self.calls.append(
+                {
+                    "messages": list(messages),
+                    "model": model,
+                    "system_prompt": system_prompt,
+                    "tools": [],
+                    "fallback_content": fallback_content,
+                    "timeout_seconds": timeout_seconds,
+                }
+            )
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content="Safe answer from authorized context.",
+                    tool_calls=None,
+                ),
+                finish_reason="stop",
+                usage=AgentUsage(
+                    prompt_tokens=7,
+                    completion_tokens=3,
+                    total_tokens=10,
+                ),
+                provider_model="test/tool-model",
+            )
+
     class _DeniedDispatcher:
         @staticmethod
         def dispatch(**_kwargs):
@@ -1000,7 +1035,7 @@ def test_approved_write_resume_marks_only_the_fresh_dispatch_admission(
 
     class _FinalProvider:
         @staticmethod
-        def answer_with_tools(*_args, **_kwargs) -> AgentProviderResult:
+        def answer_without_tools(*_args, **_kwargs) -> AgentProviderResult:
             return AgentProviderResult(
                 message=AgentAssistantResponseMessage(
                     content="Approved write completed.",
@@ -1118,7 +1153,7 @@ def test_confirmed_write_is_marked_executed_before_post_dispatch_deadline(
 
     class _ForbiddenProvider:
         @staticmethod
-        def answer_with_tools(*_args, **_kwargs):
+        def answer_without_tools(*_args, **_kwargs):
             raise AssertionError("expired turns must not start final synthesis")
 
     settings = get_settings().model_copy(
