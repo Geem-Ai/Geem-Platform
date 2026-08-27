@@ -288,6 +288,15 @@ clean-reconstruction rehearsal, and final countersignature. It does not relax
 the topology, volume, secret, image, migration, ingress, or release gates and
 never authorizes production-volume deletion.
 
+A different path applies when the owner explicitly retires all existing Geem
+test/seed state and requests a fresh single-host deployment rather than an
+in-place upgrade. In that case follow the
+[owner-authorized clean-slate production-PC procedure](./mcp-production-clean-slate.md).
+It leaves legacy volumes quarantined, creates new explicit volumes, and permits
+locally built content-addressed image IDs only through the validator's explicit
+`--allow-local-image-ids` option. Its authorization does not extend to another
+project or host service.
+
 ### 1. Prepare application prerequisites
 
 Before turning on MCP, the normal SaaS stack must already have:
@@ -2085,6 +2094,7 @@ later exact-name/fingerprint destructive ticket. Never use `compose down -v`,
 
 ## Source-of-truth files
 
+- [Owner-authorized clean-slate production-PC procedure](./mcp-production-clean-slate.md)
 - [Application settings and startup assertions](../../apps/api/app/core/config.py)
 - [Least-privilege Celery Beat application](../../apps/api/app/worker/beat_app.py)
 - [Non-mutating production Compose validator](../../apps/api/app/ops/validate_production_compose.py)

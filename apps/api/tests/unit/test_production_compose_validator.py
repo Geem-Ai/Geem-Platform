@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 
 import pytest
@@ -419,6 +420,7 @@ def _options(
     *,
     mcp_enabled: bool = False,
     ingress_services: frozenset[str] = frozenset({"cloudflared"}),
+    allow_local_image_ids: bool = False,
 ) -> ValidationOptions:
     return ValidationOptions(
         project="infra",
@@ -431,6 +433,7 @@ def _options(
             "minio_data": "infra_minio_data",
         },
         required_blocked_networks=(),
+        allow_local_image_ids=allow_local_image_ids,
     )
 
 
@@ -444,6 +447,44 @@ def _errors(config: dict[str, object], **options: object) -> list[str]:
 
 def test_accepts_exact_digest_pinned_isolated_topology() -> None:
     assert _errors(_valid_config()) == []
+
+
+def test_local_image_ids_require_explicit_single_host_opt_in() -> None:
+    config = _valid_config()
+    services = _services(config)
+    local_ids: dict[str, str] = {}
+    for service_name, service in services.items():
+        service["pull_policy"] = "never"
+        if service_name == "minio-init":
+            continue
+        identity = "api" if service_name in {"api", "worker", "beat"} else service_name
+        local_id = "sha256:" + hashlib.sha256(identity.encode()).hexdigest()
+        service["image"] = local_id
+        local_ids[service_name] = local_id
+
+    default_errors = _errors(config)
+    assert any("api image is not pinned" in error for error in default_errors)
+    assert any(
+        "api overrides the reviewed image pull policy" in error
+        for error in default_errors
+    )
+    assert _errors(config, allow_local_image_ids=True) == []
+    assert local_ids["api"] == local_ids["worker"] == local_ids["beat"]
+
+    del services["worker"]["pull_policy"]
+    errors = _errors(config, allow_local_image_ids=True)
+    assert any("worker must use pull_policy never" in error for error in errors)
+
+
+def test_local_image_opt_in_still_rejects_tags_and_malformed_ids() -> None:
+    config = _valid_config()
+    for service in _services(config).values():
+        service["pull_policy"] = "never"
+    _services(config)["api"]["image"] = "geem/api:latest"
+
+    errors = _errors(config, allow_local_image_ids=True)
+
+    assert any("api image is not pinned" in error for error in errors)
 
 
 def test_enabled_release_still_requires_beat_to_be_disabled() -> None:

@@ -774,6 +774,144 @@ def test_disposable_state_exception_is_fail_closed_and_non_destructive() -> None
     )
 
 
+def test_owner_authorized_clean_slate_path_is_explicit_and_non_destructive() -> None:
+    clean_slate_path = (
+        REPO_ROOT / "docs/integrations/mcp-production-clean-slate.md"
+    )
+    clean_slate = clean_slate_path.read_text()
+    clean_words = " ".join(clean_slate.split())
+    production = (
+        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
+    ).read_text()
+    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
+    validator = (
+        REPO_ROOT / "apps/api/app/ops/validate_production_compose.py"
+    ).read_text()
+
+    assert "Required operator authorization" in clean_words
+    assert "Do not repeat the disposable-state audit" in clean_words
+    assert "create four previously nonexistent, explicitly named volumes" in (
+        clean_words
+    )
+    assert "final Compose model must contain no `build:` definitions" in clean_words
+    assert "`--allow-local-image-ids`" in clean_words
+    assert "`pull_policy: never`" in clean_words
+    assert "compare the rendered service image references bidirectionally" in (
+        clean_words
+    )
+    assert "Never run `geem-prod-compose pull`" in clean_words
+    assert "Do not reuse, empty, rename, or delete" in clean_words
+    assert "`docker volume rm` or either volume/system prune command" in clean_words
+    assert "`MCP_CONNECTOR_ENABLED=false`" in clean_words
+    assert "App still `coming_soon`" in clean_words
+    assert "remove the issuer private key from the production host" in clean_words
+    assert clean_words.index("clean-install bootstrap") < clean_words.index(
+        "Then run the MCP-only catalog reconciler"
+    )
+    assert clean_words.index(
+        "verify all internal readiness endpoints before starting Cloudflared"
+    ) < clean_words.index("start the new `cloudflared` service last")
+    assert "Never install or enable parallel system and user units" in clean_words
+    assert "If an exact legacy container has a repository source bind" in clean_words
+    assert "When no legacy container has such a bind" in clean_words
+    assert "first start must be a deliberate readiness-failure test" in clean_words
+    assert "leave zero new-project containers running" in clean_words
+    assert "stop and disable that exact unit first" in clean_words
+    assert "prove that unit inactive and disabled" in clean_words
+    assert "Leave the legacy repository `.env` unchanged" in clean_words
+    assert (
+        clean_words.index("Do not move `HEAD`")
+        < clean_words.index(
+            "Require all expected old Geem IDs to be stopped before continuing"
+        )
+        < clean_words.index("Only now fast-forward the clean shared checkout")
+    )
+    assert (
+        clean_words.index(
+            "Remove the bootstrap password first, then create the permanent"
+        )
+        < clean_words.index("Preserve those exact permanent manifest bytes")
+        < clean_words.index(
+            "Atomically install those temporary bytes at the canonical "
+            "checksum-manifest path"
+        )
+        < clean_words.index("Require a nonzero start result")
+        < clean_words.index(
+            "require failed-start containment to leave zero new-project "
+            "containers running"
+        )
+        < clean_words.index("restore the exact preserved permanent manifest bytes")
+        < clean_words.index(
+            "Require byte equality, ownership/mode, and strict checksum verification"
+        )
+        < clean_words.index("Start the unit normally")
+        < clean_words.index(
+            "Enable the replacement system unit only after that successful normal "
+            "start"
+        )
+    )
+    assert (
+        clean_words.index("stop and disable that exact unit first")
+        < clean_words.index("stop the new Cloudflared container first")
+        < clean_words.index("enumerate new-project container IDs")
+    )
+    assert "Do not reboot the host during this cutover" in clean_words
+    assert "Record controlled-reboot validation as a pending operations gate" in (
+        clean_words
+    )
+    assert "do not claim that reboot persistence was tested" in clean_words
+    hold_activation = (
+        "install, enable, and start the independent Geem-only ingress hold"
+    )
+    prestop_external_hold = (
+        "Prove the reviewed maintenance/denial response on all exact Geem origins "
+        "while legacy Cloudflared is still running"
+    )
+    legacy_stop = "Stop and disable only the exact proven legacy Geem supervisor"
+    candidate_start = (
+        "Start only the new datastores, initializer, and three egress-boundary "
+        "services"
+    )
+    external_hold_proof = (
+        "every exact Geem public origin now shows the reviewed maintenance/denial "
+        "state"
+    )
+    normal_start = "Start the unit normally"
+    later_release = "Release the independent hold only in a later owner-authorized operation"
+    assert (
+        clean_words.index(hold_activation)
+        < clean_words.index(prestop_external_hold)
+        < clean_words.index(legacy_stop)
+        < clean_words.index(external_hold_proof)
+        < clean_words.index(candidate_start)
+        < clean_words.index(normal_start)
+        < clean_words.index(later_release)
+    )
+    assert "independent of both the legacy and candidate Compose lifecycles" in (
+        clean_words
+    )
+    assert "either the legacy or candidate `cloudflared` container" in clean_words
+    assert "If the legacy network is shared with any unrelated endpoint" in (
+        clean_words
+    )
+    assert "Candidate Cloudflared running is not authorization" in clean_words
+    assert "do not release the independent ingress hold during this procedure" in (
+        clean_words
+    )
+    assert "`law-firm`" in clean_words
+    assert "Ollama/`ollama-bridge`" in clean_words
+    assert "rollback never authorizes public traffic" in clean_words
+    assert "`compose_reference`" in clean_words
+    assert "`engine_image_id`" in clean_words
+    assert "returned `.Id` to equal the recorded `engine_image_id`" in clean_words
+    assert "The sole exception is the MinIO initializer" in clean_words
+    assert "have zero container references" in clean_words
+    assert "Never print the password" in clean_words
+    assert "mcp-production-clean-slate.md" in production
+    assert "mcp-production-clean-slate.md" in connectors
+    assert '"--allow-local-image-ids"' in validator
+
+
 def test_failure_test_manifest_is_activated_at_the_canonical_unit_path() -> None:
     production = (
         REPO_ROOT / "docs/integrations/mcp-production-deployment.md"

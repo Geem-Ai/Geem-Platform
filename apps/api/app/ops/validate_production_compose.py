@@ -170,6 +170,7 @@ CLOUDFLARED_COMMAND = (
 )
 
 DIGEST_IMAGE_RE = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")
+LOCAL_IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 # Exact scripts rendered from infra/docker-compose.yml. The production
 # validator runs in an isolated image and therefore cannot read the repository;
@@ -335,6 +336,7 @@ REVIEWED_SERVICE_FIELDS = frozenset(
         "networks",
         "pids_limit",
         "profiles",
+        "pull_policy",
         "read_only",
         "restart",
         "secrets",
@@ -387,6 +389,7 @@ class ValidationOptions:
     ingress_services: frozenset[str]
     physical_volumes: Mapping[str, str]
     required_blocked_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
+    allow_local_image_ids: bool = False
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -902,8 +905,24 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if service.get("build"):
             errors.append(f"{name} still has a production build definition")
         image = service.get("image")
-        if not isinstance(image, str) or not DIGEST_IMAGE_RE.fullmatch(image):
+        image_is_registry_digest = (
+            isinstance(image, str) and DIGEST_IMAGE_RE.fullmatch(image) is not None
+        )
+        image_is_permitted_local_id = (
+            options.allow_local_image_ids
+            and isinstance(image, str)
+            and LOCAL_IMAGE_ID_RE.fullmatch(image) is not None
+        )
+        if not image_is_registry_digest and not image_is_permitted_local_id:
             errors.append(f"{name} image is not pinned to an immutable sha256 digest")
+        pull_policy = service.get("pull_policy")
+        if options.allow_local_image_ids:
+            if pull_policy != "never":
+                errors.append(
+                    f"{name} must use pull_policy never in local-image deployment mode"
+                )
+        elif pull_policy is not None:
+            errors.append(f"{name} overrides the reviewed image pull policy")
         if service.get("ports") or service.get("expose"):
             errors.append(f"{name} exposes or publishes a container port")
         if service.get("privileged") is True:
@@ -1373,6 +1392,14 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         help="Additional host/VPC/corporate CIDR that both egress layers must cover",
     )
+    parser.add_argument(
+        "--allow-local-image-ids",
+        action="store_true",
+        help=(
+            "Permit local content-addressed sha256 image IDs for the explicit "
+            "single-host clean-slate deployment path"
+        ),
+    )
     return parser
 
 
@@ -1400,6 +1427,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ingress_services=frozenset(arguments.ingress_service),
         physical_volumes=physical_volumes,
         required_blocked_networks=required_blocks,
+        allow_local_image_ids=arguments.allow_local_image_ids,
     )
     try:
         errors = validate_production_compose(config, options)

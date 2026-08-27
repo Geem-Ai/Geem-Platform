@@ -11,6 +11,12 @@ sections of that runbook are mandatory parts of this procedure. The normative
 product and protocol contract remains the
 [Phase 13 plan](../../.cursor/plans/mcp.plan.md).
 
+For a single-owner host whose existing Geem users and data are explicitly
+retired test/seed state, use the separate
+[owner-authorized clean-slate production-PC path](./mcp-production-clean-slate.md).
+That path creates new volumes and may build content-addressed images on the
+target PC; it is not the in-place, data-preserving upgrade described here.
+
 > **STOP — current release state:** upgrading the code and database does not
 > authorize publishing MCP Connectors. Keep `MCP_CONNECTOR_ENABLED=false` and
 > the production catalog row `coming_soon` until every blocker and release gate
@@ -2356,6 +2362,7 @@ to turn MCP off.
 
 ## Source-of-truth references
 
+- [Owner-authorized clean-slate production-PC path](./mcp-production-clean-slate.md)
 - [Detailed MCP configuration/isolation/operations runbook](./mcp-connectors.md)
 - [General production deployment guide](../deployment.md)
 - [Phase 13 product and protocol plan](../../.cursor/plans/mcp.plan.md)
