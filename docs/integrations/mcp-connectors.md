@@ -1465,9 +1465,17 @@ API readiness, datastore mounts, mTLS, networks, forbidden egress, and required
 provider canaries. Test the permanent readiness and containment path with a
 temporary drop-in that deliberately stops one required service before the real
 readiness command. The start must fail and the exact project label must have
-zero running containers; remove only that test drop-in, restore the checksummed
-unit, then prove a normal start succeeds. Never use `--remove-orphans` as
-containment. See
+zero running containers. Because the unit checks only the canonical
+`/etc/geem/phase13-start-artifacts.sha256`, a separately named test manifest is
+not active by itself: preserve the exact permanent bytes, verify a temporary
+manifest that includes the test drop-in, then atomically install those
+temporary bytes at the canonical path before reload/start. Both activation and
+restoration must use a previously nonexistent staging file on the canonical
+path's filesystem, followed by a rename, and leave the canonical file
+`root:root` mode `0444`. After the failed/non-running test state is proven,
+remove only that drop-in and atomically restore the exact preserved permanent
+bytes at the canonical path before reload and normal start; do not regenerate
+the permanent manifest. Never use `--remove-orphans` as containment. See
 [Make the topology persistent before enabling MCP](./mcp-production-deployment.md#9-make-the-topology-persistent-before-enabling-mcp)
 for the mandatory transition and unit shape.
 

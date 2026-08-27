@@ -1707,6 +1707,14 @@ CIDR, image digest, MCP state, environment, secret/config source, command, or
 unit requires a new reviewed manifest; never regenerate it merely to silence
 `ExecStartPre`.
 
+Before installing any deliberate-failure drop-in, preserve the exact approved
+permanent manifest bytes under a separately named `root:root` mode-`0444`
+evidence path containing the release/evidence ID. Record that evidence file's
+checksum and prove it is byte-identical to the active canonical
+`/etc/geem/phase13-start-artifacts.sha256`. The evidence path is not an
+alternate active manifest: both unit shapes and the reviewed sudoers rule check
+only the canonical path. Do not change them to select a test manifest.
+
 After review, use exactly the scope discovered in stage 0. For a system unit:
 
 ```bash
@@ -1746,13 +1754,27 @@ ExecStartPost=/usr/local/sbin/geem-prod-compose stop --timeout 30 worker
 ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
 ```
 
-Create a separately reviewed temporary checksum manifest using the same exact
-path list as the permanent manifest plus this one exact drop-in. Never let an
-unlisted drop-in bypass the checksum boundary. Reload the one discovered
-system/user scope and start the unit. The first post-start command creates a
-deliberate missing-required-service condition, so the real readiness command
-must fail, the start job must be nonzero, and `ExecStopPost` must contain the
-partial start. Retain categorical evidence from:
+Create a separately named `root:root` mode-`0444` temporary evidence manifest
+using the same exact path list as the permanent manifest plus this one exact
+drop-in. Verify every entry and record the temporary evidence-manifest
+checksum. An alternate filename alone is not active because `ExecStartPre`
+checks only `/etc/geem/phase13-start-artifacts.sha256`.
+
+While the unit remains non-running and all recreators remain paused, create a
+previously nonexistent staging file in `/etc/geem`, on the same filesystem as
+the canonical manifest. Install the exact verified temporary bytes into that
+staging file as `root:root` mode `0444`, verify it, then rename it over the
+canonical path. A cross-filesystem copy or in-place rewrite is not atomic and
+is forbidden. Prove the canonical file is byte-identical to the separately
+named temporary evidence manifest, remains `root:root` mode `0444`, and passes
+`sha256sum --check --strict`. Never reload the manager or start the unit while
+the live test drop-in is absent from the canonical manifest.
+
+Reload the one discovered system/user scope and start the unit. The first
+post-start command creates a deliberate missing-required-service condition, so
+the real readiness command must fail, the start job must be nonzero, and
+`ExecStopPost` must contain the partial start. Retain categorical evidence
+from:
 
 ```bash
 if <systemctl-in-the-discovered-scope> start geem-stack; then
@@ -1764,10 +1786,18 @@ test -z "$(docker ps -q \
 printf 'deliberate readiness failure: zero project containers running\n'
 ```
 
-Remove only that exact temporary drop-in through the approved workflow and
-atomically restore the pre-reviewed permanent checksum manifest. Reload the
-same scope, verify the permanent artifact manifest again, then start normally
-with `sudo systemctl start geem-stack` for the system scope or
+With the deliberate start job failed, the unit confirmed non-running, zero
+project containers running, and all recreators still paused, remove only that
+exact temporary drop-in through the approved workflow. Put the exact preserved
+permanent manifest bytes—not a regenerated manifest—into a new, previously
+nonexistent staging file in `/etc/geem` on the canonical path's filesystem.
+Install that staging file as `root:root` mode `0444`, verify it, then rename it
+over `/etc/geem/phase13-start-artifacts.sha256`; never restore through a
+cross-filesystem copy or in-place rewrite. Require the restored canonical file
+to remain `root:root` mode `0444`, its checksum to equal the previously recorded
+permanent evidence checksum, the files to be byte-identical, and
+`sha256sum --check --strict` to pass. Only then reload the same scope and start
+normally with `sudo systemctl start geem-stack` for the system scope or
 `systemctl --user start geem-stack` for the user scope. Require readiness
 success. If `start` reports the replacement unit active without executing its
 finite readiness gate, stop: the handoff was not tested correctly. Also rerun

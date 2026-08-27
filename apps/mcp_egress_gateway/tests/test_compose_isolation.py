@@ -618,6 +618,89 @@ def test_production_runbooks_support_collision_safe_project_handoff() -> None:
     assert "unrelated host Cloudflared or Apache service" in connector_words
 
 
+def test_failure_test_manifest_is_activated_at_the_canonical_unit_path() -> None:
+    production = (
+        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
+    ).read_text()
+    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
+    production_words = " ".join(production.split())
+    connector_words = " ".join(connectors.split())
+
+    permanent_preservation = (
+        "Before installing any deliberate-failure drop-in, preserve the exact "
+        "approved permanent manifest bytes"
+    )
+    temporary_evidence = (
+        "Create a separately named `root:root` mode-`0444` temporary evidence "
+        "manifest"
+    )
+    temporary_includes_dropin = (
+        "using the same exact path list as the permanent manifest plus this one "
+        "exact drop-in"
+    )
+    temporary_staging = (
+        "previously nonexistent staging file in `/etc/geem`, on the same "
+        "filesystem as the canonical manifest"
+    )
+    temporary_activation = "then rename it over the canonical path"
+    temporary_verification = (
+        "remains `root:root` mode `0444`, and passes `sha256sum --check --strict`"
+    )
+    reload_for_failure = "Reload the one discovered system/user scope and start"
+    failure_evidence = "deliberate readiness failure: zero project containers running"
+    confirmed_failure = (
+        "With the deliberate start job failed, the unit confirmed non-running, "
+        "zero project containers running"
+    )
+    remove_only_dropin = "remove only that exact temporary drop-in"
+    permanent_restore = (
+        "Put the exact preserved permanent manifest bytes—not a regenerated manifest—"
+        "into a new, previously nonexistent staging file in `/etc/geem`"
+    )
+    restored_verification = (
+        "Require the restored canonical file to remain `root:root` mode `0444`, "
+        "its checksum to equal the previously recorded permanent evidence checksum"
+    )
+    normal_start = "Only then reload the same scope and start normally"
+
+    assert (
+        production_words.index(permanent_preservation)
+        < production_words.index(temporary_evidence)
+        < production_words.index(temporary_includes_dropin)
+        < production_words.index(temporary_staging)
+        < production_words.index(temporary_activation)
+        < production_words.index(temporary_verification)
+        < production_words.index(reload_for_failure)
+        < production_words.index(failure_evidence)
+        < production_words.index(confirmed_failure)
+        < production_words.index(remove_only_dropin)
+        < production_words.index(permanent_restore)
+        < production_words.index(restored_verification)
+        < production_words.index(normal_start)
+    )
+    assert (
+        "An alternate filename alone is not active because `ExecStartPre` checks "
+        "only `/etc/geem/phase13-start-artifacts.sha256`"
+        in production_words
+    )
+    assert (
+        "a separately named test manifest is not active by itself"
+        in connector_words
+    )
+    assert (
+        "atomically install those temporary bytes at the canonical path before "
+        "reload/start"
+        in connector_words
+    )
+    assert (
+        "previously nonexistent staging file on the canonical path's filesystem"
+        in connector_words
+    )
+    assert "leave the canonical file `root:root` mode `0444`" in connector_words
+    assert "failed/non-running test state is proven" in connector_words
+    assert "do not regenerate the permanent manifest" in connector_words
+
+
 def test_uat_compose_starts_mcp_gateway_without_profile() -> None:
     docker = shutil.which("docker")
     if docker is None:
