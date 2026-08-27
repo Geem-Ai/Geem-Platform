@@ -90,6 +90,55 @@ jobs:
           tests/integration/test_mcp_*.py
           tests/integration/test_openwa_phase9f.py
 
+  api-full-regression:
+    name: Full API unit and integration regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: geem
+          POSTGRES_PASSWORD: geem
+          POSTGRES_DB: geem_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geem -d geem_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://geem:geem@localhost:5432/geem_test
+      DATABASE_URL: postgresql+psycopg://geem:geem@localhost:5432/geem_test
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Run the complete API unit and integration regression
+        run: >-
+          pytest -q
+          --junitxml=phase13-api-full-regression.xml
+          tests/unit
+          tests/integration
+      - name: Attach exact-SHA API regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-api-regression-${{ github.sha }}
+          path: apps/api/phase13-api-full-regression.xml
+          if-no-files-found: error
+          retention-days: 30
+
   gateway-and-compose:
     name: Gateway, proxy, and Compose isolation
     runs-on: ubuntu-latest
@@ -114,7 +163,18 @@ jobs:
       - name: Run the complete gateway and isolation suite
         env:
           PYTHONPATH: apps/api:apps/mcp_egress_gateway
-        run: pytest -q apps/mcp_egress_gateway/tests
+        run: >-
+          pytest -q
+          --junitxml=phase13-gateway-regression.xml
+          apps/mcp_egress_gateway/tests
+      - name: Attach exact-SHA gateway regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-gateway-regression-${{ github.sha }}
+          path: phase13-gateway-regression.xml
+          if-no-files-found: error
+          retention-days: 30
       - name: Syntax-check production boundary smoke scripts
         run: sh -n infra/mcp-egress/verify-isolation.sh infra/minio/verify-init.sh
       - name: Exercise the exact MinIO initializer twice against disposable storage
@@ -125,9 +185,11 @@ jobs:
           docker build -f infra/mcp-egress/proxy/Dockerfile -t geem-mcp-proxy-ci:${GITHUB_SHA} infra/mcp-egress/proxy
 
   workspace-web:
-    name: Workspace MCP contracts
+    name: Workspace full regression and MCP contracts
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VITE_MARKETING_URL: https://geem.ai
     defaults:
       run:
         working-directory: apps/workspace_web
@@ -142,9 +204,65 @@ jobs:
           cache-dependency-path: apps/workspace_web/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - name: Run all Workspace MCP tests
+      - name: Run the complete Workspace test suite
         run: >-
           npx vitest run
-          src/features/apps/mcp
-          src/services/api/mcp.test.ts
+          --reporter=default
+          --reporter=junit
+          --outputFile=phase13-workspace-regression.xml
+      - name: Attach exact-SHA Workspace regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-workspace-regression-${{ github.sha }}
+          path: apps/workspace_web/phase13-workspace-regression.xml
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run build
+
+  other-frontends:
+    name: Dashboard and marketing regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/dashboard_web/package-lock.json
+            apps/landpage_web/package-lock.json
+      - name: Install Platform Admin dependencies
+        working-directory: apps/dashboard_web
+        run: npm ci
+      - name: Type-check Platform Admin
+        working-directory: apps/dashboard_web
+        run: npm run typecheck
+      - name: Run the complete Platform Admin test suite
+        working-directory: apps/dashboard_web
+        run: >-
+          npx vitest run
+          --reporter=default
+          --reporter=junit
+          --outputFile=phase13-dashboard-regression.xml
+      - name: Attach exact-SHA Platform Admin regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-dashboard-regression-${{ github.sha }}
+          path: apps/dashboard_web/phase13-dashboard-regression.xml
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build Platform Admin
+        working-directory: apps/dashboard_web
+        run: npm run build
+      - name: Install and verify marketing site
+        working-directory: apps/landpage_web
+        run: |
+          npm ci
+          npm run check
+          npm run build
+          npm run verify

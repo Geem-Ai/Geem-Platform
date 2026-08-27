@@ -100,7 +100,7 @@ deployment secret manager, not in the ticket.
 | Release reference | Approved immutable full commit SHA |
 | Current state | Current full SHA, branch, worktree status, and running image IDs |
 | Release images | Signed/approved registry manifest mapping every service and host platform to an immutable image digest |
-| Compose identity | One project name and the exact ordered Compose file list |
+| Compose identity | Running legacy project, approved release project, exact ordered file lists, and any collision owner |
 | Hardening overlay | Absolute deployment-owned path outside the Git checkout |
 | Deployment topology | The checked-in Cloudflare tunnel plus the required hardening overlay; any other ingress is a stop condition for this release |
 | Public hosts | Exact API, Workspace, Platform Admin, marketing, CIMD, and tunnel hosts |
@@ -122,7 +122,8 @@ change ticket.
 
 ```bash
 export GEEM_DEPLOY_ROOT=/absolute/path/to/Geem
-export GEEM_COMPOSE_PROJECT=<existing-compose-project-name>
+export GEEM_LEGACY_COMPOSE_PROJECT=<running-compose-project-name>
+export GEEM_COMPOSE_PROJECT=<approved-release-compose-project-name>
 export GEEM_RELEASE_REF=<approved-full-commit-sha>
 export GEEM_PRODUCTION_OVERLAY=/etc/geem/docker-compose.production-hardening.yml
 export GEEM_PUBLIC_API_ORIGIN=<approved-public-api-https-origin-without-trailing-slash>
@@ -175,17 +176,19 @@ docker network ls
 docker volume ls
 ```
 
-Capture the exact project-labelled container inventory, including stopped and
-one-shot containers. An unlabelled container may belong to another stack, but
-every container carrying this project label is in scope and must have a
-non-empty Compose service label:
+Capture every container carrying the legacy project label, including stopped
+and one-shot containers. A Compose project name is only a namespace, not proof
+of application ownership: two repositories can accidentally use the same
+derived name. Print the Compose working-directory and config-file labels so the
+change owner can separate Geem from a colliding stack. Every result must have a
+non-empty service label, but it is not automatically in Geem's scope:
 
 ```bash
 project_container_ids=$(docker ps -aq \
-  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")
+  --filter "label=com.docker.compose.project=$GEEM_LEGACY_COMPOSE_PROJECT")
 for container_id in $project_container_ids; do
   docker inspect "$container_id" --format \
-    'id={{.Id}} name={{.Name}} project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}} image={{.Config.Image}} status={{.State.Status}}'
+    'id={{.Id}} name={{.Name}} project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}} working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config_files={{index .Config.Labels "com.docker.compose.project.config_files"}} image={{.Config.Image}} status={{.State.Status}}'
   test -n "$(docker inspect "$container_id" --format \
     '{{index .Config.Labels "com.docker.compose.service"}}')" || {
     printf 'project-labelled container has no Compose service label: %s\n' \
@@ -195,16 +198,65 @@ for container_id in $project_container_ids; do
 done
 ```
 
-Store this redacted inventory as the pre-change baseline. Do not infer
-ownership from a name prefix, and do not omit exited containers: a stale
-one-shot or prior `compose run` container can otherwise survive the handoff.
+Store this redacted inventory as the pre-change baseline. Classify ownership
+from the recorded repository path, config-file set, service set, mounts, and
+operator evidence; never from a name prefix or the shared project label alone.
+If any result belongs to another application, protect its exact ID and stop the
+release until Geem has a separately reviewed, unused release project name. Do
+not stop/remove the foreign container or remove a shared legacy network.
+
+After review, record only the exact Geem-owned legacy IDs in a shell variable
+for the remaining read-only inventory and later handoff. Include exited
+one-shots, and revalidate every ID immediately before a maintenance action:
+
+```bash
+set -eu
+export GEEM_LEGACY_GEEM_CONTAINER_IDS='<reviewed-space-separated-exact-geem-container-ids>'
+export GEEM_LEGACY_WORKING_DIR='<recorded-geem-compose-working-directory>'
+export GEEM_LEGACY_CONFIG_FILES='<recorded-geem-compose-config-file-label>'
+GEEM_LEGACY_RUNNING_CONTAINER_IDS=
+GEEM_LEGACY_NONRUNNING_CONTAINER_IDS=
+for container_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project"}}')" = \
+    "$GEEM_LEGACY_COMPOSE_PROJECT"
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')" = \
+    "$GEEM_LEGACY_WORKING_DIR"
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project.config_files"}}')" = \
+    "$GEEM_LEGACY_CONFIG_FILES"
+  docker inspect "$container_id" --format \
+    'id={{.Id}} service={{index .Config.Labels "com.docker.compose.service"}} working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config_files={{index .Config.Labels "com.docker.compose.project.config_files"}} mounts={{json .Mounts}}'
+  running=$(docker inspect "$container_id" --format '{{.State.Running}}')
+  case "$running" in
+    true)
+      GEEM_LEGACY_RUNNING_CONTAINER_IDS="${GEEM_LEGACY_RUNNING_CONTAINER_IDS:+$GEEM_LEGACY_RUNNING_CONTAINER_IDS }$container_id"
+      ;;
+    false)
+      GEEM_LEGACY_NONRUNNING_CONTAINER_IDS="${GEEM_LEGACY_NONRUNNING_CONTAINER_IDS:+$GEEM_LEGACY_NONRUNNING_CONTAINER_IDS }$container_id"
+      ;;
+    *)
+      printf 'invalid running state for %s: %s\n' "$container_id" "$running" >&2
+      exit 1
+      ;;
+  esac
+done
+export GEEM_LEGACY_RUNNING_CONTAINER_IDS
+export GEEM_LEGACY_NONRUNNING_CONTAINER_IDS
+```
+
+Do not paste mount host paths into a public ticket. An ID that disappeared,
+changed ownership labels, or no longer matches the reviewed Geem service/mount
+inventory is a stop condition, not permission to rediscover by project label.
 
 Record immutable running image identities before a build can retag local image
 names:
 
 ```bash
-for container_id in $(docker ps -q \
-  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT"); do
+for container_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do
+  test "$(docker inspect "$container_id" --format '{{.State.Running}}')" = true \
+    || continue
   docker inspect "$container_id" --format \
     'container={{.Name}} service={{index .Config.Labels "com.docker.compose.service"}} image_id={{.Image}} image_ref={{.Config.Image}}'
   image_id=$(docker inspect "$container_id" --format '{{.Image}}')
@@ -223,6 +275,7 @@ Each service must resolve to exactly one running container, and each destination
 below must resolve to exactly one expected persistent source:
 
 ```bash
+GEEM_LEGACY_POSTGRES_CONTAINER_ID=
 for service_and_destination in \
   postgres:/var/lib/postgresql/data \
   redis:/data \
@@ -230,14 +283,25 @@ for service_and_destination in \
   minio:/data; do
   service=${service_and_destination%%:*}
   destination=/${service_and_destination#*/}
-  container_ids=$(docker ps -q \
-    --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT" \
-    --filter "label=com.docker.compose.service=$service")
-  test "$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l)" -eq 1 || {
+  container_id=
+  container_count=0
+  for candidate_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do
+    if [ "$(docker inspect "$candidate_id" --format \
+      '{{index .Config.Labels "com.docker.compose.service"}}')" = "$service" ] \
+      && [ "$(docker inspect "$candidate_id" --format \
+        '{{.State.Running}}')" = true ]; then
+      container_id=$candidate_id
+      container_count=$((container_count + 1))
+    fi
+  done
+  test "$container_count" -eq 1 || {
     printf 'expected exactly one running %s container\n' "$service" >&2
     exit 1
   }
-  docker inspect "$container_ids" --format '{{json .Mounts}}' \
+  if [ "$service" = postgres ]; then
+    GEEM_LEGACY_POSTGRES_CONTAINER_ID=$container_id
+  fi
+  docker inspect "$container_id" --format '{{json .Mounts}}' \
     | python3 -c '
 import json
 import sys
@@ -265,18 +329,41 @@ print(
 )
 ' "$service" "$destination"
 done
+test -n "$GEEM_LEGACY_POSTGRES_CONTAINER_ID"
+export GEEM_LEGACY_POSTGRES_CONTAINER_ID
 ```
 
 Store this redacted mapping in the change evidence. An absent, duplicate,
 anonymous, bind-mounted, or unexpected source is a stop condition. The engine
 source can reveal a host path; keep it out of public tickets.
 
-`GEEM_COMPOSE_PROJECT` must equal the project label on the running production
-containers. An older unit without `-p` normally derives the project name from
-its working-directory basename; do not assume it is `geem-prod`. Changing the
-project name silently selects different Compose networks and named volumes and
-can start an empty database. If a project-name or volume-name migration is
-required, stop and use a separately reviewed data migration plan.
+`GEEM_LEGACY_COMPOSE_PROJECT` must equal the project label on the running Geem
+containers. An older unit without `-p` normally derives it from the
+working-directory basename. `GEEM_COMPOSE_PROJECT` is the explicit identity of
+the replacement stack. Normally the two values are identical. They must differ
+when the legacy label also owns foreign containers, and the replacement value
+must be proven unused by containers and networks before approval.
+
+Changing only the project name would select different implicit networks and
+named volumes and can start an empty database. A reviewed collision handoff is
+safe only when the final overlay declares all four datastores `external: true`
+with the exact physical volume names captured above, validates those mappings
+before `up`, and proves identical mount type/name/destination afterward. This is
+a Compose-namespace transition, not a data copy. Keep the legacy shared network
+and every foreign container untouched. Any other project-name or volume-name
+change requires a separate data-migration plan.
+
+When the values differ, prove the release namespace is empty now; rerun this
+gate immediately before maintenance:
+
+```bash
+if [ "$GEEM_COMPOSE_PROJECT" != "$GEEM_LEGACY_COMPOSE_PROJECT" ]; then
+  test -z "$(docker ps -aq \
+    --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")"
+  test -z "$(docker network ls -q \
+    --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")"
+fi
+```
 
 Determine whether production uses a system unit or a user unit and use the same
 scope for every later `status`, `disable`, `enable`, `restart`, and reboot test.
@@ -364,8 +451,8 @@ consistency boundary:
   encryption keys, datastore credentials, tunnel/OAuth/provider credentials,
   and PKI. Never copy CA or leaf private keys into Git or a support archive.
 
-A PostgreSQL custom-format example, adapted to the exact recorded pre-upgrade
-Compose command, role, and database, is:
+A PostgreSQL custom-format example, adapted to the exact reviewed legacy
+PostgreSQL container ID, physical volume, role, and database, is:
 
 ```bash
 set -euo pipefail
@@ -373,11 +460,40 @@ set -o noclobber
 umask 077
 export GEEM_POSTGRES_DUMP="$GEEM_BACKUP_STAGING/postgres.dump"
 export GEEM_PG_RESTORE=<absolute-path-to-matching-approved-pg_restore>
+export GEEM_LEGACY_POSTGRES_VOLUME=<recorded-postgres-engine-volume>
 test ! -e "$GEEM_POSTGRES_DUMP" || exit 1
 cd "$GEEM_DEPLOY_ROOT/infra"
-if ! docker compose -p "$GEEM_COMPOSE_PROJECT" \
-  -f <current-production-compose-file> \
-  exec -T postgres pg_dump -Fc \
+test "$(docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" --format \
+  '{{index .Config.Labels "com.docker.compose.project"}}')" = \
+  "$GEEM_LEGACY_COMPOSE_PROJECT"
+test "$(docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" --format \
+  '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')" = \
+  "$GEEM_LEGACY_WORKING_DIR"
+test "$(docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" --format \
+  '{{index .Config.Labels "com.docker.compose.project.config_files"}}')" = \
+  "$GEEM_LEGACY_CONFIG_FILES"
+test "$(docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" --format \
+  '{{index .Config.Labels "com.docker.compose.service"}}')" = postgres
+test "$(docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" --format \
+  '{{.State.Running}}')" = true
+docker inspect "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" \
+  --format '{{json .Mounts}}' | python3 -c '
+import json
+import sys
+
+expected = sys.argv[1]
+mounts = [
+    mount
+    for mount in json.load(sys.stdin)
+    if mount.get("Destination") == "/var/lib/postgresql/data"
+]
+if len(mounts) != 1:
+    raise SystemExit("legacy postgres mount cardinality changed")
+mount = mounts[0]
+if mount.get("Type") != "volume" or mount.get("Name") != expected:
+    raise SystemExit("legacy postgres physical volume changed")
+' "$GEEM_LEGACY_POSTGRES_VOLUME"
+if ! docker exec "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" pg_dump -Fc \
     -U <production-db-role> <production-db-name> \
   > "$GEEM_POSTGRES_DUMP"; then
   printf '%s\n' 'pg_dump failed; preserve and mark the partial target invalid' >&2
@@ -574,13 +690,15 @@ silently erase a fail-closed check.
 After the file exists, create a persistent deployment-owned wrapper at
 `/usr/local/sbin/geem-prod-compose` and use it for the rest of the procedure,
 future releases, systemd, and rollback. Do not rely on a shell function or
-session-only environment variables. Replace every placeholder below with the
-recorded value:
+session-only environment variables. Its literal project name must equal
+`GEEM_COMPOSE_PROJECT`, never the colliding legacy identity when stage 0 chose
+a distinct replacement. Replace every placeholder below with the recorded
+value:
 
 ```bash
 #!/bin/sh
 exec <absolute-path-reported-by-command-v-docker> compose \
-    --project-name '<existing-compose-project-name>' \
+    --project-name '<approved-release-compose-project-name>' \
     --env-file '/absolute/path/to/Geem/.env' \
     --profile mcp \
     -f '/absolute/path/to/Geem/infra/docker-compose.yml' \
@@ -995,41 +1113,135 @@ retirement decision. After the final start, require zero unexpected
 project-labelled containers and exactly one container for every required
 long-running service plus the reviewed successful one-shot.
 
-Enter the approved maintenance window, drain active application/worker work,
-and pause aaPanel, CI, timers, watchers, and every other recorded recreator. A
-legacy systemd unit must become **inactive** before its file is replaced;
-`disable` alone only removes boot links and leaves an active unit in control.
+Before maintenance, install and validate the wrapper, overlay, prestart,
+readiness, containment, PKI, policy, and image inputs without starting the
+stack. Stage the replacement unit at a separate root-owned path; do **not**
+overwrite the live legacy unit or create the permanent checksum manifest yet.
+The manifest can be finalized only after the replacement unit is installed at
+its live path while the legacy unit is inactive.
 
-Review and checksum the actual unit and its drop-ins first. Then use the exact
-scope discovered in stage 0 to disable and stop it: `sudo systemctl disable
-geem-stack` followed by `sudo systemctl stop geem-stack` for a system unit, or
-the corresponding `systemctl --user` commands for a user unit. Never run both.
-The stop may intentionally stop the whole old stack; writes are already
-quiesced and the next start must select the same recorded volumes. If the
-legacy `ExecStop` is unknown, secret-bearing, destructive, or selects a
-different project/file set, stop before invoking it and use a separately
-reviewed transition/drop-in plan. Do not overwrite or daemon-reload an active
-legacy unit and hope its old stop action disappears.
+Enter the approved maintenance window, place ingress in its reviewed
+maintenance state, drain active application/worker work, establish the backup
+consistency barrier, and pause aaPanel, CI, timers, watchers, and every other
+recorded recreator. A legacy systemd unit must become **inactive** before its
+file is replaced; `disable` alone only removes boot links and leaves an active
+unit in control.
 
-Confirm the old unit is disabled and inactive. If its reviewed stop action did
-not stop API, worker, and Beat, use the exact recorded pre-upgrade Compose
-project and file set to stop only those services:
+Review and checksum the actual unit and every existing drop-in first. If its
+`ExecStop` is proven to select only Geem with the exact legacy file set, use the
+one system/user scope discovered in stage 0 to stop and disable it. Never run
+both scopes.
 
-```bash
-<recorded-pre-upgrade-compose-command-and-files> stop api worker beat
+If the source changed underneath the unit, its stop command is unsafe, or the
+legacy project label collides with another application, do not invoke the old
+`ExecStop`. Install one separately reviewed temporary drop-in in the same
+system/user scope that clears both stop directives and changes nothing else:
+
+```ini
+[Service]
+ExecStop=
+ExecStopPost=
 ```
 
-The placeholder must be replaced with the command captured in stage 0,
-including its existing project identity and every old overlay. Do not use the
-new wrapper for this one pre-cutover stop, and do not run it concurrently with
-an active legacy unit.
+Reload only the discovered manager, then use `systemctl show` in that scope to
+require empty effective `ExecStop` and `ExecStopPost` values before stopping
+and disabling the unit. The drop-in is a handoff control, not the replacement
+unit: keep it until the legacy unit is inactive, then remove only that exact
+file when installing the final unit. If the effective stop directives are not
+empty, stop the release.
+
+If the reviewed legacy `ExecStop` was not invoked, or it leaves any old Geem
+container running, transition the remaining containers only by exact stage-0
+IDs. This applies to every unsafe-stop reason, including source drift and stale
+file selection, not only a project-name collision. The approved host-specific
+handoff artifact must list only the expected running IDs in the reviewed stop
+order; do not include an already exited one-shot. Immediately before each stop,
+it must compare the project, working directory, config-file set, service,
+and canonicalized mount identity with the stage-0 Geem evidence, then account
+for the current state explicitly. A baseline-running ID may already be stopped
+by the reviewed legacy `ExecStop`; otherwise the exact-ID path stops it. Every
+baseline-non-running ID must remain non-running. The generic invariant-label
+and exact-stop shape is:
+
+```bash
+set -eu
+export GEEM_LEGACY_STOP_IDS='<reviewed-permutation-of-stage-0-running-geem-ids-in-approved-stop-order>'
+
+# Prove the reviewed stop order is complete and contains no extra ID.
+for container_id in $GEEM_LEGACY_RUNNING_CONTAINER_IDS; do
+  case " $GEEM_LEGACY_STOP_IDS " in
+    *" $container_id "*) ;;
+    *) printf 'running baseline ID omitted from stop order: %s\n' "$container_id" >&2; exit 1 ;;
+  esac
+done
+for container_id in $GEEM_LEGACY_STOP_IDS; do
+  case " $GEEM_LEGACY_RUNNING_CONTAINER_IDS " in
+    *" $container_id "*) ;;
+    *) printf 'stop order contains a non-running baseline ID: %s\n' "$container_id" >&2; exit 1 ;;
+  esac
+done
+
+# A recorded non-running one-shot must remain non-running and untouched.
+for container_id in $GEEM_LEGACY_NONRUNNING_CONTAINER_IDS; do
+  test "$(docker inspect "$container_id" --format '{{.State.Running}}')" = false
+done
+
+for container_id in $GEEM_LEGACY_STOP_IDS; do
+  case " $GEEM_LEGACY_GEEM_CONTAINER_IDS " in
+    *" $container_id "*) ;;
+    *) printf 'unapproved legacy container ID: %s\n' "$container_id" >&2; exit 1 ;;
+  esac
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project"}}')" = \
+    "$GEEM_LEGACY_COMPOSE_PROJECT"
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')" = \
+    "$GEEM_LEGACY_WORKING_DIR"
+  test "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.project.config_files"}}')" = \
+    "$GEEM_LEGACY_CONFIG_FILES"
+  <host-specific-service-and-canonical-mount-comparison> "$container_id"
+  running=$(docker inspect "$container_id" --format '{{.State.Running}}')
+  if [ "$running" = true ]; then
+    docker stop --time 60 "$container_id"
+  else
+    test "$running" = false
+  fi
+done
+
+# Fail closed before any release container can attach the existing volumes.
+legacy_running_after_handoff=
+for container_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do
+  running=$(docker inspect "$container_id" --format '{{.State.Running}}')
+  case "$running" in
+    true)
+      legacy_running_after_handoff="${legacy_running_after_handoff:+$legacy_running_after_handoff }$container_id"
+      ;;
+    false) ;;
+    *) printf 'invalid running state for %s: %s\n' "$container_id" "$running" >&2; exit 1 ;;
+  esac
+done
+test -z "$legacy_running_after_handoff" || {
+  printf 'legacy Geem container still running after handoff: %s\n' \
+    "$legacy_running_after_handoff" >&2
+  exit 1
+}
+```
+
+Replace the comparison placeholder with a fail-closed, host-specific check that
+embeds the expected service and mount identity for each exact ID. A mismatch or
+stop failure aborts the handoff. Never rediscover containers with the shared
+project label and never use the new wrapper for the old stack. Retain stopped
+legacy Geem containers through the rollback window and leave every recorded
+exited one-shot unchanged. Do not stop/remove a foreign container or remove the
+shared legacy network.
 
 Pre-Phase-13 datastores use the implicit project default network; Phase 13 moves
 them to `application_data`. The next command is therefore a controlled,
-volume-preserving datastore container/network transition. It must retain the
-recorded project name, named volume identities, and production credentials.
-Run it only after the final CIDR manifest, application value, proxy policy, and
-overlay passed the atomic stage-6 review:
+volume-preserving datastore container/network transition. It uses the approved
+release project name while retaining the exact external physical volume names
+and production credentials. Run it only after the final CIDR manifest,
+application value, proxy policy, and overlay passed the atomic stage-6 review:
 
 ```bash
 geem-prod-compose up -d \
@@ -1058,9 +1270,11 @@ The exact-image validator already proved that all nine declared IPAM subnets
 are explicit, non-overlapping, and covered identically by gateway and proxy.
 Do not change the overlay or CIDR manifest after that gate.
 
-Apply the migration explicitly, then start the complete final topology. The API
-also runs `alembic upgrade head` before Uvicorn, so its subsequent pass should
-be a no-op:
+Apply the migration explicitly in a removed one-shot API container **before**
+normal API startup, then start the complete final topology. Do not start API
+and then migrate: even with ingress held, that reverses the reviewed admission
+order. The API entrypoint also runs `alembic upgrade head` before Uvicorn, so
+its subsequent pass must be a no-op:
 
 ```bash
 geem-prod-compose run --rm --no-deps api alembic upgrade head
@@ -1254,7 +1468,7 @@ set -eu
 compose=/usr/local/sbin/geem-prod-compose
 docker=/usr/bin/docker
 api_image='<approved-api-image-reference-at-sha256-digest>'
-project='<approved-existing-compose-project>'
+project='<approved-release-compose-project>'
 
 "$compose" config --quiet
 "$compose" config --format json \
@@ -1307,7 +1521,7 @@ containers:
 #!/bin/sh
 set -eu
 
-project='<approved-existing-compose-project>'
+project='<approved-release-compose-project>'
 running=$(/usr/bin/docker ps -q \
   --filter "label=com.docker.compose.project=$project")
 if [ -n "$running" ]; then
@@ -1363,7 +1577,7 @@ ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
 ExecStop=/usr/local/sbin/geem-prod-compose stop --timeout 60
 ExecStopPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-fail-start
 TimeoutStartSec=600
-TimeoutStopSec=120
+TimeoutStopSec=240
 
 [Install]
 WantedBy=multi-user.target
@@ -1401,7 +1615,7 @@ ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
 ExecStop=/usr/local/sbin/geem-prod-compose stop --timeout 60
 ExecStopPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-fail-start
 TimeoutStartSec=600
-TimeoutStopSec=120
+TimeoutStopSec=240
 
 [Install]
 WantedBy=default.target
@@ -1414,7 +1628,10 @@ deployment account's linger state with `loginctl show-user
 an implicit Cursor action. Verify after reboot that the user manager started
 the unit without a login session.
 
-Install the wrapper, prestart, readiness, containment, final unit, and any
+After stage 7 proves the legacy unit inactive, install the already reviewed
+replacement unit at the live path and remove only the temporary handoff
+drop-in. Never copy the staged unit over an active legacy unit. Install the
+wrapper, prestart, readiness, containment, final unit, and any permanent
 drop-ins as `root:root`; executables are mode `0755`, unit/drop-ins are `0644`.
 The checksum boundary must also include every input that persistent startup
 parses or mounts: the root `.env`, checked-in base and tunnel files, external

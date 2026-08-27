@@ -225,8 +225,11 @@ broad second layer.
 ## Production deployment procedure
 
 The commands below assume the repository is installed at an arbitrary path and
-the operator starts at the repository root. Use one explicit Compose project
-name and the same file set throughout.
+the operator starts at the repository root. Use one explicit **release**
+Compose project name and the same file set throughout. The running legacy
+project may differ during a reviewed namespace-collision handoff; inventory and
+stop that old stack only by the protected exact-ID procedure in the production
+guide. Never use a shared legacy project label to select foreign containers.
 
 The checked-in `docker-compose.yml` is a development topology source, not a
 production file. `docker-compose.tunnel.yml` supplies Geem's production domain
@@ -239,7 +242,7 @@ Set the project name explicitly before inventory, start, inspect, and smoke
 commands. If the deployment uses another name, replace it consistently:
 
 ```bash
-export COMPOSE_PROJECT_NAME=geem-prod
+export COMPOSE_PROJECT_NAME=<approved-release-compose-project-name>
 export GEEM_PUBLIC_API_ORIGIN=<approved-public-api-https-origin-without-trailing-slash>
 cd infra
 ```
@@ -248,6 +251,13 @@ cd infra
 release. It has no trailing slash. Derive `APP_URL`, CIMD/client metadata, OAuth
 callback registration, RC/production readiness probes, and every operator API
 request from it; do not repeat a hard-coded API host elsewhere in the runbook.
+
+Before continuing, complete the
+[legacy versus release Compose identity inventory](./mcp-production-deployment.md#0-read-only-host-inventory).
+If the legacy project label collides with another repository, choose a proven
+unused release name, declare the four recorded datastore volumes external by
+their exact physical names, and leave every foreign container and shared legacy
+network untouched.
 
 Before any production mutation, complete the immutable, fail-closed recovery
 set and isolated restore drills in
@@ -882,16 +892,23 @@ settings, or any secret mount merely to schedule those identifiers.
 
 ### 6. Render safely, migrate, and start the boundary
 
-First validate Compose syntax without printing expanded secrets:
+Define one release-project-pinned helper, then validate Compose syntax without
+printing expanded secrets. Keep this exact helper for every later command in
+this procedure; do not redefine it without the explicit project name:
 
 ```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  config --quiet
+geem_compose() {
+  docker compose \
+    --project-name "$COMPOSE_PROJECT_NAME" \
+    --env-file ../.env \
+    --profile mcp \
+    -f docker-compose.yml \
+    -f docker-compose.tunnel.yml \
+    -f docker-compose.production-hardening.yml \
+    "$@"
+}
+
+geem_compose config --quiet
 ```
 
 Do not paste raw `docker compose config` output into a terminal transcript or
@@ -904,16 +921,6 @@ gets no deployment environment/`--env-file`, secret, mount, Docker socket, or
 network:
 
 ```bash
-geem_compose() {
-  docker compose \
-    --env-file ../.env \
-    --profile mcp \
-    -f docker-compose.yml \
-    -f docker-compose.tunnel.yml \
-    -f docker-compose.production-hardening.yml \
-    "$@"
-}
-
 export GEEM_API_IMAGE=<approved-api-image-at-sha256-digest>
 geem_compose pull
 geem_compose config --format json \
@@ -930,6 +937,13 @@ geem_compose config --format json \
       --volume minio_data=<recorded-minio-engine-volume> \
       --required-blocked-network <reviewed-host-vpc-or-corporate-cidr>
 
+geem_compose up -d \
+  postgres redis qdrant minio minio-init \
+  app-egress-proxy mcp-egress-proxy mcp-egress-gateway
+
+# After the production guide's exact mount-identity and bounded PostgreSQL
+# readiness gates pass, migrate before normal API startup.
+geem_compose run --rm --no-deps api alembic upgrade head
 geem_compose up -d --wait --wait-timeout 300
 ```
 
@@ -955,38 +969,17 @@ omitting the flag. Repeat
 the canonical manifest. Do not insert `tee` or redirect the secret-expanded
 JSON.
 
-If a deployment has not installed the persistent production wrapper described
-in the production-PC guide, the equivalent full command remains:
-
-```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  up -d --wait --wait-timeout 300
-```
+Do not replace the staged start, mount/readiness gates, one-shot migration, and
+normal start above with a raw `docker compose up`. If the persistent production
+wrapper is not installed, stop and install it through the production guide;
+the project-pinned interactive helper is not a process-manager substitute.
 
 The API container runs Alembic before Uvicorn. Confirm the live database is at
 the expected head and inspect service state:
 
 ```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  exec -T api alembic current
-
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  ps
+geem_compose exec -T api alembic current
+geem_compose ps
 ```
 
 `mcp-egress-gateway` and `mcp-egress-proxy` must be running. `ps` is not
@@ -996,13 +989,7 @@ healthcheck.
 Confirm the gateway has no published port. This command must print nothing:
 
 ```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  port mcp-egress-gateway 8443
+geem_compose port mcp-egress-gateway 8443
 ```
 
 Inspect the actual running containers, not only Compose syntax. The following
@@ -1010,16 +997,6 @@ prints no secrets; compare every service with the network map in this guide:
 
 ```bash
 set -euo pipefail
-
-geem_compose() {
-  docker compose \
-    --env-file ../.env \
-    --profile mcp \
-    -f docker-compose.yml \
-    -f docker-compose.tunnel.yml \
-    -f docker-compose.production-hardening.yml \
-    "$@"
-}
 
 for service in api worker beat postgres redis qdrant minio workspace_web dashboard_web landpage_web app-egress-proxy mcp-egress-gateway mcp-egress-proxy cloudflared; do
   container_ids=$(geem_compose ps -q "$service")
@@ -1192,13 +1169,7 @@ but a stopped datastore would also make that negative probe pass. First prove
 that the same live endpoints are reachable from the trusted API container:
 
 ```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  exec -T api python - \
+geem_compose exec -T api python - \
   postgres:5432 redis:6379 qdrant:6333 minio:9000 <<'PY'
 import socket
 import sys

@@ -481,6 +481,106 @@ def test_phase13_gate_covers_shared_provider_and_the_full_migration_chain() -> N
     assert "tests/unit/test_openrouter_contracts.py" in workflow
     assert "alembic upgrade head" in workflow
     assert "0041_openwa_binding_backfill (head)" in workflow
+    full_api_job = workflow.split("api-full-regression:", maxsplit=1)[1].split(
+        "gateway-and-compose:", maxsplit=1
+    )[0]
+    assert "tests/unit" in full_api_job
+    assert "tests/integration" in full_api_job
+    assert "phase13-api-regression-${{ github.sha }}" in workflow
+    assert "phase13-gateway-regression-${{ github.sha }}" in workflow
+    assert "Run the complete Workspace test suite" in workflow
+    assert "phase13-workspace-regression-${{ github.sha }}" in workflow
+    assert "Dashboard and marketing regression" in workflow
+    assert "phase13-dashboard-regression-${{ github.sha }}" in workflow
+
+
+def test_production_runbooks_support_collision_safe_project_handoff() -> None:
+    production = (
+        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
+    ).read_text()
+    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
+
+    assert "GEEM_LEGACY_COMPOSE_PROJECT" in production
+    assert "GEEM_LEGACY_GEEM_CONTAINER_IDS" in production
+    assert "GEEM_LEGACY_POSTGRES_CONTAINER_ID" in production
+    assert 'docker exec "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" pg_dump' in production
+    assert 'docker compose -p "$GEEM_LEGACY_COMPOSE_PROJECT"' not in production
+    assert "com.docker.compose.project.working_dir" in production
+    assert "com.docker.compose.project.config_files" in production
+    assert "Compose-namespace transition, not a data copy" in production
+    assert "Do not stop/remove a foreign container" in production
+    assert "project='<approved-release-compose-project>'" in production
+    assert "project='<approved-existing-compose-project>'" not in production
+    assert "ExecStop=\nExecStopPost=" in production
+    assert "GEEM_LEGACY_STOP_IDS" in production
+    assert 'docker stop --time 60 "$container_id"' in production
+    assert production.count("TimeoutStopSec=240") == 2
+
+    identity_baseline = production.split(
+        "After review, record only the exact Geem-owned legacy IDs", maxsplit=1
+    )[1].split("Do not paste mount host paths", maxsplit=1)[0]
+    checked_state_assignment = (
+        'running=$(docker inspect "$container_id" --format \'{{.State.Running}}\')'
+    )
+    assert "set -eu" in identity_baseline
+    assert checked_state_assignment in identity_baseline
+    assert 'if [ "$(docker inspect' not in identity_baseline
+
+    mount_inventory = production.split(
+        "Record the exact live datastore mounts", maxsplit=1
+    )[1].split("Store this redacted mapping", maxsplit=1)[0]
+    assert "container_count=$((container_count + 1))" in mount_inventory
+    assert 'docker inspect "$container_id" --format \'{{json .Mounts}}\'' in mount_inventory
+    assert 'docker inspect "$container_ids"' not in mount_inventory
+
+    backup = production.split(
+        "A PostgreSQL custom-format example", maxsplit=1
+    )[1].split("The restore drill is mandatory", maxsplit=1)[0]
+    dump_call = 'docker exec "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" pg_dump'
+    dump_call_index = backup.index(dump_call)
+    for required_check in (
+        "com.docker.compose.project.working_dir",
+        "com.docker.compose.project.config_files",
+        "com.docker.compose.service",
+        "{{.State.Running}}",
+        "legacy postgres physical volume changed",
+    ):
+        assert backup.index(required_check) < dump_call_index
+
+    handoff = production.split(
+        "If the reviewed legacy `ExecStop` was not invoked", maxsplit=1
+    )[1].split("Pre-Phase-13 datastores", maxsplit=1)[0]
+    assert "GEEM_LEGACY_RUNNING_CONTAINER_IDS" in handoff
+    assert "GEEM_LEGACY_NONRUNNING_CONTAINER_IDS" in handoff
+    assert "for container_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do" in handoff
+    assert "legacy_running_after_handoff" in handoff
+    assert checked_state_assignment in handoff
+    assert 'if [ "$(docker inspect' not in handoff
+    assert handoff.index('docker stop --time 60 "$container_id"') < handoff.index(
+        'test -z "$legacy_running_after_handoff"'
+    )
+
+    migration = "geem-prod-compose run --rm --no-deps api alembic upgrade head"
+    normal_start = "geem-prod-compose up -d --wait --wait-timeout 300"
+    assert production.index(migration) < production.index(normal_start)
+
+    assert "legacy project label collides with another repository" in connectors
+    production_procedure = connectors.split(
+        "## Production deployment procedure", maxsplit=1
+    )[1]
+    assert production_procedure.count("geem_compose() {") == 1
+    assert production_procedure.count("\ndocker compose \\") == 0
+    helper_start = production_procedure.index("geem_compose() {")
+    helper_end = production_procedure.index("\n}\n", helper_start)
+    helper = production_procedure[helper_start:helper_end]
+    assert '--project-name "$COMPOSE_PROJECT_NAME"' in helper
+    connector_migration = (
+        "geem_compose run --rm --no-deps api alembic upgrade head"
+    )
+    connector_start = "geem_compose up -d --wait --wait-timeout 300"
+    assert production_procedure.index(
+        connector_migration
+    ) < production_procedure.index(connector_start)
 
 
 def test_uat_compose_starts_mcp_gateway_without_profile() -> None:
