@@ -5,6 +5,8 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.agent.constants import SUPPORTED_AGENT_FINISH_REASONS
 from app.agent.schemas import (
     AgentAssistantResponseMessage,
@@ -18,6 +20,7 @@ from app.agent.schemas import (
 from app.chat_attachments.payload import ChatTurnAttachment, build_user_message_content
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ErrorCategory
+from app.mcp.provider import InvalidToolProviderOutput
 from app.openrouter.client import OpenRouterClient, OpenRouterStreamCancellation
 
 
@@ -267,13 +270,19 @@ class OpenRouterChatProvider:
         )
         if json_response:
             payload["response_format"] = {"type": "json_object"}
-        return self._call_agent(
+        result = self._call_agent(
             selected,
             payload,
             declared_names=_agent_declared_names(tools),
             timeout_seconds=timeout_seconds,
             max_attempts=1,
         )
+        if result.message.tool_calls and len(result.message.tool_calls) != 1:
+            raise _invalid_tool_provider_output(
+                "Agent provider returned unsupported parallel tool calls.",
+                accounting_result=result,
+            )
+        return result
 
     def answer_without_tools(
         self,
@@ -1050,6 +1059,15 @@ def validate_agent_provider_response(
         else None
     )
 
+    def invalid_tool_output(message: str) -> InvalidToolProviderOutput:
+        return _invalid_tool_provider_output_from_metadata(
+            message,
+            usage=usage,
+            provider_model=resolved_provider_model,
+            provider_request_id=provider_request_id,
+            provider_completion_id=resolved_completion_id,
+        )
+
     raw_calls = message.get("tool_calls")
     legacy_function_call = message.get("function_call")
     invalid_no_tool_output = bool(
@@ -1068,19 +1086,22 @@ def validate_agent_provider_response(
             tool_calls=None,
         )
         finish_reason = "stop"
-    elif raw_calls is not None:
+    elif raw_calls is not None or legacy_function_call is not None:
+        if legacy_function_call is not None:
+            raise invalid_tool_output(
+                "Agent provider returned an unsupported legacy function call."
+            )
         if not isinstance(raw_calls, list) or not raw_calls:
-            raise _agent_provider_error("Agent tool_calls must be non-empty.", model=fallback_model)
+            raise invalid_tool_output("Agent tool_calls must be non-empty.")
         if message.get("content") is not None or finish_reason != "tool_calls":
-            raise _agent_provider_error(
-                "Agent tool output has inconsistent content or finish reason.",
-                model=fallback_model,
+            raise invalid_tool_output(
+                "Agent tool output has inconsistent content or finish reason."
             )
         calls: list[AgentToolCall] = []
         ids: set[str] = set()
         for raw in raw_calls:
             if not isinstance(raw, Mapping):
-                raise _agent_provider_error("Invalid Agent tool call.", model=fallback_model)
+                raise invalid_tool_output("Invalid Agent tool call.")
             function = raw.get("function")
             call_id = raw.get("id")
             if (
@@ -1090,15 +1111,12 @@ def validate_agent_provider_response(
                 or raw.get("type") != "function"
                 or not isinstance(function, Mapping)
             ):
-                raise _agent_provider_error(
-                    "Invalid Agent tool call metadata.", model=fallback_model
-                )
+                raise invalid_tool_output("Invalid Agent tool call metadata.")
             name = function.get("name")
             arguments = function.get("arguments")
             if name not in declared_names or not isinstance(arguments, str):
-                raise _agent_provider_error(
+                raise invalid_tool_output(
                     "Agent provider returned an undeclared or malformed function call.",
-                    model=fallback_model,
                 )
             ids.add(call_id)
             try:
@@ -1109,17 +1127,21 @@ def validate_agent_provider_response(
                         function=AgentFunctionCall(name=name, arguments=arguments),
                     )
                 )
-            except Exception as exc:
-                raise _agent_provider_error(
-                    "Agent provider returned invalid tool-call data.", model=fallback_model
-                ) from exc
+            except ValidationError:
+                raise invalid_tool_output(
+                    "Agent provider returned invalid tool-call data."
+                ) from None
         parsed_message = AgentAssistantResponseMessage(
             content=None,
             tool_calls=calls,
         )
     else:
         content = message.get("content")
-        if not isinstance(content, str) or finish_reason == "tool_calls":
+        if finish_reason == "tool_calls":
+            raise invalid_tool_output(
+                "Agent tool output omitted a valid function call."
+            )
+        if not isinstance(content, str):
             raise _agent_provider_error(
                 "Agent text output has inconsistent content or finish reason.",
                 model=fallback_model,
@@ -1248,6 +1270,46 @@ def _agent_provider_error(
         message,
         details=details or None,
         retryable=retryable,
+    )
+
+
+def _invalid_tool_provider_output(
+    message: str,
+    *,
+    accounting_result: AgentProviderResult,
+) -> InvalidToolProviderOutput:
+    return InvalidToolProviderOutput(
+        message,
+        accounting_result=accounting_result.model_copy(
+            update={
+                "message": AgentAssistantResponseMessage(
+                    content="",
+                    tool_calls=None,
+                ),
+                "finish_reason": "stop",
+            }
+        ),
+    )
+
+
+def _invalid_tool_provider_output_from_metadata(
+    message: str,
+    *,
+    usage: AgentUsage,
+    provider_model: str | None,
+    provider_request_id: str | None,
+    provider_completion_id: str | None,
+) -> InvalidToolProviderOutput:
+    return _invalid_tool_provider_output(
+        message,
+        accounting_result=AgentProviderResult(
+            message=AgentAssistantResponseMessage(content="", tool_calls=None),
+            finish_reason="stop",
+            usage=usage,
+            provider_model=provider_model,
+            provider_request_id=provider_request_id,
+            provider_completion_id=provider_completion_id,
+        ),
     )
 
 

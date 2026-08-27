@@ -120,7 +120,7 @@ Vite already allows Host headers for `.geem.dm` and `.geem.ai`. The API allows C
 
 | Overlay | Host | Compose files | Public names | App servers |
 |---------|------|---------------|--------------|-------------|
-| **Production** | production server | `docker-compose.yml` + `docker-compose.tunnel.yml` | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `mtfm.geem.ai`, `*.geem.ai` | baked nginx (`Dockerfile.prod`) |
+| **Production** | production server | base + tunnel + deployment-owned hardening overlay through the production wrapper | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `mtfm.geem.ai`, `*.geem.ai` | immutable nginx images |
 | **UAT / this Mac** | development machine | `docker-compose.yml` + `docker-compose.uat.yml` | `app-uat.geem.ai`, `api-uat.geem.ai`, `landpage-uat.geem.ai`, `admin-uat.geem.ai` | Vite / Astro / Uvicorn `--reload` |
 
 Do **not** start `docker-compose.tunnel.yml` on the UAT Mac (it would steal production DNS). UAT does **not** route `*.geem.ai`; workspace context is `https://app-uat.geem.ai` plus `X-Workspace-Id` (and `X-Workspace-Slug` while `APP_ENV` is local/dev). Prefer Cloudflare Access in front of both.
@@ -153,11 +153,9 @@ cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 
 `.env` `CORS_ORIGINS` must include `https://hub.geem.ai` and `https://mtfm.geem.ai`. Set `APP_ADMIN_HOST=mtfm.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai`. The overlay rebuilds `workspace_web`, `landpage_web`, and `dashboard_web` as production nginx images with `VITE_*` / `PUBLIC_*` baked in, and sets `APP_URL` / `WORKSPACE_WEB_URL` plus `TRUST_PROXY_HEADERS=true`.
 
-```bash
-cd infra
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --force-recreate api workspace_web landpage_web dashboard_web cloudflared
-docker compose -f docker-compose.yml -f docker-compose.tunnel.yml logs -f cloudflared
-```
+Never run base + tunnel directly on production. Use the persistent wrapper and
+hardening overlay in the [Phase 13 production guide](integrations/mcp-production-deployment.md);
+the validator rejects builds, bind mounts, mutable images, and host ports.
 
 OpenAPI: https://api.geem.ai/docs
 
@@ -191,8 +189,8 @@ Specific CNAMEs override production `*.geem.ai` for those four names only.
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.uat.yml logs -f cloudflared
+docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml up -d --build
+docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml logs -f cloudflared
 ```
 
 | Public (UAT) | Local (still works) |
@@ -240,7 +238,7 @@ cp apps/workspace_web/.env.example apps/workspace_web/.env
 # if you use localhost instead of geem.dm, set VITE_API_URL=http://localhost:8000
 
 cd infra
-docker compose up -d --build
+docker compose --env-file ../.env up -d --build
 ```
 
 | Service | URL |
@@ -261,13 +259,13 @@ After the API is healthy:
 
 ```bash
 cd infra
-docker compose exec api python -m app.identity.bootstrap
+docker compose --env-file ../.env exec api python -m app.identity.bootstrap
 ```
 
 Requires `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env`. Safe to re-run: existing users are promoted to platform admin; password is unchanged unless you pass `--reset-password`. To apply current `BOOTSTRAP_*` plan limits onto the existing bootstrap plan (normal boot does not overwrite them):
 
 ```bash
-docker compose exec api python -m app.identity.bootstrap --resync-bootstrap-plan
+docker compose --env-file ../.env exec api python -m app.identity.bootstrap --resync-bootstrap-plan
 ```
 
 This also ensures the default Workspace, the internal Platform Knowledge Workspace, the Geem General Expert, and (when `APP_ENV` is local/dev) the demo billing catalog.
@@ -275,17 +273,17 @@ This also ensures the default Workspace, the internal Platform Knowledge Workspa
 Or register from the Workspace UI (`/api/auth/register`) and skip bootstrap. To seed demo plans/credit packs and the local checkout gateway later:
 
 ```bash
-docker compose exec api python -m app.billing.seed
+docker compose --env-file ../.env exec api python -m app.billing.seed
 ```
 
 ### Logs and teardown
 
 ```bash
 cd infra
-docker compose ps
-docker compose logs -f api worker workspace_web
-docker compose down          # keep volumes
-docker compose down -v       # wipe Postgres / Qdrant / MinIO / Redis data
+docker compose --env-file ../.env ps
+docker compose --env-file ../.env logs -f api worker workspace_web
+docker compose --env-file ../.env down          # keep volumes
+docker compose --env-file ../.env down -v       # wipe Postgres / Qdrant / MinIO / Redis data
 ```
 
 ## Path 2 — dependencies in Docker, API and UI on the host
@@ -296,7 +294,7 @@ Use this when you want a debugger, `pytest` against real services, or faster UI 
 
    ```bash
    cd infra
-   docker compose up -d postgres redis qdrant minio minio-init
+   docker compose --env-file ../.env up -d postgres redis qdrant minio minio-init
    ```
 
 2. Point **host** processes at published/localhost ports. Create `apps/api/.env` or export:

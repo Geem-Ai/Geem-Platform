@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import runpy
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,6 +33,7 @@ from app.common.crypto import decrypt_secret
 from app.connectors.credentials import ConnectorCredentialService
 from app.connectors.models import (
     AppConnection,
+    ChannelBinding,
     ChannelConversationBinding,
     ConnectorWebhookEvent,
 )
@@ -246,6 +249,9 @@ class FakeOpenWAClient:
 class FakeExecutor:
     def __init__(self, db: Session, settings=None) -> None:  # noqa: ANN001
         _ = db, settings
+
+    def select_mcp_tools(self, **_: object) -> list[object]:
+        return []
 
     def execute(self, *, expert_id: uuid.UUID, question: str, **_: object) -> dict:
         return {
@@ -487,6 +493,21 @@ def test_openwa_registry_and_access_gates(client, register_user, db, monkeypatch
     assert body["connector_key"] == "openwa"
     assert body["connect_mode"] == "qr"
     assert body["provider_status"] == "qr_ready"
+    binding_id = db.scalar(
+        select(ChannelBinding.id).where(
+            ChannelBinding.app_connection_id == uuid.UUID(body["id"])
+        )
+    )
+    assert binding_id is not None
+    assert body["channel_binding_id"] == str(binding_id)
+    assert body["channel_binding_id"] != body["id"]
+
+    listed = client.get(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["channel_binding_id"] == str(binding_id)
 
     status = client.get(
         f"/api/apps/whatsapp/connections/{body['id']}/openwa/status",
@@ -500,6 +521,156 @@ def test_openwa_registry_and_access_gates(client, register_user, db, monkeypatch
     )
     assert qr.status_code == 200, qr.text
     assert qr.json()["qr_code"].startswith("data:image/png")
+
+
+def test_openwa_read_endpoints_fail_closed_without_persisted_binding(
+    client, register_user, db
+) -> None:
+    _seed(db)
+    app, plan = _publish_whatsapp_for_test(db)
+    owner = register_user(email="openwa-missing-binding-owner@example.com")
+    member = register_user(email="openwa-missing-binding-member@example.com")
+    ws = _create_workspace(client, owner, "openwa-missing-binding")
+    _add_member(db, ws["id"], member["user"]["id"], WorkspaceRole.MEMBER)
+    _grant_whatsapp_access(
+        db,
+        workspace_id=uuid.UUID(ws["id"]),
+        app=app,
+        plan=plan,
+        actor_id=uuid.UUID(owner["user"]["id"]),
+    )
+
+    started = client.post(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+        json={"connect_mode": "qr"},
+    )
+    assert started.status_code == 201, started.text
+    connection_id = uuid.UUID(started.json()["id"])
+    binding = db.scalar(
+        select(ChannelBinding).where(
+            ChannelBinding.app_connection_id == connection_id
+        )
+    )
+    assert binding is not None
+    db.delete(binding)
+    db.commit()
+
+    requests = (
+        ("/api/apps/whatsapp/connections", _ws_headers(owner, ws)),
+        (
+            f"/api/apps/whatsapp/connections/{connection_id}",
+            _ws_headers(owner, ws),
+        ),
+        (
+            f"/api/apps/whatsapp/connections/{connection_id}/openwa/status",
+            _ws_headers(member, ws),
+        ),
+    )
+    for path, headers in requests:
+        response = client.get(path, headers=headers)
+        assert response.status_code == 502, response.text
+        assert response.json() == {
+            "error": "connector_connection_failed",
+            "code": "connector_connection_failed",
+            "message": "WhatsApp connection binding is unavailable.",
+            "details": None,
+        }
+        assert db.scalar(
+            select(ChannelBinding.id).where(
+                ChannelBinding.app_connection_id == connection_id
+            )
+        ) is None
+
+
+def test_openwa_binding_backfill_is_durable_across_transactions(
+    client, register_user, db
+) -> None:
+    _seed(db)
+    app, plan = _publish_whatsapp_for_test(db)
+    owner = register_user(email="openwa-binding-backfill@example.com")
+    ws = _create_workspace(client, owner, "openwa-binding-backfill")
+    workspace_id = uuid.UUID(ws["id"])
+    _grant_whatsapp_access(
+        db,
+        workspace_id=workspace_id,
+        app=app,
+        plan=plan,
+        actor_id=uuid.UUID(owner["user"]["id"]),
+    )
+
+    started = client.post(
+        "/api/apps/whatsapp/connections",
+        headers=_ws_headers(owner, ws),
+        json={"connect_mode": "qr"},
+    )
+    assert started.status_code == 201, started.text
+    connection_id = uuid.UUID(started.json()["id"])
+    old_binding = db.scalar(
+        select(ChannelBinding).where(
+            ChannelBinding.app_connection_id == connection_id
+        )
+    )
+    assert old_binding is not None
+    db.delete(old_binding)
+    db.commit()
+
+    migration = runpy.run_path(
+        str(
+            Path(__file__).resolve().parents[2]
+            / "migrations/versions/0041_openwa_binding_backfill.py"
+        )
+    )
+    assert migration["revision"] == "0041_openwa_binding_backfill"
+    assert len(migration["revision"]) <= 32
+    assert migration["down_revision"] == "0040_mcp_external_surfaces"
+    backfill = migration["_backfill_openwa_channel_bindings"]
+    assert callable(backfill)
+
+    with Session(bind=db.get_bind(), expire_on_commit=False) as migration_db:
+        assert backfill(migration_db.connection()) == 1
+        migration_db.commit()
+    with Session(bind=db.get_bind(), expire_on_commit=False) as repeat_db:
+        assert backfill(repeat_db.connection()) == 0
+        repeat_db.commit()
+
+    with Session(bind=db.get_bind(), expire_on_commit=False) as list_db:
+        workspace = list_db.get(Workspace, workspace_id)
+        membership = list_db.scalar(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.user_id == uuid.UUID(owner["user"]["id"]),
+            )
+        )
+        assert workspace is not None
+        assert membership is not None
+        listed = OpenWAChannelService(
+            list_db, client_factory=FakeOpenWAClient
+        ).list_connections(
+            workspace=workspace,
+            membership=membership,
+            app_slug="whatsapp",
+        )
+        assert len(listed.items) == 1
+        returned_binding_id = listed.items[0].channel_binding_id
+        assert returned_binding_id is not None
+        assert not list_db.new
+
+    # Model the next request's exact surface-target lookup.  The identifier
+    # returned above must still resolve after the listing transaction closes.
+    with Session(bind=db.get_bind(), expire_on_commit=False) as target_db:
+        persisted = target_db.scalar(
+            select(ChannelBinding).where(
+                ChannelBinding.workspace_id == workspace_id,
+                ChannelBinding.id == returned_binding_id,
+                ChannelBinding.app_connection_id == connection_id,
+            )
+        )
+        assert persisted is not None
+        assert persisted.expert_id is None
+        assert persisted.enabled is True
+        assert persisted.auto_reply_enabled is True
+        assert persisted.respond_to_groups is False
 
 
 def test_openwa_expert_binding_and_disconnect_fail_closed(

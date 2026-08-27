@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import ipaddress
+from pathlib import Path
+
 import pytest
 
 from app.common.outbound_http import (
     OutboundTargetBlocked,
     canonicalize_outbound_url,
     resolve_outbound_target,
+)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+STATIC_DENY_NETWORKS = tuple(
+    ipaddress.ip_network(line, strict=True)
+    for line in (
+        REPO_ROOT / "infra/mcp-egress/proxy/static-deny-networks.txt"
+    ).read_text(encoding="utf-8").splitlines()
+    if line.strip() and not line.lstrip().startswith("#")
 )
 
 
@@ -77,6 +90,53 @@ def test_resolution_layer_rejects_private_metadata_and_mapped_addresses(address:
             "https://tools.example.com/mcp",
             resolver=lambda _host, _port: (address,),
         )
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "10.0.0.1",
+        "100.64.0.1",
+        "168.63.129.16",
+        "192.0.2.1",
+        "5f00::1",
+        "4000::1",
+        "6000::1",
+        "8000::1",
+        "2001::1",
+    ],
+)
+def test_python_policy_rejects_representatives_covered_by_static_proxy_manifest(
+    address: str,
+) -> None:
+    parsed_address = ipaddress.ip_address(address)
+    assert any(
+        parsed_address.version == network.version and parsed_address in network
+        for network in STATIC_DENY_NETWORKS
+    )
+
+    with pytest.raises(OutboundTargetBlocked):
+        resolve_outbound_target(
+            "https://tools.example.com/mcp",
+            resolver=lambda _host, _port: (address,),
+        )
+
+
+@pytest.mark.parametrize("address", ["1.1.1.1", "2606:4700:4700::1111"])
+def test_public_controls_are_allowed_by_python_and_static_proxy_policy(
+    address: str,
+) -> None:
+    parsed_address = ipaddress.ip_address(address)
+    assert not any(
+        parsed_address.version == network.version and parsed_address in network
+        for network in STATIC_DENY_NETWORKS
+    )
+
+    target = resolve_outbound_target(
+        "https://tools.example.com/mcp",
+        resolver=lambda _host, _port: (address,),
+    )
+    assert target.connect_address == address
 
 
 def test_every_dns_answer_must_be_public() -> None:

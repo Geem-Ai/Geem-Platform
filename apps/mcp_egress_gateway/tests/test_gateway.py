@@ -286,8 +286,17 @@ def test_neutral_dns_timeout_never_dispatches_after_the_caller_fails() -> None:
     assert transport.calls == []
 
 
+@pytest.mark.parametrize(
+    ("pinned_address", "expected_authority"),
+    [
+        ("93.184.216.34", b"93.184.216.34:443"),
+        ("2606:4700:4700::1111", b"[2606:4700:4700::1111]:443"),
+    ],
+)
 def test_proxy_connect_authority_and_host_are_the_same_pinned_ip(
     monkeypatch: pytest.MonkeyPatch,
+    pinned_address: str,
+    expected_authority: bytes,
 ) -> None:
     class SocketFixture:
         def __init__(self) -> None:
@@ -326,7 +335,7 @@ def test_proxy_connect_authority_and_host_are_the_same_pinned_ip(
     settings = _settings(forward_proxy_url="http://proxy.internal:3128")
     target = resolve_outbound_target(
         "https://tenant.example.com/mcp",
-        resolver=lambda _host, _port: ("93.184.216.34",),
+        resolver=lambda _host, _port: (pinned_address,),
     )
     opened = PinnedHttpTransport(settings)._open_socket(
         target,
@@ -334,8 +343,11 @@ def test_proxy_connect_authority_and_host_are_the_same_pinned_ip(
     )
     assert opened is connection
     assert bytes(connection.sent).startswith(
-        b"CONNECT 93.184.216.34:443 HTTP/1.1\r\n"
-        b"Host: 93.184.216.34:443\r\n"
+        b"CONNECT "
+        + expected_authority
+        + b" HTTP/1.1\r\nHost: "
+        + expected_authority
+        + b"\r\n"
     )
     assert b"tenant.example.com" not in connection.sent
 

@@ -1,0 +1,29 @@
+# Canonical static deny policy for the independent MCP CONNECT proxy.
+# IPv6 permits only global-unicast 2000::/3, then conservatively blocks the
+# non-global regions inside it. The 2001::/23 supernet intentionally also
+# blocks its few globally routable anycast/assignment exceptions; a future
+# relaxation requires a reviewed policy and parity-test change.
+0.0.0.0/8
+10.0.0.0/8
+100.64.0.0/10
+127.0.0.0/8
+168.63.129.16/32
+169.254.0.0/16
+172.16.0.0/12
+192.0.0.0/24
+192.0.2.0/24
+192.88.99.0/24
+192.168.0.0/16
+198.18.0.0/15
+198.51.100.0/24
+203.0.113.0/24
+224.0.0.0/4
+240.0.0.0/4
+::/3
+# Deliberately conservative: deny all of 2001::/23, not only assigned subranges.
+2001::/23
+2001:db8::/32
+2002::/16
+3fff::/20
+4000::/2
+8000::/1

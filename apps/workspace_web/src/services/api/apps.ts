@@ -190,11 +190,14 @@ export type AppConnection = {
   credentials_expires_at: string | null;
   created_at: string | null;
   capabilities: ConnectionCapabilities;
+  /** Exact channel surface identifier; present for WhatsApp connections. */
+  channel_binding_id?: string | null;
   /** Present when starting an OAuth connection — navigate the browser here. */
   authorization_url?: string | null;
 };
 
 export type WhatsAppConnection = AppConnection & {
+  channel_binding_id?: string | null;
   provider_status?: WhatsAppProviderStatus | null;
   connect_mode?: WhatsAppConnectMode | string | null;
   phone?: string | null;

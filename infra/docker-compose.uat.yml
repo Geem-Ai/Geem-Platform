@@ -3,7 +3,7 @@
 # Does not replace local geem.dm / localhost DX — use it in addition.
 #
 #   cd infra
-#   docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml up -d --build
 #
 # Requires infra/cloudflared/credentials-uat.json (see infra/cloudflared/config.uat.yml).
 # Do NOT start docker-compose.tunnel.yml on this host (that overlay claims
@@ -34,15 +34,6 @@ services:
         condition: service_started
 
   worker:
-    environment:
-      APP_URL: https://api-uat.geem.ai
-      TRUST_PROXY_HEADERS: "true"
-      WORKSPACE_WEB_URL: https://app-uat.geem.ai
-      APP_ROOT_DOMAIN: geem.dm
-      APP_ADMIN_HOST: admin-uat.geem.ai
-      CORS_ORIGINS: *uat-cors-origins
-
-  beat:
     environment:
       APP_URL: https://api-uat.geem.ai
       TRUST_PROXY_HEADERS: "true"

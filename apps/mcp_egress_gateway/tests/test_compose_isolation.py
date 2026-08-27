@@ -78,6 +78,7 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
 
     for name in (
         "application_data",
+        "application_broker",
         "application_ingress",
         "application_provider_control",
         "mcp_egress_control",
@@ -89,17 +90,71 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
     proxy = services["mcp-egress-proxy"]
     app_proxy = services["app-egress-proxy"]
     assert set(gateway["networks"]) == {"mcp_egress_control", "mcp_proxy_control"}
-    assert set(proxy["networks"]) == {"mcp_proxy_control", "public_egress"}
+    assert set(proxy["networks"]) == {"mcp_proxy_control", "mcp_public_egress"}
     assert set(app_proxy["networks"]) == {
         "application_provider_control",
-        "public_egress",
+        "application_provider_egress",
     }
     assert gateway.get("ports") is None
     assert gateway["read_only"] is True
     assert gateway["cap_drop"] == ["ALL"]
+    assert gateway["deploy"]["replicas"] == 1
+    assert gateway["profiles"] == ["mcp"]
+    assert proxy["profiles"] == ["mcp"]
+    for name, service in services.items():
+        if name not in {"mcp-egress-gateway", "mcp-egress-proxy"}:
+            assert not service.get("profiles")
+        if name == "minio-init":
+            assert service.get("restart") is None
+        else:
+            assert service["restart"] == "unless-stopped"
+    assert services["beat"]["environment"]["MCP_CONNECTOR_ENABLED"] == "false"
+    assert set(services["beat"]["environment"]) == {
+        "APP_ENV",
+        "MCP_CONNECTOR_ENABLED",
+        "REDIS_URL",
+    }
+    assert services["beat"]["command"][:4] == [
+        "celery",
+        "-A",
+        "app.worker.beat_app:beat_app",
+        "beat",
+    ]
+    assert services["beat"]["deploy"]["replicas"] == 1
+    assert services["beat"].get("secrets") is None
+    assert set(services["beat"]["networks"]) == {"application_broker"}
+    assert proxy["environment"]["MCP_PROXY_BLOCKED_NETWORKS"] == (
+        gateway["environment"]["EGRESS_BLOCKED_NETWORKS"]
+    )
+    assert proxy["environment"]["MCP_PROXY_REQUIRE_BLOCKED_NETWORKS"] == "false"
+    assert proxy["entrypoint"] == [
+        "python3",
+        "/usr/local/lib/geem/render_mcp_proxy_config.py",
+    ]
 
-    for name in ("postgres", "redis", "qdrant", "minio"):
+    for name in ("postgres", "qdrant", "minio"):
         assert set(services[name]["networks"]) == {"application_data"}
+    assert set(services["redis"]["networks"]) == {"application_broker"}
+    assert "application_broker" in services["api"]["networks"]
+    assert "application_broker" in services["worker"]["networks"]
+    assert services["postgres"]["healthcheck"]["test"] == ["CMD", "pg_isready"]
+    assert services["redis"]["healthcheck"]["test"] == [
+        "CMD",
+        "redis-cli",
+        "ping",
+    ]
+    assert services["qdrant"]["healthcheck"]["test"] == [
+        "CMD",
+        "bash",
+        "-c",
+        "exec 3<>/dev/tcp/127.0.0.1/6333",
+    ]
+    assert services["api"]["healthcheck"]["test"] == [
+        "CMD",
+        "curl",
+        "-f",
+        "http://localhost:8000/api/health/live",
+    ]
     assert "mcp_egress_control" in services["api"]["networks"]
     assert "mcp_egress_control" in services["worker"]["networks"]
     assert all(
@@ -111,7 +166,17 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
         name
         for name, service in services.items()
         if "public_egress" in service.get("networks", {})
-    } == {"app-egress-proxy", "mcp-egress-proxy"}
+    } == set()
+    assert {
+        name
+        for name, service in services.items()
+        if "application_provider_egress" in service.get("networks", {})
+    } == {"app-egress-proxy"}
+    assert {
+        name
+        for name, service in services.items()
+        if "mcp_public_egress" in service.get("networks", {})
+    } == {"mcp-egress-proxy"}
 
     gateway_environment = set(gateway.get("environment", {}))
     assert not gateway_environment.intersection(
@@ -159,6 +224,265 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
     assert gateway_secret_targets == server_targets
 
 
+def test_minio_compose_allowlists_env_and_rejects_production_fallbacks(
+    tmp_path: Path,
+) -> None:
+    docker = shutil.which("docker")
+    if docker is None:
+        pytest.skip("Docker Compose CLI is unavailable")
+
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "APP_ENV": "production",
+            "MINIO_ACCESS_KEY": "",
+            "MINIO_SECRET_KEY": "",
+            "JWT_SECRET": "must-not-reach-minio",
+            "SECRETS_ENCRYPTION_KEY": "must-not-reach-minio",
+            "OPENROUTER_API_KEY": "must-not-reach-minio",
+        }
+    )
+    rendered = subprocess.run(
+        [
+            docker,
+            "compose",
+            "-f",
+            str(REPO_ROOT / "infra/docker-compose.yml"),
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    services = json.loads(rendered.stdout)["services"]
+
+    assert set(services["minio"]["environment"]) == {
+        "APP_ENV",
+        "MINIO_ROOT_PASSWORD",
+        "MINIO_ROOT_USER",
+    }
+    assert set(services["minio-init"]["environment"]) == {
+        "APP_ENV",
+        "MINIO_ACCESS_KEY",
+        "MINIO_BUCKET",
+        "MINIO_SECRET_KEY",
+    }
+    assert services["minio-init"]["image"] == (
+        "quay.io/minio/mc@sha256:"
+        "993e8c454a7ec632923f7e3e61adf1d473261da6354cefd641aedd33a2cfe112"
+    )
+    rendered_init_script = services["minio-init"]["entrypoint"][2]
+    assert "until timeout -k 2s 5s mc alias set" in rendered_init_script
+    assert (
+        "--conn-read-deadline 4s --conn-write-deadline 4s"
+        in rendered_init_script
+    )
+    assert (
+        'timeout -k 2s 10s mc mb --ignore-existing "local/$${MINIO_BUCKET}"'
+        in rendered_init_script
+    )
+    assert (
+        'timeout -k 2s 10s mc anonymous set none "local/$${MINIO_BUCKET}"'
+        in rendered_init_script
+    )
+    assert (
+        'timeout -k 2s 10s mc stat "local/$${MINIO_BUCKET}" >/dev/null'
+        in rendered_init_script
+    )
+
+    # Empty production credentials must remain empty after Compose rendering;
+    # local-only defaults are applied inside the guarded container scripts.
+    assert services["minio"]["environment"]["MINIO_ROOT_USER"] == ""
+    assert services["minio"]["environment"]["MINIO_ROOT_PASSWORD"] == ""
+    assert services["minio-init"]["environment"]["MINIO_ACCESS_KEY"] == ""
+    assert services["minio-init"]["environment"]["MINIO_SECRET_KEY"] == ""
+
+    for service_name in ("minio", "minio-init"):
+        service = services[service_name]
+        assert service["entrypoint"][:2] == ["/bin/sh", "-c"]
+        script = service["entrypoint"][2]
+        # `config` keeps the escaped form so the rendered model can be fed
+        # back to Compose. The runtime command receives one literal `$`.
+        assert "$${APP_ENV}" in script
+        runtime_entrypoint = [
+            *service["entrypoint"][:2],
+            script.replace("$$", "$"),
+        ]
+        rejected = subprocess.run(
+            runtime_entrypoint,
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                **{
+                    key: str(value)
+                    for key, value in service["environment"].items()
+                },
+            },
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        assert rejected.returncode != 0
+        assert "non-default access key in production" in rejected.stderr
+
+    fake_mc = tmp_path / "mc"
+    fake_mc.write_text(
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  alias) exit 0 ;;\n"
+        "  mb) exit 23 ;;\n"
+        "  anonymous) exit 99 ;;\n"
+        "  *) exit 98 ;;\n"
+        "esac\n"
+    )
+    fake_mc.chmod(0o755)
+    fake_timeout = tmp_path / "timeout"
+    fake_timeout.write_text(
+        "#!/bin/sh\n"
+        "[ \"$1\" = \"-k\" ] || exit 97\n"
+        "shift 3\n"
+        "exec \"$@\"\n"
+    )
+    fake_timeout.chmod(0o755)
+    init_service = services["minio-init"]
+    init_entrypoint = [
+        *init_service["entrypoint"][:2],
+        init_service["entrypoint"][2].replace("$$", "$"),
+    ]
+    failed_bucket_create = subprocess.run(
+        init_entrypoint,
+        env={
+            "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+            "APP_ENV": "production",
+            "MINIO_ACCESS_KEY": "production-access",
+            "MINIO_SECRET_KEY": "production-secret",
+            "MINIO_BUCKET": "rag-documents",
+        },
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    # `set -e` must propagate the bucket-creation failure. Reaching the
+    # anonymous-policy command would instead return the fake command's 99.
+    assert failed_bucket_create.returncode == 23
+
+
+def test_minio_init_source_is_bounded_idempotent_and_fail_closed() -> None:
+    compose = (REPO_ROOT / "infra/docker-compose.yml").read_text()
+    minio_source = compose.split("\n  minio:\n", 1)[1].split(
+        "\n  minio-init:\n", 1
+    )[0]
+    init_source = compose.split("\n  minio-init:\n", 1)[1].split(
+        "\n  api:\n", 1
+    )[0]
+
+    for service_source in (minio_source, init_source):
+        assert "env_file:" not in service_source
+        assert "../.env" not in service_source
+        assert "set -eu" in service_source
+        assert "$${APP_ENV}" in service_source
+
+    assert "|| true" not in init_source
+    assert "exit 0" not in init_source
+    assert "timeout -k 2s 10s mc mb --ignore-existing" in init_source
+    assert "until timeout -k 2s 5s mc alias set" in init_source
+    assert "--conn-read-deadline 4s --conn-write-deadline 4s" in init_source
+    assert "attempts=$$((attempts + 1))" in init_source
+    assert 'if [ "$${attempts}" -ge 30 ]' in init_source
+    assert (
+        'timeout -k 2s 10s mc anonymous set none "local/$${MINIO_BUCKET}"'
+        in init_source
+    )
+    assert (
+        'timeout -k 2s 10s mc stat "local/$${MINIO_BUCKET}" >/dev/null'
+        in init_source
+    )
+
+
+def test_supported_compose_env_file_supplies_one_minio_identity(tmp_path: Path) -> None:
+    docker = shutil.which("docker")
+    if docker is None:
+        pytest.skip("Docker Compose CLI is unavailable")
+    env_file = tmp_path / "compose.env"
+    env_file.write_text(
+        "APP_ENV=local\n"
+        "MINIO_ACCESS_KEY=sentinel-minio-access\n"
+        "MINIO_SECRET_KEY=sentinel-minio-secret\n"
+        "MINIO_BUCKET=sentinel-minio-bucket\n"
+    )
+
+    rendered = subprocess.run(
+        [
+            docker,
+            "compose",
+            "--env-file",
+            str(env_file),
+            "-f",
+            str(REPO_ROOT / "infra/docker-compose.yml"),
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    services = json.loads(rendered.stdout)["services"]
+
+    assert services["minio"]["environment"] == {
+        "APP_ENV": "local",
+        "MINIO_ROOT_PASSWORD": "sentinel-minio-secret",
+        "MINIO_ROOT_USER": "sentinel-minio-access",
+    }
+    assert services["minio-init"]["environment"] == {
+        "APP_ENV": "local",
+        "MINIO_ACCESS_KEY": "sentinel-minio-access",
+        "MINIO_BUCKET": "sentinel-minio-bucket",
+        "MINIO_SECRET_KEY": "sentinel-minio-secret",
+    }
+
+
+def test_uat_systemd_uses_the_root_compose_environment() -> None:
+    unit = (REPO_ROOT / "infra/systemd/geem-uat.user.service").read_text()
+
+    assert unit.count("docker compose --env-file ../.env") == 2
+
+
+def test_phase13_gate_runs_the_exact_minio_initializer_smoke() -> None:
+    script_path = REPO_ROOT / "infra/minio/verify-init.sh"
+    script = script_path.read_text()
+    workflow = (
+        REPO_ROOT / ".github/workflows/phase13-mcp-release-gate.yml"
+    ).read_text()
+
+    assert "--env-file /dev/null" in script
+    assert "-f \"$REPO_ROOT/infra/docker-compose.yml\"" in script
+    assert script.count("compose run --rm --no-deps minio-init") == 2
+    assert 'mc anonymous set download "local/$MINIO_BUCKET"' in script
+    assert '[ "$public_status" = "200" ]' in script
+    assert "compose down --volumes --remove-orphans" in script
+    assert (
+        "http://127.0.0.1:9100/$MINIO_BUCKET/policy-probe.txt" in script
+    )
+    assert '[ "$anonymous_status" = "403" ]' in script
+    assert "sh infra/minio/verify-init.sh" in workflow
+
+
+def test_phase13_gate_covers_shared_provider_and_the_full_migration_chain() -> None:
+    workflow = (
+        REPO_ROOT / ".github/workflows/phase13-mcp-release-gate.yml"
+    ).read_text()
+
+    assert "tests/unit/test_agent_*.py" in workflow
+    assert "tests/unit/test_openrouter_contracts.py" in workflow
+    assert "alembic upgrade head" in workflow
+    assert "0041_openwa_binding_backfill (head)" in workflow
+
+
 def test_uat_compose_starts_mcp_gateway_without_profile() -> None:
     docker = shutil.which("docker")
     if docker is None:
@@ -203,12 +527,16 @@ def test_uat_compose_starts_mcp_gateway_without_profile() -> None:
 
 def test_deployed_proxy_is_connect_only_deny_private_and_has_no_access_log() -> None:
     config = (REPO_ROOT / "infra/mcp-egress/proxy/squid.conf").read_text()
+    static_manifest = (
+        REPO_ROOT / "infra/mcp-egress/proxy/static-deny-networks.txt"
+    ).read_text()
     assert "acl CONNECT method CONNECT" in config
     assert "http_access deny blocked_destination" in config
     assert "http_access deny !CONNECT" in config
-    assert "acl blocked_destination dst 169.254.0.0/16" in config
-    assert "acl blocked_destination dst 10.0.0.0/8" in config
-    assert "acl blocked_destination dst fc00::/7" in config
+    assert "# __GEEM_STATIC_BLOCKS__" in config
+    assert "169.254.0.0/16" in static_manifest
+    assert "10.0.0.0/8" in static_manifest
+    assert "8000::/1" in static_manifest
     assert "access_log none" in config
 
     app_config = (REPO_ROOT / "infra/app-egress/proxy/squid.conf").read_text()
@@ -221,9 +549,22 @@ def test_deployed_proxy_is_connect_only_deny_private_and_has_no_access_log() -> 
 def test_deployed_isolation_smoke_covers_live_release_boundaries() -> None:
     script = (REPO_ROOT / "infra/mcp-egress/verify-isolation.sh").read_text()
 
+    assert "MCP_SMOKE_COMPOSE_WRAPPER" in script
+    assert '"$COMPOSE_WRAPPER" "$@"' in script
+    assert "require_exactly_one_running beat" in script
+    assert "require_exactly_one_running mcp-egress-gateway" in script
     assert "--cert /run/secrets/mcp-egress/client.crt" in script
     assert "gateway accepted a caller without a client certificate" in script
     assert "postgres:5432 redis:6379 qdrant:6333 minio:9000" in script
+    assert "require_unreachable beat postgres:5432 qdrant:6333 minio:9000" in script
+    assert "for service in api worker beat mcp-egress-gateway" in script
     assert "1.1.1.1" in script
-    assert "CONNECT 10.0.0.1:443" in script
+    assert 'os.getenv("EGRESS_BLOCKED_NETWORKS"' in script
+    assert (
+        "STATIC_DENY_MANIFEST=$REPO_ROOT/infra/mcp-egress/proxy/"
+        "static-deny-networks.txt"
+    ) in script
+    assert 'done < "$STATIC_DENY_MANIFEST"' in script
+    assert 'b" 403 "' in script
+    assert 'b" 200 "' in script
     assert "mcp-egress-proxy" in script

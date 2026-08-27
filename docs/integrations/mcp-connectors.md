@@ -8,8 +8,9 @@ is working before publication.
 For an existing production machine that has not yet pulled or deployed Phase
 13, start with the
 [production-PC upgrade and deployment guide](./mcp-production-deployment.md).
-It adds source pinning, backup, migration/seed, frontend, supervisor, dependency,
-and rollback sequencing around this security and operations runbook.
+It adds source pinning, backup, migration/catalog reconciliation, frontend,
+supervisor, dependency, and rollback sequencing around this security and
+operations runbook.
 
 Geem is the model-owning MCP **client/host**. The remote server executes tools;
 Geem owns model selection, discovery, authorization, the tool loop, metering,
@@ -22,13 +23,19 @@ companion to that plan and to the [deployment guide](../deployment.md).
 
 ## Release state and non-negotiable gates
 
-The production catalog row is intentionally seeded as `coming_soon`. A
-`coming_soon` App cannot be checked out, installed, or admitted at runtime, so
+The MCP-scoped reconciler creates a missing production catalog row as
+`coming_soon`, but deliberately preserves the status of any existing row. An
+existing row in any other state is a stop condition: obtain separate Platform
+Admin lifecycle approval and restore `coming_soon` before enabling the runtime
+flag. A `coming_soon` App cannot be checked out, installed, or admitted at runtime, so
 paid release testing must use a separate release-candidate environment with the
 same production topology, signed plans, and a deliberately **published** RC
-catalog row. After the RC passes, publish the production row through Platform
-Admin. Do not temporarily bypass status checks or invent zero/placeholder
-prices to make testing succeed.
+catalog row. Production API and worker must keep
+`MCP_CONNECTOR_ENABLED=false` until that RC passes for the exact release SHA and
+image manifest. After RC sign-off, enable production under the controlled gate
+below, verify it while the row remains `coming_soon`, and only then publish
+through Platform Admin. Do not temporarily bypass status checks or invent
+zero/placeholder prices to make testing succeed.
 
 The locked production product is:
 
@@ -46,6 +53,8 @@ these values, the configured `mcp_remote` adapter, and
 Do not promote Phase 13 while any of these conditions is true:
 
 - `MCP_CONNECTOR_ENABLED` is true before the isolated gateway is proven.
+- Production `MCP_CONNECTOR_ENABLED` is true before the production-topology RC
+  and paid-product gate is signed off for the exact release.
 - The UAT overlay is being used as isolation evidence. It deliberately gives
   the gateway direct public egress and sets its mode to `local`.
 - API, worker, or gateway can open an unaudited direct public socket.
@@ -58,30 +67,44 @@ Do not promote Phase 13 while any of these conditions is true:
 - The exact paid checkout, renewal, installation, discovery, approval, and
   Workspace/API/Widget/direct-WhatsApp canary has not passed.
 
-### Known release blockers in the checked-in deployment
+Treat an unintended secret injection, successful forbidden network probe,
+unknown image/policy checksum, or suspected unauthorized access as a security
+incident. Stop promotion, preserve redacted evidence, prevent automatic
+recreation, and invoke incident response. Do not dump container environments or
+rotate encryption/datastore credentials ad hoc; follow the incident path under
+[Emergency disable and rollback](#emergency-disable-and-rollback).
+
+### Release compatibility blockers and gates
 
 These are operationally significant and must not be hidden by the runbook:
 
 1. The checked-in production systemd unit does not start the Compose `mcp`
    profile or name `mcp-egress-gateway` and `mcp-egress-proxy`. Update the
    process manager before release or the boundary will not return after reboot.
-2. Celery Beat loads the global application settings but intentionally has no
-   MCP client private key. A shared `.env` with
-   `MCP_CONNECTOR_ENABLED=true` therefore makes Beat fail closed. Keep the flag
-   explicitly `false` for Beat; do **not** give Beat the client key or MCP
-   network solely to make it start.
-3. The current Workspace MCP panel sends a WhatsApp `AppConnection.id` where
-   the API requires the exact internal `ChannelBinding.id`. Treat WhatsApp MCP
-   surface binding as a release blocker until the UI/API contract is corrected
-   and covered by E2E. Never guess or substitute one identifier for the other.
-4. The checked-in MCP Squid policy is a broad independent deny layer, but it is
-   not yet a complete duplicate of Python's non-global-address policy and does
-   not ingest `MCP_EGRESS_BLOCKED_NETWORKS`. Before production promotion, make
-   the proxy or an equivalent network control independently deny every reviewed
-   non-global class and deployment-specific range, then add live parity probes.
+2. Older Compose releases let Celery Beat inherit the full application
+   environment. The approved exact SHA and final overlay must run
+   `app.worker.beat_app:beat_app` with exactly `APP_ENV=production`, the
+   internal `REDIS_URL`, and `MCP_CONNECTOR_ENABLED=false`. Beat receives no
+   `env_file`, database/Qdrant/MinIO/provider/MCP variables, secret mounts, or
+   network beyond the dedicated `application_broker`; `beat.deploy.replicas` and live Beat
+   cardinality must both equal one.
+3. Older Workspace builds send a WhatsApp `AppConnection.id` where the API
+   requires the exact internal `ChannelBinding.id`. The approved exact SHA must
+   include the UI/API contract fix and its unit/E2E evidence. Never guess or
+   substitute one identifier for the other, and do not combine a fixed backend
+   with an older frontend artifact.
+4. Older MCP proxy images use only a static broad deny layer and do not ingest
+   deployment CIDRs. The approved release must include the fail-closed proxy
+   renderer, set `MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true`, prove its canonical
+   set equals gateway `MCP_EGRESS_BLOCKED_NETWORKS`, and pass live parity probes
+   for every reviewed class/range.
 5. `infra/docker-compose.yml` is a development baseline. It contains known
    Postgres/MinIO credentials and host-published ports; the tunnel overlay does
    not remove them. Never use base + tunnel alone as a production deployment.
+6. Older Phase 13 topologies place app proxy, MCP proxy, and Cloudflared on one
+   public bridge, allowing those peers to reach the unauthenticated MCP proxy.
+   The approved exact SHA must split provider, MCP, and ingress outbound
+   networks and prove exactly one authorized service on each.
 
 ## Supported production contract
 
@@ -112,8 +135,9 @@ flowchart LR
   subgraph App[Application boundary]
     API[API]
     W[Celery worker]
-    B[Celery Beat<br/>MCP disabled]
-    DB[(Postgres / Redis /<br/>Qdrant / MinIO)]
+    B[Celery Beat<br/>broker-only / MCP disabled]
+    DB[(Postgres / Qdrant / MinIO)]
+    R[(Redis broker)]
     AP[Fixed-provider proxy]
   end
 
@@ -123,17 +147,21 @@ flowchart LR
   end
 
   API -->|application_data| DB
+  API -->|application_broker| R
   W -->|application_data| DB
-  B -->|application_data| DB
+  W -->|application_broker| R
+  B -->|application_broker only| R
   API -->|reviewed providers only| AP
   W -->|reviewed providers only| AP
   API -->|mTLS, operation scoped| G
   W -->|mTLS, operation scoped| G
   G -->|validated literal IP via CONNECT| MP
-  AP -->|public TLS| FP[Fixed providers]
-  MP -->|public TLS, TCP 443| RMCP[Remote MCP / OAuth hosts]
+  AP -->|dedicated provider egress, TLS| FP[Fixed providers]
+  MP -->|dedicated MCP egress, TLS/443| RMCP[Remote MCP / OAuth hosts]
 
   G -. no route .-> DB
+  G -. no route .-> R
+  B -. no route .-> DB
   G -. no direct public route .-> RMCP
   API -. no direct public route .-> RMCP
   W -. no direct public route .-> RMCP
@@ -155,19 +183,25 @@ encryption key. It does not persist payloads or emit URL/body access logs.
 
 | Service | Networks | Public route | MCP role |
 | --- | --- | --- | --- |
-| API | data, ingress, fixed-provider control, MCP control | No direct route | mTLS gateway client |
-| Worker | data, fixed-provider control, MCP control | No direct route | mTLS gateway client; ID-only jobs |
-| Beat | data only | No | Schedules ID-only jobs; MCP flag must remain false |
-| Datastores | data only | No | No MCP access |
+| API | data, broker, ingress, fixed-provider control, MCP control | No direct route | mTLS gateway client |
+| Worker | data, broker, fixed-provider control, MCP control | No direct route | mTLS gateway client; ID-only jobs |
+| Beat | broker only | No | Broker-only scheduler using `beat_app`; exact three-variable environment and no secrets |
+| Redis | broker only | No | Internal Celery broker |
+| PostgreSQL, Qdrant, MinIO | data only | No | No MCP access |
 | MCP gateway | MCP control, MCP proxy control | No direct route | URL/DNS/TLS/protocol enforcement |
-| MCP proxy | MCP proxy control, public egress | Yes | CONNECT/443 with independent address denies |
-| App proxy | fixed-provider control, public egress | Yes | Fixed reviewed provider hosts only |
-| Cloudflared | ingress, public egress | Yes | Inbound application tunnel, not MCP |
+| MCP proxy | MCP proxy control, dedicated MCP public egress | Yes | CONNECT/443 with independent address denies |
+| App proxy | fixed-provider control, dedicated provider egress | Yes | Fixed reviewed provider hosts only |
+| Cloudflared | ingress, dedicated ingress public egress | Yes | Inbound application tunnel, not MCP |
 
-All networks except `public_egress` are declared `internal: true`. Neither MCP
-service publishes a host port. API and worker set `HTTP_PROXY`/`HTTPS_PROXY` to
-the fixed-provider proxy, while the MCP gateway client uses `trust_env=False`;
-ordinary proxy variables cannot silently intercept or bypass MCP mTLS.
+The data/broker/control/ingress networks are `internal: true`. The three external-route
+networks are separate: `application_provider_egress` contains only the app
+proxy, `mcp_public_egress` only the MCP proxy, and `public_egress` only the
+reviewed ingress service (Cloudflared in this topology). This prevents a
+compromised app proxy or ingress peer from reaching the unauthenticated MCP
+proxy over a shared public bridge. Neither MCP service publishes a host port.
+API and worker set `HTTP_PROXY`/`HTTPS_PROXY` to the fixed-provider proxy, while
+the MCP gateway client uses `trust_env=False`; ordinary proxy variables cannot
+silently intercept or bypass MCP mTLS.
 Tenant-selected MCP or OAuth hosts must never be added to the fixed-provider
 proxy allowlist; they belong exclusively behind the MCP gateway.
 
@@ -180,12 +214,13 @@ the build context. Preserve these controls when changing the image or
 orchestrator.
 
 The checked-in MCP proxy has no proxy authentication or source ACL. Its current
-protection is network membership plus no published port. Keep
-`public_egress` membership minimal; where the deployment threat model requires
-an independent source restriction, add and verify a binding/firewall/source ACL
-before release. Do not describe the current proxy policy as identical to
-Python's complete non-global-address policy: it is an independent broad second
-layer.
+protection is exclusive membership in `mcp_public_egress`, its separate
+`mcp_proxy_control` ingress, and no published port. Never attach the app proxy,
+Cloudflared, or another workload to either MCP network. Where the deployment
+threat model requires an independent source restriction, add and verify a
+binding/firewall/source ACL before release. Do not describe the proxy policy as
+identical to Python's complete non-global-address policy: it is an independent
+broad second layer.
 
 ## Production deployment procedure
 
@@ -205,8 +240,23 @@ commands. If the deployment uses another name, replace it consistently:
 
 ```bash
 export COMPOSE_PROJECT_NAME=geem-prod
+export GEEM_PUBLIC_API_ORIGIN=<approved-public-api-https-origin-without-trailing-slash>
 cd infra
 ```
+
+`GEEM_PUBLIC_API_ORIGIN` is the single approved public API origin for this
+release. It has no trailing slash. Derive `APP_URL`, CIMD/client metadata, OAuth
+callback registration, RC/production readiness probes, and every operator API
+request from it; do not repeat a hard-coded API host elsewhere in the runbook.
+
+Before any production mutation, complete the immutable, fail-closed recovery
+set and isolated restore drills in
+[Create and verify the rollback point](./mcp-production-deployment.md#1-create-and-verify-the-rollback-point).
+PostgreSQL must restore into an empty database; MinIO recovery must include
+versions/delete markers/configuration rather than only `mc mirror`; Qdrant must
+preserve aliases and settings; Redis must use a supported consistent RDB/AOF or
+storage snapshot when its state is required. An artifact that can merely be
+listed or checksummed is not a recovery point.
 
 ### 1. Prepare application prerequisites
 
@@ -221,7 +271,7 @@ Before turning on MCP, the normal SaaS stack must already have:
 - `OPENROUTER_API_KEY` plus reviewed primary and fallback model IDs;
 - for the direct-WhatsApp release canary, `OPENWA_BASE_URL`, a non-empty
   `OPENWA_API_KEY`, and a reviewed `OPENWA_TIMEOUT_SECONDS`;
-- PostgreSQL migrations through `0040_mcp_external_surfaces`;
+- PostgreSQL migrations through `0041_openwa_binding_backfill`;
 - healthy Postgres, Redis, Qdrant, MinIO, API, and worker services;
 - the normal billing provider and paid App installation flow configured.
 
@@ -325,7 +375,7 @@ deployment ranges and keep the switch off initially:
 ```dotenv
 APP_ENV=production
 AUTH_REQUIRED=true
-APP_URL=https://api.geem.ai
+APP_URL=<exact-value-of-GEEM_PUBLIC_API_ORIGIN>
 WORKSPACE_WEB_URL=https://hub.geem.ai
 # Fresh install: set a dedicated secret-manager value. Existing upgrade: keep
 # the current effective value; do not replace a JWT_SECRET-derived identity.
@@ -345,7 +395,7 @@ MCP_EGRESS_PKI_DIR=/srv/geem-secrets/mcp-egress
 
 MCP_CONNECTOR_ENABLED=false
 MCP_SUPPORTED_PROTOCOL_VERSIONS=2026-07-28,2025-11-25,2024-11-05
-MCP_CLIENT_METADATA_URL=https://api.geem.ai/api/connectors/oauth/mcp_remote/client-metadata.json
+MCP_CLIENT_METADATA_URL=<exact-value-of-GEEM_PUBLIC_API_ORIGIN>/api/connectors/oauth/mcp_remote/client-metadata.json
 
 MCP_EGRESS_GATEWAY_URL=https://mcp-egress-gateway:8443
 MCP_EGRESS_APP_ENV=production
@@ -355,6 +405,7 @@ MCP_EGRESS_CLIENT_KEY_FILE=/run/secrets/mcp-egress/client.key
 MCP_EGRESS_CA_CERT_FILE=/run/secrets/mcp-egress/ca.crt
 MCP_EGRESS_BLOCKED_NETWORKS=10.42.0.0/16,172.30.0.0/16
 MCP_ALLOW_PRIVATE_EGRESS=false
+MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true
 
 MCP_EGRESS_MAX_REQUEST_BYTES=65536
 # Tool inventories include tool JSON Schemas and can be substantially larger
@@ -398,10 +449,10 @@ not interpolate `MCP_EGRESS_PROXY_URL`. If a deployment changes the proxy
 service name or port, change both declarations and prove the resulting route.
 The gateway does not receive the application `.env` wholesale.
 
-The checked-in tunnel overlay is specific to `api.geem.ai`, `hub.geem.ai`, and
-the other Geem production hosts; it overrides application URLs and frontend
-build arguments. A custom-domain or release-candidate deployment must provide a
-later overlay that consistently replaces API/worker `APP_URL`,
+The checked-in tunnel overlay is specific to the approved Geem production
+hosts; it overrides application URLs and frontend build arguments. A
+release-candidate deployment must provide a later overlay that consistently
+replaces API/worker `APP_URL`,
 `WORKSPACE_WEB_URL`, `MCP_CLIENT_METADATA_URL`, frontend build arguments, and
 Cloudflared configuration. Never combine an `api.example` CIMD URL with the
 unmodified Geem tunnel overlay.
@@ -410,7 +461,7 @@ unmodified Geem tunnel overlay.
 
 | Setting | Production rule |
 | --- | --- |
-| `MCP_CONNECTOR_ENABLED` | Start `false`; turn on only after live isolation succeeds. |
+| `MCP_CONNECTOR_ENABLED` | Start `false`; production turns on only after live isolation, persistence, monitoring, blocker closure, and signed RC approval. |
 | `MCP_SUPPORTED_PROTOCOL_VERSIONS` | Exact reviewed order; no untested revisions. |
 | `MCP_CLIENT_METADATA_URL` | Optional public HTTPS CIMD route; empty disables CIMD. |
 | `MCP_EGRESS_GATEWAY_URL` | Internal HTTPS origin only; no path, query, fragment, or userinfo. Outside local/test the host is exactly `mcp-egress-gateway` or ends in `.internal`, `.svc`, or `.svc.cluster.local`. |
@@ -419,6 +470,7 @@ unmodified Geem tunnel overlay.
 | Client cert/key/CA file settings | Container mount paths readable by API and worker. |
 | `MCP_EGRESS_BLOCKED_NETWORKS` | Every Docker, VPC, host-routed, corporate, and deployment-owned CIDR that tenants must not reach. |
 | `MCP_ALLOW_PRIVATE_EGRESS` | Always `false` outside explicit local/test fixtures; startup rejects otherwise. |
+| `MCP_PROXY_REQUIRE_BLOCKED_NETWORKS` | `true`; proxy startup must fail if the canonical deployment CIDR set is empty. |
 | Request/response byte limits | Bound gateway ingress and remote response bodies before parsing. |
 | Connect/read/total egress timeouts | Total must be at least connect; the gateway charges all transit and lock time against the earlier deadline. |
 | Legacy session TTL/count | Bound in-memory legacy Streamable HTTP/SSE state. TTL is non-sliding. |
@@ -450,32 +502,77 @@ transition, reserved, and non-global addresses are already rejected in code.
 `MCP_EGRESS_BLOCKED_NETWORKS` adds deployment-specific ranges and documents the
 operator's intent.
 
-After Compose has created its networks, list their actual subnets without
-rendering the application `.env`:
+The independent Squid boundary renders the tracked
+[`static-deny-networks.txt`](../../infra/mcp-egress/proxy/static-deny-networks.txt)
+as data before it renders deployment CIDRs. Its IPv6 policy conservatively
+allows only global-unicast `2000::/3`, then blocks reviewed non-global ranges
+inside that space. `2001::/23` intentionally overblocks its few globally
+routable exceptions; relaxing it requires a reviewed manifest, Python-policy
+parity tests, proxy-image rebuild, and live positive/negative evidence.
+
+Prefer reviewed, explicit, non-overlapping IPAM subnets in the production
+overlay. Build one canonical normalized CIDR manifest from all nine final
+Compose subnets plus Docker defaults, host bridges, VPC/cloud, corporate,
+internal-public, metadata, and other deployment-owned ranges. If networks
+already exist, list their actual subnets without rendering the application
+`.env`. Before the first Phase 13 start, zero means the reviewed overlay will
+create that logical network; more than one is always fatal. After start, set
+`GEEM_REQUIRE_ALL_NETWORKS=true` so every logical name must resolve to exactly
+one project network:
 
 ```bash
 : "${COMPOSE_PROJECT_NAME:?export the exact deployed Compose project name}"
+: "${GEEM_REQUIRE_ALL_NETWORKS:=false}"
 
-for logical_network in application_data application_ingress application_provider_control mcp_egress_control mcp_proxy_control public_egress; do
-  network_id=$(docker network ls \
+for logical_network in \
+  application_data application_broker application_ingress \
+  application_provider_control application_provider_egress \
+  mcp_egress_control mcp_proxy_control mcp_public_egress public_egress; do
+  network_ids=$(docker network ls \
     --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" \
     --filter "label=com.docker.compose.network=$logical_network" \
     --format '{{.ID}}')
+  network_count=$(printf '%s\n' "$network_ids" | sed '/^$/d' | wc -l)
+  test "$network_count" -le 1 || {
+    printf 'expected at most one %s network, found %s\n' "$logical_network" "$network_count" >&2
+    exit 1
+  }
+  if [ "$network_count" -eq 0 ]; then
+    if [ "$GEEM_REQUIRE_ALL_NETWORKS" = true ]; then
+      printf 'expected one %s network after start, found zero\n' "$logical_network" >&2
+      exit 1
+    fi
+    printf '%s: absent (will be created from reviewed IPAM)\n' "$logical_network"
+    continue
+  fi
+  network_id=$network_ids
   printf '%s: ' "$logical_network"
   docker network inspect "$network_id" \
     --format '{{range .IPAM.Config}}{{printf "%s " .Subnet}}{{end}}{{println}}'
 done
 ```
 
-Copy those subnets, VPC ranges, host bridge ranges, internal public ranges, and
-cloud metadata destinations into the comma-separated setting. Recheck after an
-IPAM or network change.
+Before start, normalize and compare every existing subnet with the approved
+manifest; an absent future network is not drift because the exact-image
+validator separately proves its declared IPAM and policy coverage. Multiple
+matches, overlap, or drift is a stop condition. After start, rerun with
+`GEEM_REQUIRE_ALL_NETWORKS=true`; zero is then also a stop condition.
 
-The custom list is passed to gateway code; it is not automatically written into
-Squid. If the organization uses a publicly routed CIDR internally, add a
-reviewed `acl ... dst ...` plus `http_access deny ...` before the final allow in
-[`infra/mcp-egress/proxy/squid.conf`](../../infra/mcp-egress/proxy/squid.conf),
-rebuild the proxy, and test both layers.
+The overlay feeds the same `MCP_EGRESS_BLOCKED_NETWORKS` value to gateway
+`EGRESS_BLOCKED_NETWORKS` and proxy `MCP_PROXY_BLOCKED_NETWORKS`. The immutable
+proxy entrypoint validates/canonicalizes that data and renders corresponding
+Squid denies before start; `MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true` makes an
+empty set fatal. The exact-image topology validator proves normalized set
+equality and required coverage before start, and the live 200/403 probes prove
+both layers afterward. Deploy the value, proxy/gateway images, and checksums as
+one atomic policy release while the boundary is stopped. Never patch only one
+layer after IPAM drift.
+
+Explicit IPAM is mandatory because the exact-image validator must prove complete
+coverage before start. If deterministic, non-overlapping subnets cannot be
+allocated, stop and redesign the topology rather than bootstrapping a boundary
+with an unknown or partially blocked set. After start, rerun the command above
+and require actual subnets to match the declarations exactly.
 
 ### 5. Create the production hardening overlay
 
@@ -484,77 +581,269 @@ required production input, not an optional MCP convenience overlay. At minimum
 it must:
 
 - replace `rag/rag` with secret-manager-backed Postgres credentials and override
-  API, worker, and Beat `DATABASE_URL` with the matching encoded URL;
+  API and worker `DATABASE_URL` with the matching encoded URL; Beat must not
+  receive `DATABASE_URL`;
 - replace `minio/change-me` in MinIO, the application settings, and `minio-init`
   with the same secret-backed values;
-- remove the host port publications inherited by API, MinIO, Workspace Web,
-  Platform Admin, and Landing Page when Cloudflared is the ingress, or bind only
-  the explicitly reviewed loopback ports for a different ingress design;
-- retain no host port for the MCP gateway or proxy;
-- keep API/worker/gateway off `public_egress` and preserve the network map above;
-- keep MCP explicitly disabled for Beat, which receives neither client PKI nor
-  an MCP network;
+- reset the inherited whole-application `env_file` from MinIO and `minio-init`;
+  they receive only explicit MinIO values, while gateway/proxies receive no
+  application environment at all;
+- pin every service to the approved registry `image@sha256:...` reference and
+  remove every production `build:` fallback;
+- preserve the exact physical PostgreSQL, Redis, Qdrant, and MinIO volume names
+  and mount destinations recorded before upgrade;
+- remove every inherited host port publication. The production validator rejects
+  host ports on all services, including API, MinIO, every frontend, gateway, and
+  both proxies;
+- keep API/worker/gateway off every external-route network and preserve the
+  network map above;
+- give app proxy, MCP proxy, and ingress three separate external-route networks
+  with exactly one authorized service on each;
+- run Beat through `app.worker.beat_app:beat_app` with only
+  `APP_ENV=production`, the internal `REDIS_URL`, and
+  `MCP_CONNECTOR_ENABLED=false`; reset its inherited `env_file`, mounts, and
+  secrets, and attach it only to the dedicated internal broker network;
+- set `beat.deploy.replicas: 1` and prove exactly one running Beat container;
+  duplicate schedulers can enqueue the same periodic work more than once;
+- run exactly one MCP gateway replica while legacy sessions remain in memory;
 - preserve the baked, no-reload production commands and remove development bind
-  mounts; and
+  mounts;
+- replace the Cloudflared host bind with the exact reviewed Compose config and
+  secret objects below; proxy policy remains immutable image content; and
 - provide the exact effective public API, Workspace, CIMD, frontend-build, and
   tunnel domains for this environment.
 
+Workspace, Platform Admin, marketing, and Cloudflared are required Compose
+services in this release contract. An outside-Compose static bundle or alternate
+ingress is not an equivalent deployment and must stop promotion.
+
 This fragment shows the required override pattern. It is not a substitute for
-reviewing the complete merged topology:
+reviewing the complete merged topology. It deliberately does not override the
+approved release's fail-closed MinIO entrypoints. The digest-pinned
+`minio-init` image/command must bound every network operation, enforce a finite
+overall retry budget, use supported client deadlines, and verify bucket/policy
+state. If the exact release lacks that behavior, stop rather than replacing it
+with an improvised production shell:
 
 ```yaml
 services:
   postgres:
+    image: ${POSTGRES_IMAGE:?required immutable image@sha256 reference}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
       POSTGRES_DB: ${POSTGRES_DB:?required}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+
+  redis:
+    image: ${REDIS_IMAGE:?required immutable image@sha256 reference}
+
+  qdrant:
+    image: ${QDRANT_IMAGE:?required immutable image@sha256 reference}
 
   minio:
+    image: ${MINIO_IMAGE:?required immutable image@sha256 reference}
+    env_file: !reset []
     environment:
+      APP_ENV: production
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?required}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?required}
     ports: !reset []
 
   minio-init:
+    env_file: !reset []
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?required}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?required}
+      APP_ENV: production
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required}
       MINIO_BUCKET: ${MINIO_BUCKET:-rag-documents}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        sleep 3
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb -p "local/$$MINIO_BUCKET" || true
-        mc anonymous set none "local/$$MINIO_BUCKET"
 
   api:
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable image@sha256 reference}
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}
     ports: !reset []
+    volumes: !reset []
 
   worker:
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable image@sha256 reference}
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}
+    volumes: !reset []
 
   beat:
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?required}
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable image@sha256 reference}
+    env_file: !reset []
+    environment: !override
+      APP_ENV: production
+      REDIS_URL: redis://redis:6379/0
       MCP_CONNECTOR_ENABLED: "false"
+    volumes: !reset []
+    secrets: !reset []
+    command:
+      - celery
+      - -A
+      - app.worker.beat_app:beat_app
+      - beat
+      - --loglevel=INFO
+      - --schedule
+      - /tmp/celerybeat-schedule
+    deploy:
+      replicas: 1
+
+  app-egress-proxy:
+    build: !reset null
+    image: ${APP_EGRESS_PROXY_IMAGE:?required immutable image@sha256 reference}
+
+  mcp-egress-gateway:
+    build: !reset null
+    image: ${MCP_EGRESS_GATEWAY_IMAGE:?required immutable image@sha256 reference}
+
+  mcp-egress-proxy:
+    build: !reset null
+    image: ${MCP_EGRESS_PROXY_IMAGE:?required immutable image@sha256 reference}
+    environment:
+      MCP_PROXY_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:?required}
+      MCP_PROXY_REQUIRE_BLOCKED_NETWORKS: "true"
 
   workspace_web:
+    build: !reset null
+    image: ${WORKSPACE_WEB_IMAGE:?required immutable image@sha256 reference}
     ports: !reset []
 
   dashboard_web:
+    build: !reset null
+    image: ${DASHBOARD_WEB_IMAGE:?required immutable image@sha256 reference}
     ports: !reset []
 
   landpage_web:
+    build: !reset null
+    image: ${LANDPAGE_WEB_IMAGE:?required immutable image@sha256 reference}
     ports: !reset []
+
+  cloudflared:
+    image: ${CLOUDFLARED_IMAGE:?required immutable image@sha256 reference}
+    volumes: !reset []
+    env_file: !reset []
+    environment: !reset {}
+    user: "65532:65532"
+    command:
+      - tunnel
+      - --protocol
+      - http2
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+    configs:
+      - source: cloudflared_config
+        target: /etc/cloudflared/config.yml
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+    secrets:
+      - source: cloudflared_credentials
+        target: /etc/cloudflared/credentials.json
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+    read_only: true
+    tmpfs: !reset []
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+volumes:
+  postgres_data:
+    external: true
+    name: ${POSTGRES_VOLUME_NAME:?required existing physical volume}
+  redis_data:
+    external: true
+    name: ${REDIS_VOLUME_NAME:?required existing physical volume}
+  qdrant_data:
+    external: true
+    name: ${QDRANT_VOLUME_NAME:?required existing physical volume}
+  minio_data:
+    external: true
+    name: ${MINIO_VOLUME_NAME:?required existing physical volume}
+
+configs:
+  cloudflared_config:
+    file: /etc/geem/cloudflared/config.yml
+
+secrets:
+  cloudflared_credentials:
+    file: /etc/geem/cloudflared/credentials.json
+
+networks:
+  application_data:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-application-data-cidr>}]}
+  application_broker:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-application-broker-cidr>}]}
+  application_ingress:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-application-ingress-cidr>}]}
+  application_provider_control:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-provider-control-cidr>}]}
+  application_provider_egress:
+    internal: false
+    ipam: {config: [{subnet: <reviewed-provider-egress-cidr>}]}
+  mcp_egress_control:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-mcp-control-cidr>}]}
+  mcp_proxy_control:
+    internal: true
+    ipam: {config: [{subnet: <reviewed-mcp-proxy-control-cidr>}]}
+  mcp_public_egress:
+    internal: false
+    ipam: {config: [{subnet: <reviewed-mcp-public-egress-cidr>}]}
+  public_egress:
+    internal: false
+    ipam: {config: [{subnet: <reviewed-ingress-public-egress-cidr>}]}
 ```
+
+Docker Compose implements local file-backed configs/secrets as bind mounts; the
+`uid`, `gid`, and `mode` fields in the service binding do not remap the source
+file on this deployment path. Provision the two Cloudflared files without
+printing them, keep root ownership so UID 65532 cannot modify credentials, and
+prove that the runtime UID/GID can traverse and read but not write:
+
+```bash
+sudo chown root:65532 /etc/geem/cloudflared
+sudo chmod 0750 /etc/geem/cloudflared
+sudo chown root:65532 \
+  /etc/geem/cloudflared/config.yml \
+  /etc/geem/cloudflared/credentials.json
+sudo chmod 0440 \
+  /etc/geem/cloudflared/config.yml \
+  /etc/geem/cloudflared/credentials.json
+
+test "$(stat -c '%u:%g:%a' /etc/geem/cloudflared)" = '0:65532:750'
+test "$(stat -c '%u:%g:%a' /etc/geem/cloudflared/config.yml)" = '0:65532:440'
+test "$(stat -c '%u:%g:%a' /etc/geem/cloudflared/credentials.json)" = '0:65532:440'
+sudo -u '#65532' -g '#65532' -- test -r /etc/geem/cloudflared/config.yml
+sudo -u '#65532' -g '#65532' -- test -r /etc/geem/cloudflared/credentials.json
+sudo -u '#65532' -g '#65532' -- test ! -w /etc/geem/cloudflared/credentials.json
+```
+
+The Compose metadata remains mode `0444` for the config and `0400` for the
+secret because that is the portable container mount contract. The host checks
+above are an additional prerequisite for local Compose and must pass before
+rendering or starting the tunnel.
+
+Compose and the container shell both parse embedded programs. Every
+container-shell dollar sign must be escaped as `$$`, including
+`$${VAR:?checks}`, `$$attempts`, and `$$((...))`. A single `$` asks Compose to
+interpolate on the host and can erase a fail-closed check. `env_file: !reset []`
+is security-significant: adding an `environment:` map alone does not remove an
+inherited application `.env`.
 
 Use different Postgres and MinIO secrets. Ensure `DATABASE_URL` percent-encodes
 reserved password characters and points to the internal `postgres:5432`
@@ -577,8 +866,7 @@ change the stored role password. Rotate it during a reviewed maintenance window:
    putting it in shell history. Do not put `ALTER ROLE ... PASSWORD` with a
    literal secret on a command line.
 4. Update `POSTGRES_PASSWORD` and the matching percent-encoded `DATABASE_URL`,
-   then recreate Postgres, API, worker, and Beat together in the maintenance
-   window.
+   then recreate Postgres, API, and worker together in the maintenance window.
 5. Prove API database readiness and authentication, then revoke the old secret
    from the manager. Never delete the volume to make environment initialization
    run again.
@@ -587,9 +875,10 @@ Changing an existing database name or role also needs an explicit SQL migration;
 Compose environment alone will not create it in an initialized volume.
 
 Apply this overlay last in every production `up`, `stop`, `ps`, and
-process-manager command. Beat's static schedule can enqueue MCP job identifiers
-while the worker, which has `MCP_CONNECTOR_ENABLED=true`, performs the
-authorized work. Never mount the MCP client key into Beat.
+process-manager command. Beat's broker-only app can enqueue scheduled task
+identifiers while the full worker performs authorized work. Beat must never
+load the normal Celery application, application `.env`, datastore/provider/MCP
+settings, or any secret mount merely to schedule those identifiers.
 
 ### 6. Render safely, migrate, and start the boundary
 
@@ -608,8 +897,66 @@ docker compose \
 Do not paste raw `docker compose config` output into a terminal transcript or
 support ticket; `env_file` values are expanded and may disclose secrets.
 
-Build and start the complete production topology while the connector flag is
-still false:
+Pull the exact digest-pinned images from the approved registry manifest. Do not
+build or retag production images on the host. Before start, stream the merged
+JSON into the repository-owned validator in the exact API image. The validator
+gets no deployment environment/`--env-file`, secret, mount, Docker socket, or
+network:
+
+```bash
+geem_compose() {
+  docker compose \
+    --env-file ../.env \
+    --profile mcp \
+    -f docker-compose.yml \
+    -f docker-compose.tunnel.yml \
+    -f docker-compose.production-hardening.yml \
+    "$@"
+}
+
+export GEEM_API_IMAGE=<approved-api-image-at-sha256-digest>
+geem_compose pull
+geem_compose config --format json \
+  | docker run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$GEEM_API_IMAGE" \
+      -m app.ops.validate_production_compose \
+      --project "$COMPOSE_PROJECT_NAME" \
+      --mcp-enabled false \
+      --ingress-service cloudflared \
+      --volume postgres_data=<recorded-postgres-engine-volume> \
+      --volume redis_data=<recorded-redis-engine-volume> \
+      --volume qdrant_data=<recorded-qdrant-engine-volume> \
+      --volume minio_data=<recorded-minio-engine-volume> \
+      --required-blocked-network <reviewed-host-vpc-or-corporate-cidr>
+
+geem_compose up -d --wait --wait-timeout 300
+```
+
+Before the `up` line, run the exact project-label inventory gate in
+[Pull, migrate, reconcile, and start with MCP disabled](./mcp-production-deployment.md#7-pull-migrate-reconcile-and-start-with-mcp-disabled).
+Compare all containers (including exited one-shots) carrying
+`com.docker.compose.project=$COMPOSE_PROJECT_NAME` with
+`geem_compose config --services`. There may be no empty service label,
+duplicate service container, or unexpected service. Review and retire an orphan
+only by its exact approved container ID after inspecting its image, mounts, and
+networks, and then rerun the gate. Never use either form of
+`--remove-orphans`. Post-start evidence must show zero unexpected
+project-labelled containers and exact required service cardinality.
+
+`--pull never` ensures the validator code comes from the already-verified exact
+image rather than a mutable tag. Do not replace this with `docker compose run`,
+which creates a service-scoped container and can create/join deployment
+networks. Pass `--ingress-service cloudflared` exactly once for the reviewed
+in-Compose tunnel. This release contract does not approve an external or
+alternate ingress; stop and obtain a separately reviewed topology rather than
+omitting the flag. Repeat
+`--required-blocked-network` for every non-Compose host/VPC/corporate CIDR in
+the canonical manifest. Do not insert `tee` or redirect the secret-expanded
+JSON.
+
+If a deployment has not installed the persistent production wrapper described
+in the production-PC guide, the equivalent full command remains:
 
 ```bash
 docker compose \
@@ -618,7 +965,7 @@ docker compose \
   -f docker-compose.yml \
   -f docker-compose.tunnel.yml \
   -f docker-compose.production-hardening.yml \
-  up -d --build
+  up -d --wait --wait-timeout 300
 ```
 
 The API container runs Alembic before Uvicorn. Confirm the live database is at
@@ -675,7 +1022,13 @@ geem_compose() {
 }
 
 for service in api worker beat postgres redis qdrant minio workspace_web dashboard_web landpage_web app-egress-proxy mcp-egress-gateway mcp-egress-proxy cloudflared; do
-  container_id=$(geem_compose ps -q "$service")
+  container_ids=$(geem_compose ps -q "$service")
+  container_count=$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l)
+  test "$container_count" -eq 1 || {
+    echo "expected one running $service container, found $container_count" >&2
+    exit 1
+  }
+  container_id=$container_ids
   printf '%s: ' "$service"
   docker inspect "$container_id" \
     --format '{{range $name, $_ := .NetworkSettings.Networks}}{{printf "%s " $name}}{{end}}{{println}}'
@@ -687,14 +1040,49 @@ for service in api minio workspace_web dashboard_web landpage_web mcp-egress-gat
   docker inspect "$container_id" --format '{{json .HostConfig.PortBindings}}'
 done
 
+assert_datastore_mount() {
+  service=$1
+  target=$2
+  expected_volume=$3
+  container_ids=$(geem_compose ps -q "$service")
+  container_count=$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l)
+  test "$container_count" -eq 1 || {
+    echo "expected one $service container, found $container_count" >&2
+    return 1
+  }
+  docker inspect "$container_ids" --format '{{json .Mounts}}' \
+    | python3 -c '
+import json
+import sys
+
+service, target, expected = sys.argv[1:]
+mounts = [mount for mount in json.load(sys.stdin) if mount.get("Destination") == target]
+if len(mounts) != 1:
+    raise SystemExit(f"{service} must have exactly one mount at {target}")
+mount = mounts[0]
+if mount.get("Type") != "volume" or mount.get("Name") != expected:
+    raise SystemExit(f"{service} physical volume identity changed")
+' "$service" "$target" "$expected_volume"
+}
+
+assert_datastore_mount postgres /var/lib/postgresql/data <recorded-postgres-engine-volume>
+assert_datastore_mount redis /data <recorded-redis-engine-volume>
+assert_datastore_mount qdrant /qdrant/storage <recorded-qdrant-engine-volume>
+assert_datastore_mount minio /data <recorded-minio-engine-volume>
+
 assert_network_services() {
   logical_network=$1
   shift
-  network_id=$(docker network ls \
+  network_ids=$(docker network ls \
     --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" \
     --filter "label=com.docker.compose.network=$logical_network" \
     --format '{{.ID}}')
-  test -n "$network_id" || { echo "missing network: $logical_network" >&2; return 1; }
+  network_count=$(printf '%s\n' "$network_ids" | sed '/^$/d' | wc -l)
+  test "$network_count" -eq 1 || {
+    echo "expected one $logical_network network, found $network_count" >&2
+    return 1
+  }
+  network_id=$network_ids
 
   members=$(docker network inspect "$network_id" \
     --format '{{range .Containers}}{{println .Name}}{{end}}')
@@ -724,17 +1112,23 @@ assert_network_services() {
 }
 
 assert_network_services application_data \
-  postgres redis qdrant minio api worker beat
+  postgres qdrant minio api worker
+assert_network_services application_broker \
+  redis api worker beat
 assert_network_services application_ingress \
   api workspace_web dashboard_web landpage_web cloudflared
 assert_network_services application_provider_control \
   api worker app-egress-proxy
+assert_network_services application_provider_egress \
+  app-egress-proxy
 assert_network_services mcp_egress_control \
   api worker mcp-egress-gateway
 assert_network_services mcp_proxy_control \
   mcp-egress-gateway mcp-egress-proxy
+assert_network_services mcp_public_egress \
+  mcp-egress-proxy
 assert_network_services public_egress \
-  app-egress-proxy mcp-egress-proxy cloudflared
+  cloudflared
 ```
 
 `minio-init` is a one-shot container and may no longer have a live network
@@ -742,14 +1136,22 @@ endpoint after it succeeds. Verify its configured `application_data`
 membership with the rendered-Compose/static topology test; do not require it
 in the live `.Containers` assertion above.
 
-With Cloudflared as ingress, every host-port result must be `{}` or `null` and
-the only `public_egress` members must be `app-egress-proxy`,
-`mcp-egress-proxy`, and `cloudflared`. In particular:
+With Cloudflared as ingress, every host-port result must be `{}` or `null`.
+The cardinality loop must find exactly one running Beat; zero is unavailable and
+more than one permits duplicate periodic dispatch. The rendered validator must
+also require `beat.deploy.replicas: 1`.
 
-- API and worker must not have `public_egress`;
+`application_provider_egress` contains only `app-egress-proxy`,
+`mcp_public_egress` only `mcp-egress-proxy`, and `public_egress` only
+`cloudflared`. In particular:
+
+- API, worker, Beat, gateway, and datastores must have no external-route network;
 - gateway must have only `mcp_egress_control` and `mcp_proxy_control`;
-- MCP proxy must have only `mcp_proxy_control` and `public_egress`;
-- Beat and all datastores must have only `application_data`; and
+- MCP proxy must have only `mcp_proxy_control` and `mcp_public_egress`;
+- app proxy must have only `application_provider_control` and
+  `application_provider_egress`;
+- Beat and Redis must have only `application_broker`; PostgreSQL, Qdrant, and
+  MinIO must have only `application_data`; and
 - neither proxy may join `application_data`.
 
 Verify that the running API received the expected public origins without
@@ -771,6 +1173,13 @@ egress must print `false`. Retain secret-manager evidence that the running
 Postgres password is not `rag`, the MinIO secret is not `change-me`, and the
 application/init credentials match; do not prove that by printing container
 environments into a ticket.
+
+The four physical volume names must exactly match the pre-upgrade inventory.
+Also compare the parsed `DATABASE_URL` host/port/role/database with the recorded
+production identity and verify `current_user`/`current_database()` through the
+running application connection, without printing the password or full URL. A
+new volume, role, or database is a stop condition even when a healthcheck is
+green.
 
 If a previously hardened application stack was already running, start proxy
 and gateway first, then force-recreate API and worker so they load the
@@ -806,18 +1215,18 @@ are considered evidence.
 
 ### 8. Run the live isolation gate
 
-From `infra/`, run the checked-in test against the same Compose project:
+From `infra/`, run the checked-in test through the exact persistent production
+Compose wrapper:
 
 ```bash
-MCP_SMOKE_COMPOSE_FILE="$PWD/docker-compose.yml" \
-MCP_SMOKE_ENV_FILE="$PWD/../.env" \
+MCP_SMOKE_COMPOSE_WRAPPER=/usr/local/sbin/geem-prod-compose \
 ./mcp-egress/verify-isolation.sh
 ```
 
-If the deployment was started with `-p`, export the identical
-`COMPOSE_PROJECT_NAME` before running the script. The script accepts one base
-Compose file and uses the already-running project's containers; custom
-multi-file topology changes still require separate rendered-network review.
+The wrapper must contain the identical project name, profile, env file, and
+ordered production overlays used to start the stack. The single-file script
+fallback is for local/development use and is not production evidence because it
+can silently omit the hardening overlay.
 
 Success is exit status 0 and this final line:
 
@@ -829,23 +1238,36 @@ The live gate proves:
 
 1. The API client certificate can reach the authenticated gateway health route.
 2. The same TLS request without a client certificate fails.
-3. API, worker, and gateway cannot open a raw socket to `1.1.1.1:443`.
+3. API, worker, Beat, and gateway cannot open a raw socket to `1.1.1.1:443`.
 4. Gateway cannot resolve/connect to `postgres:5432`, `redis:6379`,
    `qdrant:6333`, or `minio:9000`.
-5. The MCP proxy rejects CONNECT to `10.0.0.1:443`.
+5. Beat can reach only the Redis broker network and cannot resolve/connect to
+   PostgreSQL, Qdrant, or MinIO.
+6. The MCP proxy first returns `200` for the reviewed public CONNECT canary,
+   then returns an explicit policy `403` for standard and deployment-specific
+   blocked ranges.
 
 #### Deployment-specific address-policy parity
 
-The checked-in smoke is necessary but incomplete. Before release, extend the
-live evidence to every deployment CIDR and reviewed non-global class. At a
-minimum test:
+The checked-in smoke sends CONNECT probes for every tracked static CIDR and
+every deployment CIDR, and requires an explicit Squid `403`. Before release,
+also retain gateway-layer evidence for every deployment CIDR and reviewed
+non-global class. At a minimum test:
 
 - cloud metadata targets including `169.254.169.254` and `168.63.129.16`;
 - one address from every `MCP_EGRESS_BLOCKED_NETWORKS` entry;
 - documentation/benchmark, IPv6 ULA/link-local, mapped, and transition ranges;
+- conservative IPv6 reserved-space representatives including `4000::1`,
+  `5f00::1`, `6000::1`, and `8000::1`;
 - the corresponding explicit Squid deny for every class/range; and
 - one controlled public HTTPS/443 MCP canary that succeeds, proving the negative
   results were not caused by a general upstream outage.
+
+For every deployment CIDR, retain both an explicit gateway HTTP 403 and an
+explicit Squid CONNECT 403; timeout, DNS failure, or 5xx is not policy evidence.
+Against the controlled public HTTPS/443 target, retain an explicit proxy CONNECT
+HTTP 200 plus a successful gateway/MCP canary. The positive and negative
+results must come from the same image/policy release and maintenance window.
 
 The `geem_compose` helper from step 6 can exercise gateway target validation.
 This script derives a representative address from **every** configured custom
@@ -884,6 +1306,10 @@ fixed = [
     "64:ff9b::c000:201",
     "64:ff9b:1::1",
     "2001::1",
+    "4000::1",
+    "5f00::1",
+    "6000::1",
+    "8000::1",
     "2002:c000:0201::",
     "2001:db8::1",
     "ff00::1",
@@ -965,6 +1391,10 @@ fixed = [
     "64:ff9b::c000:201",
     "64:ff9b:1::1",
     "2001::1",
+    "4000::1",
+    "5f00::1",
+    "6000::1",
+    "8000::1",
     "2002:c000:0201::",
     "2001:db8::1",
     "ff00::1",
@@ -1017,48 +1447,100 @@ The smoke test does **not** prove that a real public MCP server is reachable,
 protocol-compatible, or correct on every product surface. Run a controlled
 public release-canary after this negative security gate.
 
-### 9. Enable API and worker only
+### 9. Make startup persistent while MCP remains disabled
 
-After the boundary passes, change the shared deployment value to:
-
-```dotenv
-MCP_CONNECTOR_ENABLED=true
-```
-
-Keep the Beat override false, then recreate API and worker:
-
-```bash
-docker compose \
-  --env-file ../.env \
-  --profile mcp \
-  -f docker-compose.yml \
-  -f docker-compose.tunnel.yml \
-  -f docker-compose.production-hardening.yml \
-  up -d --no-deps --force-recreate api worker
-
-curl --fail --silent --show-error \
-  https://api.geem.ai/api/health/ready
-```
-
-Application startup now verifies the internal gateway/proxy origins, readable
-client PKI, protocol order, timeouts, provider key, exact model identifiers, and
-capability matrix. A failure is a deployment error; do not weaken the assertion.
-
-### 10. Make startup persistent
-
-Every supervisor, systemd unit, aaPanel project, CI deployment, and reboot path
-must include:
+Every approved system/user unit and reboot path must include:
 
 - `--profile mcp`;
 - the base, production tunnel, and final production-hardening files;
 - `mcp-egress-proxy` and `mcp-egress-gateway` when services are named
   explicitly;
 - the same `--env-file` and Compose project name;
-- shutdown of both MCP services on stop.
+- a checksummed `ExecStartPre` that runs `config --quiet`, the exact
+  digest-pinned/networkless validator with stored approved project, Cloudflared,
+  physical-volume, MCP-state, and CIDR arguments, and the project-label
+  no-orphan gate before every `up`;
+- shutdown of the whole wrapper-selected stack on normal stop; and
+- fail-start `ExecStopPost` containment that does not parse drifted Compose
+  input: it verifies and stops the immutable running container IDs selected by
+  the exact project label, then requires zero running project containers.
 
 The checked-in [`geem-stack.service`](../../infra/systemd/geem-stack.service)
 does not yet satisfy this list. Manual `docker compose up` is not enough for a
 production release if the process manager later recreates a partial stack.
+
+An active legacy system/user unit must be reviewed, disabled, and made inactive
+before its file is replaced; `disable` alone does not hand off control. A user
+unit must use `WantedBy=default.target`, have reviewed linger behavior, and pass
+a reboot-without-login test. Every unit needs finite Docker readiness, finite
+`up --wait`, finite `TimeoutStartSec`, and a bounded all-service readiness
+script that checks long-running cardinality, healthchecks, one-shot success,
+API readiness, datastore mounts, mTLS, networks, forbidden egress, and required
+provider canaries. Test the permanent readiness and containment path with a
+temporary drop-in that deliberately stops one required service before the real
+readiness command. The start must fail and the exact project label must have
+zero running containers; remove only that test drop-in, restore the checksummed
+unit, then prove a normal start succeeds. Never use `--remove-orphans` as
+containment. See
+[Make the topology persistent before enabling MCP](./mcp-production-deployment.md#9-make-the-topology-persistent-before-enabling-mcp)
+for the mandatory transition and unit shape.
+
+### 10. Complete the release-candidate gate
+
+Keep production `MCP_CONNECTOR_ENABLED=false` and the production catalog row
+`coming_soon`. A separate production-topology RC using the exact release SHA,
+registry image manifest, policy checksums, network contract, signed plans, and
+isolated catalog/database must pass the complete paid lifecycle, all intended
+surfaces, approvals, ambiguity/reconciliation, zero-binding behavior,
+monitoring, controlled reboot, and rollback rehearsal. UAT or a production
+infrastructure smoke is not RC evidence.
+
+The signed RC approval must name the exact artifacts being promoted. Follow
+[Release-candidate and paid-product gate](./mcp-production-deployment.md#12-release-candidate-and-paid-product-gate).
+Do not enable production merely because the boundary tests above pass.
+
+### 11. Enable production API and worker only after RC sign-off
+
+Only after the RC approval and an explicit production-enable authorization may
+the shared deployment value change to:
+
+```dotenv
+MCP_CONNECTOR_ENABLED=true
+```
+
+Keep Beat on its exact broker-only command/environment with the flag false.
+Before recreation, rerun the exact-image,
+networkless production topology validator with `--mcp-enabled true` and the
+same project, ingress, and four physical-volume arguments used in step 6. It
+must receive only merged JSON on stdin—no deployment environment, secret,
+mount, Docker socket, or service network. Then recreate API and worker only:
+
+```bash
+geem_compose config --format json \
+  | docker run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$GEEM_API_IMAGE" \
+      -m app.ops.validate_production_compose \
+      --project "$COMPOSE_PROJECT_NAME" \
+      --mcp-enabled true \
+      --ingress-service cloudflared \
+      --volume postgres_data=<recorded-postgres-engine-volume> \
+      --volume redis_data=<recorded-redis-engine-volume> \
+      --volume qdrant_data=<recorded-qdrant-engine-volume> \
+      --volume minio_data=<recorded-minio-engine-volume> \
+      --required-blocked-network <reviewed-host-vpc-or-corporate-cidr>
+
+geem_compose up -d --no-deps --force-recreate \
+  --wait --wait-timeout 300 api worker
+timeout 120 /usr/local/sbin/geem-prod-readiness
+curl --fail --silent --show-error "$GEEM_PUBLIC_API_ORIGIN/api/health/ready"
+```
+
+Application startup now verifies the internal gateway/proxy origins, readable
+client PKI, protocol order, timeouts, provider key, exact model identifiers, and
+capability matrix. A failure is a deployment error; do not weaken the assertion.
+Keep the production row `coming_soon` until all post-enable checks pass;
+publication is a separate authorized Platform Admin action.
 
 ## Kubernetes or non-Compose equivalent
 
@@ -1096,6 +1578,13 @@ operation still requires the published App, active installation, current active
 subscription, matching plan, current tool grant, and—on external
 surfaces—current companion App plus an exact target binding.
 
+Migrations do not create the catalog row. Use the approved MCP-only command in
+the API service: run `python -m app.apps_catalog.reconcile_mcp --dry-run`, obtain
+the required approval, run it separately with `--apply`, then require
+`--verify`. It preserves existing MCP status/plans/entitlements/extra and does
+not reconcile unrelated Apps. Never replace it with the broad
+`app.apps_catalog.seed`, ad hoc SQL, or a private helper call in production.
+
 ### Roles
 
 | Action | Permission |
@@ -1114,7 +1603,7 @@ normal dynamic RBAC permission and should be assigned sparingly.
 
 In Platform Admin:
 
-1. Open the seeded **MCP Connectors** App.
+1. Open the reconciled **MCP Connectors** App.
 2. Configure exactly the three locked plans and signed positive monthly SAR
    prices. Choose exactly one default.
 3. Keep the **production** row `coming_soon`. In a separate release-candidate
@@ -1123,9 +1612,10 @@ In Platform Admin:
    Platform Admin so checkout, install, paid access, and runtime can execute.
 4. Confirm the RC connector is `mcp_remote` / `tool_source`, run the full paid
    renewal and four-surface release checklist, and retain the evidence.
-5. Only after the RC passes, enable the already-proven production boundary and
-   publish the production row through Platform Admin so the product-specific
-   validator runs. Follow with a bounded production read-only canary.
+5. Only after the RC passes, enable API/worker under the production gate while
+   keeping the row `coming_soon`, then rerun every post-enable check. Publication
+   is a separate authorized Platform Admin action so the product-specific
+   validator runs; follow it with a bounded production read-only canary.
 
 In a tenant Workspace, an authorized manager then chooses a plan, completes
 hosted checkout/payment fulfillment, and installs MCP Connectors. Installation
@@ -1141,7 +1631,7 @@ a logged-in Workspace session token; `X-Workspace-Id` is only a routing hint and
 the backend still verifies membership.
 
 ```bash
-export GEEM_API_URL=https://api.geem.ai
+: "${GEEM_PUBLIC_API_ORIGIN:?set the approved public API origin first}"
 read -r -s -p 'Short-lived Workspace access token: ' GEEM_ACCESS_TOKEN
 printf '\n'
 read -r -p 'Tenant Workspace UUID: ' GEEM_WORKSPACE_ID
@@ -1151,7 +1641,7 @@ No authentication:
 
 ```bash
 curl --fail --silent --show-error \
-  -X POST "$GEEM_API_URL/api/apps/mcp/servers" \
+  -X POST "$GEEM_PUBLIC_API_ORIGIN/api/apps/mcp/servers" \
   -H "Authorization: Bearer $GEEM_ACCESS_TOKEN" \
   -H "X-Workspace-Id: $GEEM_WORKSPACE_ID" \
   -H 'Content-Type: application/json' \
@@ -1212,7 +1702,7 @@ For an OAuth connection, start authorization:
 
 ```bash
 curl --fail --silent --show-error \
-  -X POST "$GEEM_API_URL/api/apps/mcp/servers/<connection-id>/oauth/start" \
+  -X POST "$GEEM_PUBLIC_API_ORIGIN/api/apps/mcp/servers/<connection-id>/oauth/start" \
   -H "Authorization: Bearer $GEEM_ACCESS_TOKEN" \
   -H "X-Workspace-Id: $GEEM_WORKSPACE_ID" \
   -H 'Content-Type: application/json' \
@@ -1222,8 +1712,9 @@ curl --fail --silent --show-error \
 Open the returned `authorization_url` in the same operator's browser. The exact
 callback is:
 
-```text
-https://api.geem.ai/api/connectors/oauth/mcp_remote/callback
+```bash
+printf '%s\n' \
+  "$GEEM_PUBLIC_API_ORIGIN/api/connectors/oauth/mcp_remote/callback"
 ```
 
 After callback, inspect
@@ -1251,7 +1742,7 @@ Example read-only grant:
 
 ```bash
 curl --fail --silent --show-error \
-  -X POST "$GEEM_API_URL/api/experts/<expert-id>/mcp-grants" \
+  -X POST "$GEEM_PUBLIC_API_ORIGIN/api/experts/<expert-id>/mcp-grants" \
   -H "Authorization: Bearer $GEEM_ACCESS_TOKEN" \
   -H "X-Workspace-Id: $GEEM_WORKSPACE_ID" \
   -H 'Content-Type: application/json' \
@@ -1315,10 +1806,11 @@ For WhatsApp/OpenWA:
 - only direct chats are eligible;
 - the companion WhatsApp App is paid/active.
 
-As noted in the release blockers, the current Workspace UI does not yet expose
-the correct WhatsApp binding identifier. Do not use a database lookup as a
-normal tenant workflow or claim the surface complete until the contract is
-fixed.
+The release may expose this workflow only when the deployed Workspace and API
+artifacts come from the approved exact SHA containing the `ChannelBinding.id`
+contract fix and its unit/E2E tests. Do not use a database lookup as a normal
+tenant workflow, mix frontend/backend artifacts, or claim the surface complete
+without that evidence.
 
 `write_policy=deny` omits write tools from the external surface.
 `workspace_operator_approval` permits a generic pending state, but only an
@@ -1426,7 +1918,7 @@ gateway/proxy network.
 
 | Symptom | Likely cause | Correct response |
 | --- | --- | --- |
-| Beat exits after enabling MCP | Beat inherited `MCP_CONNECTOR_ENABLED=true` but has no client PKI | Apply the Beat=false rule in the final hardening overlay. Do not mount a key or MCP network. |
+| Beat fails validation or exits | A stale overlay selects the full Celery app, inherits application environment/secrets, uses a non-internal broker, or changes the false MCP flag | Restore `app.worker.beat_app:beat_app`, the exact three-variable environment, internal Redis URL, no secret mounts, and the dedicated broker-only network. |
 | Gateway restart loop / unreadable key | Host permissions do not make server key readable to UID/GID 10001 | Correct secret ownership/mode, verify mount path, recreate gateway. |
 | TLS hostname or `curl` error 60 | CA mismatch, missing SAN, or expired leaf | Re-run `openssl verify`, `-checkhost`, and expiry checks; issue a correct leaf. |
 | Valid client still fails TLS | Wrong signer, key pair, client EKU, or stale container secret | Verify client pair/chain, recreate API/worker/gateway, retest. |
@@ -1439,13 +1931,13 @@ gateway/proxy network.
 | Gateway datastore negative passes while a datastore is down | False positive control | Restore all datastores, prove API can reach each, then rerun negative gateway probes. |
 | No useful Squid request logs | Intentional no-log policy | Correlate redacted gateway operation IDs and categorical codes; do not enable body/URL logs. |
 | MCP works until reboot | Process manager omitted `--profile mcp` or named services | Update persistent startup/stop commands and test a controlled reboot. |
-| WhatsApp binding returns not found | UI/client supplied AppConnection ID instead of ChannelBinding ID, or channel is not direct/active | Treat as the known contract blocker; do not guess IDs or bypass relational checks. |
+| WhatsApp binding returns not found | An older UI supplied AppConnection ID instead of ChannelBinding ID, artifacts are mismatched, or channel is not direct/active | Verify the exact-SHA UI/API fix and deploy matching artifacts; do not guess IDs or bypass relational checks. |
 
 The development base also publishes API, MinIO, and frontend ports and contains
 known datastore credentials. That does not give the gateway datastore access,
 but it does make base + tunnel unsafe for production. Stop promotion until the
-final hardening overlay removes those bindings (or applies the explicitly
-reviewed loopback ingress design) and replaces every development credential.
+final hardening overlay removes those bindings and replaces every development
+credential.
 
 ## Emergency disable and rollback
 
@@ -1455,6 +1947,18 @@ worker with `--no-deps`. Stop the gateway/proxy too if the boundary itself is
 suspect. Confirm that new discovery and dispatch fail closed. This prioritizes
 containment and may leave remote OAuth revocation or pending work for later
 reconciliation.
+
+For unintended secret injection, a successful forbidden network/datastore
+probe, unknown image/policy checksum, or suspected unauthorized access, freeze
+automation and invoke the security-incident process. Preserve container/image
+IDs, creation times, orchestrator events, policy checksums, and redacted logs;
+identify exposed variable **names** and owners without printing values. Contain
+the affected service under incident-command approval, then revoke/rotate in
+dependency order and rebuild only from the approved registry manifest. Do not
+delete evidence or rotate `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY`, datastore
+credentials, OAuth secrets, or PKI as an improvised deployment fix. Discovering
+that MinIO, `minio-init`, gateway, or either proxy inherited the application
+`.env` is an exposure incident even if no misuse is yet visible.
 
 For a planned rollback, preserve the gateway long enough to clean up safely:
 
@@ -1475,21 +1979,33 @@ reviewed release rollback.
 
 ## Production release checklist
 
+- [ ] A new immutable PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set
+  passes isolated restore drills; a dump/mirror/snapshot listing alone is not
+  recovery evidence.
+- [ ] The exact release SHA has a signed registry manifest recording immutable
+  top-level and host-platform image digests; production has no `build:` fallback.
 - [ ] Dedicated per-environment CA, server identity, and client identity pass
   chain, EKU, SAN, key-match, permission, leaf/intermediate/CA expiry checks.
 - [ ] `.env` uses production gateway/proxy origins, reviewed protocol order,
   private egress false, deployment CIDRs, bounded limits, and exact model matrix.
 - [ ] Final production-hardening overlay replaces Postgres/MinIO development
-  credentials, matches application/init credentials, and removes all unneeded
+  credentials, resets whole-app MinIO/init env files, matches application/init
+  credentials, preserves physical datastore volumes, and removes all unneeded
   host ports and development mounts/commands.
 - [ ] Effective API, Workspace, CIMD, frontend-build, and tunnel domains match;
   the release candidate does not inherit production Geem domains accidentally.
-- [ ] Beat explicitly has `MCP_CONNECTOR_ENABLED=false` and no client key/network.
-- [ ] Migrations `0036` through `0040` are at head with the connector disabled.
-- [ ] The complete Compose/process-manager topology starts both MCP services
-  after a controlled reboot.
+- [ ] Beat runs `app.worker.beat_app:beat_app` with exactly production mode,
+  internal Redis, and MCP false; it has no `env_file`, extra variables, secret
+  mounts, or network beyond `application_broker`; `deploy.replicas` and live
+  cardinality are both exactly one.
+- [ ] Migrations `0036` through `0041` are at head with the connector disabled.
+- [ ] Legacy supervisor handoff is complete; finite all-service readiness starts
+  both MCP services after a controlled reboot without an interactive login.
 - [ ] Running-container inspection matches the exact network map and only the
-  two proxies plus Cloudflared join `public_egress`.
+  app proxy joins `application_provider_egress`, only MCP proxy joins
+  `mcp_public_egress`, and only reviewed ingress joins `public_egress`.
+- [ ] Every logical network label resolves to exactly one network; application
+  and proxy CIDR sets were generated/applied atomically with recorded checksums.
 - [ ] API positive datastore controls pass while gateway negative datastore
   probes pass against those same live services.
 - [ ] Valid mTLS succeeds, no-certificate TLS fails, and no MCP host port exists.
@@ -1508,10 +2024,14 @@ reviewed release rollback.
   checkout, fulfillment, renewal, installation, expiry/uninstall, and quota
   gates pass without stale positive access while production remains
   `coming_soon`.
-- [ ] After RC sign-off, production is published only through Platform Admin
-  and a bounded read-only production canary passes.
+- [ ] Signed RC approval names the exact SHA/images/policies before production
+  `MCP_CONNECTOR_ENABLED` changes from false to true.
+- [ ] After RC sign-off, API/worker enablement and all post-enable checks pass
+  while production remains `coming_soon`; Platform Admin publication is a
+  separate authorization followed by a bounded read-only production canary.
 - [ ] Workspace Chat and public API pass; Widget and direct WhatsApp exact
-  default-off bindings pass after the current WhatsApp ID blocker is fixed.
+  default-off bindings pass on the matching exact-SHA artifacts containing the
+  WhatsApp `ChannelBinding.id` fix and tests.
 - [ ] Direct WhatsApp uses the reviewed OpenWA base URL, non-empty API key,
   bounded timeout, paid companion App, active direct-chat channel, and the exact
   `ChannelBinding.id`.
@@ -1521,15 +2041,20 @@ reviewed release rollback.
   lookup or egress.
 - [ ] No unresolved ambiguous outcome/delivery remains and rollback has been
   rehearsed.
+- [ ] Security-incident ownership and unintended-secret/forbidden-route
+  containment are rehearsed without dumping environments or destroying evidence.
 
 ## Source-of-truth files
 
 - [Application settings and startup assertions](../../apps/api/app/core/config.py)
+- [Least-privilege Celery Beat application](../../apps/api/app/worker/beat_app.py)
+- [Non-mutating production Compose validator](../../apps/api/app/ops/validate_production_compose.py)
 - [Compose topology source (development base)](../../infra/docker-compose.yml)
 - [Production tunnel overlay](../../infra/docker-compose.tunnel.yml)
 - [UAT functional-only overlay](../../infra/docker-compose.uat.yml)
 - [Live isolation smoke](../../infra/mcp-egress/verify-isolation.sh)
 - [MCP proxy policy](../../infra/mcp-egress/proxy/squid.conf)
+- [MCP proxy CIDR renderer](../../infra/mcp-egress/proxy/render_config.py)
 - [Fixed-provider proxy policy](../../infra/app-egress/proxy/squid.conf)
 - [Gateway protocol and deadline contract](../../apps/mcp_egress_gateway/README.md)
 - [Gateway configuration assertions](../../apps/mcp_egress_gateway/gateway/config.py)
@@ -1537,4 +2062,5 @@ reviewed release rollback.
 - [MCP management schemas](../../apps/api/app/mcp/schemas.py)
 - [Surface binding and approval schemas](../../apps/api/app/mcp/surfaces.py)
 - [MCP product identifiers and locked limits](../../apps/api/app/apps_catalog/mcp_product.py)
+- [MCP-only catalog reconciler](../../apps/api/app/apps_catalog/reconcile_mcp.py)
 - [Publication validator](../../apps/api/app/apps_catalog/publication.py)

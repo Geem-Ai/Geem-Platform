@@ -325,6 +325,9 @@ APP_SPECS: tuple[AppSpec, ...] = (
     ),
 )
 
+MCP_CATEGORY_SPEC = next(spec for spec in CATEGORY_SPECS if spec.slug == "automation")
+MCP_APP_SPEC = next(spec for spec in APP_SPECS if spec.slug == MCP_CONNECTORS_APP_SLUG)
+
 # One-time slug renames so re-seed migrates existing rows instead of duplicating.
 _SLUG_ALIASES: dict[str, str] = {
     "whatsapp": "openwa",
@@ -377,6 +380,40 @@ def ensure_app_catalog(
 ) -> tuple[list[AppCategory], list[CatalogApp]]:
     """Always-safe entrypoint for bootstrap / API startup."""
     return seed_app_catalog(db, settings=settings)
+
+
+def reconcile_mcp_app_catalog(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+) -> tuple[AppCategory, CatalogApp]:
+    """Reconcile only the MCP catalog identity for a production upgrade.
+
+    Unlike :func:`seed_app_catalog`, this path never iterates over or mutates
+    any other App. It creates the shared ``automation`` category only when the
+    category is absent; an existing shared category is deliberately left
+    untouched. MCP lifecycle status and commercial plans are also preserved.
+    """
+
+    acquire_app_runtime_mutation_fence(db, MCP_CONNECTORS_APP_SLUG)
+    repo = AppCatalogRepository(db)
+    category = repo.get_category_by_slug(MCP_CATEGORY_SPEC.slug)
+    if category is None:
+        category = AppCategory(
+            slug=MCP_CATEGORY_SPEC.slug,
+            name_key=MCP_CATEGORY_SPEC.name_key,
+            description_key=MCP_CATEGORY_SPEC.description_key,
+            icon=MCP_CATEGORY_SPEC.icon,
+            sort_order=MCP_CATEGORY_SPEC.sort_order,
+            is_active=True,
+        )
+        repo.upsert_category(category)
+
+    app = _ensure_app(repo, MCP_APP_SPEC)
+    _validate_seeded_product_after_mutation(repo, app, settings=settings)
+    db.flush()
+    logger.info("mcp_app_catalog_reconciled app=%s", MCP_CONNECTORS_APP_SLUG)
+    return category, app
 
 
 def _seeds_guarded_product_authority(spec: AppSpec) -> bool:

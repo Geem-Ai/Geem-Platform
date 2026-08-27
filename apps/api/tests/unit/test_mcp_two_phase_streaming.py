@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import time
+import traceback
 import uuid
 from types import SimpleNamespace
 
@@ -27,7 +28,9 @@ from app.mcp.executor import (
     ToolLoopTurnExecutor,
     _PreparedTurn,
 )
+from app.mcp.provider import InvalidToolProviderOutput
 from app.mcp.result import NormalizedToolResult
+from app.usage.attribution import GenerationUsageContext
 
 
 def _settings():
@@ -208,6 +211,62 @@ class _NamedScriptedToolProvider:
             finish_reason="stop",
             usage=AgentUsage(prompt_tokens=3, completion_tokens=1, total_tokens=4),
             provider_model="test/tool-model",
+        )
+
+
+class _InvalidToolOutputProvider(_NamedScriptedToolProvider):
+    def __init__(
+        self,
+        calls: list[tuple[str, str]],
+        *,
+        final_content: str,
+        violating_finalizer: bool = False,
+    ) -> None:
+        super().__init__(calls, final_content=final_content)
+        self.violating_finalizer = violating_finalizer
+
+    def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        if self.call_index < len(self.calls):
+            return super().answer_with_tools(messages, **_kwargs)
+        self.messages.append(copy.deepcopy(list(messages)))
+        self.tool_sets.append(copy.deepcopy(list(_kwargs.get("tools") or [])))
+        raise InvalidToolProviderOutput(
+            "Agent provider returned an undeclared or malformed function call.",
+            accounting_result=AgentProviderResult(
+                message=AgentAssistantResponseMessage(content="", tool_calls=None),
+                finish_reason="stop",
+                usage=AgentUsage(prompt_tokens=7, completion_tokens=2, total_tokens=9),
+                provider_model="test/tool-model",
+                provider_request_id="request-invalid",
+                provider_completion_id="completion-invalid",
+            ),
+        )
+
+    def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+        if not self.violating_finalizer:
+            return super().answer_without_tools(messages, **_kwargs)
+        self.messages.append(copy.deepcopy(list(messages)))
+        self.tool_sets.append([])
+        self.without_tools_calls += 1
+        return AgentProviderResult(
+            message=AgentAssistantResponseMessage(
+                content=None,
+                tool_calls=[
+                    AgentToolCall(
+                        id="call-illegal-finalizer",
+                        type="function",
+                        function=AgentFunctionCall(
+                            name="create_branch",
+                            arguments='{"name":"hallucinated"}',
+                        ),
+                    )
+                ],
+            ),
+            finish_reason="tool_calls",
+            usage=AgentUsage(prompt_tokens=4, completion_tokens=2, total_tokens=6),
+            provider_model="test/tool-model",
+            provider_request_id="request-finalizer",
+            provider_completion_id="completion-finalizer",
         )
 
 
@@ -598,6 +657,391 @@ def test_late_final_answer_usage_is_recorded_before_answer_is_withheld() -> None
     assert raised.value.category == ErrorCategory.MCP_TOOL_CALL_FAILED
     assert recorded == [(6, False)]
     assert dispatcher.calls == 0
+
+
+def test_initial_invalid_tool_output_never_dispatches_or_pauses_and_finalizes_safe() -> None:
+    provider = _InvalidToolOutputProvider(
+        [],
+        final_content=_document_answer("unused"),
+        violating_finalizer=True,
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    write_resolved = _resolved_variant(
+        resolved,
+        alias="mcp_write",
+        classification="write",
+    )
+    executor._record_intermediate_usage = (  # type: ignore[method-assign]
+        ToolLoopTurnExecutor._record_intermediate_usage.__get__(
+            executor,
+            ToolLoopTurnExecutor,
+        )
+    )
+    usage_context = GenerationUsageContext()
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="how many branches exist?",
+            invocation=invocation,
+            usage_context=usage_context,
+            tools=[resolved, write_resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 0
+    assert [event.event for event in events] == ["complete"]
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read", "mcp_write"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert provider.messages[1] == provider.messages[0]
+    result = events[-1].result
+    assert result is not None
+    assert result.pending is None
+    assert result.answer.startswith("An external tool request could not be interpreted")
+    assert result.citations == []
+    rag = executor.rag
+    assert isinstance(rag, _RecordingDocumentRag)
+    assert [call["operation_type"] for call in rag.generation_calls] == [
+        "mcp_generation_iteration",
+        "mcp_final_synthesis",
+    ]
+    assert [
+        call["payload"]["_meta"]["usage"]["total_tokens"]
+        for call in rag.generation_calls
+    ] == [9, 6]
+    assert rag.generation_calls[0]["payload"]["_meta"] == {
+        "usage": {
+            "prompt_tokens": 7,
+            "completion_tokens": 2,
+            "total_tokens": 9,
+        },
+        "request_id": "request-invalid",
+        "openrouter_id": "completion-invalid",
+    }
+
+
+def test_invalid_write_output_after_successful_read_uses_unchanged_transcript() -> None:
+    provider = _InvalidToolOutputProvider(
+        [("mcp_read", '{"customer_id":7}')],
+        final_content=_document_answer("One branch found."),
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(
+        provider,
+        dispatcher,
+        general=False,
+    )
+    write_resolved = _resolved_variant(
+        resolved,
+        alias="mcp_write",
+        classification="write",
+    )
+    executor._record_intermediate_usage = (  # type: ignore[method-assign]
+        ToolLoopTurnExecutor._record_intermediate_usage.__get__(
+            executor,
+            ToolLoopTurnExecutor,
+        )
+    )
+    usage_context = GenerationUsageContext()
+
+    events = list(
+        executor.execute_events(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="how many branches exist?",
+            invocation=invocation,
+            usage_context=usage_context,
+            tools=[resolved, write_resolved],  # type: ignore[list-item]
+            keepalive_interval_seconds=None,
+        )
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7}]
+    assert [event.event for event in events] == [
+        "tool_call",
+        "tool_result",
+        "complete",
+    ]
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read", "mcp_write"],
+        ["mcp_read", "mcp_write"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert provider.messages[2] == provider.messages[1]
+    result = events[-1].result
+    assert result is not None
+    assert result.pending is None
+    assert result.answer == "One branch found."
+    assert result.citations == [
+        {
+            "kind": "tool",
+            "connection_display_name": "CRM",
+            "tool_name": "lookup_customer",
+        }
+    ]
+    rag = executor.rag
+    assert isinstance(rag, _RecordingDocumentRag)
+    assert [call["operation_type"] for call in rag.generation_calls] == [
+        "mcp_generation_iteration",
+        "mcp_generation_iteration",
+        "mcp_final_synthesis",
+    ]
+    assert [
+        call["payload"]["_meta"]["usage"]["total_tokens"]
+        for call in rag.generation_calls
+    ] == [3, 9, 4]
+
+
+def test_undeclared_call_after_successful_read_is_never_dispatched() -> None:
+    provider = _NamedScriptedToolProvider(
+        [
+            ("mcp_read", '{"customer_id":7}'),
+            ("create_branch", '{"name":"hallucinated"}'),
+        ],
+        final_content="Used the one safe result.",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="how many branches exist?",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 1
+    assert dispatcher.arguments == [{"customer_id": 7}]
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        ["mcp_read"],
+        [],
+    ]
+    assert provider.without_tools_calls == 1
+    assert result.pending is None
+    assert result.answer == "Used the one safe result."
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        "{",
+        "[]",
+        '{"unknown":1}',
+        '{"customer_id":"wrong"}',
+    ],
+)
+def test_malformed_declared_arguments_finalize_without_dispatch(arguments: str) -> None:
+    provider = _ScriptedToolProvider(
+        [arguments],
+        final_content="The malformed call was not run.",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert dispatcher.calls == 0
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True, False]
+    assert result.pending is None
+    assert result.answer == "The malformed call was not run."
+
+
+def test_malformed_argument_context_cannot_leak_if_finalizer_fails() -> None:
+    rejected_secret = "mcp-rejected-secret-must-not-reach-logs"
+
+    class _FailingFinalizerProvider(_ScriptedToolProvider):
+        def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(copy.deepcopy(list(messages)))
+            self.tool_sets.append([])
+            raise RuntimeError("tool-free finalizer failed")
+
+    provider = _FailingFinalizerProvider(
+        [json.dumps({"customer_id": rejected_secret})],
+        final_content="unused",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    with pytest.raises(RuntimeError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    rendered = "".join(
+        traceback.format_exception(raised.type, raised.value, raised.tb)
+    )
+    assert rejected_secret not in rendered
+    assert "MCP arguments do not match the approved input schema" not in rendered
+    assert dispatcher.calls == 0
+
+
+def test_invalid_provider_context_cannot_leak_if_recovery_fails() -> None:
+    rejected_secret = "provider-rejected-secret-must-not-reach-logs"
+
+    class _ChainedInvalidProvider(_NamedScriptedToolProvider):
+        def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(copy.deepcopy(list(messages)))
+            self.tool_sets.append(copy.deepcopy(list(_kwargs.get("tools") or [])))
+            accounting = AgentProviderResult(
+                message=AgentAssistantResponseMessage(content="", tool_calls=None),
+                finish_reason="stop",
+                usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
+                provider_model="test/tool-model",
+            )
+            try:
+                raise ValueError(rejected_secret)
+            except ValueError as cause:
+                raise InvalidToolProviderOutput(
+                    "Agent provider returned malformed tool output.",
+                    accounting_result=accounting,
+                ) from cause
+
+        def answer_without_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(copy.deepcopy(list(messages)))
+            self.tool_sets.append([])
+            raise RuntimeError("tool-free finalizer failed")
+
+    provider = _ChainedInvalidProvider([], final_content="unused")
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    with pytest.raises(RuntimeError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    rendered = "".join(
+        traceback.format_exception(raised.type, raised.value, raised.tb)
+    )
+    assert rejected_secret not in rendered
+    assert "malformed tool output" not in rendered
+    assert dispatcher.calls == 0
+
+
+def test_provider_inconsistent_tool_finish_recovers_without_dispatch() -> None:
+    class _InconsistentProvider(_NamedScriptedToolProvider):
+        def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(copy.deepcopy(list(messages)))
+            self.tool_sets.append(copy.deepcopy(list(_kwargs.get("tools") or [])))
+            return AgentProviderResult(
+                message=AgentAssistantResponseMessage(
+                    content="provider returned text with a tool finish",
+                    tool_calls=None,
+                ),
+                finish_reason="tool_calls",
+                usage=AgentUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3),
+                provider_model="test/tool-model",
+            )
+
+    provider = _InconsistentProvider([], final_content="Recovered without a tool.")
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    result = executor.execute(
+        knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+        expert_id=invocation.expert_id,
+        question="question",
+        invocation=invocation,
+        usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+        tools=[resolved],  # type: ignore[list-item]
+    )
+
+    assert result.answer == "Recovered without a tool."
+    assert dispatcher.calls == 0
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"],
+        [],
+    ]
+
+
+def test_invalid_approved_schema_remains_a_nonrecoverable_configuration_error() -> None:
+    provider = _ScriptedToolProvider(
+        ['{"customer_id":7}'],
+        final_content="unused",
+    )
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+    resolved.tool.input_schema["properties"]["customer_id"]["type"] = "not-a-type"
+
+    with pytest.raises(AppError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    assert raised.value.category == ErrorCategory.MCP_TOOL_INCOMPATIBLE
+    assert dispatcher.calls == 0
+    assert [bool(tool_set) for tool_set in provider.tool_sets] == [True]
+
+
+def test_generic_provider_failure_is_not_recovered_as_invalid_tool_output() -> None:
+    class _GenericFailureProvider(_InvalidToolOutputProvider):
+        def answer_with_tools(self, messages, **_kwargs) -> AgentProviderResult:
+            self.messages.append(copy.deepcopy(list(messages)))
+            self.tool_sets.append(copy.deepcopy(list(_kwargs.get("tools") or [])))
+            raise AppError(
+                ErrorCategory.GENERATION_FAILED,
+                "Provider transport failed.",
+                retryable=True,
+            )
+
+    provider = _GenericFailureProvider([], final_content="unused")
+    dispatcher = _RecordingDispatcher()
+    executor, resolved, invocation = _tool_loop(provider, dispatcher)
+
+    with pytest.raises(AppError) as raised:
+        executor.execute(
+            knowledge=SimpleNamespace(),  # type: ignore[arg-type]
+            expert_id=invocation.expert_id,
+            question="question",
+            invocation=invocation,
+            usage_context=SimpleNamespace(),  # type: ignore[arg-type]
+            tools=[resolved],  # type: ignore[list-item]
+        )
+
+    assert type(raised.value) is AppError
+    assert raised.value.retryable is True
+    assert dispatcher.calls == 0
+    assert [_tool_schema_names(tool_set) for tool_set in provider.tool_sets] == [
+        ["mcp_read"]
+    ]
+    assert provider.without_tools_calls == 0
 
 
 def test_reordered_identical_success_dispatches_once_then_synthesizes_tool_free() -> None:

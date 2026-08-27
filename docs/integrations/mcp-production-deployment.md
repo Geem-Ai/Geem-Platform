@@ -23,7 +23,7 @@ Phase 13 is not a configuration-only change. It adds or changes:
 
 - API schemas, connector management, OAuth, grants, approvals, quotas, runtime
   execution, delivery, retention, audit, and worker tasks;
-- PostgreSQL migrations `0036` through `0040`;
+- PostgreSQL migrations `0036` through `0041`;
 - Workspace, Widget, WhatsApp, and Platform Admin integration points;
 - an mTLS MCP egress gateway and a separate CONNECT-only egress proxy;
 - a fixed-provider proxy for ordinary API/worker HTTPS traffic;
@@ -67,7 +67,8 @@ Cursor must not:
   environments, connector arguments/results, or sensitive URLs;
 - rotate `JWT_SECRET`, `SECRETS_ENCRYPTION_KEY`, database credentials, or PKI as
   an incidental part of the upgrade;
-- attach API, worker, Beat, or the MCP gateway to `public_egress`;
+- attach API, worker, Beat, or the MCP gateway to `public_egress`,
+  `application_provider_egress`, or `mcp_public_egress`;
 - enable the connector before the live isolation and dependency canaries pass;
 - publish the paid App, change signed prices, approve writes, or reconcile an
   ambiguous external result without explicit operator authorization;
@@ -79,6 +80,15 @@ verified, the production overlay is incomplete, the encryption identity is
 uncertain, a required dependency loses connectivity, or any security probe
 fails.
 
+An unexpected secret exposure, successful forbidden network probe, unknown
+image, evidence of unauthorized access, or unexplained production mutation is
+an incident, not a deployment warning. Stop the rollout, preserve redacted
+evidence, prevent automation from recreating affected workloads, and invoke the
+organization's incident-response process. Do not rotate credentials, delete
+containers/logs, or resume deployment until the incident commander approves a
+contained recovery plan; an uncoordinated rotation can break encryption,
+datastore access, OAuth revocation, or forensic evidence.
+
 ## Required operator inputs
 
 Record these values in the change ticket before execution. Store secrets in the
@@ -89,12 +99,12 @@ deployment secret manager, not in the ticket.
 | Repository root | Exact absolute path on the production host |
 | Release reference | Approved immutable full commit SHA |
 | Current state | Current full SHA, branch, worktree status, and running image IDs |
-| Release images | Approved prebuilt image digest manifest, or approved resolved base/output digests for a local build |
+| Release images | Signed/approved registry manifest mapping every service and host platform to an immutable image digest |
 | Compose identity | One project name and the exact ordered Compose file list |
 | Hardening overlay | Absolute deployment-owned path outside the Git checkout |
-| Deployment topology | Cloudflare tunnel, aaPanel/Nginx, or another reviewed ingress |
+| Deployment topology | The checked-in Cloudflare tunnel plus the required hardening overlay; any other ingress is a stop condition for this release |
 | Public hosts | Exact API, Workspace, Platform Admin, marketing, CIMD, and tunnel hosts |
-| Data backup | Verified PostgreSQL dump plus MinIO, Qdrant, Redis, and configuration recovery point |
+| Data backup | New immutable recovery-set ID plus successful PostgreSQL, MinIO, Qdrant, Redis, configuration, and secret-manager restore evidence |
 | Encryption identity | Whether ciphertext currently uses explicit `SECRETS_ENCRYPTION_KEY` or the existing `JWT_SECRET` fallback |
 | Datastore credentials | Existing production identities and the approved rotation plan, if any |
 | PKI | Per-environment CA/leaf issuance owner, secret path, expiry, and rotation owner |
@@ -102,7 +112,7 @@ deployment secret manager, not in the ticket.
 | Fixed providers | Every production HTTP(S), SMTP, telemetry, billing, storage, OAuth, and messaging dependency |
 | Product release | Signed SAR prices, one default plan, RC environment, and release owner |
 | Canary fixtures | Controlled public HTTPS/443 MCP servers and OAuth credentials |
-| Operations | Maintenance window, rollback owner, monitoring destination, and alert owner |
+| Operations | Maintenance window, rollback owner, legacy-supervisor transition, monitoring destination, alert owner, and incident commander |
 
 ## 0. Read-only host inventory
 
@@ -115,6 +125,7 @@ export GEEM_DEPLOY_ROOT=/absolute/path/to/Geem
 export GEEM_COMPOSE_PROJECT=<existing-compose-project-name>
 export GEEM_RELEASE_REF=<approved-full-commit-sha>
 export GEEM_PRODUCTION_OVERLAY=/etc/geem/docker-compose.production-hardening.yml
+export GEEM_PUBLIC_API_ORIGIN=<approved-public-api-https-origin-without-trailing-slash>
 
 cd "$GEEM_DEPLOY_ROOT"
 git status --short
@@ -124,7 +135,7 @@ git log -1 --oneline
 
 docker version
 docker compose version
-for required_command in docker openssl curl timeout systemctl; do
+for required_command in docker openssl curl timeout systemctl python3; do
   command -v "$required_command" >/dev/null || {
     printf 'required command is missing: %s\n' "$required_command" >&2
     exit 1
@@ -143,9 +154,12 @@ Requirements:
   the authoritative compatibility gate.
 - Disk space must cover parallel old/new images, builds, database migration,
   and rollback artifacts.
-- OpenSSL, curl, systemd, and GNU coreutils `timeout` must be available. Node.js
-  22 is required if the host builds a static Workspace or Platform Admin bundle
-  outside Compose.
+- OpenSSL, curl, systemd, and GNU coreutils `timeout` must be available.
+- `GEEM_PUBLIC_API_ORIGIN` is the one approved public API origin for the whole
+  release. It must be an HTTPS origin with no path, query, fragment, userinfo,
+  or trailing slash. Use that same value for `APP_URL`, CIMD, OAuth callback
+  registration, RC/production probes, and operator API examples; do not type a
+  host literal again later in the procedure.
 
 Inventory the real supervisor and topology. Examples:
 
@@ -161,6 +175,30 @@ docker network ls
 docker volume ls
 ```
 
+Capture the exact project-labelled container inventory, including stopped and
+one-shot containers. An unlabelled container may belong to another stack, but
+every container carrying this project label is in scope and must have a
+non-empty Compose service label:
+
+```bash
+project_container_ids=$(docker ps -aq \
+  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")
+for container_id in $project_container_ids; do
+  docker inspect "$container_id" --format \
+    'id={{.Id}} name={{.Name}} project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}} image={{.Config.Image}} status={{.State.Status}}'
+  test -n "$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.service"}}')" || {
+    printf 'project-labelled container has no Compose service label: %s\n' \
+      "$container_id" >&2
+    exit 1
+  }
+done
+```
+
+Store this redacted inventory as the pre-change baseline. Do not infer
+ownership from a name prefix, and do not omit exited containers: a stale
+one-shot or prior `compose run` container can otherwise survive the handoff.
+
 Record immutable running image identities before a build can retag local image
 names:
 
@@ -173,6 +211,65 @@ for container_id in $(docker ps -q \
   docker image inspect "$image_id" --format 'repo_digests={{json .RepoDigests}}'
 done
 ```
+
+Keep `image_ref`, local `image_id`, and `repo_digests` as three distinct
+fields. A local image ID is not a registry digest, and an empty `RepoDigests`
+array is not reproducible release provenance. For a multi-platform image,
+record both the approved top-level registry manifest digest and the resolved
+host-platform child manifest/config digest.
+
+Record the exact live datastore mounts before selecting a new Compose file.
+Each service must resolve to exactly one running container, and each destination
+below must resolve to exactly one expected persistent source:
+
+```bash
+for service_and_destination in \
+  postgres:/var/lib/postgresql/data \
+  redis:/data \
+  qdrant:/qdrant/storage \
+  minio:/data; do
+  service=${service_and_destination%%:*}
+  destination=/${service_and_destination#*/}
+  container_ids=$(docker ps -q \
+    --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT" \
+    --filter "label=com.docker.compose.service=$service")
+  test "$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l)" -eq 1 || {
+    printf 'expected exactly one running %s container\n' "$service" >&2
+    exit 1
+  }
+  docker inspect "$container_ids" --format '{{json .Mounts}}' \
+    | python3 -c '
+import json
+import sys
+
+service, destination = sys.argv[1:]
+mounts = [
+    mount
+    for mount in json.load(sys.stdin)
+    if mount.get("Destination") == destination
+]
+if len(mounts) != 1:
+    raise SystemExit(
+        f"{service} must have exactly one persistent mount at {destination}"
+    )
+mount = mounts[0]
+if mount.get("Type") != "volume" or not mount.get("Name"):
+    raise SystemExit(
+        f"{service} must use one named Docker volume at {destination}"
+    )
+source = mount.get("Source")
+name = mount.get("Name")
+print(
+    f"service={service} type=volume source={source} "
+    f"destination={destination} volume={name}"
+)
+' "$service" "$destination"
+done
+```
+
+Store this redacted mapping in the change evidence. An absent, duplicate,
+anonymous, bind-mounted, or unexpected source is a stop condition. The engine
+source can reveal a host path; keep it out of public tickets.
 
 `GEEM_COMPOSE_PROJECT` must equal the project label on the running production
 containers. An older unit without `-p` normally derives the project name from
@@ -199,64 +296,120 @@ Determine whether the machine currently uses:
 - a deployment-owned aaPanel/Nginx Compose file; or
 - another orchestrator.
 
-Do not combine those topologies blindly. This guide's canonical Compose path is
-the base file, tunnel overlay, and a deployment-owned production-hardening
-overlay applied last. If the host remains on a different topology, it must
-implement the same network, secret, process, and isolation contract before
-proceeding.
+Do not combine those topologies. This release guide and its validator approve
+only the base file, the checked-in Cloudflare tunnel overlay, and a
+deployment-owned production-hardening overlay applied last. If the host uses
+aaPanel/Nginx or another ingress, stop. That topology needs its own reviewed,
+tested release contract; omitting Cloudflared here would leave the internal-only
+application ingress with no approved serving path.
 
 ## 1. Create and verify the rollback point
 
 Keep MCP disabled and the App unpublished. Quiesce writes or use the
 organization's consistent snapshot procedure.
 
-Back up and verify restoration/readability for:
-
-- PostgreSQL, including schema and data;
-- MinIO objects and configuration;
-- Qdrant collections/snapshots;
-- Redis if session/Celery recovery is required;
-- `.env`, deployment-owned Compose files, Nginx/Cloudflare configuration,
-  proxy policies, the Compose wrapper, systemd units, and frontend deployment
-  configuration;
-- the current full Git SHA and the IDs/digests of running images; and
-- PKI through the approved secret manager. Never copy a CA private key or leaf
-  private key into the repository or an ordinary support archive.
-
-A PostgreSQL example, adapted to the current production project and role, is:
+Create one new recovery set with a unique change/release ID. The staging and
+final paths must both be previously nonexistent, on the same filesystem, and
+outside the Git checkout. Never reuse a failed name or write directly into a
+prior recovery set:
 
 ```bash
-export GEEM_BACKUP_DIR=<approved-existing-absolute-backup-directory>
-export GEEM_BACKUP_FILE="$GEEM_BACKUP_DIR/geem-before-phase13-<change-id>.sql"
-test -d "$GEEM_BACKUP_DIR" && test -w "$GEEM_BACKUP_DIR" || {
+set -euo pipefail
+umask 077
+export GEEM_BACKUP_ROOT=<approved-existing-absolute-backup-directory>
+export GEEM_RECOVERY_ID=<unique-change-id-and-approved-release-sha>
+export GEEM_BACKUP_STAGING="$GEEM_BACKUP_ROOT/.incomplete-$GEEM_RECOVERY_ID"
+export GEEM_BACKUP_FINAL="$GEEM_BACKUP_ROOT/$GEEM_RECOVERY_ID"
+test -d "$GEEM_BACKUP_ROOT" && test -w "$GEEM_BACKUP_ROOT" || {
   printf '%s\n' 'approved backup directory is unavailable; stopping' >&2
   exit 1
 }
-test ! -e "$GEEM_BACKUP_FILE" || {
-  printf '%s\n' 'backup target already exists; choose a new immutable name' >&2
+test ! -e "$GEEM_BACKUP_STAGING" && test ! -e "$GEEM_BACKUP_FINAL" || {
+  printf '%s\n' 'recovery-set name already exists; choose a new immutable name' >&2
   exit 1
 }
-umask 077
+mkdir -m 0700 "$GEEM_BACKUP_STAGING"
+printf '%s\n' incomplete > "$GEEM_BACKUP_STAGING/STATUS"
+```
+
+Any failure leaves the staging directory marked `incomplete`. Preserve it for
+diagnosis according to retention policy; do not rename it to the final path,
+delete evidence, or rerun into it. Capture all of the following under the same
+consistency boundary:
+
+- **PostgreSQL:** roles/ownership needed by the application plus a custom-format
+  schema-and-data dump. A plain non-empty file or successful `pg_dump` exit is
+  insufficient.
+- **MinIO:** every application bucket, object version, delete marker, object
+  metadata, lifecycle/retention setting, and the required service-account/IAM
+  configuration. `mc mirror` by itself is not a complete recovery point because
+  it need not preserve versions, delete markers, or server configuration. Use a
+  storage-level consistent snapshot or a documented version-aware export.
+- **Qdrant:** a full-storage snapshot when supported, or every collection
+  snapshot plus the complete alias mapping and collection/cluster settings
+  required to reconstruct the service. Per-collection snapshots alone do not
+  prove alias recovery.
+- **Redis:** record the persistence mode and capture a supported RDB/AOF recovery
+  artifact when sessions, queues, locks, rate counters, or Celery state must
+  survive rollback. Use `redis-cli --rdb` or a storage snapshot taken after a
+  confirmed persistence barrier; never copy a live, changing RDB/AOF file.
+- **Deployment configuration:** `.env`, deployment-owned Compose files,
+  proxy/firewall policies, Nginx/Cloudflare configuration, the Compose wrapper,
+  systemd units/drop-ins, frontend release pointers, and automation state.
+  Encrypt this secret-bearing component and restrict its access.
+- **Release identity:** current full Git SHA, Compose project/file order,
+  datastore mount source/destination map, database role/database identity,
+  image reference/ID/RepoDigests, and the approved registry manifest.
+- **Secret recovery:** version identifiers and tested recovery authority for
+  encryption keys, datastore credentials, tunnel/OAuth/provider credentials,
+  and PKI. Never copy CA or leaf private keys into Git or a support archive.
+
+A PostgreSQL custom-format example, adapted to the exact recorded pre-upgrade
+Compose command, role, and database, is:
+
+```bash
+set -euo pipefail
 set -o noclobber
+umask 077
+export GEEM_POSTGRES_DUMP="$GEEM_BACKUP_STAGING/postgres.dump"
+export GEEM_PG_RESTORE=<absolute-path-to-matching-approved-pg_restore>
+test ! -e "$GEEM_POSTGRES_DUMP" || exit 1
 cd "$GEEM_DEPLOY_ROOT/infra"
 if ! docker compose -p "$GEEM_COMPOSE_PROJECT" \
   -f <current-production-compose-file> \
-  exec -T postgres pg_dump -U <production-db-role> <production-db-name> \
-  > "$GEEM_BACKUP_FILE"; then
+  exec -T postgres pg_dump -Fc \
+    -U <production-db-role> <production-db-name> \
+  > "$GEEM_POSTGRES_DUMP"; then
   printf '%s\n' 'pg_dump failed; preserve and mark the partial target invalid' >&2
   exit 1
 fi
-test -s "$GEEM_BACKUP_FILE" || {
+test -s "$GEEM_POSTGRES_DUMP" || {
   printf '%s\n' 'pg_dump produced an empty file; mark the target invalid' >&2
+  exit 1
+}
+"$GEEM_PG_RESTORE" --list "$GEEM_POSTGRES_DUMP" >/dev/null || {
+  printf '%s\n' 'pg_restore could not parse the custom-format dump' >&2
   exit 1
 }
 ```
 
-The operator must verify that the dump is non-empty and can be read by
-`pg_restore --list` for a custom-format dump or by an approved SQL validation
-for a plain dump. A command completing successfully is not, by itself, restore
-evidence. If `pg_dump` fails, mark the partial target invalid and choose a new
-immutable filename after correcting the cause; never overwrite it silently.
+The restore drill is mandatory and runs in a disposable, network-isolated
+environment that cannot address production. Restore PostgreSQL into a new empty
+database and verify migrations, ownership, extensions, row-count invariants,
+and application read canaries. Restore MinIO, Qdrant, and Redis into empty
+instances and verify object/version inventories, Qdrant aliases/search canaries,
+and Redis load/application invariants. Also rehearse configuration, secret, and
+image recovery. Merely listing or checksum-reading an artifact is not a restore
+test.
+
+After every component passes, generate a manifest containing component type,
+capture timestamp, source identity, consistency method, artifact checksum/size,
+encryption/key-version reference, restore-test result, retention class, and
+operator approval. Do not include secret values. Mark `STATUS` complete, then
+atomically rename the staging directory to `GEEM_BACKUP_FINAL`. Copy/commit the
+set to the approved immutable or WORM backup store and verify its independent
+checksum. Local permissions alone are not immutability. MODE 2 stops until the
+final recovery set and its restore evidence are approved.
 
 ### Preserve encryption-key continuity
 
@@ -308,6 +461,7 @@ git merge-base --is-ancestor \
   d2839326c85edff0c8e7b061f190e640aaf3dc49 HEAD || exit 1
 for required_file in \
   apps/api/migrations/versions/0040_mcp_external_surfaces.py \
+  apps/api/migrations/versions/0041_openwa_binding_backfill.py \
   apps/mcp_egress_gateway/Dockerfile \
   infra/mcp-egress/verify-isolation.sh \
   infra/app-egress/proxy/squid.conf \
@@ -329,6 +483,17 @@ SHA: MCP API unit/integration tests, gateway tests, Compose isolation tests,
 Workspace MCP tests/build, and the normal application regression suite. Do not
 install ad hoc development dependencies on the production machine merely to
 replace missing release CI evidence.
+
+The exact-SHA release must also publish an approved registry manifest. For
+every application, worker/Beat, frontend, gateway, proxy, datastore, and ingress
+service it records: service name, source SHA, registry/repository, immutable
+`image@sha256:...` reference, OS/architecture, top-level multi-platform manifest
+digest (when present), resolved platform child manifest/config digest, build
+provenance/SBOM reference, and signature/attestation verification result. Pull
+those immutable references before maintenance and verify the running host
+platform resolves to the recorded child digest. Mutable tags, a local image ID,
+or an unverified `RepoDigests` entry do not satisfy this gate. Production must
+not rebuild or retag the release in place.
 
 ## 3. Select one final production Compose topology
 
@@ -352,31 +517,59 @@ values and the actual current topology. It must satisfy every item in
 including:
 
 - secret-backed, matching PostgreSQL and MinIO credentials;
+- no whole-application `env_file` on Beat, MinIO, `minio-init`, the MCP gateway,
+  or either proxy; each receives only its explicit least-privilege variables;
 - no development credential, bind mount, reload server, or Vite/Astro dev
   process;
-- approved immutable image references/digests for every production service, or
-  a separately approved local-build manifest with resolved base/output digests;
-- no unreviewed host ports and no MCP gateway/proxy host port;
-- API on application data, ingress, fixed-provider control, and MCP control
-  networks only;
-- worker on application data, fixed-provider control, and MCP control networks
-  only, with no ingress network;
-- Beat on application data only, with `MCP_CONNECTOR_ENABLED=false`, no MCP
-  client key, and no MCP control network;
+- no host bind mount. Cloudflared uses the exact `cloudflared_config` Compose
+  config and `cloudflared_credentials` Compose secret contract documented in
+  the linked overlay; proxy policy remains immutable image content;
+- the exact immutable registry references from the approved release manifest
+  for every production service, with no production `build:` fallback;
+- no host ports on any production service;
+- API on application data, application broker, ingress, fixed-provider control,
+  and MCP control networks only;
+- worker on application data, application broker, fixed-provider control, and
+  MCP control networks only, with no ingress network;
+- Redis on the dedicated internal application broker network only;
+- Beat on the application broker network only, running
+  `app.worker.beat_app:beat_app` with
+  exactly `APP_ENV=production`, internal `REDIS_URL`, and
+  `MCP_CONNECTOR_ENABLED=false`; it has no `env_file`, database/Qdrant/MinIO/
+  provider/MCP variables, source mount, secret mount, or other network;
+- `beat.deploy.replicas: 1`, with exactly one live scheduler after every start
+  and reboot; duplicate Beat instances are unsafe;
 - gateway on MCP control and proxy control only;
-- MCP proxy on proxy control and public egress only;
-- only the fixed-provider proxy, MCP proxy, and Cloudflared on public egress;
+- exactly one gateway replica while legacy sessions remain in memory;
+- MCP proxy on proxy control and its dedicated `mcp_public_egress` only;
+- fixed-provider proxy on provider control and its dedicated
+  `application_provider_egress` only;
+- Cloudflared alone on `public_egress`; no egress-capable bridge is shared by
+  ingress, app proxy, and MCP proxy;
 - exact production API, Workspace, Platform Admin, CIMD, frontend-build, and
-  tunnel domains; and
-- the same final file order in every build, up, exec, ps, stop, rollback, CI,
+  tunnel domains;
+- exactly one explicit, non-overlapping IPAM subnet for each of the nine logical
+  networks; inability to allocate them is a stop condition; and
+- the same final file order in every pull, up, exec, ps, stop, rollback, CI,
   aaPanel, and systemd command.
 
-The final overlay must preserve the existing production volume identities. If
-the current deployment uses explicit external volume names, reproduce those
-names deliberately in the final topology. Before any recreate, compare the
-running containers' mounts with the merged Compose volume declarations. A new
-empty `<project>_postgres_data`, `minio_data`, or `qdrant_data` volume is a stop
-condition, not a fresh-install opportunity.
+The final overlay must preserve the existing production volume identities and
+declare all four as `external: true` with their exact recorded physical engine
+names. This prevents a changed project/path from manufacturing new datastore
+volumes. Before any recreate, compare the
+running containers' exact mount type/source/destination/volume name with the
+merged Compose volume declarations for PostgreSQL, Redis, Qdrant, and MinIO.
+Each datastore destination must have exactly one expected persistent source.
+A new, anonymous, duplicate, or empty `<project>_postgres_data`, `redis_data`,
+`minio_data`, or `qdrant_data` volume is a stop condition, not a fresh-install
+opportunity. Prove database role, database name, and the credential identity in
+`DATABASE_URL` still select the existing database without printing values.
+
+Any shell program embedded in Compose YAML is parsed once by Compose and again
+inside the container. Escape every container-shell dollar sign as `$$`,
+including variables, `${parameter:?checks}`, and arithmetic such as
+`$$((attempts + 1))`. A single `$` is host-side Compose interpolation and can
+silently erase a fail-closed check.
 
 After the file exists, create a persistent deployment-owned wrapper at
 `/usr/local/sbin/geem-prod-compose` and use it for the rest of the procedure,
@@ -402,10 +595,26 @@ Create it through the approved configuration-management/editor workflow, then:
 sudo chown root:root /usr/local/sbin/geem-prod-compose
 sudo chmod 0755 /usr/local/sbin/geem-prod-compose
 sh -n /usr/local/sbin/geem-prod-compose
-geem-prod-compose config --quiet
 ```
 
-`config --quiet` must pass before any Phase 13 container is created. Never run
+The Cloudflared form is not discretionary: when it is the in-Compose ingress,
+the merged service must run as `65532:65532`, use the fixed HTTP/2 command,
+mount `/etc/cloudflared/config.yml` read-only from `cloudflared_config` mode
+`0444`, mount `/etc/cloudflared/credentials.json` from
+`cloudflared_credentials` mode `0400`, and use a read-only root filesystem,
+`cap_drop: [ALL]`, `no-new-privileges`, `pids_limit: 64`, and `mem_limit: 128m`.
+The two top-level resources use absolute deployment-owned file paths and no
+Cloudflared environment or bind mount. The linked overlay fragment is the
+authoritative YAML shape. Local Compose does not remap ownership/mode for
+file-backed configs and secrets, so the linked host-side `root:65532` ownership,
+`0440` file modes, directory traversal, UID/GID 65532 readability, and
+non-writability checks are also mandatory before start.
+
+At this point only wrapper syntax is checked. Do not run `config --quiet` until
+the stage-4 environment merge, stage-5 PKI, stage-6 CIDR/IPAM policy, immutable
+image references, credentials, and physical volume identities are populated.
+The stage-7 `config --quiet` gate must pass before any Phase 13 container is
+created. Never run
 plain `docker compose config` in a logged production session because expanded
 configuration can contain secrets.
 
@@ -415,9 +624,9 @@ When a linked section of `mcp-connectors.md` shows a relative
 shortened example that drops the project name, environment file, profile, or
 an overlay.
 
-If the production host does not use the Geem tunnel overlay, replace it with a
-reviewed deployment-owned production overlay and update the wrapper once. Do
-not retain a file whose domains or ingress do not match the host.
+If the production host does not use the checked-in Geem tunnel overlay, stop
+this procedure. Do not improvise a replacement or omit the tunnel; obtain a
+separately reviewed ingress contract and validator change first.
 
 ## 4. Merge Phase 13 configuration without replacing `.env`
 
@@ -430,7 +639,8 @@ The initial state must remain closed:
 ```dotenv
 MCP_CONNECTOR_ENABLED=false
 MCP_SUPPORTED_PROTOCOL_VERSIONS=2026-07-28,2025-11-25,2024-11-05
-MCP_CLIENT_METADATA_URL=https://<public-api-host>/api/connectors/oauth/mcp_remote/client-metadata.json
+APP_URL=<exact-value-of-GEEM_PUBLIC_API_ORIGIN>
+MCP_CLIENT_METADATA_URL=<exact-value-of-GEEM_PUBLIC_API_ORIGIN>/api/connectors/oauth/mcp_remote/client-metadata.json
 
 MCP_EGRESS_PKI_DIR=/approved/host/secret/path/mcp-egress
 MCP_EGRESS_GATEWAY_URL=https://mcp-egress-gateway:8443
@@ -441,6 +651,7 @@ MCP_EGRESS_CLIENT_KEY_FILE=/run/secrets/mcp-egress/client.key
 MCP_EGRESS_CA_CERT_FILE=/run/secrets/mcp-egress/ca.crt
 MCP_EGRESS_BLOCKED_NETWORKS=<reviewed-comma-separated-cidrs>
 MCP_ALLOW_PRIVATE_EGRESS=false
+MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true
 
 MCP_EGRESS_MAX_REQUEST_BYTES=65536
 MCP_EGRESS_MAX_RESPONSE_BYTES=262144
@@ -497,28 +708,40 @@ require_exact_env_value() {
 }
 
 for key in \
-  APP_ENV AUTH_REQUIRED \
+  APP_ENV AUTH_REQUIRED APP_URL MCP_CLIENT_METADATA_URL \
   MCP_CONNECTOR_ENABLED MCP_SUPPORTED_PROTOCOL_VERSIONS \
   MCP_EGRESS_PKI_DIR MCP_EGRESS_GATEWAY_URL MCP_EGRESS_APP_ENV \
   MCP_EGRESS_PROXY_URL MCP_EGRESS_BLOCKED_NETWORKS \
-  MCP_ALLOW_PRIVATE_EGRESS MCP_TOOL_PROVIDER_CAPABILITY_MATRIX; do
+  MCP_ALLOW_PRIVATE_EGRESS MCP_PROXY_REQUIRE_BLOCKED_NETWORKS \
+  MCP_TOOL_PROVIDER_CAPABILITY_MATRIX; do
   require_one_env_key "$key"
 done
 
 require_exact_env_value APP_ENV production
 require_exact_env_value AUTH_REQUIRED true
+require_exact_env_value APP_URL "$GEEM_PUBLIC_API_ORIGIN"
 require_exact_env_value MCP_CONNECTOR_ENABLED false
 require_exact_env_value MCP_EGRESS_APP_ENV production
 require_exact_env_value MCP_ALLOW_PRIVATE_EGRESS false
+require_exact_env_value MCP_PROXY_REQUIRE_BLOCKED_NETWORKS true
 require_exact_env_value MCP_EGRESS_GATEWAY_URL https://mcp-egress-gateway:8443
 require_exact_env_value MCP_EGRESS_PROXY_URL http://mcp-egress-proxy:3128
 require_exact_env_value MCP_SUPPORTED_PROTOCOL_VERSIONS \
   2026-07-28,2025-11-25,2024-11-05
+
+metadata_url=$(awk -F= '$1 == "MCP_CLIENT_METADATA_URL" {print substr($0, index($0, "=") + 1)}' \
+  "$GEEM_DEPLOY_ROOT/.env")
+test -z "$metadata_url" || \
+  test "$metadata_url" = \
+    "$GEEM_PUBLIC_API_ORIGIN/api/connectors/oauth/mcp_remote/client-metadata.json" || {
+  printf 'MCP client metadata URL is not derived from the approved API origin\n' >&2
+  exit 1
+}
 ```
 
 Review non-empty values for the PKI directory, blocked-network inventory, exact
 model IDs, and capability matrix without copying them into logs. Repeat these
-checks after the second network-policy pass and before enabling MCP.
+checks after the atomic network-policy release and before enabling MCP.
 
 ## 5. Provision and validate production mTLS PKI
 
@@ -558,15 +781,28 @@ Set `MCP_EGRESS_BLOCKED_NETWORKS` to every deployment-owned Docker, VPC, host
 bridge, corporate, internal-public, and metadata range. The value cannot be
 copied from an example.
 
-Plan a two-pass rollout while MCP remains disabled. The first pass is completed
-in stage 7, where the new Phase 13 networks are actually created:
+Prefer explicit, non-overlapping IPAM subnets in the reviewed production
+overlay so the final network set is known before any boundary service starts.
+Build one canonical, normalized, sorted CIDR manifest containing all nine final
+Compose subnets plus Docker defaults, host bridges, VPC/cloud, corporate,
+internal-public, metadata, and other deployment-owned ranges. Give it a change
+ID and checksum.
 
-1. Render the final topology and provision the closed boundary.
-2. Inspect every actual Compose network subnet.
-3. Add any newly allocated subnet to `MCP_EGRESS_BLOCKED_NETWORKS`.
-4. Add equivalent explicit deny rules to the MCP proxy policy.
-5. Rebuild/recreate the proxy and gateway.
-6. Rerun the rendered-topology review and all live parity probes.
+Treat the application blocked-network value and the independent proxy ACL as
+one atomic policy release:
+
+1. Generate both from the same approved CIDR manifest.
+2. Prove the normalized sets are equal before start; comments/order may differ,
+   but no CIDR may be missing from either layer.
+3. Record the manifest and both policy checksums in release evidence.
+4. Apply the `.env`/secret-manager value, proxy policy, overlay, and immutable
+   proxy/gateway images in one stopped-boundary change.
+5. Recreate proxy and gateway together, then rerun both parity probe suites.
+
+Explicit IPAM is mandatory because the exact-image validator must prove policy
+coverage before start. If the deployment cannot allocate reviewed deterministic
+subnets, stop and redesign the topology; do not start a boundary with an
+unknown or partially blocked network set.
 
 Follow [Inventory and block deployment networks](./mcp-connectors.md#4-inventory-and-block-deployment-networks)
 and [Deployment-specific address-policy parity](./mcp-connectors.md#deployment-specific-address-policy-parity)
@@ -576,36 +812,38 @@ the reviewed non-global and deployment-specific ranges.
 ### Deployment-owned proxy policy
 
 Do not edit tracked `infra/*/proxy/squid.conf` files directly on the production
-machine. Policy changes must either:
-
-1. be committed, tested, and included in the approved release SHA; or
-2. live in a root-owned, non-secret deployment configuration outside the Git
-   checkout and be mounted read-only over `/etc/squid/squid.conf` by
-   `$GEEM_PRODUCTION_OVERLAY`.
-
-For deployment-specific MCP CIDRs, an external policy must start from the exact
-approved release's `infra/mcp-egress/proxy/squid.conf`, add every reviewed deny
-before the final allow, and be mounted only into `mcp-egress-proxy`. A custom
-fixed-provider policy must start from `infra/app-egress/proxy/squid.conf`,
-retain default-deny behavior, and be mounted only into `app-egress-proxy`.
-Example override shape:
+machine or mount a host replacement over the approved image. The MCP proxy
+image contains the reviewed broad policy and a fail-closed renderer. Set the
+same canonical value in both layers and require it in production:
 
 ```yaml
 services:
   mcp-egress-proxy:
-    volumes:
-      - /etc/geem/mcp-egress-squid.conf:/etc/squid/squid.conf:ro
-
-  app-egress-proxy:
-    volumes:
-      - /etc/geem/app-egress-squid.conf:/etc/squid/squid.conf:ro
+    environment:
+      MCP_PROXY_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:?required}
+      MCP_PROXY_REQUIRE_BLOCKED_NETWORKS: "true"
 ```
 
-Omit the app-proxy mount when the checked-in fixed-provider list exactly matches
-production. Keep external proxy policies root-owned and non-writable by the
-container user, validate their syntax, record their checksums, and merge every
-future upstream policy change deliberately. Never put credentials in a proxy
-policy.
+The renderer parses canonical CIDRs as data and inserts only validated Squid ACL
+lines; raw environment text is never interpreted as configuration. The
+repository validator proves that gateway `EGRESS_BLOCKED_NETWORKS` and proxy
+`MCP_PROXY_BLOCKED_NETWORKS` are identical, non-empty, cover every explicit
+Compose subnet plus every repeated `--required-blocked-network`, and that the
+require flag is true. Record the proxy image/template digest and canonical set
+checksum.
+
+A fixed-provider allowlist change must be committed, tested, built into an
+approved digest-pinned `app-egress-proxy` image, and included in the release
+manifest. Do not use a host bind mount to bypass image provenance. Never put
+credentials in either proxy policy.
+
+Before the first Phase 13 start, an absent logical network is expected and will
+be created from the already reviewed explicit IPAM; any network that already
+exists must resolve to exactly one project-labeled object and match the approved
+manifest. Multiple matches are always fatal. After creation, rerun the inventory
+with `GEEM_REQUIRE_ALL_NETWORKS=true`, require exactly one for all nine, and
+compare every actual subnet with the canonical CIDR manifest. An IPAM drift
+requires a new atomic policy release, not an in-place edit to only one layer.
 
 ### Fixed-provider dependencies
 
@@ -634,107 +872,148 @@ its exact egress design and proxy policy are reviewed, rebuilt, and canaried.
 Raw external SMTP is not carried by the HTTP CONNECT policy used by API and
 worker. If production email uses an external SMTP server, provide a separately
 reviewed internal mail relay or a dedicated least-privilege SMTP egress
-boundary. Do not attach API/worker to `public_egress`, and do not pretend adding
-an SMTP hostname to the HTTPS proxy allowlist fixes `smtplib` traffic. Login,
+boundary. Do not attach API/worker to any public-egress network, and do not
+pretend adding an SMTP hostname to the HTTPS proxy allowlist fixes `smtplib`
+traffic. Login,
 verification, invitation, and reset-email canaries must pass before promotion.
 
-## 7. Build, migrate, seed, and start with MCP disabled
+## 7. Pull, migrate, reconcile, and start with MCP disabled
 
-Confirm again that the effective shared value is
-`MCP_CONNECTOR_ENABLED=false` and the final Beat override is also false.
+Confirm again that API and worker receive `MCP_CONNECTOR_ENABLED=false`. Beat
+must independently retain its exact broker-only command and three-variable
+environment with the MCP value false; it must not inherit the shared `.env`.
 
-Prefer immutable prebuilt application/gateway/proxy/frontend image digests tied
-to the approved release manifest. The current Dockerfiles and Compose sources
-contain mutable base/image tags, so an in-place build is not reproducible from
-the Git SHA alone. Do not run the following fallback until the release owner has
-recorded and approved every resolved base image digest and the resulting image
-digests for this deployment:
+Pull the exact registry digest references from the approved release manifest.
+The final overlay must replace every mutable `image:` and every `build:` entry;
+production is not a build host. Verify signature/attestation, host-platform
+resolution, and the resolved child/config digest before maintenance:
 
 ```bash
 geem-prod-compose config --quiet
-geem-prod-compose build
+geem-prod-compose pull
+<approved-registry-manifest-verifier> \
+  --release "$GEEM_RELEASE_REF" \
+  --compose-wrapper /usr/local/sbin/geem-prod-compose
 ```
 
-Validate the effective merged topology without printing or storing the rendered
-JSON. Keep this pipeline intact; never insert `tee` or redirect its first
-command to a file:
+Validate the effective merged topology with the repository-owned validator in
+the exact digest-pinned API image. It creates no Compose service or deployment
+network and receives no deployment environment/`--env-file`, secret, host
+mount, or Docker socket.
+Keep the pipe intact; never insert `tee`, a redirect, `docker compose run`, or a
+support logger. Replace the ingress and four physical-volume values with the
+stage-0 evidence:
 
 ```bash
+export GEEM_API_IMAGE=<approved-api-image-at-sha256-digest>
 geem-prod-compose config --format json \
-  | geem-prod-compose run --rm --no-deps -T api python -c '
-import json
-import sys
-
-config = json.load(sys.stdin)
-services = config["services"]
-
-def require(condition, message):
-    if not condition:
-        raise SystemExit(message)
-
-def environment(service):
-    return services[service].get("environment") or {}
-
-def networks(service):
-    return set((services[service].get("networks") or {}).keys())
-
-def is_false(value):
-    return str(value).strip().lower() == "false"
-
-require(config.get("name") == "<existing-compose-project-name>", "wrong Compose project")
-require(is_false(environment("api").get("MCP_CONNECTOR_ENABLED")), "API MCP must be disabled")
-require(is_false(environment("worker").get("MCP_CONNECTOR_ENABLED")), "worker MCP must be disabled")
-require(is_false(environment("beat").get("MCP_CONNECTOR_ENABLED")), "Beat MCP must be disabled")
-require(environment("mcp-egress-gateway").get("APP_ENV") == "production", "gateway must be production")
-require(is_false(environment("mcp-egress-gateway").get("EGRESS_ALLOW_PRIVATE")), "private egress must be disabled")
-require(str(environment("mcp-egress-gateway").get("EGRESS_BLOCKED_NETWORKS") or "").strip(), "custom blocked networks are empty")
-require(networks("api") == {"application_data", "application_ingress", "application_provider_control", "mcp_egress_control"}, "wrong API networks")
-require(networks("worker") == {"application_data", "application_provider_control", "mcp_egress_control"}, "wrong worker networks")
-require(networks("beat") == {"application_data"}, "wrong Beat networks")
-require(networks("mcp-egress-gateway") == {"mcp_egress_control", "mcp_proxy_control"}, "wrong gateway networks")
-require(networks("mcp-egress-proxy") == {"mcp_proxy_control", "public_egress"}, "wrong MCP proxy networks")
-public_members = {name for name in services if "public_egress" in networks(name)}
-expected_public_members = {
-    "app-egress-proxy",
-    "mcp-egress-proxy",
-    "cloudflared",
-}
-require(public_members == expected_public_members, "wrong public-egress membership")
-require(not services["mcp-egress-gateway"].get("ports"), "gateway publishes a host port")
-require(not services["mcp-egress-proxy"].get("ports"), "MCP proxy publishes a host port")
-require(not services["beat"].get("secrets"), "Beat received a secret mount")
-print("effective closed topology valid")
-'
+  | docker run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$GEEM_API_IMAGE" \
+      -m app.ops.validate_production_compose \
+      --project "$GEEM_COMPOSE_PROJECT" \
+      --mcp-enabled false \
+      --ingress-service cloudflared \
+      --volume postgres_data=<recorded-postgres-engine-volume> \
+      --volume redis_data=<recorded-redis-engine-volume> \
+      --volume qdrant_data=<recorded-qdrant-engine-volume> \
+      --volume minio_data=<recorded-minio-engine-volume> \
+      --required-blocked-network <reviewed-host-vpc-or-corporate-cidr>
 ```
 
-Replace the project placeholder inside the validator with the preserved project
-name. The example `expected_public_members` set is for the checked-in
-Cloudflared topology. For aaPanel/Nginx or another ingress, replace that set
-with the exact reviewed Compose services that legitimately require
-`public_egress`; if ingress runs outside Compose, do not invent a member for it.
-The two egress proxies remain required. A validation failure must not be
-bypassed.
+The validator is release code from `GEEM_API_IMAGE`, so its image digest must
+match the approved registry manifest and `--pull never` must not substitute a
+tag. Pass `--ingress-service cloudflared` exactly once for the reviewed
+in-Compose tunnel. External or alternate ingress is not approved by this release;
+stop instead of omitting the flag. Repeat
+`--required-blocked-network` for every non-Compose host/VPC/corporate range in
+the canonical manifest. The validator enforces the closed flags, exact network
+map, internal networks, public membership, datastore mount identity,
+least-privilege environments/secrets, exactly one declared Beat replica, one
+gateway replica, no unsafe
+ports/build/dev commands/mounts, and immutable images. A validation failure must
+not be bypassed.
 
-Before maintenance, force the new image to validate the enabled MCP settings
-and mounted client PKI in an isolated one-off container. This does not start a
-tool call or enable the running application:
+Before any `up`, compare every existing project-labelled container with the
+exact service set from the fully rendered release. This gate allows a release
+service to be absent before first start, but permits no unknown service label,
+empty label, or duplicate container for a service:
 
 ```bash
-geem-prod-compose run --rm --no-deps \
-  -e MCP_CONNECTOR_ENABLED=true \
-  api python -c \
-  'from app.core.config import get_settings; get_settings(); print("MCP settings valid")'
+expected_services=$(mktemp)
+actual_services=$(mktemp)
+trap 'rm -f "$expected_services" "$actual_services"' EXIT HUP INT TERM
+
+geem-prod-compose config --services | LC_ALL=C sort -u > "$expected_services"
+for container_id in $(docker ps -aq \
+  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT"); do
+  service=$(docker inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.service"}}')
+  test -n "$service" || {
+    printf 'project-labelled container has no service label: %s\n' \
+      "$container_id" >&2
+    exit 1
+  }
+  printf '%s\n' "$service" >> "$actual_services"
+done
+LC_ALL=C sort -o "$actual_services" "$actual_services"
+
+test -z "$(uniq -d "$actual_services")" || {
+  printf 'duplicate project service containers exist\n' >&2
+  uniq -d "$actual_services" >&2
+  exit 1
+}
+test -z "$(comm -13 "$expected_services" "$actual_services")" || {
+  printf 'unexpected project service containers exist\n' >&2
+  comm -13 "$expected_services" "$actual_services" >&2
+  exit 1
+}
+printf 'project container inventory: no duplicate or unexpected services\n'
+rm -f "$expected_services" "$actual_services"
+trap - EXIT HUP INT TERM
 ```
 
-Enter the approved maintenance response, drain active application/worker work,
-and disable the recorded system or user supervisor so it cannot recreate the
-old topology. Do not invoke the checked-in unit's `ExecStop`: it also stops the
-datastores. Instead, use the exact recorded pre-upgrade Compose project and file
-set to stop only `api`, `worker`, and `beat`.
+If this gate finds an orphan, record its exact container ID, service label,
+image identity, state, networks, and mounts. Obtain explicit review for that
+specific ID and its data consequences, then stop and remove only the approved
+container, without `-v`, before rerunning the gate. The approved retirement is
+an exact-ID operation, for example:
 
-Disable the discovered system unit with `sudo systemctl disable geem-stack`, or
-the discovered user unit with `systemctl --user disable geem-stack`; run only
-the applicable command. Also pause aaPanel/CI automation.
+```bash
+container_id='<approved-exact-container-id>'
+test "$(docker inspect "$container_id" --format \
+  '{{index .Config.Labels "com.docker.compose.project"}}')" = \
+  "$GEEM_COMPOSE_PROJECT"
+docker stop --time 60 "$container_id"
+docker rm "$container_id"
+```
+
+Never use
+`compose down --remove-orphans`, `compose up --remove-orphans`, a name glob, or
+a bulk removal command: this handoff requires an auditable per-container
+retirement decision. After the final start, require zero unexpected
+project-labelled containers and exactly one container for every required
+long-running service plus the reviewed successful one-shot.
+
+Enter the approved maintenance window, drain active application/worker work,
+and pause aaPanel, CI, timers, watchers, and every other recorded recreator. A
+legacy systemd unit must become **inactive** before its file is replaced;
+`disable` alone only removes boot links and leaves an active unit in control.
+
+Review and checksum the actual unit and its drop-ins first. Then use the exact
+scope discovered in stage 0 to disable and stop it: `sudo systemctl disable
+geem-stack` followed by `sudo systemctl stop geem-stack` for a system unit, or
+the corresponding `systemctl --user` commands for a user unit. Never run both.
+The stop may intentionally stop the whole old stack; writes are already
+quiesced and the next start must select the same recorded volumes. If the
+legacy `ExecStop` is unknown, secret-bearing, destructive, or selects a
+different project/file set, stop before invoking it and use a separately
+reviewed transition/drop-in plan. Do not overwrite or daemon-reload an active
+legacy unit and hope its old stop action disappears.
+
+Confirm the old unit is disabled and inactive. If its reviewed stop action did
+not stop API, worker, and Beat, use the exact recorded pre-upgrade Compose
+project and file set to stop only those services:
 
 ```bash
 <recorded-pre-upgrade-compose-command-and-files> stop api worker beat
@@ -742,12 +1021,15 @@ the applicable command. Also pause aaPanel/CI automation.
 
 The placeholder must be replaced with the command captured in stage 0,
 including its existing project identity and every old overlay. Do not use the
-new wrapper for this one pre-cutover stop.
+new wrapper for this one pre-cutover stop, and do not run it concurrently with
+an active legacy unit.
 
 Pre-Phase-13 datastores use the implicit project default network; Phase 13 moves
 them to `application_data`. The next command is therefore a controlled,
 volume-preserving datastore container/network transition. It must retain the
-recorded project name, named volume identities, and production credentials:
+recorded project name, named volume identities, and production credentials.
+Run it only after the final CIDR manifest, application value, proxy policy, and
+overlay passed the atomic stage-6 review:
 
 ```bash
 geem-prod-compose up -d \
@@ -756,7 +1038,11 @@ geem-prod-compose up -d \
 ```
 
 Compare all datastore mounts with the recorded pre-upgrade mounts. Stop if any
-container selected a new or empty volume. Wait boundedly for PostgreSQL before
+container selected a new or empty volume. Rerun the exact stage-0
+type/source/destination/volume-name inventory and require a byte-for-byte match
+for all four physical sources and destinations. Separately prove the stored
+PostgreSQL role/database identity and the parsed (redacted) `DATABASE_URL`
+identity agree with the pre-upgrade record. Wait boundedly for PostgreSQL before
 running Alembic:
 
 ```bash
@@ -768,25 +1054,9 @@ timeout 180 sh -c '
 ' sh '<production-db-role>' '<production-db-name>'
 ```
 
-Now complete the second network-policy pass from stage 6: inspect the actual
-new subnets, add them to `MCP_EGRESS_BLOCKED_NETWORKS`, update the approved MCP
-proxy policy, and recreate the closed boundary before starting API or worker:
-
-The earlier API settings-validation container plus the foundation services must
-have instantiated all six logical networks: `application_data`,
-`application_ingress`, `application_provider_control`, `mcp_egress_control`,
-`mcp_proxy_control`, and `public_egress`. Confirm each project-labeled network
-exists and inspect its assigned subnet. If any is absent, stop and correct the
-topology rather than finalizing an incomplete CIDR list.
-
-```bash
-geem-prod-compose config --quiet
-geem-prod-compose up -d --force-recreate \
-  mcp-egress-proxy mcp-egress-gateway
-```
-
-Do not continue until the datastore mounts and application/gateway/proxy
-network memberships match the recorded final design.
+The exact-image validator already proved that all nine declared IPAM subnets
+are explicit, non-overlapping, and covered identically by gateway and proxy.
+Do not change the overlay or CIDR manifest after that gate.
 
 Apply the migration explicitly, then start the complete final topology. The API
 also runs `alembic upgrade head` before Uvicorn, so its subsequent pass should
@@ -794,9 +1064,24 @@ be a no-op:
 
 ```bash
 geem-prod-compose run --rm --no-deps api alembic upgrade head
-geem-prod-compose up -d
+geem-prod-compose up -d --wait --wait-timeout 300
 geem-prod-compose ps
 ```
+
+Now require all nine actual logical networks to exist, with each logical label
+resolving to exactly one project network. Compare every assigned subnet with
+the declared IPAM and approved CIDR manifest, then compare every live service
+membership and datastore mount with the final design. Zero/multiple matches,
+missing subnets, overlap, drift, or an unexpected member stops the deployment
+and the boundary remains unavailable; never patch only `.env` or only Squid.
+Rerun the linked inventory command with
+`GEEM_REQUIRE_ALL_NETWORKS=true` for this post-start gate.
+
+`--wait` is a finite startup gate, not complete application evidence: services
+without healthchecks are only proven running. Follow it with the explicit
+readiness, one-shot completion, network, mTLS, datastore, and dependency probes
+in stages 8–10. `minio-init` must exit zero after a fail-closed credential,
+bucket, and policy check; a swallowed `mc` failure is a stop condition.
 
 Verify the live database explicitly:
 
@@ -805,25 +1090,40 @@ geem-prod-compose exec -T api alembic current
 geem-prod-compose exec -T api alembic heads
 ```
 
-The current head must include `0040_mcp_external_surfaces`. Do not enable MCP if
-the current revision and repository head differ.
+The current head must include `0041_openwa_binding_backfill`. Do not enable MCP
+if the current revision and repository head differ.
 
 Migrations do not seed the App Catalog row, and ordinary API startup does not
 run the catalog seed. First check through Platform Admin or an approved
 read-only database/API inspection whether slug `mcp-connectors` already exists.
 
-The minimum baseline has no MCP-only seed CLI. If the actual approved release
-still lacks one, the following command reconciles the **entire** App Catalog and
-can update metadata/plans for non-MCP products:
+Use only the reviewed MCP-scoped reconciler from the approved release. First
+run and review its dry-run, then back up the affected catalog/category rows:
 
 ```bash
-geem-prod-compose exec -T api python -m app.apps_catalog.seed
+geem-prod-compose exec -T api \
+  python -m app.apps_catalog.reconcile_mcp --dry-run
 ```
 
-Run it only after backing up the catalog, reviewing the target release's full
-`APP_SPECS` diff against production, and receiving explicit product/release-owner
-approval. Otherwise stop and deploy a reviewed MCP-only seeding command; do not
-use ad hoc SQL or call private seed helpers from a production shell.
+Obtain a separate production mutation approval for exactly that reviewed
+change. Only then apply it, and verify in a distinct command:
+
+```bash
+geem-prod-compose exec -T api \
+  python -m app.apps_catalog.reconcile_mcp --apply
+geem-prod-compose exec -T api \
+  python -m app.apps_catalog.reconcile_mcp --verify
+```
+
+The command may create the automation category only when missing and otherwise
+changes only `mcp-connectors`; it preserves existing MCP status, plans,
+entitlements, and extra product data. A broad `app.apps_catalog.seed`, ad hoc
+SQL, or private helper call is not an approved production substitute.
+
+Because status is preserved, any pre-existing row whose status is not
+`coming_soon` is a stop condition. Obtain a separate Platform Admin lifecycle
+approval and correct that state before enabling API or worker; otherwise an
+already-published row could become live as soon as the runtime flag changes.
 
 Verify through Platform Admin or a read-only database/API inspection that:
 
@@ -832,14 +1132,16 @@ Verify through Platform Admin or a read-only database/API inspection that:
 - connector is `mcp_remote` / `tool_source`; and
 - no zero-priced or placeholder MCP plan was manufactured.
 
-The production seed intentionally creates no MCP plans. Signed plan pricing is
-a later Platform Admin and release-owner action.
+The MCP reconciler intentionally creates no plans. Signed plan pricing is a
+later Platform Admin and release-owner action.
 
-Confirm that API, worker, Beat, Workspace, Platform Admin, gateway, both
-proxies, and the ingress service use the new images/configuration. If the host
-serves static frontend bundles outside Compose, also run the established
-Node.js 22 `npm ci`/production build and atomically deploy the Workspace and
-Platform Admin outputs. Do not leave an old frontend talking to the new API.
+Confirm that API, worker, Beat, Workspace, Platform Admin, marketing, gateway,
+both proxies, and Cloudflared use the new digest-pinned Compose images and
+configuration. This release does not permit Workspace, Platform Admin, or
+marketing static bundles to be served outside Compose: all three frontends and
+Cloudflared are validator-required services. Stop if the host still has an
+outside-Compose frontend or alternate ingress instead of trying to update it in
+parallel.
 
 ## 8. Prove the closed production boundary
 
@@ -853,40 +1155,43 @@ Run every inspection and probe in these sections of the isolation runbook:
 Those links define mandatory assertions and probe bodies. Their examples assume
 a relative hardening file. Execute each equivalent Compose operation through
 `geem-prod-compose` and the external production overlay; do not copy a raw
-command that selects a different project or omits an overlay. For the checked-in
-`verify-isolation.sh`, export the exact project name first because the script
-builds its own single-file Compose command:
+command that selects a different project or omits an overlay. Run the checked-in
+smoke through the persistent wrapper so it inspects the same project, profile,
+environment file, and complete overlay set:
 
 ```bash
-export COMPOSE_PROJECT_NAME=<existing-compose-project-name>
-MCP_SMOKE_COMPOSE_FILE="$GEEM_DEPLOY_ROOT/infra/docker-compose.yml" \
-MCP_SMOKE_ENV_FILE="$GEEM_DEPLOY_ROOT/.env" \
+MCP_SMOKE_COMPOSE_WRAPPER=/usr/local/sbin/geem-prod-compose \
   "$GEEM_DEPLOY_ROOT/infra/mcp-egress/verify-isolation.sh"
 ```
 
 Required evidence includes:
 
 - merged runtime networks exactly match the documented network map;
+- provider proxy, MCP proxy, and ingress are each the sole member of their own
+  external-route network; no shared public bridge exists;
 - no MCP gateway/proxy host port exists;
 - API can reach live PostgreSQL, Redis, Qdrant, and MinIO endpoints;
 - gateway cannot resolve or connect to those same live endpoints;
 - valid application mTLS succeeds and a caller without a client certificate
   fails at TLS;
-- API, worker, and gateway cannot open a direct public socket;
+- API, worker, Beat, and gateway cannot open a direct public socket;
 - MCP proxy denies private, metadata, every configured deployment CIDR,
   documentation/benchmark, IPv6, mapped, and transition ranges;
-- one controlled public HTTPS/443 MCP canary succeeds, proving negative tests
-  are not merely a general outage;
+- gateway and proxy each return explicit 403 policy denials for a representative
+  address in every deployment CIDR; timeout/5xx is not denial evidence;
+- one controlled public HTTPS/443 target returns an explicit proxy CONNECT HTTP
+  200 and passes the gateway/MCP canary, proving negative tests are not a
+  general outage;
 - the static Compose-isolation test passes in its gateway dependency
   environment; and
 - billing, storage OAuth, messaging, email, and other fixed-provider canaries
   still pass through their intended boundaries.
 
 The checked-in `verify-isolation.sh` is necessary but intentionally incomplete:
-it accepts one Compose file and addresses only its built-in probe set. Review
-the actual multi-file merged topology separately and retain the full custom
-CIDR/parity evidence. A failed parity probe is a release blocker, not a reason
-to weaken policy.
+its built-in probes do not replace the exact-image rendered-topology validator
+or full custom CIDR/parity evidence. A failed parity probe is a release blocker,
+not a reason to weaken policy. Production must not use the script's single-file
+development fallback.
 
 ## 9. Make the topology persistent before enabling MCP
 
@@ -905,9 +1210,140 @@ use:
 - every required API, worker, Beat, frontend/admin, proxy, datastore, and
   ingress service.
 
+Create a root-owned `/usr/local/sbin/geem-prod-readiness` that exits nonzero
+unless, within a fixed deadline:
+
+- every required long-running service resolves to exactly one running container,
+  including exactly one Beat scheduler;
+- every declared healthcheck is healthy and every required one-shot exits zero;
+- API public readiness and internal datastore canaries pass;
+- Beat can reach Redis but cannot resolve or connect to PostgreSQL, Qdrant, or
+  MinIO;
+- gateway mTLS succeeds and the no-client-certificate check fails;
+- the exact network cardinality/membership and datastore mounts still match;
+  and
+- gateway/proxy have no host ports and forbidden direct-public probes fail.
+
+The script must use the persistent Compose wrapper, print only categorical
+results, and never print environments or raw merged configuration. Test both a
+success and a deliberately missing-service failure before installing it.
+
+Create a second root-owned executable,
+`/usr/local/sbin/geem-prod-prestart`. It is part of the approved release
+artifact, not a session helper. Before every `up`, it must:
+
+1. run `geem-prod-compose config --quiet`;
+2. stream `geem-prod-compose config --format json` into the validator from the
+   exact approved API image digest with `--pull never`, no network, read-only
+   root, no capabilities, and no Docker socket or host mounts;
+3. pass literal, reviewed values for the project, the single `cloudflared`
+   ingress, all four physical volumes, the closed MCP flag, and every canonical
+   non-Compose blocked CIDR; and
+4. rerun the exact project-label inventory gate, rejecting empty labels,
+   duplicates, and unexpected services before Compose can create anything.
+
+Store those arguments as quoted literals inside this root-owned script. Do not
+read them from the invoking shell or an unchecksummed environment file. The
+script's validator command has this mandatory shape; replace every placeholder
+and repeat the CIDR flag as required by the approved manifest:
+
+```bash
+#!/bin/sh
+set -eu
+
+compose=/usr/local/sbin/geem-prod-compose
+docker=/usr/bin/docker
+api_image='<approved-api-image-reference-at-sha256-digest>'
+project='<approved-existing-compose-project>'
+
+"$compose" config --quiet
+"$compose" config --format json \
+  | "$docker" run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$api_image" \
+      -m app.ops.validate_production_compose \
+      --project "$project" \
+      --mcp-enabled false \
+      --ingress-service cloudflared \
+      --volume postgres_data='<recorded-postgres-engine-volume>' \
+      --volume redis_data='<recorded-redis-engine-volume>' \
+      --volume qdrant_data='<recorded-qdrant-engine-volume>' \
+      --volume minio_data='<recorded-minio-engine-volume>' \
+      --required-blocked-network '<reviewed-non-compose-cidr-1>' \
+      --required-blocked-network '<reviewed-non-compose-cidr-n>'
+
+expected_services=$(mktemp)
+actual_services=$(mktemp)
+trap 'rm -f "$expected_services" "$actual_services"' EXIT HUP INT TERM
+"$compose" config --services | LC_ALL=C sort -u > "$expected_services"
+for container_id in $("$docker" ps -aq \
+  --filter "label=com.docker.compose.project=$project"); do
+  service=$("$docker" inspect "$container_id" --format \
+    '{{index .Config.Labels "com.docker.compose.service"}}')
+  test -n "$service" || exit 1
+  printf '%s\n' "$service" >> "$actual_services"
+done
+LC_ALL=C sort -o "$actual_services" "$actual_services"
+test -z "$(uniq -d "$actual_services")"
+test -z "$(comm -13 "$expected_services" "$actual_services")"
+printf 'pre-start topology validation: passed\n'
+```
+
+When production MCP is later enabled, updating the literal
+`--mcp-enabled false` to `true` is part of that separately approved change; the
+script and checksum manifest must be reviewed and replaced atomically with the
+`.env` edit. A restart must never validate a different MCP state than it starts.
+
+Create `/usr/local/sbin/geem-prod-fail-start` as another root-owned executable.
+On any failed start result it captures the running containers with the exact
+approved project label, verifies that label again for every immutable ID, stops
+those IDs directly through Docker, and then requires zero running containers
+with that project label. It must not parse the possibly invalid Compose files
+that caused preflight to fail. It never removes a container or volume and is a
+categorical no-op when normal `ExecStop` already left no running project
+containers:
+
+```bash
+#!/bin/sh
+set -eu
+
+project='<approved-existing-compose-project>'
+running=$(/usr/bin/docker ps -q \
+  --filter "label=com.docker.compose.project=$project")
+if [ -n "$running" ]; then
+  for container_id in $running; do
+    test "$(/usr/bin/docker inspect "$container_id" --format \
+      '{{index .Config.Labels "com.docker.compose.project"}}')" = "$project"
+  done
+  stop_status=0
+  /usr/bin/timeout 90 /usr/bin/docker stop --time 60 $running \
+    >/dev/null || stop_status=$?
+else
+  stop_status=0
+fi
+remaining=$(/usr/bin/docker ps -q \
+  --filter "label=com.docker.compose.project=$project")
+test -z "$remaining" || {
+  printf 'fail-start containment left project containers running\n' >&2
+  exit 1
+}
+test "$stop_status" -eq 0 || {
+  printf 'fail-start containment stop command failed or timed out\n' >&2
+  exit 1
+}
+printf 'fail-start containment: zero project containers running\n'
+```
+
+Replace the project placeholder with the same literal embedded in the wrapper
+and prestart script. Direct stopping is required because malformed or drifted
+Compose input may be the reason `ExecStartPre` failed. The containment script
+does not use `down`, `--remove-orphans`, or `rm`; if an external recreator
+starts an unknown container during containment, the zero-running check fails
+and incident handling begins instead of deleting unreviewed state.
+
 An illustrative **system-unit** command shape is below. Preserve Docker/network
-ordering and an unlimited or reviewed migration-aware start timeout. Replace
-every path and user with the reviewed production value; do not copy it verbatim:
+ordering and finite startup/stop deadlines. Replace every path and user with the
+reviewed production value; do not copy it verbatim:
 
 ```ini
 [Unit]
@@ -919,9 +1355,15 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/absolute/path/to/Geem/infra
-ExecStart=/usr/local/sbin/geem-prod-compose up -d
-ExecStop=/usr/local/sbin/geem-prod-compose stop
-TimeoutStartSec=0
+ExecStartPre=/usr/bin/timeout 120 /bin/sh -c 'until /usr/bin/docker info >/dev/null 2>&1; do /usr/bin/sleep 2; done'
+ExecStartPre=/usr/bin/sha256sum --check --strict --quiet /etc/geem/phase13-start-artifacts.sha256
+ExecStartPre=/usr/bin/timeout 180 /usr/local/sbin/geem-prod-prestart
+ExecStart=/usr/local/sbin/geem-prod-compose up -d --wait --wait-timeout 300
+ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
+ExecStop=/usr/local/sbin/geem-prod-compose stop --timeout 60
+ExecStopPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-fail-start
+TimeoutStartSec=600
+TimeoutStopSec=120
 
 [Install]
 WantedBy=multi-user.target
@@ -930,7 +1372,18 @@ WantedBy=multi-user.target
 If stage 0 found a **user unit**, it cannot rely on the system unit's
 `Requires=docker.service` ordering. Use an explicit, bounded Docker-readiness
 check and enable it for the user manager's boot target. Resolve the actual
-absolute paths with `command -v` and review them before installing the unit:
+absolute paths with `command -v` and review them before installing the unit.
+If the deployment account cannot read every root-owned file in the checksum
+manifest, do not omit those files or weaken their modes. Install an audited
+sudoers rule that permits only this literal command (no wildcard or alternate
+manifest), validate it with `visudo -cf`, and include that sudoers file in the
+manifest:
+
+```sudoers
+<deployment-user> ALL=(root) NOPASSWD: /usr/bin/sha256sum --check --strict --quiet /etc/geem/phase13-start-artifacts.sha256
+```
+
+The user-unit shape then uses the exact noninteractive command:
 
 ```ini
 [Unit]
@@ -941,9 +1394,14 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/absolute/path/to/Geem/infra
 ExecStartPre=/usr/bin/timeout 120 /bin/sh -c 'until /usr/bin/docker info >/dev/null 2>&1; do /usr/bin/sleep 2; done'
-ExecStart=/usr/local/sbin/geem-prod-compose up -d
-ExecStop=/usr/local/sbin/geem-prod-compose stop
-TimeoutStartSec=0
+ExecStartPre=/usr/bin/sudo -n /usr/bin/sha256sum --check --strict --quiet /etc/geem/phase13-start-artifacts.sha256
+ExecStartPre=/usr/bin/timeout 180 /usr/local/sbin/geem-prod-prestart
+ExecStart=/usr/local/sbin/geem-prod-compose up -d --wait --wait-timeout 300
+ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
+ExecStop=/usr/local/sbin/geem-prod-compose stop --timeout 60
+ExecStopPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-fail-start
+TimeoutStartSec=600
+TimeoutStopSec=120
 
 [Install]
 WantedBy=default.target
@@ -956,12 +1414,66 @@ deployment account's linger state with `loginctl show-user
 an implicit Cursor action. Verify after reboot that the user manager started
 the unit without a login session.
 
+Install the wrapper, prestart, readiness, containment, final unit, and any
+drop-ins as `root:root`; executables are mode `0755`, unit/drop-ins are `0644`.
+The checksum boundary must also include every input that persistent startup
+parses or mounts: the root `.env`, checked-in base and tunnel files, external
+hardening overlay, Cloudflared configuration/credential source, MCP PKI source
+files, and any deployment-owned proxy/config files named by the overlay. A
+credential, certificate, policy, image digest, or environment rotation is a
+reviewed manifest replacement, not an unchecked edit. After final review,
+checksum the exact absolute paths into a root-owned mode-`0444` manifest:
+
+```bash
+set -euo pipefail
+umask 077
+staged_manifest=$(mktemp)
+root_staged_manifest="/etc/geem/.phase13-start-artifacts.$$.new"
+cleanup_manifest_stage() {
+  rm -f "$staged_manifest"
+  sudo rm -f "$root_staged_manifest"
+}
+trap cleanup_manifest_stage EXIT HUP INT TERM
+
+sudo sha256sum \
+  /usr/local/sbin/geem-prod-compose \
+  /usr/local/sbin/geem-prod-prestart \
+  /usr/local/sbin/geem-prod-readiness \
+  /usr/local/sbin/geem-prod-fail-start \
+  "$GEEM_DEPLOY_ROOT/.env" \
+  "$GEEM_DEPLOY_ROOT/infra/docker-compose.yml" \
+  "$GEEM_DEPLOY_ROOT/infra/docker-compose.tunnel.yml" \
+  "$GEEM_PRODUCTION_OVERLAY" \
+  <every-external-config-secret-and-pki-source-path> \
+  <exact-user-unit-artifact-verifier-sudoers-path-if-used> \
+  <installed-unit-absolute-path> \
+  > "$staged_manifest"
+sudo sha256sum --check --strict --quiet "$staged_manifest"
+sudo test ! -e "$root_staged_manifest"
+sudo install -o root -g root -m 0444 \
+  "$staged_manifest" "$root_staged_manifest"
+sudo sha256sum --check --strict --quiet "$root_staged_manifest"
+sudo mv "$root_staged_manifest" \
+  /etc/geem/phase13-start-artifacts.sha256
+sudo sha256sum --check --strict \
+  /etc/geem/phase13-start-artifacts.sha256
+sudo sha256sum /etc/geem/phase13-start-artifacts.sha256
+```
+
+Record the final manifest checksum in the signed change evidence. Expand the
+external-input and conditional sudoers placeholders to separate literal paths,
+or remove the conditional entry when a system unit is used; do not leave a
+placeholder in the installed command. If the unit has drop-ins, list every
+exact drop-in path in the manifest too. A changed project, ingress, volume,
+CIDR, image digest, MCP state, environment, secret/config source, command, or
+unit requires a new reviewed manifest; never regenerate it merely to silence
+`ExecStartPre`.
+
 After review, use exactly the scope discovered in stage 0. For a system unit:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable geem-stack
-sudo systemctl restart geem-stack
 ```
 
 For a user unit, use these instead—never both sets:
@@ -969,8 +1481,61 @@ For a user unit, use these instead—never both sets:
 ```bash
 systemctl --user daemon-reload
 systemctl --user enable geem-stack
-systemctl --user restart geem-stack
 ```
+
+The legacy unit must already be inactive from stage 7 before these commands.
+Do not perform the first normal start yet. The first start of the replacement
+unit is the deliberate failure test below; starting it normally first would
+make a later `start` a no-op and would not exercise containment.
+
+Before accepting the supervisor, prove fail-start containment deliberately in
+the maintenance window. Stop the currently running, already-validated stack
+through the persistent wrapper and prove that no project container remains
+running. Then, through the same configuration-management workflow, install one
+temporary drop-in for the new unit that clears `ExecStartPost`, stops `worker`,
+then runs the real readiness script:
+
+```bash
+/usr/bin/timeout 90 /usr/local/sbin/geem-prod-compose stop --timeout 60
+test -z "$(docker ps -q \
+  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")"
+```
+
+```ini
+[Service]
+ExecStartPost=
+ExecStartPost=/usr/local/sbin/geem-prod-compose stop --timeout 30 worker
+ExecStartPost=/usr/bin/timeout 120 /usr/local/sbin/geem-prod-readiness
+```
+
+Create a separately reviewed temporary checksum manifest using the same exact
+path list as the permanent manifest plus this one exact drop-in. Never let an
+unlisted drop-in bypass the checksum boundary. Reload the one discovered
+system/user scope and start the unit. The first post-start command creates a
+deliberate missing-required-service condition, so the real readiness command
+must fail, the start job must be nonzero, and `ExecStopPost` must contain the
+partial start. Retain categorical evidence from:
+
+```bash
+if <systemctl-in-the-discovered-scope> start geem-stack; then
+  printf 'deliberate readiness failure unexpectedly passed\n' >&2
+  exit 1
+fi
+test -z "$(docker ps -q \
+  --filter "label=com.docker.compose.project=$GEEM_COMPOSE_PROJECT")"
+printf 'deliberate readiness failure: zero project containers running\n'
+```
+
+Remove only that exact temporary drop-in through the approved workflow and
+atomically restore the pre-reviewed permanent checksum manifest. Reload the
+same scope, verify the permanent artifact manifest again, then start normally
+with `sudo systemctl start geem-stack` for the system scope or
+`systemctl --user start geem-stack` for the user scope. Require readiness
+success. If `start` reports the replacement unit active without executing its
+finite readiness gate, stop: the handoff was not tested correctly. Also rerun
+the full project-label inventory: it must contain zero unexpected containers
+and exact required service cardinality. This test is incomplete if it merely
+observes a failed unit while any project container remains running.
 
 Perform a controlled reboot in the maintenance plan. After reboot, repeat
 readiness, process, network, no-host-port, mTLS, direct-public, proxy-deny, and
@@ -1004,19 +1569,24 @@ covered by tests/evidence:
 
 - persistent production startup includes the exact MCP profile, services,
   environment, project, and hardening overlay;
-- Beat remains explicitly MCP-disabled without client PKI or an MCP network;
+- Beat runs the least-privilege `app.worker.beat_app:beat_app`, with only
+  production mode, internal Redis, and MCP false, and without an `env_file`,
+  application/datastore/provider/MCP secrets, or any network beyond the
+  dedicated internal application broker; both
+  `beat.deploy.replicas` and live Beat cardinality equal one;
 - Workspace WhatsApp surface binding uses the exact internal
   `ChannelBinding.id`, not `AppConnection.id`, and has E2E coverage;
 - the proxy independently denies every reviewed non-global and
   deployment-specific range, including the custom CIDR set;
 - the development base/tunnel topology is fully overridden by the reviewed
   production-hardening overlay;
+- fixed-provider proxy, MCP proxy, and ingress each have a distinct
+  single-member external-route network;
 - application, gateway, proxy, frontend, datastore, and ingress images are
   pinned by an approved digest manifest rather than unresolved mutable tags;
-- the existing database has an approved MCP catalog-row creation path; a broad
-  all-App seed is not run without catalog diff review and owner approval;
+- the MCP-only catalog reconciler passes dry-run/apply/verify and no broad
+  all-App seed or ad hoc SQL is used;
 - external SMTP and any other non-HTTP dependency has a reviewed egress path;
-  and
 - the gateway runs as one replica while legacy sessions are in memory, unless
   strict session affinity for every legacy handle is proven; and
 - all intended monitoring, certificate-expiry alerts, and response owners are
@@ -1025,64 +1595,10 @@ covered by tests/evidence:
 If a later approved release fixes a blocker, retain the commit, test, and live
 evidence that closes it. Do not simply remove the checklist item.
 
-## 12. Enable API and worker only
+## 12. Release-candidate and paid-product gate
 
-Only after stages 0–11 pass may the operator change the shared deployment value
-to:
-
-```dotenv
-MCP_CONNECTOR_ENABLED=true
-```
-
-The final Compose overlay must continue forcing Beat to false. Recreate API and
-worker only. Before recreation, prove the **post-enable merged configuration**;
-checking the old running Beat container is insufficient because it still has
-its pre-edit environment:
-
-```bash
-geem-prod-compose config --format json \
-  | geem-prod-compose run --rm --no-deps -T api python -c '
-import json
-import sys
-
-from app.core.config import get_settings
-
-services = json.load(sys.stdin)["services"]
-
-def enabled(service):
-    value = (services[service].get("environment") or {}).get("MCP_CONNECTOR_ENABLED")
-    return str(value).strip().lower() == "true"
-
-if not enabled("api") or not enabled("worker") or enabled("beat"):
-    raise SystemExit("post-enable API/worker/Beat flags are unsafe")
-gateway = services["mcp-egress-gateway"].get("environment") or {}
-if gateway.get("APP_ENV") != "production":
-    raise SystemExit("gateway is not in production mode")
-if str(gateway.get("EGRESS_ALLOW_PRIVATE")).strip().lower() != "false":
-    raise SystemExit("private egress is enabled")
-get_settings()
-print("post-enable settings valid; Beat remains disabled")
-'
-```
-
-Then recreate API and worker:
-
-```bash
-geem-prod-compose up -d --no-deps --force-recreate api worker
-geem-prod-compose ps api worker beat mcp-egress-gateway mcp-egress-proxy
-curl --fail --silent --show-error https://<public-api-host>/api/health/ready
-```
-
-Startup must validate the internal gateway/proxy origins, readable client PKI,
-protocol order, timeouts, provider key, exact model IDs, and capability matrix.
-Do not weaken a startup assertion to make the service start.
-
-Keep the production catalog row `coming_soon`; this stage proves runtime
-configuration only.
-
-## 13. Release-candidate and paid-product gate
-
-Infrastructure enablement grants no tenant access. Use a separate
+Production `MCP_CONNECTOR_ENABLED` must remain `false` throughout this stage.
+Use a separate
 production-topology RC environment and isolated catalog/database to:
 
 1. Configure exactly the signed monthly SAR plans below and one default through
@@ -1094,8 +1610,9 @@ production-topology RC environment and isolated catalog/database to:
 4. Test no-auth, static-header, and OAuth server connection flows.
 5. Test complete discovery/pagination, classification, definition pinning,
    grants, and read-only calls.
-6. Test Workspace Chat, public API, Widget, and direct WhatsApp only after the
-   exact binding blocker is fixed.
+6. Test Workspace Chat, public API, Widget, and direct WhatsApp only with
+   matching exact-SHA Workspace/API artifacts containing the
+   `ChannelBinding.id` contract fix and unit/E2E evidence.
 7. Test write approval, expiry, tamper denial, one-dispatch behavior,
    `outcome_unknown`, delivery-unknown, and reconciliation.
 8. Test zero-grant/zero-binding legacy behavior and a controlled reboot.
@@ -1112,10 +1629,73 @@ Independently verify positive monthly SAR prices, Starter/Team/Scale order,
 exact limits, and exactly one default. The isolated RC database does not create
 production plans.
 
-Only after that production comparison and all other gates pass may an
-authorized Platform Admin publish the production row. Follow publication with
-a bounded read-only production canary. Never use zero/placeholder prices or
-temporarily bypass publication checks.
+Attach exact release SHA/image digests, topology/policy checksums, paid-flow
+evidence, surface/write/ambiguity tests, controlled-reboot evidence, monitoring,
+and rollback rehearsal to the RC sign-off. A functional UAT run, production
+infrastructure readiness, or a `coming_soon` row is not an RC substitute.
+
+Only a signed RC approval may authorize stage 13. Never use zero/placeholder
+prices or temporarily bypass publication checks.
+
+## 13. Enable production API and worker only after RC sign-off
+
+Only after stages 0–12 pass, the signed RC approval names the exact production
+release, and an operator explicitly authorizes enablement may the shared value
+change to:
+
+```dotenv
+MCP_CONNECTOR_ENABLED=true
+```
+
+The final Compose overlay must continue enforcing Beat's exact broker-only
+command, three-variable environment, no-secret/no-`env_file` contract, and
+false MCP flag. Before recreation, rerun the repository-owned topology
+validator from the exact digest-pinned API image with `--mcp-enabled true`;
+checking the old running Beat container is insufficient because it still has
+its pre-edit configuration. Use the same project, ingress, and physical-volume
+arguments approved in stage 7:
+
+```bash
+geem-prod-compose config --format json \
+  | docker run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$GEEM_API_IMAGE" \
+      -m app.ops.validate_production_compose \
+      --project "$GEEM_COMPOSE_PROJECT" \
+      --mcp-enabled true \
+      --ingress-service cloudflared \
+      --volume postgres_data=<recorded-postgres-engine-volume> \
+      --volume redis_data=<recorded-redis-engine-volume> \
+      --volume qdrant_data=<recorded-qdrant-engine-volume> \
+      --volume minio_data=<recorded-minio-engine-volume> \
+      --required-blocked-network <reviewed-host-vpc-or-corporate-cidr>
+```
+
+The validator receives only rendered JSON on stdin: no deployment environment file,
+secret, host mount, Docker socket, or service network. Never replace it with
+`docker compose run`.
+
+Recreate API and worker only, then run the finite readiness script and repeat
+the live flag, Beat isolation, mTLS, direct-public, datastore, and provider
+canaries:
+
+```bash
+geem-prod-compose up -d --no-deps --force-recreate \
+  --wait --wait-timeout 300 api worker
+timeout 120 /usr/local/sbin/geem-prod-readiness
+geem-prod-compose ps api worker beat mcp-egress-gateway mcp-egress-proxy
+curl --fail --silent --show-error "$GEEM_PUBLIC_API_ORIGIN/api/health/ready"
+```
+
+Startup must validate the internal gateway/proxy origins, readable client PKI,
+protocol order, timeouts, provider key, exact model IDs, and capability matrix.
+Do not weaken a startup assertion to make the service start.
+
+Keep the production catalog row `coming_soon` until the post-enable checks pass.
+Then an authorized Platform Admin may run the product-specific publication
+validator and publish the production row named in the RC approval. Follow
+publication with a bounded read-only production canary. Infrastructure or flag
+enablement alone never authorizes publication.
 
 ## 14. Emergency disable and rollback
 
@@ -1125,7 +1705,8 @@ For immediate containment:
 
 1. Move the catalog row to `coming_soon` or unpublish it.
 2. Set `MCP_CONNECTOR_ENABLED=false` in the preserved production `.env`.
-3. Keep the Beat override false.
+3. Keep Beat on its broker-only command/environment with MCP false and exactly
+   one replica.
 4. Force-recreate only API and worker with the same final Compose wrapper and
    `--no-deps`; the already-running dependency closure must not be recreated.
 5. Stop gateway/proxy too if the boundary itself is suspected.
@@ -1147,6 +1728,29 @@ Keep that containment in place until a reviewed boundary release is deployed.
 Do not stop the boundary during a routine disable when pending cleanup or OAuth
 revocation still needs it.
 
+### Security-incident path
+
+Use the incident process, not routine rollback, if a container received
+unintended secrets, a forbidden egress/datastore probe succeeds, an image or
+policy checksum is unknown, or unauthorized access is suspected. Immediately:
+
+1. freeze release automation and new MCP admission;
+2. preserve container/image IDs, creation times, orchestrator events, policy
+   checksums, and redacted logs without dumping environments or secret values;
+3. identify exposed **variable names**, credential owners, access scope, and
+   affected time window through the secret manager and deployment definition;
+4. contain the affected workload/boundary under incident-command approval;
+5. revoke/rotate affected credentials in dependency order, using the separate
+   encryption-key migration whenever ciphertext identity is involved; and
+6. rebuild from the last approved registry manifest, rerun restore/isolation
+   evidence, and resume only after incident closure.
+
+Deleting a container, clearing logs, rotating `JWT_SECRET` or
+`SECRETS_ENCRYPTION_KEY`, or changing a datastore password ad hoc can destroy
+evidence or availability. In particular, discovering that MinIO, `minio-init`,
+the gateway, or a proxy inherited the application `.env` is a credential
+exposure incident even if the service appeared healthy.
+
 Before a planned application-code rollback, deny/expire pending approvals,
 reconcile ambiguous writes/deliveries, revoke bindings and grants, and perform
 best-effort OAuth revocation. Preserve the gateway while cleanup requires it.
@@ -1159,25 +1763,31 @@ to turn MCP off.
 ## Production evidence checklist
 
 - [ ] Operator input table is complete; no value was guessed.
-- [ ] Current and target full SHAs, image digests, and final Compose file order are recorded.
+- [ ] Current/target full SHAs and the signed registry manifest (top/platform digests) are recorded.
 - [ ] Worktree was clean and the source update was a reviewed fast-forward.
-- [ ] PostgreSQL, MinIO, Qdrant, Redis/configuration recovery points are verified.
+- [ ] One new immutable PostgreSQL/MinIO/Qdrant/Redis/configuration recovery set passes isolated restores.
 - [ ] Effective encryption identity is unchanged.
 - [ ] Modern Compose accepts the complete merged topology.
-- [ ] Deployment-owned hardening overlay removes dev credentials, mounts, commands, and ports.
+- [ ] Hardening removes dev state and whole-app MinIO env injection, pins images, and preserves physical volumes.
 - [ ] Per-environment mTLS chains, SAN/EKU, key matches, permissions, and expiry pass.
-- [ ] `MCP_EGRESS_BLOCKED_NETWORKS` and independent proxy denies cover actual deployment ranges.
+- [ ] One-network cardinality passes; atomic application/proxy CIDR sets and checksums cover actual ranges.
 - [ ] API/worker have no direct public route; fixed-provider and non-HTTP dependency canaries pass.
-- [ ] Alembic current/head includes `0040_mcp_external_surfaces`.
-- [ ] Approved catalog-row creation/reconciliation ran; `mcp-connectors` is unique and `coming_soon` with no placeholder plans.
+- [ ] Alembic current/head includes `0041_openwa_binding_backfill`.
+- [ ] MCP-only catalog dry-run/apply/verify passes; the row is unique and `coming_soon` with no placeholder plans.
 - [ ] Workspace and Platform Admin production artifacts match the backend release.
 - [ ] Positive datastore and negative gateway isolation controls pass against the same live services.
+- [ ] Provider proxy, MCP proxy, and ingress have separate one-member external-route networks.
 - [ ] Full mTLS, no-port, direct-public, custom parity, static topology, and public MCP canaries pass.
-- [ ] Persistent startup and a controlled reboot preserve the exact topology.
+- [ ] Legacy supervisor handoff, finite all-service readiness, and controlled reboot preserve the exact topology.
 - [ ] Every release blocker is closed with code/test/live evidence.
-- [ ] API/worker enablement leaves Beat disabled and production unpublished.
 - [ ] Separate RC paid lifecycle, all intended surfaces, approvals, ambiguity handling, and rollback pass.
+- [ ] RC sign-off names the exact release before production API/worker enablement.
+- [ ] Post-RC API/worker enablement leaves Beat on its broker-only command,
+  exact three-variable environment, no secrets, MCP false, and exactly one
+  declared/live replica while production remains unpublished until final
+  authorization.
 - [ ] Monitoring, alert ownership, PKI rotation, and emergency disable are operational.
+- [ ] Security-incident ownership and secret-exposure/forbidden-route containment are operational.
 
 ## Source-of-truth references
 
@@ -1185,12 +1795,15 @@ to turn MCP off.
 - [General production deployment guide](../deployment.md)
 - [Phase 13 product and protocol plan](../../.cursor/plans/mcp.plan.md)
 - [Application settings and startup assertions](../../apps/api/app/core/config.py)
-- [MCP catalog seed](../../apps/api/app/apps_catalog/seed.py)
+- [Least-privilege Celery Beat application](../../apps/api/app/worker/beat_app.py)
+- [Non-mutating production Compose validator](../../apps/api/app/ops/validate_production_compose.py)
+- [MCP-only catalog reconciler](../../apps/api/app/apps_catalog/reconcile_mcp.py)
 - [MCP migrations](../../apps/api/migrations/versions)
 - [Base Compose topology](../../infra/docker-compose.yml)
 - [Production tunnel overlay](../../infra/docker-compose.tunnel.yml)
 - [MCP live isolation smoke](../../infra/mcp-egress/verify-isolation.sh)
 - [MCP proxy policy](../../infra/mcp-egress/proxy/squid.conf)
+- [MCP proxy CIDR renderer](../../infra/mcp-egress/proxy/render_config.py)
 - [Fixed-provider proxy policy](../../infra/app-egress/proxy/squid.conf)
 - [PKI layout contract](../../infra/mcp-egress/pki/README.md)
 - [Gateway runtime contract](../../apps/mcp_egress_gateway/README.md)

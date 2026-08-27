@@ -75,15 +75,6 @@ class AppConnectionOut(BaseModel):
     )
 
 
-class AppConnectionListOut(BaseModel):
-    items: list[AppConnectionOut]
-    total: int
-    limit: int
-    offset: int
-    used: int | None = None
-    connection_limit: int | None = None
-
-
 class StartConnectionRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     connection_id: uuid.UUID | None = None  # reconnect existing
@@ -113,6 +104,7 @@ class ChannelSettingsUpdateRequest(BaseModel):
 
 
 class WhatsAppConnectionOut(AppConnectionOut):
+    channel_binding_id: uuid.UUID
     provider_status: str | None = None
     connect_mode: str | None = None
     phone: str | None = None
@@ -120,6 +112,18 @@ class WhatsAppConnectionOut(AppConnectionOut):
     enabled: bool = True
     auto_reply_enabled: bool = True
     respond_to_groups: bool = False
+
+
+class AppConnectionListOut(BaseModel):
+    # The shared list route returns richer channel DTOs for WhatsApp. Keep the
+    # subtype in the response contract so FastAPI does not serialize it back to
+    # AppConnectionOut and discard the exact ChannelBinding identifier.
+    items: list[WhatsAppConnectionOut | AppConnectionOut]
+    total: int
+    limit: int
+    offset: int
+    used: int | None = None
+    connection_limit: int | None = None
 
 
 class GoogleDrivePickerSessionOut(BaseModel):

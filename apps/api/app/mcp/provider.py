@@ -15,6 +15,29 @@ _REQUIRED_CAPABILITIES = frozenset(
 )
 
 
+class InvalidToolProviderOutput(AppError):
+    """A metered provider response that cannot be admitted as a tool call.
+
+    The raw, untrusted call is deliberately not retained.  ``accounting_result``
+    contains only validated usage and provider identifiers so the executor can
+    charge the rejected generation before performing one strict tool-free
+    finalization.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        accounting_result: AgentProviderResult,
+    ) -> None:
+        self.accounting_result = accounting_result
+        super().__init__(
+            ErrorCategory.GENERATION_FAILED,
+            message,
+            retryable=False,
+        )
+
+
 class ToolCapableChatProvider(Protocol):
     def answer_with_tools(
         self,
@@ -77,4 +100,8 @@ def select_tool_capable_model(settings: Settings) -> str:
     )
 
 
-__all__ = ["ToolCapableChatProvider", "select_tool_capable_model"]
+__all__ = [
+    "InvalidToolProviderOutput",
+    "ToolCapableChatProvider",
+    "select_tool_capable_model",
+]

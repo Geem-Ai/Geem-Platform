@@ -1,9 +1,12 @@
 # Local full stack (bind-mounts, --reload).
-# Production host (baked nginx + hub.geem.ai / api.geem.ai / geem.ai):
-#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+# Production MUST use the reviewed deployment-owned hardening overlay through
+# /usr/local/sbin/geem-prod-compose. Base + tunnel alone retains development
+# credentials, builds, bind mounts, reload commands, and host ports and is
+# forbidden for production. See docs/integrations/mcp-production-deployment.md.
 # This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat / admin-uat):
-#   docker compose -f docker-compose.yml -f docker-compose.uat.yml up -d --build
-# MinIO credentials: MINIO_ACCESS_KEY / MINIO_SECRET_KEY in repo-root ../.env
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml up -d --build
+# MinIO credentials: MINIO_ACCESS_KEY / MINIO_SECRET_KEY in repo-root ../.env.
+# Only those values are passed to MinIO; the application env is not shared.
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,7 +18,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      test: ["CMD", "pg_isready"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,7 +36,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - application_data
+      - application_broker
 
   qdrant:
     image: qdrant/qdrant:v1.13.2
@@ -41,7 +44,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -52,14 +55,36 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
-    env_file:
-      - ../.env
-    entrypoint: >
-      /bin/sh -c "
-      export MINIO_ROOT_USER=\"$${MINIO_ACCESS_KEY:-minio}\";
-      export MINIO_ROOT_PASSWORD=\"$$MINIO_SECRET_KEY\";
-      exec minio server /data --console-address \":9001\"
-      "
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        case "$${APP_ENV}" in
+          local|dev|development|test)
+            export MINIO_ROOT_USER="$${MINIO_ROOT_USER:-minio}"
+            export MINIO_ROOT_PASSWORD="$${MINIO_ROOT_PASSWORD:-change-me}"
+            ;;
+          production)
+            if [ -z "$${MINIO_ROOT_USER}" ] || [ "$${MINIO_ROOT_USER}" = "minio" ]; then
+              echo "MinIO requires a non-default access key in production" >&2
+              exit 1
+            fi
+            if [ -z "$${MINIO_ROOT_PASSWORD}" ] || [ "$${MINIO_ROOT_PASSWORD}" = "change-me" ]; then
+              echo "MinIO requires a non-default secret key in production" >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "MinIO refuses unsupported APP_ENV" >&2
+            exit 1
+            ;;
+        esac
+        exec minio server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     ports:
@@ -69,20 +94,60 @@ services:
       - application_data
 
   minio-init:
-    image: minio/mc:latest
-    env_file:
-      - ../.env
+    # RELEASE.2024-11-21 includes UBI9 coreutils `timeout` and supports both
+    # connection deadlines and `mc mb --ignore-existing`. Keep the multi-arch
+    # index digest pinned so the watchdog cannot disappear under a mutable tag.
+    image: quay.io/minio/mc@sha256:993e8c454a7ec632923f7e3e61adf1d473261da6354cefd641aedd33a2cfe112
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rag-documents}
     depends_on:
       minio:
         condition: service_started
-    entrypoint: >
-      /bin/sh -c "
-      sleep 3;
-      mc alias set local http://minio:9000 \"$${MINIO_ACCESS_KEY:-minio}\" \"$$MINIO_SECRET_KEY\";
-      mc mb -p local/rag-documents || true;
-      mc anonymous set none local/rag-documents;
-      exit 0;
-      "
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        case "$${APP_ENV}" in
+          local|dev|development|test)
+            MINIO_ACCESS_KEY="$${MINIO_ACCESS_KEY:-minio}"
+            MINIO_SECRET_KEY="$${MINIO_SECRET_KEY:-change-me}"
+            ;;
+          production)
+            if [ -z "$${MINIO_ACCESS_KEY}" ] || [ "$${MINIO_ACCESS_KEY}" = "minio" ]; then
+              echo "MinIO initialization requires a non-default access key in production" >&2
+              exit 1
+            fi
+            if [ -z "$${MINIO_SECRET_KEY}" ] || [ "$${MINIO_SECRET_KEY}" = "change-me" ]; then
+              echo "MinIO initialization requires a non-default secret key in production" >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "MinIO initialization refuses unsupported APP_ENV" >&2
+            exit 1
+            ;;
+        esac
+
+        attempts=0
+        until timeout -k 2s 5s mc alias set \
+          --conn-read-deadline 4s --conn-write-deadline 4s \
+          local http://minio:9000 "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}" \
+          >/dev/null 2>&1; do
+          attempts=$$((attempts + 1))
+          if [ "$${attempts}" -ge 30 ]; then
+            echo "MinIO did not become ready before the initialization deadline" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+
+        timeout -k 2s 10s mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+        timeout -k 2s 10s mc anonymous set none "local/$${MINIO_BUCKET}"
+        timeout -k 2s 10s mc stat "local/$${MINIO_BUCKET}" >/dev/null
     networks:
       - application_data
 
@@ -142,6 +207,7 @@ services:
       start_period: 180s
     networks:
       - application_data
+      - application_broker
       - application_ingress
       - application_provider_control
       - mcp_egress_control
@@ -191,6 +257,7 @@ services:
     command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
     networks:
       - application_data
+      - application_broker
       - application_provider_control
       - mcp_egress_control
 
@@ -202,9 +269,10 @@ services:
       context: ./app-egress/proxy
       dockerfile: Dockerfile
     restart: unless-stopped
+    user: "13:13"
     networks:
       - application_provider_control
-      - public_egress
+      - application_provider_egress
     read_only: true
     tmpfs:
       - /run:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
@@ -223,25 +291,23 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file:
-      - ../.env
     environment:
-      DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag
+      APP_ENV: ${APP_ENV:-local}
       REDIS_URL: redis://redis:6379/0
-      QDRANT_URL: http://qdrant:6333
-      MINIO_ENDPOINT: minio:9000
+      # Beat schedules maintenance only. It must never discover or dispatch
+      # tenant MCP tools, even when API and worker are enabled in production.
+      MCP_CONNECTOR_ENABLED: "false"
     volumes:
       - ../apps/api:/app
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
-      api:
-        condition: service_healthy
-    command: celery -A app.worker.celery_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
+    command: celery -A app.worker.beat_app:beat_app beat --loglevel=INFO --schedule /tmp/celerybeat-schedule
+    # Duplicate schedulers can enqueue the same maintenance job more than once.
+    deploy:
+      replicas: 1
     networks:
-      - application_data
+      - application_broker
 
   workspace_web:
     build:
@@ -309,6 +375,7 @@ services:
       context: ..
       dockerfile: apps/mcp_egress_gateway/Dockerfile
     restart: unless-stopped
+    user: "10001:10001"
     environment:
       # Fail-safe default: Compose interpolation does not inherit ../.env.
       # UAT explicitly overrides this to local below.
@@ -357,6 +424,10 @@ services:
       - no-new-privileges:true
     pids_limit: 128
     mem_limit: 256m
+    # Legacy MCP sessions are process-local. Keep one gateway replica unless a
+    # later release adds shared session state or proves strict session affinity.
+    deploy:
+      replicas: 1
 
   # The only component attached to both the internal proxy-control network and
   # a public-egress network. Squid accepts CONNECT to validated IPs only, denies
@@ -367,9 +438,18 @@ services:
       context: ./mcp-egress/proxy
       dockerfile: Dockerfile
     restart: unless-stopped
+    user: "13:13"
+    environment:
+      # The independent Squid boundary receives the same deployment CIDRs as
+      # the Python gateway. Production overlays must require a non-empty set.
+      MCP_PROXY_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:-}
+      MCP_PROXY_REQUIRE_BLOCKED_NETWORKS: ${MCP_PROXY_REQUIRE_BLOCKED_NETWORKS:-false}
+    # Keep the renderer explicit in the rendered Compose model so production
+    # validation can detect an overlay that bypasses the dynamic deny policy.
+    entrypoint: ["python3", "/usr/local/lib/geem/render_mcp_proxy_config.py"]
     networks:
       - mcp_proxy_control
-      - public_egress
+      - mcp_public_egress
     read_only: true
     tmpfs:
       - /run:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
@@ -404,17 +484,27 @@ networks:
   # Application datastores are reachable only by trusted application services.
   application_data:
     internal: true
+  # Redis is isolated from the database/object/vector data plane. API, worker,
+  # and the broker-only Beat scheduler are the only application peers.
+  application_broker:
+    internal: true
   # Ingress/UI traffic is internal; cloudflared bridges it from public_egress.
   application_ingress:
     internal: true
   # API/worker can reach only the fixed-provider proxy on this network.
   application_provider_control:
     internal: true
+  # Only the fixed-provider proxy receives this external default route. It is
+  # deliberately separate from ingress and the tenant-selected MCP proxy.
+  application_provider_egress:
   # API/worker -> gateway only; no public default route.
   mcp_egress_control:
     internal: true
   # Gateway -> dedicated proxy only; no public default route.
   mcp_proxy_control:
     internal: true
-  # Only dedicated proxies and tunnel ingress attach to this public route.
+  # Only the MCP proxy receives this external default route.
+  mcp_public_egress:
+  # Only tunnel ingress attaches to this external default route. Separate
+  # egress bridges prevent any public-facing peer from using either proxy.
   public_egress:

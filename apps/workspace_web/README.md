@@ -48,7 +48,7 @@ On workspace switch / logout, previous workspace queries are removed.
 From `infra/`:
 
 ```bash
-docker compose up workspace_web
+docker compose --env-file ../.env up workspace_web
 ```
 
 Service `workspace_web` maps host **5174** → container 5174 (Vite dev). The Cloudflare Tunnel overlay builds `Dockerfile.prod` and serves nginx on port **80** (published as host **5174**).

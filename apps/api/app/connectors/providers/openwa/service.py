@@ -248,7 +248,11 @@ class OpenWAChannelService:
             installation=installation,
             for_update=can_manage,
         )
-        binding = self._ensure_channel_binding(row)
+        binding = (
+            self._ensure_channel_binding(row)
+            if can_manage
+            else self._require_channel_binding(row)
+        )
         if not can_manage:
             # Read-only snapshot — never mutate connection lifecycle as a member.
             return self._serialize_connection(
@@ -544,7 +548,7 @@ class OpenWAChannelService:
             row = self.db.get(AppConnection, item.id)
             if row is None or row.workspace_id != workspace.id:
                 continue
-            binding = self._ensure_channel_binding(row)
+            binding = self._require_channel_binding(row)
             enriched.append(
                 self._serialize_connection(
                     row,
@@ -554,9 +558,8 @@ class OpenWAChannelService:
                     can_manage=can_manage,
                 )
             )
-        self.db.flush()
         return AppConnectionListOut(
-            items=enriched,  # type: ignore[arg-type]
+            items=enriched,
             total=base.total,
             limit=base.limit,
             offset=base.offset,
@@ -581,7 +584,7 @@ class OpenWAChannelService:
             connection_id=connection_id,
             installation=installation,
         )
-        binding = self._ensure_channel_binding(row)
+        binding = self._require_channel_binding(row)
         return self._serialize_connection(
             row,
             app_slug=app.slug,
@@ -1067,12 +1070,7 @@ class OpenWAChannelService:
         return row
 
     def _ensure_channel_binding(self, connection: AppConnection) -> ChannelBinding:
-        binding = self.db.scalar(
-            select(ChannelBinding).where(
-                ChannelBinding.workspace_id == connection.workspace_id,
-                ChannelBinding.app_connection_id == connection.id,
-            )
-        )
+        binding = self._get_channel_binding(connection)
         if binding is not None:
             return binding
         binding = ChannelBinding(
@@ -1086,6 +1084,28 @@ class OpenWAChannelService:
         self.db.add(binding)
         self.db.flush()
         return binding
+
+    def _require_channel_binding(self, connection: AppConnection) -> ChannelBinding:
+        binding = self._get_channel_binding(connection)
+        if binding is None:
+            # A binding is part of the persisted OpenWA connection identity.  A
+            # read endpoint must never manufacture a transaction-local UUID
+            # that disappears when its request-scoped Session closes.
+            raise AppError(
+                ErrorCategory.CONNECTOR_CONNECTION_FAILED,
+                "WhatsApp connection binding is unavailable.",
+            )
+        return binding
+
+    def _get_channel_binding(
+        self, connection: AppConnection
+    ) -> ChannelBinding | None:
+        return self.db.scalar(
+            select(ChannelBinding).where(
+                ChannelBinding.workspace_id == connection.workspace_id,
+                ChannelBinding.app_connection_id == connection.id,
+            )
+        )
 
     def _fetch_current_session(self, row: AppConnection) -> OpenWASession:
         session_id = self._session_id_from_row(row)
@@ -1241,6 +1261,7 @@ class OpenWAChannelService:
         return WhatsAppConnectionOut.model_validate(
             {
                 **base.model_dump(),
+                "channel_binding_id": binding.id,
                 "provider_status": (row.extra or {}).get("provider_status"),
                 "connect_mode": (row.extra or {}).get("connect_mode"),
                 "phone": row.external_account_id,

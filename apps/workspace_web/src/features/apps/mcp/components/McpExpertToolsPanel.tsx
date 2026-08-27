@@ -26,6 +26,7 @@ import {
   useRevokeExpertMcpGrant,
   useRevokeExpertMcpSurfaceBinding,
 } from '../hooks/useMcpQueries';
+import { whatsappMcpSurfaceTargets } from '../surfaceTargets';
 
 function grantName(grant: McpGrant): string {
   return grant.tool_name || grant.llm_tool_name || grant.tool_id;
@@ -71,10 +72,7 @@ export function McpExpertToolsPanel({ expertId }: { expertId: string }) {
     if (surfaceKind === 'chat_widget') {
       return widget.data ? [{ id: widget.data.id, label: widget.data.title || widget.data.id }] : [];
     }
-    return (whatsapp.data?.items ?? []).map((connection) => ({
-      id: connection.id,
-      label: connection.display_name || connection.external_account_name || connection.id,
-    }));
+    return whatsappMcpSurfaceTargets(whatsapp.data?.items ?? []);
   }, [surfaceKind, widget.data, whatsapp.data]);
 
   useEffect(() => {
@@ -186,9 +184,9 @@ export function McpExpertToolsPanel({ expertId }: { expertId: string }) {
         <CardHeader className="min-h-[38px] bg-accent/50"><div><h3 className="text-sm font-semibold">{t('experts.mcp.surfaceBindings')}</h3><p className="text-xs text-muted-foreground">{t('experts.mcp.surfaceBindingsHint')}</p></div></CardHeader>
         <CardContent className="pt-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2"><Label>{t('experts.mcp.grant')}</Label><Select value={bindingGrantId} onValueChange={setBindingGrantId} disabled={!canEdit}><SelectTrigger><SelectValue placeholder={t('experts.mcp.selectGrant')} /></SelectTrigger><SelectContent>{activeGrants.filter((grant) => grant.state === 'active').map((grant) => <SelectItem key={grant.id} value={grant.id}>{grantName(grant)}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>{t('experts.mcp.surface')}</Label><Select value={surfaceKind} onValueChange={(value) => setSurfaceKind(value as McpSurfaceKind)} disabled={!canEdit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="chat_widget">{t('experts.mcp.chatWidget')}</SelectItem><SelectItem value="whatsapp_openwa">{t('experts.mcp.whatsapp')}</SelectItem></SelectContent></Select></div>
-            <div className="space-y-2"><Label>{t('experts.mcp.exactTarget')}</Label><Select value={targetId} onValueChange={setTargetId} disabled={!canEdit}><SelectTrigger><SelectValue placeholder={t('experts.mcp.selectTarget')} /></SelectTrigger><SelectContent>{targets.map((target) => <SelectItem key={target.id} value={target.id}>{target.label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2"><Label>{t('experts.mcp.grant')}</Label><Select value={bindingGrantId} onValueChange={setBindingGrantId} disabled={!canEdit}><SelectTrigger data-testid="mcp-binding-grant"><SelectValue placeholder={t('experts.mcp.selectGrant')} /></SelectTrigger><SelectContent>{activeGrants.filter((grant) => grant.state === 'active').map((grant) => <SelectItem key={grant.id} value={grant.id}>{grantName(grant)}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2"><Label>{t('experts.mcp.surface')}</Label><Select value={surfaceKind} onValueChange={(value) => setSurfaceKind(value as McpSurfaceKind)} disabled={!canEdit}><SelectTrigger data-testid="mcp-binding-surface"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="chat_widget">{t('experts.mcp.chatWidget')}</SelectItem><SelectItem value="whatsapp_openwa">{t('experts.mcp.whatsapp')}</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><Label>{t('experts.mcp.exactTarget')}</Label><Select value={targetId} onValueChange={setTargetId} disabled={!canEdit}><SelectTrigger data-testid="mcp-binding-target"><SelectValue placeholder={t('experts.mcp.selectTarget')} /></SelectTrigger><SelectContent>{targets.map((target) => <SelectItem key={target.id} value={target.id}>{target.label}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-2"><Label>{t('experts.mcp.writePolicy')}</Label><Select value={writePolicy} onValueChange={(value) => setWritePolicy(value as McpWritePolicy)} disabled={!canEdit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="deny">{t('experts.mcp.writeDeny')}</SelectItem><SelectItem value="workspace_operator_approval">{t('experts.mcp.operatorApproval')}</SelectItem></SelectContent></Select></div>
           </div>
           <div className="space-y-2 text-sm"><label className="flex items-center gap-2 text-destructive"><input type="checkbox" className="size-4 accent-primary" checked={publicAck} onChange={(event) => setPublicAck(event.target.checked)} disabled={!canEdit} />{t('experts.mcp.publicRiskAck')}</label><label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" checked={bindingOutboundAck} onChange={(event) => setBindingOutboundAck(event.target.checked)} disabled={!canEdit} />{t('experts.mcp.outboundAck')}</label></div>

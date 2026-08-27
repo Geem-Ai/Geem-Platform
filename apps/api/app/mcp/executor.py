@@ -62,7 +62,11 @@ from app.mcp.gateway_client import (
 )
 from app.mcp.models import McpServerTool, McpToolGrant
 from app.mcp.oauth import McpOAuthService
-from app.mcp.provider import ToolCapableChatProvider, select_tool_capable_model
+from app.mcp.provider import (
+    InvalidToolProviderOutput,
+    ToolCapableChatProvider,
+    select_tool_capable_model,
+)
 from app.mcp.public_tokens import (
     channel_external_principal_fingerprint,
     origin_digest as keyed_origin_digest,
@@ -94,6 +98,13 @@ class RuntimeResolvedTool(Protocol):
     tool: McpServerTool
     connection: AppConnection
     provider_tool_schema: dict[str, Any]
+
+
+class _InvalidToolArguments(AppError):
+    """A model-generated call whose arguments cannot be safely admitted."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(ErrorCategory.MCP_TOOL_INCOMPATIBLE, message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -776,17 +787,42 @@ class ToolLoopTurnExecutor:
                 )
                 return
             _require_deadline(deadline)
-            provider_result = yield from _run_blocking_with_keepalives(
-                lambda: self.provider.answer_with_tools(
-                    messages,
+            invalid_accounting_result: AgentProviderResult | None = None
+            try:
+                provider_result = yield from _run_blocking_with_keepalives(
+                    lambda: self.provider.answer_with_tools(
+                        messages,
+                        model=model,
+                        system_prompt=prepared.system_prompt,
+                        tools=tool_schemas,
+                        json_response=not prepared.general,
+                        timeout_seconds=_remaining_deadline(deadline),
+                    ),
+                    keepalive_interval_seconds=keepalive_interval_seconds,
+                )
+            except InvalidToolProviderOutput as exc:
+                # Retain only the provider's sanitized accounting envelope, then
+                # leave the exception handler before metering/finalization.  A
+                # secondary failure must never inherit a provider parser
+                # traceback that may contain rejected tool arguments.
+                invalid_accounting_result = exc.accounting_result
+            if invalid_accounting_result is not None:
+                self._record_intermediate_usage(
+                    invalid_accounting_result,
+                    prepared=prepared,
+                    usage_context=usage_context,
+                    final=False,
+                )
+                yield from self._finish_after_invalid_tool_output(
+                    messages=messages,
                     model=model,
-                    system_prompt=prepared.system_prompt,
-                    tools=tool_schemas,
-                    json_response=not prepared.general,
-                    timeout_seconds=_remaining_deadline(deadline),
-                ),
-                keepalive_interval_seconds=keepalive_interval_seconds,
-            )
+                    prepared=prepared,
+                    citations=citations,
+                    usage_context=usage_context,
+                    deadline=deadline,
+                    keepalive_interval_seconds=keepalive_interval_seconds,
+                )
+                return
             calls = provider_result.message.tool_calls or []
             if calls or provider_result.finish_reason != "stop":
                 self._record_intermediate_usage(
@@ -796,20 +832,68 @@ class ToolLoopTurnExecutor:
                     final=False,
                 )
                 _require_deadline(deadline)
+            if not calls and provider_result.finish_reason != "stop":
+                # Provider adapters are not trusted to keep message content and
+                # finish_reason internally consistent. Treat a tool-shaped
+                # outcome with no admitted call exactly like any other malformed
+                # tool output, regardless of provider implementation.
+                yield from self._finish_after_invalid_tool_output(
+                    messages=messages,
+                    model=model,
+                    prepared=prepared,
+                    citations=citations,
+                    usage_context=usage_context,
+                    deadline=deadline,
+                    keepalive_interval_seconds=keepalive_interval_seconds,
+                )
+                return
             if calls:
                 if provider_result.finish_reason != "tool_calls" or len(calls) != 1:
-                    raise AppError(
-                        ErrorCategory.MCP_TOOL_INCOMPATIBLE,
-                        "The model returned an unsupported parallel tool call.",
+                    yield from self._finish_after_invalid_tool_output(
+                        messages=messages,
+                        model=model,
+                        prepared=prepared,
+                        citations=citations,
+                        usage_context=usage_context,
+                        deadline=deadline,
+                        keepalive_interval_seconds=keepalive_interval_seconds,
                     )
+                    return
                 call = calls[0]
                 resolved = by_alias.get(call.function.name)
                 if resolved is None:
-                    raise AppError(
-                        ErrorCategory.MCP_TOOL_NOT_GRANTED,
-                        "The model selected an ungranted MCP tool.",
+                    yield from self._finish_after_invalid_tool_output(
+                        messages=messages,
+                        model=model,
+                        prepared=prepared,
+                        citations=citations,
+                        usage_context=usage_context,
+                        deadline=deadline,
+                        keepalive_interval_seconds=keepalive_interval_seconds,
                     )
-                arguments = _validate_arguments(call.function.arguments, resolved.tool.input_schema)
+                    return
+                invalid_arguments = False
+                try:
+                    arguments = _validate_arguments(
+                        call.function.arguments,
+                        resolved.tool.input_schema,
+                    )
+                except _InvalidToolArguments:
+                    # Leave the handler before calling the finalizer so an
+                    # unrelated failure cannot chain the schema validator's
+                    # rejected instance into application logs.
+                    invalid_arguments = True
+                if invalid_arguments:
+                    yield from self._finish_after_invalid_tool_output(
+                        messages=messages,
+                        model=model,
+                        prepared=prepared,
+                        citations=citations,
+                        usage_context=usage_context,
+                        deadline=deadline,
+                        keepalive_interval_seconds=keepalive_interval_seconds,
+                    )
+                    return
                 fingerprint = _tool_call_fingerprint(call.function.name, arguments)
                 pagination_call = (
                     _pagination_call_identity(
@@ -1114,6 +1198,62 @@ class ToolLoopTurnExecutor:
             deadline=deadline,
             fallback_answer=_TOOL_ERROR_FALLBACK,
             insufficient_context=True,
+        )
+
+    def _answer_after_invalid_tool_output(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str,
+        prepared: _PreparedTurn,
+        deadline: float,
+    ) -> AgentProviderResult:
+        """Finish without tools after rejecting one malformed model call."""
+
+        return self._answer_without_tools(
+            messages,
+            model=model,
+            prepared=prepared,
+            deadline=deadline,
+            fallback_answer=(
+                "An external tool request could not be interpreted safely, so it "
+                "was not run. Please try again."
+            ),
+            insufficient_context=True,
+        )
+
+    def _finish_after_invalid_tool_output(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str,
+        prepared: _PreparedTurn,
+        citations: list[dict[str, Any]],
+        usage_context: GenerationUsageContext,
+        deadline: float,
+        keepalive_interval_seconds: float | None,
+    ) -> Generator[ToolLoopStreamEvent, None, None]:
+        """Yield one strict final response without exposing the rejected call."""
+
+        invalid_output_result = yield from _run_blocking_with_keepalives(
+            lambda: self._answer_after_invalid_tool_output(
+                messages=messages,
+                model=model,
+                prepared=prepared,
+                deadline=deadline,
+            ),
+            keepalive_interval_seconds=keepalive_interval_seconds,
+        )
+        yield ToolLoopStreamEvent(
+            event="complete",
+            data={},
+            result=self._finalize_before_deadline(
+                invalid_output_result,
+                prepared=prepared,
+                tool_citations=citations,
+                usage_context=usage_context,
+                deadline=deadline,
+            ),
         )
 
     def _answer_after_repeated_success(
@@ -1635,26 +1775,28 @@ def _validate_arguments(
     else:
         try:
             value = json.loads(raw)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise AppError(
-                ErrorCategory.MCP_TOOL_INCOMPATIBLE,
-                "MCP arguments are invalid JSON.",
-            ) from exc
+        except (TypeError, json.JSONDecodeError):
+            raise _InvalidToolArguments("MCP arguments are invalid JSON.") from None
     if not isinstance(value, dict):
-        raise AppError(ErrorCategory.MCP_TOOL_INCOMPATIBLE, "MCP arguments must be an object.")
+        raise _InvalidToolArguments("MCP arguments must be an object.")
     _reject_remote_refs(schema)
     try:
         Draft202012Validator.check_schema(schema)
-        Draft202012Validator(schema).validate(value)
-    except (SchemaError, ValidationError) as exc:
+    except SchemaError as exc:
         raise AppError(
             ErrorCategory.MCP_TOOL_INCOMPATIBLE,
-            "MCP arguments do not match the approved input schema.",
+            "The approved MCP input schema is invalid.",
         ) from exc
     try:
+        Draft202012Validator(schema).validate(value)
+    except ValidationError:
+        raise _InvalidToolArguments(
+            "MCP arguments do not match the approved input schema."
+        ) from None
+    try:
         json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
-    except (TypeError, ValueError) as exc:
-        raise AppError(ErrorCategory.MCP_TOOL_INCOMPATIBLE, "MCP arguments are invalid.") from exc
+    except (TypeError, ValueError):
+        raise _InvalidToolArguments("MCP arguments are invalid.") from None
     return value
 
 

@@ -50,7 +50,7 @@ cp .env.example .env
 cp apps/workspace_web/.env.example apps/workspace_web/.env
 
 cd infra
-docker compose up -d --build
+docker compose --env-file ../.env up -d --build
 ```
 
 | Service | URL |
@@ -66,7 +66,7 @@ First admin (optional; or register in the UI):
 
 ```bash
 cd infra
-docker compose exec api python -m app.identity.bootstrap
+docker compose --env-file ../.env exec api python -m app.identity.bootstrap
 ```
 
 Local billing checkout uses the **Noop** gateway when `APP_ENV=local` / `test`. ClickPay credentials are optional until a ClickPay config is enabled.
