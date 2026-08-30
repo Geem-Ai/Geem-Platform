@@ -994,6 +994,12 @@ def test_production_publication_builds_and_verifies_exact_locked_images() -> Non
     assert "platforms: linux/amd64" in workflow
     assert workflow.count("uses: docker/build-push-action@") == 7
     assert "python -m pytest -q -p no:cacheprovider tests/unit tests/integration" in workflow
+    frontend_verification = workflow.split(
+        "- name: Verify the exact published frontend images", maxsplit=1
+    )[1].split("- name: Create exact-SHA production image manifest", maxsplit=1)[0]
+    assert frontend_verification.count(
+        "--tmpfs /run:rw,noexec,nosuid,nodev"
+    ) == 3
     assert "(.images | length) == 7" in workflow
     assert "(.build_bases | length) == 5" in workflow
     assert "(.runtime_images | length) == 5" in workflow
