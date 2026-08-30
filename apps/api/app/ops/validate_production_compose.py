@@ -159,7 +159,12 @@ MCP_SECRET_NAMES = frozenset(
     }
 )
 CLOUDFLARED_CONFIG_NAME = "cloudflared_config"
+CLOUDFLARED_MAINTENANCE_CONFIG_NAME = "cloudflared_maintenance_config"
 CLOUDFLARED_CREDENTIALS_NAME = "cloudflared_credentials"
+CLOUDFLARED_CONFIG_FILES = {
+    "live": "/etc/geem/cloudflared/config.yml",
+    "maintenance": "/etc/geem/cloudflared/config.maintenance.yml",
+}
 CLOUDFLARED_COMMAND = (
     "tunnel",
     "--protocol",
@@ -390,6 +395,7 @@ class ValidationOptions:
     physical_volumes: Mapping[str, str]
     required_blocked_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
     allow_local_image_ids: bool = False
+    cloudflared_mode: str = "live"
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -767,6 +773,15 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             "this production topology requires the exact reviewed cloudflared ingress"
         )
         return errors
+    if options.cloudflared_mode not in CLOUDFLARED_CONFIG_FILES:
+        errors.append("cloudflared mode is not one of the reviewed contracts")
+        return errors
+
+    cloudflared_config_name = (
+        CLOUDFLARED_CONFIG_NAME
+        if options.cloudflared_mode == "live"
+        else CLOUDFLARED_MAINTENANCE_CONFIG_NAME
+    )
 
     # The ingress flag approves one complete, fixed Cloudflared contract. It
     # cannot be used to bless an arbitrary public service or credential mount.
@@ -785,7 +800,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if not _has_exact_resource_binding(
             service,
             field="configs",
-            source=CLOUDFLARED_CONFIG_NAME,
+            source=cloudflared_config_name,
             target="/etc/cloudflared/config.yml",
             uid="65532",
             gid="65532",
@@ -804,12 +819,17 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             errors.append("cloudflared does not have the exact reviewed credential mount")
         if service.get("volumes"):
             errors.append("cloudflared ingress must not receive volume or bind mounts")
+        if (
+            options.cloudflared_mode == "maintenance"
+            and service.get("depends_on") not in (None, {})
+        ):
+            errors.append("maintenance cloudflared must not depend on application services")
 
     has_cloudflared = "cloudflared" in options.ingress_services
     expected_secret_names = MCP_SECRET_NAMES | (
         {CLOUDFLARED_CREDENTIALS_NAME} if has_cloudflared else set()
     )
-    expected_config_names = {CLOUDFLARED_CONFIG_NAME} if has_cloudflared else set()
+    expected_config_names = {cloudflared_config_name} if has_cloudflared else set()
     if not MCP_SECRET_NAMES.issubset(secrets):
         errors.append("production is missing a reviewed MCP PKI secret source")
     if set(secrets) != expected_secret_names:
@@ -831,16 +851,23 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
                 "cloudflared credentials must use one non-empty absolute file source"
             )
         if not _is_exact_absolute_file_declaration(
-            configs.get(CLOUDFLARED_CONFIG_NAME),
-            name=f"{options.project}_{CLOUDFLARED_CONFIG_NAME}",
+            configs.get(cloudflared_config_name),
+            name=f"{options.project}_{cloudflared_config_name}",
         ):
             errors.append(
                 "cloudflared config must use one non-empty absolute file source"
             )
+        elif (
+            _mapping(configs.get(cloudflared_config_name)).get("file")
+            != CLOUDFLARED_CONFIG_FILES[options.cloudflared_mode]
+        ):
+            errors.append("cloudflared config uses the wrong reviewed host file")
     expected_networks = dict(EXPECTED_SERVICE_NETWORKS)
     for ingress in options.ingress_services:
-        expected_networks[ingress] = frozenset(
-            {"application_ingress", INGRESS_PUBLIC_NETWORK}
+        expected_networks[ingress] = (
+            frozenset({"application_ingress", INGRESS_PUBLIC_NETWORK})
+            if options.cloudflared_mode == "live"
+            else frozenset({INGRESS_PUBLIC_NETWORK})
         )
     for name, expected in expected_networks.items():
         if _service_networks(services[name]) != expected:
@@ -1400,6 +1427,15 @@ def _parser() -> argparse.ArgumentParser:
             "single-host clean-slate deployment path"
         ),
     )
+    parser.add_argument(
+        "--cloudflared-mode",
+        choices=("live", "maintenance"),
+        default="live",
+        help=(
+            "Select the reviewed live-origin or fail-closed maintenance-only "
+            "Cloudflared topology"
+        ),
+    )
     return parser
 
 
@@ -1428,6 +1464,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         physical_volumes=physical_volumes,
         required_blocked_networks=required_blocks,
         allow_local_image_ids=arguments.allow_local_image_ids,
+        cloudflared_mode=arguments.cloudflared_mode,
     )
     try:
         errors = validate_production_compose(config, options)

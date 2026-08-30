@@ -421,6 +421,7 @@ def _options(
     mcp_enabled: bool = False,
     ingress_services: frozenset[str] = frozenset({"cloudflared"}),
     allow_local_image_ids: bool = False,
+    cloudflared_mode: str = "live",
 ) -> ValidationOptions:
     return ValidationOptions(
         project="infra",
@@ -434,6 +435,7 @@ def _options(
         },
         required_blocked_networks=(),
         allow_local_image_ids=allow_local_image_ids,
+        cloudflared_mode=cloudflared_mode,
     )
 
 
@@ -445,8 +447,153 @@ def _errors(config: dict[str, object], **options: object) -> list[str]:
     return validate_production_compose(config, _options(**options))  # type: ignore[arg-type]
 
 
+def _maintenance_config() -> dict[str, object]:
+    config = _valid_config()
+    cloudflared = _services(config)["cloudflared"]
+    cloudflared["networks"] = {"public_egress": None}
+    cloudflared["configs"] = [
+        {
+            "source": "cloudflared_maintenance_config",
+            "target": "/etc/cloudflared/config.yml",
+            "uid": "65532",
+            "gid": "65532",
+            "mode": 0o444,
+        }
+    ]
+    cloudflared.pop("depends_on", None)
+    config["configs"] = {
+        "cloudflared_maintenance_config": {
+            "name": "infra_cloudflared_maintenance_config",
+            "file": "/etc/geem/cloudflared/config.maintenance.yml",
+        }
+    }
+    return config
+
+
 def test_accepts_exact_digest_pinned_isolated_topology() -> None:
     assert _errors(_valid_config()) == []
+
+
+def test_accepts_exact_fail_closed_maintenance_ingress_topology() -> None:
+    assert _errors(_maintenance_config(), cloudflared_mode="maintenance") == []
+
+
+def test_programmatic_cloudflared_mode_must_select_a_reviewed_contract() -> None:
+    assert _errors(
+        _valid_config(), cloudflared_mode="unreviewed"
+    ) == ["cloudflared mode is not one of the reviewed contracts"]
+
+
+def test_live_and_maintenance_ingress_contracts_are_not_interchangeable() -> None:
+    live_errors = _errors(_maintenance_config())
+    maintenance_errors = _errors(
+        _valid_config(), cloudflared_mode="maintenance"
+    )
+
+    assert "cloudflared does not have the exact reviewed config mount" in live_errors
+    assert (
+        "production config declarations differ from reviewed service bindings"
+        in live_errors
+    )
+    assert (
+        "cloudflared does not have the exact reviewed config mount"
+        in maintenance_errors
+    )
+    assert (
+        "production config declarations differ from reviewed service bindings"
+        in maintenance_errors
+    )
+    assert "cloudflared has an unexpected network membership" in maintenance_errors
+
+
+def test_maintenance_ingress_cannot_rejoin_application_ingress() -> None:
+    config = _maintenance_config()
+    _services(config)["cloudflared"]["networks"] = {
+        "application_ingress": None,
+        "public_egress": None,
+    }
+
+    errors = _errors(config, cloudflared_mode="maintenance")
+
+    assert "cloudflared has an unexpected network membership" in errors
+
+
+@pytest.mark.parametrize(
+    "depends_on",
+    [
+        {"api": {"condition": "service_started"}},
+        [],
+        "api",
+        0,
+    ],
+)
+def test_maintenance_ingress_cannot_depend_on_application_services(
+    depends_on: object,
+) -> None:
+    config = _maintenance_config()
+    _services(config)["cloudflared"]["depends_on"] = depends_on
+
+    errors = _errors(config, cloudflared_mode="maintenance")
+
+    assert "maintenance cloudflared must not depend on application services" in errors
+
+
+@pytest.mark.parametrize("cloudflared_mode", ["live", "maintenance"])
+def test_cloudflared_config_binding_must_match_selected_mode(
+    cloudflared_mode: str,
+) -> None:
+    config = (
+        _valid_config()
+        if cloudflared_mode == "live"
+        else _maintenance_config()
+    )
+    _services(config)["cloudflared"]["configs"][0]["source"] = "wrong_config"  # type: ignore[index]
+
+    errors = _errors(config, cloudflared_mode=cloudflared_mode)
+
+    assert "cloudflared does not have the exact reviewed config mount" in errors
+
+
+@pytest.mark.parametrize(
+    ("cloudflared_mode", "wrong_path"),
+    [
+        ("live", "/etc/geem/cloudflared/config.maintenance.yml"),
+        ("maintenance", "/etc/geem/cloudflared/config.yml"),
+    ],
+)
+def test_cloudflared_host_config_path_must_match_selected_mode(
+    cloudflared_mode: str, wrong_path: str
+) -> None:
+    config = (
+        _valid_config()
+        if cloudflared_mode == "live"
+        else _maintenance_config()
+    )
+    config_name = (
+        "cloudflared_config"
+        if cloudflared_mode == "live"
+        else "cloudflared_maintenance_config"
+    )
+    config["configs"][config_name]["file"] = wrong_path  # type: ignore[index]
+
+    errors = _errors(config, cloudflared_mode=cloudflared_mode)
+
+    assert "cloudflared config uses the wrong reviewed host file" in errors
+
+
+def test_maintenance_mode_rejects_extra_live_config_declaration() -> None:
+    config = _maintenance_config()
+    config["configs"]["cloudflared_config"] = {  # type: ignore[index]
+        "name": "infra_cloudflared_config",
+        "file": "/etc/geem/cloudflared/config.yml",
+    }
+
+    errors = _errors(config, cloudflared_mode="maintenance")
+
+    assert (
+        "production config declarations differ from reviewed service bindings"
+        in errors
+    )
 
 
 def test_local_image_ids_require_explicit_single_host_opt_in() -> None:

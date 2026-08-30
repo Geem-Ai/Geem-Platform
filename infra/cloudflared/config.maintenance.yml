@@ -1,0 +1,21 @@
+# Phase 13 clean-slate maintenance configuration for the existing production
+# tunnel. This file deliberately contains no application origin. Keep it
+# byte-identical when installed as
+# /etc/geem/cloudflared/config.maintenance.yml.
+tunnel: e054f188-97ca-4cab-80da-020f0ae4385b
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: hub.geem.ai
+    service: http_status:503
+  - hostname: api.geem.ai
+    service: http_status:503
+  - hostname: geem.ai
+    service: http_status:503
+  - hostname: www.geem.ai
+    service: http_status:503
+  - hostname: mtfm.geem.ai
+    service: http_status:503
+  - hostname: "*.geem.ai"
+    service: http_status:503
+  - service: http_status:404

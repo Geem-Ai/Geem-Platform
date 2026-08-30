@@ -48,9 +48,10 @@ For this path only:
 - The legacy supervisor may be replaced by one root-owned system unit after its
   discovered system/user unit is stopped and disabled. This is a controlled
   scope migration: the old unit must never remain active or enabled in parallel.
-- The infrastructure may finish running behind an independent Geem-only ingress
-  hold. Because controlled-reboot validation is deferred, this procedure does
-  not release public traffic; that later release remains a separate gate.
+- The infrastructure may finish running behind either approved Geem-only
+  ingress-hold mode. Because controlled-reboot validation is deferred, this
+  procedure does not release public traffic; that later release remains a
+  separate gate.
 - The clean release uses `/etc/geem/production.env` for Compose interpolation
   and for API/worker `env_file`. Leave the legacy repository `.env` unchanged
   so a failed cutover can safely restart the retained legacy containers.
@@ -79,40 +80,117 @@ Stop legacy Geem containers only by their already verified full IDs. Do not
 stop or modify an unrelated project, system Cloudflared, Apache, or a shared
 network. A label collision is not ownership evidence.
 
-## Independent Geem-only ingress hold
+## Geem-only ingress hold: choose exactly one mode
 
-Before stopping legacy Geem or starting any new-project container, activate and
-prove an ingress hold that is independent of both the legacy and candidate
-Compose lifecycles. Scope it only to the exact Geem public origins/tunnel. It
-must remain effective if either the legacy or candidate `cloudflared` container
-starts, restarts, or is recreated.
+Keep public requests away from application origins throughout migration,
+isolation checks, the deliberate unit failure, the successful normal unit
+start, bounded monitoring, and the pending controlled-reboot test. Choose and
+record exactly one of these modes before cutover.
 
-The preferred mechanism is an externally managed Cloudflare maintenance
-control over only those exact Geem public hosts/tunnel. A host-firewall
-alternative is acceptable only when reinspection proves the legacy tunnel's
-egress network contains zero unrelated endpoints and the rules cover both that
-legacy egress identity/subnet and the exact candidate `public_egress` subnet
-without matching anything else. Such rules must use the host's native firewall,
-a dedicated forward hook that loads before Docker and cannot be reordered or
-flushed by Docker, idempotent exact-rule checks, packet-counter evidence, a
-fail-closed removal script reserved for the later release gate, and boot
-ordering that restores the hold before either tunnel can auto-start. Do not
-restart Docker, flush or replace a shared chain, or use mutable container/name
-matches. If the legacy network is shared with any unrelated endpoint, the
-host-firewall alternative is forbidden and the external Cloudflare control is
-required. A mechanism that merely leaves either Cloudflared container stopped
-is not an independent hold.
+### Mode A: independent external hold
 
-The hold must not match, stop, modify, reuse, or route through `law-firm`, the
-host's system Cloudflared, Apache, Ollama/`ollama-bridge`, another Docker subnet,
-or any unrelated public host. If no exact independent hold can be established
-with the available host or Cloudflare authority, stop before legacy downtime
-and report that single actionable blocker.
+Use an externally managed Cloudflare maintenance control scoped only to the
+exact Geem public origins/tunnel. It must be independent of both legacy and
+candidate Compose lifecycles and remain effective if either `cloudflared`
+container starts, restarts, or is recreated.
 
-Keep the hold active through migration, isolation checks, the deliberate unit
-failure, the successful normal unit start, bounded monitoring, and the pending
-controlled-reboot test. Candidate Cloudflared running is not authorization to
-release traffic.
+A host-firewall implementation is acceptable only when reinspection proves the
+legacy tunnel's egress network contains zero unrelated endpoints and exact
+rules cover both the legacy egress identity/subnet and candidate
+`public_egress` subnet without matching anything else. If the legacy network is
+shared with any unrelated endpoint, firewall Mode A is forbidden. Never modify
+or flush a shared chain.
+
+### Mode B: exact local maintenance tunnel
+
+Use this owner-authorized offline fallback when the host cannot administer the
+public zone and a shared legacy network makes firewall Mode A unsafe. It
+requires the existing locally managed Geem tunnel and DNS routes to remain
+unchanged. It does not create or edit a Cloudflare tunnel, DNS record, route, or
+zone policy.
+
+The active production tunnel configuration must be byte-identical to the
+approved release's
+`infra/cloudflared/config.maintenance.yml`. That tracked file maps every exact
+Geem hostname and `*.geem.ai` to Cloudflared's built-in `http_status:503`
+service, maps the final catch-all to `http_status:404`, and contains no
+application origin. Cloudflare documents `http_status` as a built-in service,
+so it makes no upstream connection. The reviewed maintenance Compose overlay
+also removes Cloudflared from `application_ingress`, removes its application
+dependencies, and leaves it attached only to `public_egress`.
+
+Treat the complete Mode B maintenance runtime pack as one coupled, immutable
+unit, not as a config-file substitution. The active pack contains:
+
+- the root-owned, byte-identical maintenance config at
+  `/etc/geem/cloudflared/config.maintenance.yml`;
+- the root-owned, byte-identical maintenance overlay at
+  `/etc/geem/docker-compose.maintenance-ingress.yml`;
+- the wrapper's four-file selection, in order: checked-in base, checked-in
+  tunnel, deployment-owned production hardening, then maintenance overlay;
+- pre-start validation with the literal `--cloudflared-mode maintenance`, plus
+  unit/readiness behavior that starts Cloudflared last; and
+- one checksum manifest covering that complete pack and all other startup
+  inputs.
+
+The maintenance overlay must be the final Compose file. It is what removes the
+live config resource and `application_ingress`; selecting the maintenance
+config without selecting that overlay is forbidden. The later live release
+uses a different, equally coupled three-file runtime pack and the literal
+`--cloudflared-mode live`.
+
+Before downtime, extract the maintenance template from the exact release SHA,
+install it as a staged `root:65532` mode-`0440` regular file, and require all of
+the following without exposing credentials or opening a network:
+
+- byte equality with the tracked release template;
+- equality of its tunnel UUID and credentials path with the reviewed live
+  locally managed tunnel;
+- `cloudflared --config /etc/cloudflared/config.yml tunnel ingress validate`
+  succeeds in the exact local Cloudflared image with `--network none`, the
+  config mounted read-only, and no application environment;
+- `cloudflared --config /etc/cloudflared/config.yml tunnel ingress rule <URL>`
+  selects `http_status:503` for `geem.ai`,
+  `www.geem.ai`, `api.geem.ai`, `hub.geem.ai`, `mtfm.geem.ai`, and a random
+  `*.geem.ai` hostname, while an unrelated hostname selects the final
+  `http_status:404`; and
+- no ingress service contains `http://`, `https://`, `unix:`, `tcp:`, `ssh:`,
+  `rdp:`, `smb:`, `bastion`, or `hello_world`.
+
+The persistent pre-start script must repeat byte equality for both tracked
+maintenance files, isolated Cloudflared validation, rule-selection checks,
+four-file rendered-topology validation, and manifest verification on every
+start. Include the active copies and tracked templates in the permanent
+checksum manifest. Any divergence fails closed before Cloudflared starts.
+
+Mode B uses the same locally managed tunnel UUID as the legacy connector, so
+the transition must be serialized. Before cutover, prove through available
+account inventory that no other connector replica can serve this tunnel. If
+account inventory is unavailable, record the owner's explicit assertion that
+this PC is the sole intentional connector host and combine it with the local
+container inventory and repeated cache-busted probes before and after the
+swap. Evidence of an unknown remote replica is a hard stop. Never run legacy
+live-routing and candidate maintenance connectors concurrently for this tunnel.
+
+Mode B begins with a deliberate offline transition: neutralize the legacy Geem
+supervisor, set only the verified legacy Geem Cloudflared container's restart
+policy to `no`, stop that exact container, and prove it cannot return. After the
+remaining verified legacy Geem containers stop and the checkout reaches the
+approved SHA, install and validate the complete maintenance runtime pack, then
+start only candidate Cloudflared with `--no-deps` before starting any
+application service. Require fresh, repeated cache-busted external probes to
+return `503` for every Geem origin. Until that proof passes, no datastore,
+migration, bootstrap, API, worker, frontend, or MCP service may start.
+
+Candidate Cloudflared running under Mode B is the maintenance control, not a
+traffic-release event. If it stops, Geem remains unavailable rather than
+falling through to an application origin. Never restart legacy Cloudflared with
+its live-routing config during rollback.
+
+Both modes must leave `law-firm`, the host's system Cloudflared, Apache,
+Ollama/`ollama-bridge`, shared networks, unrelated public hosts, and unrelated
+Cloudflare accounts/zones untouched. If neither mode can be established, stop
+before legacy downtime and report that single actionable blocker.
 
 ## 1. Pre-stage the release while the old Geem stack is still running
 
@@ -172,11 +250,15 @@ Create the following outside the Git checkout:
 
 - `/etc/geem/production.env`;
 - `/etc/geem/docker-compose.production-hardening.yml`;
-- `/etc/geem/cloudflared/config.yml` and `credentials.json`;
+- `/etc/geem/cloudflared/config.yml`, `config.maintenance.yml`, and
+  `credentials.json`;
+- for Mode B, `/etc/geem/docker-compose.maintenance-ingress.yml` as a
+  byte-identical root-owned copy of the tracked release overlay;
 - `/etc/geem/mcp-egress/` with the documented CA certificate and server/client
   leaf certificate/key layout;
 - `/usr/local/sbin/geem-prod-compose`;
-- the root-owned independent-ingress-hold rule scripts and system unit;
+- the selected ingress-hold artifacts: Mode A rule scripts/unit or the exact
+  Mode B maintenance runtime pack and validation script;
 - finite pre-start, readiness, and failed-start containment scripts; and
 - a staged root-owned system `geem-stack` unit outside its live systemd path.
 
@@ -186,9 +268,9 @@ cutover explicitly neutralizes it. Never install or enable parallel system and
 user units.
 
 The production hardening overlay must follow the complete fragment and network
-map in
-[`Create the production hardening overlay`](./mcp-connectors.md#5-create-the-production-hardening-overlay),
-with these clean-slate substitutions:
+map in [`Create the production hardening
+overlay`](./mcp-connectors.md#5-create-the-production-hardening-overlay), with
+these clean-slate substitutions:
 
 - all `*_IMAGE` values are exact local `sha256:...` IDs captured above;
 - every service sets `pull_policy: never`;
@@ -216,9 +298,12 @@ Install the gateway server key as
 `root:10001` mode `0440`, the application client key as `root:root` mode
 `0400`, and public certificates as mode `0644`.
 
-Install the Cloudflared source directory as `root:65532` mode `0750` and both
-source files as `root:65532` mode `0440` so container UID/GID `65532` can read
-but not write them. The rendered Compose config/secret targets retain the
+Install the Cloudflared source directory as `root:65532` mode `0750` and the
+live config, maintenance config, and credentials as `root:65532` mode `0440`
+so container UID/GID `65532` can read but not write them. Install the Mode B
+maintenance overlay as a `root:root` mode `0444` regular file. Require the
+maintenance config and overlay to be byte-identical to the tracked files at the
+approved release SHA. The rendered Compose config/secret targets retain the
 stricter documented modes.
 
 For the fresh database, generate a dedicated strong
@@ -234,15 +319,32 @@ Create these four volumes only after proving each exact name is absent:
 - `<release-project>-minio-data-<release-id>`.
 
 Declare them `external: true` in the final overlay. If any name already exists,
-choose a new release ID; do not reuse or clear it.
+choose a new release ID; do not reuse or clear it. The sole resume exception is
+an exact volume created by an earlier stopped attempt under this same approved
+clean-slate operation: it may be reused only after proving it has never been
+mounted by any container, has zero current references, has the recorded
+driver/labels, and contains no entries. If any proof fails, preserve it and use
+a new release ID.
 
 ## 3. Complete non-disruptive preflight
 
-The persistent wrapper must always select, in this order:
+The persistent wrapper for the live runtime pack must select, in this order:
 
 1. `infra/docker-compose.yml`;
 2. `infra/docker-compose.tunnel.yml`; and
 3. `/etc/geem/docker-compose.production-hardening.yml`.
+
+The persistent wrapper for the Mode B maintenance runtime pack must append:
+
+4. `/etc/geem/docker-compose.maintenance-ingress.yml`.
+
+The Mode B overlay must be last. It cannot be an optional environment-driven
+path. While the maintenance hold is selected, every wrapper invocation and
+unit action must use all four files, and every topology validator invocation
+must include `--cloudflared-mode maintenance`. The live three-file pack must
+use `--cloudflared-mode live`. Switching between those contracts requires an
+atomic replacement of the whole runtime pack described below; changing only a
+Cloudflared config file is forbidden.
 
 It must also select the new project name,
 `/etc/geem/production.env`, and the MCP profile. The overlay must reset the
@@ -262,12 +364,20 @@ to exist with the expected driver/labels, have zero container references, and
 require every legacy volume to retain its recorded state. Require every
 placeholder to be resolved.
 
-After those checks, install, enable, and start the independent Geem-only ingress
-hold. Prove the reviewed maintenance/denial response on all exact Geem origins
-while legacy Cloudflared is still running. For an allowed host-firewall hold,
-also prove both exact subnet rules with synthetic egress probes and packet-
-counter changes that cannot reach an unrelated subnet. Keep that hold active
-throughout every following step.
+For Mode A, install, enable, and start the independent hold after those checks.
+Prove the reviewed maintenance/denial response on every exact Geem origin while
+legacy Cloudflared is still running. For an allowed host-firewall hold, also
+prove both exact subnet rules with synthetic egress probes and packet-counter
+changes that cannot reach an unrelated subnet. Keep that hold active throughout
+every following step.
+
+For Mode B, do not mutate Cloudflare or stop legacy traffic during preflight.
+Stage the exact maintenance config, maintenance overlay, four-file wrapper,
+pre-start mode, and validation script. Run every isolated template and wrapper
+syntax check above, and record that the public offline window begins only at
+section 4. These paths are not used by the legacy connector. Do not invoke the
+candidate wrapper until the bytes, existing tunnel identity, and sole-connector
+gate pass.
 
 ## 4. Execute the bounded offline cutover
 
@@ -276,17 +386,30 @@ throughout every following step.
    container. If its stop action could select another project, neutralize only
    that exact unsafe hook first; then stop and disable the unit, prove it
    inactive and disabled, and stop the verified Geem containers directly.
-2. Stop the verified running legacy Geem container IDs in dependency-safe
-   order. Leave unrelated and already exited containers untouched. Require all
-   expected old Geem IDs to be stopped before continuing.
-3. Before any candidate container starts, prove from an external vantage that
-   every exact Geem public origin now shows the reviewed maintenance/denial
-   state and not a legacy or candidate application response.
-4. Only now fast-forward the clean shared checkout with
+2. Under Mode B, update only the verified legacy Geem Cloudflared container to
+   restart policy `no`, stop that exact container first, and prove it remains
+   stopped. This begins the owner-authorized public offline window. Never change
+   the restart policy of, or stop, a system/foreign Cloudflared container.
+3. Stop the other verified running legacy Geem container IDs in dependency-safe
+   order. Under Mode A, stop the verified Geem Cloudflared ID in that same
+   sequence. Leave unrelated and already exited containers untouched. Require
+   all expected old Geem IDs to be stopped before continuing.
+4. Under Mode A, prove from an external vantage that every exact Geem public
+   origin still shows the reviewed maintenance/denial state and not a legacy or
+   candidate application response. Under Mode B, require only an unavailable
+   tunnel/offline response at this point; no candidate application exists yet.
+5. Only now fast-forward the clean shared checkout with
    `git merge --ff-only <approved-release-sha>`. Require exact target `HEAD`, a
    clean worktree, and the expected Phase 13 artifacts. Never use reset.
-5. Run `config --quiet`, then stream rendered JSON into the exact local API
-   image. Do not print or save the rendered Compose JSON:
+6. Install the selected complete runtime pack from the already staged regular
+   files. Under Mode A this is the reviewed three-file wrapper and live
+   validator mode. Under Mode B, re-prove byte equality with both tracked
+   maintenance files, then atomically install the four-file wrapper, maintenance
+   pre-start mode, maintenance config, maintenance overlay, and provisional
+   checksum manifest. Never select one Mode B artifact without the others.
+7. Run `config --quiet`, then stream rendered JSON into the exact local API
+   image. Do not print or save the rendered Compose JSON. This example is the
+   Mode B command; Mode A must use the literal `--cloudflared-mode live` instead:
 
 ```bash
 sudo -n /usr/local/sbin/geem-prod-compose config --quiet
@@ -299,6 +422,7 @@ sudo -n /usr/local/sbin/geem-prod-compose config --format json \
       --mcp-enabled false \
       --allow-local-image-ids \
       --ingress-service cloudflared \
+      --cloudflared-mode maintenance \
       --volume postgres_data="$POSTGRES_VOLUME_NAME" \
       --volume redis_data="$REDIS_VOLUME_NAME" \
       --volume qdrant_data="$QDRANT_VOLUME_NAME" \
@@ -307,13 +431,31 @@ sudo -n /usr/local/sbin/geem-prod-compose config --format json \
 ```
 
 Put the same literal validator arguments, including
-`--allow-local-image-ids`, in the root-owned persistent pre-start script.
+`--allow-local-image-ids` and the selected `--cloudflared-mode`, in the
+root-owned persistent pre-start script. Under Mode B, inspect the rendered JSON
+without saving it and require Cloudflared to have only `public_egress`, no
+`depends_on`, exactly one maintenance config binding, and no live config
+declaration.
 
-6. Start only the new datastores, initializer, and three egress-boundary
+8. Under Mode B, repeat the isolated validation/rule checks against
+   `/etc/geem/cloudflared/config.maintenance.yml`, then run exactly through the
+   four-file wrapper:
+
+```bash
+sudo -n /usr/local/sbin/geem-prod-compose up -d --no-deps cloudflared
+```
+
+   Require the candidate project to contain exactly one container and require
+   it to be Cloudflared. From an external vantage, use unique cache-busting
+   paths and request `Cache-Control: no-cache`; require status `503` on every
+   exact Geem origin and a random wildcard hostname. Stop on any application
+   body, redirect to an application, non-maintenance success, or unexpected
+   candidate container. Mode A leaves candidate Cloudflared stopped here.
+9. Start only the new datastores, initializer, and three egress-boundary
    services.
-7. Verify that each datastore is mounted to exactly one of the new named
+10. Verify that each datastore is mounted to exactly one of the new named
    volumes at the canonical destination.
-8. Wait boundedly for PostgreSQL, then run the one-shot migration before normal
+11. Wait boundedly for PostgreSQL, then run the one-shot migration before normal
    API startup:
 
 ```bash
@@ -357,44 +499,55 @@ The current head must include `0041_openwa_binding_backfill`.
 
 ## 5. Acceptance and persistence
 
-Before starting Cloudflared:
+Before final application acceptance—and before starting candidate Cloudflared
+under Mode A; the maintenance-only Mode B instance is already running:
 
 - require exactly one running container for every required internal
   long-running service except `cloudflared` and exactly one successful MinIO
   initializer;
-- run the production topology validator again against the live configuration;
+- run the production topology validator again against the selected rendered
+  runtime pack and its literal selected mode;
 - run `infra/mcp-egress/verify-isolation.sh` through the persistent wrapper;
 - prove the gateway has no host port and cannot reach application datastores;
 - prove API/worker can reach their datastores and the gateway through mTLS;
 - prove API, worker, Beat, and gateway have no direct public route;
 - prove the MCP proxy denies private, metadata, deployment, and Compose CIDRs;
-- verify all internal readiness endpoints before starting Cloudflared; and
+- verify all internal readiness endpoints before Mode A starts Cloudflared;
+  under Mode B, the already-running maintenance connector must remain isolated
+  on `public_egress` only; and
 - verify the unrelated no-touch assets retain their original IDs, states,
   mounts, and network membership.
 
 After those internal checks pass, install the already reviewed replacement
-scripts and system unit at their live root-owned paths. The independent ingress
-hold remains active. The replacement unit's normal start must:
+scripts and system unit at their live root-owned paths. The selected ingress
+hold remains active. The wrapper, pre-start script, readiness script, unit, and
+manifest must all select the same live or maintenance runtime pack. The
+replacement unit's normal start must:
 
 1. validate checksums and the rendered topology;
 2. start the complete internal service list without `cloudflared`;
 3. pass finite internal readiness and isolation checks;
 4. start the new `cloudflared` service last; and
-5. pass a bounded external probe proving the expected maintenance/denial state
-   still hides every Geem origin.
+5. pass a bounded external probe proving Mode A's maintenance/denial state or
+   Mode B's exact `503` state still hides every Geem origin.
 
 Remove the bootstrap password first, then create the permanent root-owned
-startup checksum manifest over every live input: wrapper, overlay,
-`/etc/geem/production.env`, local-image manifest, tunnel files, PKI files,
-ingress-hold scripts/unit, pre-start/readiness/containment scripts, final
-unit/drop-ins, and checked-in base/tunnel Compose files. Preserve those exact
-permanent manifest bytes in a separately named root-owned evidence file.
+startup checksum manifest over every live input: selected wrapper and Compose
+file list, deployment overlay, `/etc/geem/production.env`, local-image
+manifest, tunnel files, PKI files, the selected ingress-hold scripts/unit or
+complete maintenance runtime pack, pre-start/readiness/containment scripts,
+final unit/drop-ins, and checked-in base/tunnel files. In Mode B it must include
+both active maintenance files and both tracked source files. Preserve those
+exact permanent manifest bytes in a separately named root-owned evidence file.
 
 The replacement unit's first start must be a deliberate readiness-failure
 test, not a normal start:
 
-1. Stop the manually validated new-project containers and prove zero remain
-   running. Cloudflared has not started yet.
+1. Stop the manually validated new-project containers, including candidate
+   Cloudflared under Mode B, and prove zero remain running. Mode A's external
+   hold must remain active. Mode B is expected to be tunnel-unavailable or
+   return a Cloudflare-side `5xx` during this bounded test; it must never expose
+   an application response.
 2. Install one temporary drop-in that clears the normal post-start commands,
    stops `worker` after the internal start, and invokes the real readiness
    script so the start must fail.
@@ -402,31 +555,62 @@ test, not a normal start:
    permanent path list plus that drop-in. Atomically install those temporary
    bytes at the canonical checksum-manifest path.
 4. Reload the system manager and start the unit. Require a nonzero start result,
-   require Cloudflared never started, and require failed-start containment to
-   leave zero new-project containers running.
+   require candidate Cloudflared never started, and require failed-start
+   containment to leave zero new-project containers running. Under Mode B,
+   accept only continued tunnel unavailability/`5xx` from outside.
 5. With the unit inactive, remove only the temporary drop-in and atomically
    restore the exact preserved permanent manifest bytes. Require byte equality,
    ownership/mode, and strict checksum verification before another reload.
 6. Start the unit normally. Only after internal readiness succeeds may its
-   final post-start action start Cloudflared. Require full long-running-service
-   cardinality including exactly one Cloudflared, prove the independent hold
-   still returns the reviewed maintenance/denial state for the public API,
-   Workspace, Platform Admin, and marketing origins, and rerun the
-   unrelated-asset comparison.
+   final post-start action start Cloudflared through the selected wrapper.
+   Require full long-running-service cardinality including exactly one
+   Cloudflared. Prove Mode A still returns its reviewed maintenance/denial
+   state, or Mode B has restored repeated exact `503` responses with no
+   application body, for the public API, Workspace, Platform Admin, marketing,
+   and wildcard origins. Rerun the unrelated-asset comparison.
 7. Enable the replacement system unit only after that successful normal start.
    Require the legacy user/system unit to remain inactive and disabled.
 
 Do not reboot the host during this cutover because that would interrupt assets
 outside Geem's authorized scope. Record controlled-reboot validation as a
 pending operations gate; do not claim that reboot persistence was tested and do
-not release the independent ingress hold during this procedure.
+not release the selected ingress hold during this procedure.
 
-Release the independent hold only in a later owner-authorized operation after
-the controlled reboot succeeds, bounded monitoring is active, and the exact
-Geem origins are ready. The release action must remove only the exact hold rule,
-disable only its exact hold unit, record owner and timestamp, and then verify all
-four public origins. Until then, leave the candidate infrastructure running
-behind the hold.
+Release the selected hold only in a later owner-authorized operation after the
+controlled reboot succeeds, bounded monitoring is active, and the exact Geem
+origins are ready. Under Mode A, remove only the exact hold rule and disable
+only its exact hold unit, then immediately probe every exact and wildcard live
+origin. On any failure, re-establish only that exact hold, verify the reviewed
+maintenance/denial response again, and report the failed gate; record owner and
+timestamp only after every live probe succeeds. Under Mode B, first stage and
+validate a complete live runtime pack: tracked live config at
+`/etc/geem/cloudflared/config.yml`, the
+three-file wrapper without the maintenance overlay, literal
+`--cloudflared-mode live` in pre-start validation, matching unit/readiness
+behavior, and a new checksum manifest. Preserve the complete currently active
+maintenance pack for rollback.
+
+Then stop and temporarily disable the exact replacement `geem-stack` unit.
+Require its bounded stop/containment path to stop candidate maintenance
+Cloudflared first, prove the unit inactive and disabled, and leave zero project
+containers running before selecting the live pack. Differing connectors for
+the same tunnel UUID must never overlap. Install the whole validated live pack
+while the unit is inactive, reload the system manager, and start the unit
+normally. Its pre-start must validate the live pack, start all internal
+services, prove readiness/isolation, and start live Cloudflared last. Require
+the unit active, exact service cardinality, and every live-origin probe before
+re-enabling it. A brief unavailable interval is expected because no
+Cloudflare-side traffic steering is available.
+
+If any start or origin check fails, require failed-start containment to leave
+zero project containers, keep the exact unit inactive and disabled, restore
+the complete preserved maintenance runtime pack—not only its config
+file—reload, and start the unit normally. Its pre-start must validate with
+literal `--cloudflared-mode maintenance`, restore the internal services, and
+start only maintenance Cloudflared last. Require the unit active, repeated
+`503` responses, and exact service cardinality before re-enabling it. Record
+owner and timestamp. Until that separate release succeeds, leave the candidate
+infrastructure behind the selected hold.
 
 Success for this path means Phase 13 schema, catalog row, MCP gateway/proxy,
 frontends, isolation, and persistent startup are installed behind the active
@@ -446,7 +630,9 @@ failed migration, topology, isolation, readiness, or public-ingress gate must:
 3. enumerate new-project container IDs, revalidate their exact project label,
    and stop only those IDs without removing them;
 4. leave every fresh and legacy volume intact; and
-5. keep the independent ingress hold active and unrelated assets untouched.
+5. keep Mode A's independent hold active; under Mode B, accept only a
+   fail-closed offline/`5xx` state after candidate Cloudflared stops. Keep all
+   unrelated assets untouched.
 
 Keep both old and new supervisors neutralized during containment. Reinspect the
 recorded legacy mounts before any restart. If an exact legacy container has a
@@ -455,21 +641,35 @@ worktree after switching non-destructively to the recorded legacy commit with
 `git switch --detach <legacy-sha>`. When no legacy container has such a bind,
 leave the checkout at the target SHA. Revalidate every legacy ID and mount,
 start the legacy datastores first, then application services, and start only
-the legacy Geem Cloudflared container last. Before and after starting that
-tunnel, prove the same independent hold still denies every exact Geem public
-origin; rollback never authorizes public traffic. Do not automatically re-enable
-the legacy supervisor. If those preconditions do not pass, leave Geem offline
-and report the failed checkpoint; never improvise a broad rollback against
-project `infra`.
+the legacy Geem Cloudflared container last only under Mode A. Before and after
+starting that tunnel, prove the same independent hold still denies every exact
+Geem public origin. Under Mode B, never restart legacy Cloudflared with its live
+config; keep it restart-disabled and stopped.
+
+If the checkout remains at the approved target SHA, revalidate the complete
+four-file maintenance pack and start only candidate maintenance Cloudflared
+with `--no-deps`; repeated external probes must restore exact `503`. If a
+legacy source bind requires switching the checkout to `<legacy-sha>`, the
+candidate wrapper is forbidden because its checked-in base and tunnel paths no
+longer resolve to approved candidate bytes. In that branch, revalidate the
+preserved stopped candidate maintenance container's exact full ID, image,
+project/service labels, root-owned maintenance-config checksum, read-only
+mounts, and sole `public_egress` network membership, then restart only that
+exact container ID directly. Never recreate it through Compose at the legacy
+SHA. If the preserved container is absent, running, changed, or cannot pass all
+checks, leave public Geem offline. Rollback never authorizes public traffic.
+Do not automatically re-enable the legacy supervisor. If those preconditions
+do not pass, leave Geem offline and report the failed checkpoint; never
+improvise a broad rollback against project `infra`.
 
 ## Stop conditions
 
 Stop only for an actionable execution failure: dirty/divergent source, inability
 to install Compose V2, image build/pull failure, missing required secret,
 colliding new project/volume/network, ownership ambiguity that could affect an
-unrelated asset, inability to establish the exact independent ingress hold,
-failed migration, failed topology/isolation/readiness gate, or unexpected
-mutation outside Geem.
+unrelated asset, inability to establish either exact ingress-hold mode, failed
+migration, failed topology/isolation/readiness gate, or unexpected mutation
+outside Geem.
 
 Do not stop merely to request another read-only inventory, disposable-data
 audit, backup, restore rehearsal, legal/finance countersignature, signed image

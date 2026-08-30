@@ -1,0 +1,22 @@
+# Phase 13 owner-authorized offline cutover overlay.
+#
+# This overlay keeps the existing locally managed Cloudflare Tunnel connected
+# while making every routed hostname return a built-in HTTP 503 response. It
+# deliberately removes the application ingress network and all dependencies,
+# so the held connector cannot reach a Geem application origin.
+services:
+  cloudflared:
+    depends_on: !reset {}
+    networks: !override
+      - public_egress
+    configs: !override
+      - source: cloudflared_maintenance_config
+        target: /etc/cloudflared/config.yml
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+
+configs:
+  cloudflared_config: !reset null
+  cloudflared_maintenance_config:
+    file: /etc/geem/cloudflared/config.maintenance.yml

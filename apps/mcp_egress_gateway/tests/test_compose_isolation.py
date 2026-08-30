@@ -774,6 +774,138 @@ def test_disposable_state_exception_is_fail_closed_and_non_destructive() -> None
     )
 
 
+def test_maintenance_tunnel_artifacts_are_fail_closed() -> None:
+    maintenance_config_path = (
+        REPO_ROOT / "infra/cloudflared/config.maintenance.yml"
+    )
+    maintenance_overlay_path = (
+        REPO_ROOT / "infra/docker-compose.maintenance-ingress.yml"
+    )
+    live_config = (REPO_ROOT / "infra/cloudflared/config.yml").read_text()
+    maintenance_config = maintenance_config_path.read_text()
+    maintenance_overlay = maintenance_overlay_path.read_text()
+
+    for identity_prefix in ("tunnel:", "credentials-file:"):
+        live_identity = next(
+            line for line in live_config.splitlines() if line.startswith(identity_prefix)
+        )
+        maintenance_identity = next(
+            line
+            for line in maintenance_config.splitlines()
+            if line.startswith(identity_prefix)
+        )
+        assert maintenance_identity == live_identity
+    maintenance_hosts = (
+        "hub.geem.ai",
+        "api.geem.ai",
+        "geem.ai",
+        "www.geem.ai",
+        "mtfm.geem.ai",
+        '"*.geem.ai"',
+    )
+    for hostname in maintenance_hosts:
+        assert (
+            f"  - hostname: {hostname}\n    service: http_status:503"
+            in maintenance_config
+        )
+    assert maintenance_config.count("service: http_status:503") == len(
+        maintenance_hosts
+    )
+    assert maintenance_config.rstrip().endswith("- service: http_status:404")
+    for forbidden_origin in (
+        "service: http://",
+        "service: https://",
+        "service: unix:",
+        "service: tcp:",
+        "service: ssh:",
+        "service: rdp:",
+        "service: smb:",
+        "service: bastion",
+        "service: hello_world",
+        "originRequest:",
+    ):
+        assert forbidden_origin not in maintenance_config
+
+    assert "depends_on: !reset {}" in maintenance_overlay
+    assert "networks: !override\n      - public_egress" in maintenance_overlay
+    assert "configs: !override" in maintenance_overlay
+    assert "source: cloudflared_maintenance_config" in maintenance_overlay
+    assert "cloudflared_config: !reset null" in maintenance_overlay
+    assert "file: /etc/geem/cloudflared/config.maintenance.yml" in maintenance_overlay
+    assert "CLOUDFLARED_MAINTENANCE_CONFIG_FILE" not in maintenance_overlay
+
+
+def test_maintenance_tunnel_overlay_merges_to_public_only_ingress(
+    tmp_path: Path,
+) -> None:
+    docker = shutil.which("docker")
+    if docker is None:
+        pytest.skip("Docker Compose CLI is unavailable")
+    maintenance_overlay_path = (
+        REPO_ROOT / "infra/docker-compose.maintenance-ingress.yml"
+    )
+    hardening_fixture = tmp_path / "docker-compose.production-hardening.yml"
+    hardening_fixture.write_text(
+        """services:
+  cloudflared:
+    volumes: !reset []
+    configs:
+      - source: cloudflared_config
+        target: /etc/cloudflared/config.yml
+        uid: \"65532\"
+        gid: \"65532\"
+        mode: 0444
+configs:
+  cloudflared_config:
+    file: /etc/geem/cloudflared/config.yml
+"""
+    )
+    rendered = subprocess.run(
+        [
+            docker,
+            "compose",
+            "--profile",
+            "mcp",
+            "-f",
+            str(REPO_ROOT / "infra/docker-compose.yml"),
+            "-f",
+            str(REPO_ROOT / "infra/docker-compose.tunnel.yml"),
+            "-f",
+            str(hardening_fixture),
+            "-f",
+            str(maintenance_overlay_path),
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    compose = json.loads(rendered.stdout)
+    cloudflared = compose["services"]["cloudflared"]
+
+    assert set(cloudflared["networks"]) == {"public_egress"}
+    assert cloudflared.get("depends_on") is None
+    assert not cloudflared.get("volumes")
+    assert cloudflared["configs"] == [
+        {
+            "source": "cloudflared_maintenance_config",
+            "target": "/etc/cloudflared/config.yml",
+            "uid": "65532",
+            "gid": "65532",
+            "mode": "0444",
+        }
+    ]
+    assert compose["configs"] == {
+        "cloudflared_maintenance_config": {
+            "name": "infra_cloudflared_maintenance_config",
+            "file": "/etc/geem/cloudflared/config.maintenance.yml",
+        }
+    }
+
+
 def test_owner_authorized_clean_slate_path_is_explicit_and_non_destructive() -> None:
     clean_slate_path = (
         REPO_ROOT / "docs/integrations/mcp-production-clean-slate.md"
@@ -809,7 +941,7 @@ def test_owner_authorized_clean_slate_path_is_explicit_and_non_destructive() -> 
         "Then run the MCP-only catalog reconciler"
     )
     assert clean_words.index(
-        "verify all internal readiness endpoints before starting Cloudflared"
+        "verify all internal readiness endpoints before Mode A starts Cloudflared"
     ) < clean_words.index("start the new `cloudflared` service last")
     assert "Never install or enable parallel system and user units" in clean_words
     assert "If an exact legacy container has a repository source bind" in clean_words
@@ -860,47 +992,86 @@ def test_owner_authorized_clean_slate_path_is_explicit_and_non_destructive() -> 
         clean_words
     )
     assert "do not claim that reboot persistence was tested" in clean_words
-    hold_activation = (
-        "install, enable, and start the independent Geem-only ingress hold"
-    )
-    prestop_external_hold = (
-        "Prove the reviewed maintenance/denial response on all exact Geem origins "
-        "while legacy Cloudflared is still running"
-    )
-    legacy_stop = "Stop and disable only the exact proven legacy Geem supervisor"
-    candidate_start = (
-        "Start only the new datastores, initializer, and three egress-boundary "
-        "services"
-    )
-    external_hold_proof = (
-        "every exact Geem public origin now shows the reviewed maintenance/denial "
-        "state"
-    )
-    normal_start = "Start the unit normally"
-    later_release = "Release the independent hold only in a later owner-authorized operation"
+    assert "### Mode A: independent external hold" in clean_slate
+    assert "### Mode B: exact local maintenance tunnel" in clean_slate
     assert (
-        clean_words.index(hold_activation)
-        < clean_words.index(prestop_external_hold)
-        < clean_words.index(legacy_stop)
-        < clean_words.index(external_hold_proof)
-        < clean_words.index(candidate_start)
-        < clean_words.index(normal_start)
-        < clean_words.index(later_release)
+        "does not create or edit a Cloudflare tunnel, DNS record, route, or zone policy"
+        in clean_words
     )
-    assert "independent of both the legacy and candidate Compose lifecycles" in (
+    assert (
+        "Treat the complete Mode B maintenance runtime pack as one coupled, "
+        "immutable unit"
+        in clean_words
+    )
+    assert "/etc/geem/cloudflared/config.maintenance.yml" in clean_slate
+    assert "/etc/geem/docker-compose.maintenance-ingress.yml" in clean_slate
+    assert "The maintenance overlay must be the final Compose file" in clean_words
+    assert "four-file rendered-topology validation" in clean_words
+    assert "`--cloudflared-mode maintenance`" in clean_slate
+    assert "`--cloudflared-mode live`" in clean_slate
+    assert "no other connector replica can serve this tunnel" in clean_words
+    assert "sole intentional connector host" in clean_words
+    assert "unknown remote replica is a hard stop" in clean_words
+    assert (
+        "Never run legacy live-routing and candidate maintenance connectors concurrently"
+        in clean_words
+    )
+
+    cutover = clean_words.split(
+        "## 4. Execute the bounded offline cutover", maxsplit=1
+    )[1].split("## 5. Acceptance and persistence", maxsplit=1)[0]
+    cutover_order = (
+        "Stop and disable only the exact proven legacy Geem supervisor/recreator",
+        "restart policy `no`, stop that exact container first",
+        "Only now fast-forward the clean shared checkout",
+        "up -d --no-deps cloudflared",
+        "require status `503` on every exact Geem origin",
+        "Start only the new datastores, initializer, and three egress-boundary services",
+    )
+    cutover_indexes = [cutover.index(step) for step in cutover_order]
+    assert cutover_indexes == sorted(cutover_indexes)
+
+    failure_test = clean_words.split(
+        "The replacement unit's first start must be a deliberate readiness-failure test",
+        maxsplit=1,
+    )[1].split("Do not reboot the host during this cutover", maxsplit=1)[0]
+    assert "leave zero new-project containers running" in failure_test
+    assert "Mode B" in failure_test
+    assert "offline" in failure_test or "tunnel-unavailable" in failure_test
+
+    release = clean_words.split(
+        "Release the selected hold only in a later owner-authorized operation",
+        maxsplit=1,
+    )[1].split("Success for this path means", maxsplit=1)[0]
+    assert "probe every exact and wildcard live origin" in release
+    assert "re-establish only that exact hold" in release
+    assert "stop candidate maintenance Cloudflared" in release
+    assert "--cloudflared-mode live" in release
+    assert "three-file" in release
+    assert "checksum manifest" in release
+    assert "leave zero project containers running" in release
+    assert release.count("start the unit normally") >= 2
+    assert "Require the unit active" in release
+    assert "restore the complete preserved maintenance runtime pack" in release
+    assert "--cloudflared-mode maintenance" in release
+
+    containment = clean_words.split(
+        "## Failure containment", maxsplit=1
+    )[1].split("## Stop conditions", maxsplit=1)[0]
+    assert "candidate wrapper is forbidden" in containment
+    assert "restart only that exact container ID directly" in containment
+    assert "Never recreate it through Compose at the legacy SHA" in containment
+
+    assert "shared legacy network makes firewall Mode A unsafe" in clean_words
+    assert "Candidate Cloudflared running under Mode B is the maintenance control" in (
         clean_words
     )
-    assert "either the legacy or candidate `cloudflared` container" in clean_words
-    assert "If the legacy network is shared with any unrelated endpoint" in (
-        clean_words
-    )
-    assert "Candidate Cloudflared running is not authorization" in clean_words
-    assert "do not release the independent ingress hold during this procedure" in (
+    assert "do not release the selected ingress hold during this procedure" in (
         clean_words
     )
     assert "`law-firm`" in clean_words
     assert "Ollama/`ollama-bridge`" in clean_words
-    assert "rollback never authorizes public traffic" in clean_words
+    assert "Rollback never authorizes public traffic" in clean_words
     assert "`compose_reference`" in clean_words
     assert "`engine_image_id`" in clean_words
     assert "returned `.Id` to equal the recorded `engine_image_id`" in clean_words
