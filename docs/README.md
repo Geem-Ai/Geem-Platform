@@ -3,11 +3,10 @@
 | Guide | When to use it |
 |-------|----------------|
 | [development.md](./development.md) | Run Geem locally (Docker Compose, host API, tests) |
-| [deployment.md](./deployment.md) | Deploy on a VPS with aaPanel (Nginx + production Compose) |
+| [deployment.md](./deployment.md) | Remove an old Geem deployment and perform a fresh, isolated production install on the shared Linux server |
 | [architecture.md](./architecture.md) | Request paths, provider boundaries, pipeline versions |
 | [integrations/client-agent-api.md](./integrations/client-agent-api.md) | Integrate Laravel AI or an OpenAI-compatible client with the paid Agents AI API |
-| [integrations/mcp-production-deployment.md](./integrations/mcp-production-deployment.md) | Upgrade an existing production PC to Phase 13 safely, with backups, release pinning, isolation gates, persistence, and rollback |
-| [integrations/mcp-connectors.md](./integrations/mcp-connectors.md) | Configure, isolate, operate, and release-gate Phase 13 MCP Connectors |
+| [integrations/mcp-connectors.md](./integrations/mcp-connectors.md) | Configure, isolate, operate, and release-gate MCP Connectors |
 | [apps/google-drive.md](./apps/google-drive.md) | Configure the Google Drive knowledge app (Google Cloud → OAuth → Geem → Expert) |
 | [apps/microsoft-onedrive.md](./apps/microsoft-onedrive.md) | Configure the Microsoft OneDrive knowledge app (Entra → Graph → Geem → Expert) |
 | [invitations.md](./invitations.md) | Workspace email invitations (tokens, providers, accept contract) |

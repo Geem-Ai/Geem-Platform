@@ -2,7 +2,7 @@
 # Production MUST use the reviewed deployment-owned hardening overlay through
 # /usr/local/sbin/geem-prod-compose. Base + tunnel alone retains development
 # credentials, builds, bind mounts, reload commands, and host ports and is
-# forbidden for production. See docs/integrations/mcp-production-deployment.md.
+# forbidden for production. See docs/deployment.md.
 # This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat / admin-uat):
 #   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml up -d --build
 # MinIO credentials: MINIO_ACCESS_KEY / MINIO_SECRET_KEY in repo-root ../.env.
@@ -155,6 +155,8 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      args:
+        API_PYTHON_BASE_IMAGE: ${API_PYTHON_BASE_IMAGE:-python:3.12-slim}
     restart: unless-stopped
     env_file:
       - ../.env
@@ -216,6 +218,8 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      args:
+        API_PYTHON_BASE_IMAGE: ${API_PYTHON_BASE_IMAGE:-python:3.12-slim}
     restart: unless-stopped
     env_file:
       - ../.env
@@ -268,6 +272,8 @@ services:
     build:
       context: ./app-egress/proxy
       dockerfile: Dockerfile
+      args:
+        PROXY_UBUNTU_BASE_IMAGE: ${PROXY_UBUNTU_BASE_IMAGE:-ubuntu:24.04}
     restart: unless-stopped
     user: "13:13"
     networks:
@@ -290,6 +296,8 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      args:
+        API_PYTHON_BASE_IMAGE: ${API_PYTHON_BASE_IMAGE:-python:3.12-slim}
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-local}
@@ -366,7 +374,7 @@ services:
     networks:
       - application_ingress
 
-  # Phase 13A — the application can reach this mTLS listener only over an
+  # MCP boundary — the application can reach this mTLS listener only over an
   # internal control network. The gateway is deliberately absent from
   # application_data, receives no ../.env, and has no direct public network.
   mcp-egress-gateway:
@@ -374,6 +382,8 @@ services:
     build:
       context: ..
       dockerfile: apps/mcp_egress_gateway/Dockerfile
+      args:
+        MCP_GATEWAY_PYTHON_BASE_IMAGE: ${MCP_GATEWAY_PYTHON_BASE_IMAGE:-python:3.12.11-slim-bookworm}
     restart: unless-stopped
     user: "10001:10001"
     environment:
@@ -437,6 +447,8 @@ services:
     build:
       context: ./mcp-egress/proxy
       dockerfile: Dockerfile
+      args:
+        PROXY_UBUNTU_BASE_IMAGE: ${PROXY_UBUNTU_BASE_IMAGE:-ubuntu:24.04}
     restart: unless-stopped
     user: "13:13"
     environment:

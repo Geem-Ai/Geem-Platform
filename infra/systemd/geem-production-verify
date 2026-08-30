@@ -1,0 +1,141 @@
+#!/bin/sh
+set -eu
+
+fail() {
+  echo "Geem production verification failed: $1" >&2
+  exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || fail "must run as root"
+[ "$#" -eq 1 ] || fail "expected internal, runtime, or ingress stage"
+stage=$1
+case "$stage" in
+  internal|runtime|ingress) ;;
+  *) fail "expected internal, runtime, or ingress stage" ;;
+esac
+
+compose=/usr/local/sbin/geem-prod-compose
+[ -x "$compose" ] || fail "production Compose wrapper is missing"
+
+require_one_running() {
+  service=$1
+  ids=$("$compose" ps -q --status running "$service") \
+    || fail "could not inspect $service"
+  count=0
+  for id in $ids; do
+    count=$((count + 1))
+  done
+  [ "$count" -eq 1 ] || fail "$service must have exactly one running container"
+}
+
+verify_internal_health() {
+  "$compose" exec -T api curl -fsS --connect-timeout 5 --max-time 30 \
+    http://localhost:8000/api/health/ready >/dev/null \
+    || fail "API readiness failed"
+  current_revision=$("$compose" exec -T api alembic current 2>/dev/null) \
+    || fail "database revision check failed"
+  head_revision=$("$compose" exec -T api alembic heads 2>/dev/null) \
+    || fail "migration-head check failed"
+  head_count=$(printf '%s\n' "$head_revision" | grep -c '[^[:space:]]' || true)
+  [ "$head_count" -eq 1 ] \
+    || fail "migration graph does not have exactly one head"
+  [ -n "$current_revision" ] && [ "$current_revision" = "$head_revision" ] \
+    || fail "database is not at the sole migration head"
+
+  expected_mcp_state=
+  expect_mcp_value=false
+  mcp_state_count=0
+  while IFS= read -r argument || [ -n "$argument" ]; do
+    if [ "$expect_mcp_value" = true ]; then
+      case "$argument" in
+        true|false) ;;
+        *) fail "stored MCP validator state is invalid" ;;
+      esac
+      expected_mcp_state=$argument
+      mcp_state_count=$((mcp_state_count + 1))
+      expect_mcp_value=false
+    elif [ "$argument" = --mcp-enabled ]; then
+      expect_mcp_value=true
+    fi
+  done < /etc/geem/production-validator.args
+  [ "$expect_mcp_value" = false ] && [ "$mcp_state_count" -eq 1 ] \
+    || fail "stored MCP validator state is missing or duplicated"
+  for service in api worker; do
+    "$compose" exec -T "$service" sh -c \
+      '[ "${MCP_CONNECTOR_ENABLED:-}" = "$1" ]' sh "$expected_mcp_state" \
+      || fail "$service MCP runtime state differs from the approved validator state"
+  done
+
+  MCP_SMOKE_COMPOSE_WRAPPER="$compose" \
+  MCP_SMOKE_ENV_FILE=/etc/geem/production.env \
+    /opt/geem/current/infra/mcp-egress/verify-isolation.sh \
+    || fail "MCP egress isolation gate failed"
+}
+
+verify_stable_cloudflared() {
+  ids=$("$compose" ps -q --status running cloudflared) \
+    || fail "could not inspect cloudflared"
+  count=0
+  cloudflared_id=
+  for id in $ids; do
+    count=$((count + 1))
+    cloudflared_id=$id
+  done
+  [ "$count" -eq 1 ] \
+    || fail "cloudflared must have exactly one running container"
+
+  baseline=$(/usr/bin/docker inspect --format \
+    '{{.State.Running}}:{{.State.Restarting}}:{{.RestartCount}}' \
+    "$cloudflared_id") \
+    || fail "could not inspect cloudflared state"
+  case "$baseline" in
+    true:false:*) ;;
+    *) fail "cloudflared is not stably running" ;;
+  esac
+
+  check=1
+  while [ "$check" -le 6 ]; do
+    current_ids=$("$compose" ps -q --status running cloudflared) \
+      || fail "could not re-inspect cloudflared"
+    [ "$current_ids" = "$cloudflared_id" ] \
+      || fail "cloudflared container changed during stability window"
+    current=$(/usr/bin/docker inspect --format \
+      '{{.State.Running}}:{{.State.Restarting}}:{{.RestartCount}}' \
+      "$cloudflared_id") \
+      || fail "could not re-inspect cloudflared state"
+    [ "$current" = "$baseline" ] \
+      || fail "cloudflared restarted during stability window"
+    [ "$check" -eq 6 ] || /usr/bin/sleep 5
+    check=$((check + 1))
+  done
+}
+
+for service in postgres redis qdrant minio app-egress-proxy \
+  mcp-egress-proxy mcp-egress-gateway api worker beat workspace_web \
+  dashboard_web landpage_web; do
+  require_one_running "$service"
+done
+
+initializer_ids=$("$compose" ps -aq minio-init) \
+  || fail "could not inspect minio-init"
+initializer_count=0
+for initializer_id in $initializer_ids; do
+  initializer_count=$((initializer_count + 1))
+  [ "$(/usr/bin/docker inspect --format '{{.State.Status}}:{{.State.ExitCode}}' "$initializer_id")" = "exited:0" ] \
+    || fail "minio-init did not finish successfully"
+done
+[ "$initializer_count" -eq 1 ] \
+  || fail "minio-init must have exactly one completed container"
+
+if [ "$stage" = internal ]; then
+  [ -z "$("$compose" ps -q --status running cloudflared)" ] \
+    || fail "cloudflared started before internal verification"
+  verify_internal_health
+elif [ "$stage" = runtime ]; then
+  require_one_running cloudflared
+  verify_internal_health
+else
+  verify_stable_cloudflared
+fi
+
+echo "Geem production $stage verification passed"

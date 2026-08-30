@@ -1,19 +1,12 @@
-# Locally-managed Cloudflare Tunnel (production host).
-# Credentials are gitignored: infra/cloudflared/credentials.json
-# Development/UAT on a separate Mac: config.uat.yml + credentials-uat.json.
+# Production Cloudflare Tunnel topology template.
 #
-# Create / refresh (once, on the host):
-#   cloudflared tunnel login
-#   cloudflared tunnel create geem-dalseen
-#   cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
-#   cloudflared tunnel route dns geem-dalseen hub.geem.ai
-#   cloudflared tunnel route dns geem-dalseen api.geem.ai
-#   cloudflared tunnel route dns geem-dalseen geem.ai
-#   cloudflared tunnel route dns geem-dalseen mtfm.geem.ai
-#   cloudflared tunnel route dns geem-dalseen "*.geem.ai"
-
-# name: geem-dalseen
-tunnel: e054f188-97ca-4cab-80da-020f0ae4385b
+# This file deliberately contains no live tunnel identity. The fresh Linux
+# deployment procedure creates a new tunnel and installs a rendered copy at
+# /etc/geem/cloudflared/config.yml. Never run this template until the marker
+# below has been replaced with that new tunnel's exact UUID. Tunnel credentials
+# stay outside Git at /etc/geem/cloudflared/credentials.json.
+# Development/UAT uses config.uat.yml and credentials-uat.json instead.
+tunnel: REPLACE_WITH_NEW_TUNNEL_UUID
 credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
@@ -40,6 +33,16 @@ ingress:
     service: http://dashboard_web:80
     originRequest:
       httpHostHeader: mtfm.geem.ai
+  # Reserved UAT labels must never fall through the production wildcard when
+  # an exact UAT DNS record is absent or temporarily removed.
+  - hostname: app-uat.geem.ai
+    service: http_status:404
+  - hostname: api-uat.geem.ai
+    service: http_status:404
+  - hostname: landpage-uat.geem.ai
+    service: http_status:404
+  - hostname: admin-uat.geem.ai
+    service: http_status:404
   - hostname: "*.geem.ai"
     service: http://workspace_web:80
   - service: http_status:404

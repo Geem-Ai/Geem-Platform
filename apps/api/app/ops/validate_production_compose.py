@@ -159,12 +159,8 @@ MCP_SECRET_NAMES = frozenset(
     }
 )
 CLOUDFLARED_CONFIG_NAME = "cloudflared_config"
-CLOUDFLARED_MAINTENANCE_CONFIG_NAME = "cloudflared_maintenance_config"
 CLOUDFLARED_CREDENTIALS_NAME = "cloudflared_credentials"
-CLOUDFLARED_CONFIG_FILES = {
-    "live": "/etc/geem/cloudflared/config.yml",
-    "maintenance": "/etc/geem/cloudflared/config.maintenance.yml",
-}
+CLOUDFLARED_CONFIG_FILE = "/etc/geem/cloudflared/config.yml"
 CLOUDFLARED_COMMAND = (
     "tunnel",
     "--protocol",
@@ -176,6 +172,8 @@ CLOUDFLARED_COMMAND = (
 
 DIGEST_IMAGE_RE = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")
 LOCAL_IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+INSTALL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{7,127}$")
+INSTALL_LABEL = "com.geem.production.install"
 
 # Exact scripts rendered from infra/docker-compose.yml. The production
 # validator runs in an isolated image and therefore cannot read the repository;
@@ -337,6 +335,7 @@ REVIEWED_SERVICE_FIELDS = frozenset(
         "environment",
         "healthcheck",
         "image",
+        "labels",
         "mem_limit",
         "networks",
         "pids_limit",
@@ -395,7 +394,8 @@ class ValidationOptions:
     physical_volumes: Mapping[str, str]
     required_blocked_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
     allow_local_image_ids: bool = False
-    cloudflared_mode: str = "live"
+    expected_api_image: str | None = None
+    install_id: str = ""
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -773,15 +773,14 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             "this production topology requires the exact reviewed cloudflared ingress"
         )
         return errors
-    if options.cloudflared_mode not in CLOUDFLARED_CONFIG_FILES:
-        errors.append("cloudflared mode is not one of the reviewed contracts")
-        return errors
 
-    cloudflared_config_name = (
-        CLOUDFLARED_CONFIG_NAME
-        if options.cloudflared_mode == "live"
-        else CLOUDFLARED_MAINTENANCE_CONFIG_NAME
-    )
+    if INSTALL_ID_RE.fullmatch(options.install_id) is None:
+        errors.append("--install-id is not a valid immutable installation identity")
+        return errors
+    expected_install_label = {INSTALL_LABEL: options.install_id}
+    for name, service in services.items():
+        if _mapping(service.get("labels")) != expected_install_label:
+            errors.append(f"{name} does not carry the exact approved installation label")
 
     # The ingress flag approves one complete, fixed Cloudflared contract. It
     # cannot be used to bless an arbitrary public service or credential mount.
@@ -800,7 +799,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if not _has_exact_resource_binding(
             service,
             field="configs",
-            source=cloudflared_config_name,
+            source=CLOUDFLARED_CONFIG_NAME,
             target="/etc/cloudflared/config.yml",
             uid="65532",
             gid="65532",
@@ -819,17 +818,12 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             errors.append("cloudflared does not have the exact reviewed credential mount")
         if service.get("volumes"):
             errors.append("cloudflared ingress must not receive volume or bind mounts")
-        if (
-            options.cloudflared_mode == "maintenance"
-            and service.get("depends_on") not in (None, {})
-        ):
-            errors.append("maintenance cloudflared must not depend on application services")
 
     has_cloudflared = "cloudflared" in options.ingress_services
     expected_secret_names = MCP_SECRET_NAMES | (
         {CLOUDFLARED_CREDENTIALS_NAME} if has_cloudflared else set()
     )
-    expected_config_names = {cloudflared_config_name} if has_cloudflared else set()
+    expected_config_names = {CLOUDFLARED_CONFIG_NAME} if has_cloudflared else set()
     if not MCP_SECRET_NAMES.issubset(secrets):
         errors.append("production is missing a reviewed MCP PKI secret source")
     if set(secrets) != expected_secret_names:
@@ -851,23 +845,21 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
                 "cloudflared credentials must use one non-empty absolute file source"
             )
         if not _is_exact_absolute_file_declaration(
-            configs.get(cloudflared_config_name),
-            name=f"{options.project}_{cloudflared_config_name}",
+            configs.get(CLOUDFLARED_CONFIG_NAME),
+            name=f"{options.project}_{CLOUDFLARED_CONFIG_NAME}",
         ):
             errors.append(
                 "cloudflared config must use one non-empty absolute file source"
             )
         elif (
-            _mapping(configs.get(cloudflared_config_name)).get("file")
-            != CLOUDFLARED_CONFIG_FILES[options.cloudflared_mode]
+            _mapping(configs.get(CLOUDFLARED_CONFIG_NAME)).get("file")
+            != CLOUDFLARED_CONFIG_FILE
         ):
             errors.append("cloudflared config uses the wrong reviewed host file")
     expected_networks = dict(EXPECTED_SERVICE_NETWORKS)
     for ingress in options.ingress_services:
-        expected_networks[ingress] = (
-            frozenset({"application_ingress", INGRESS_PUBLIC_NETWORK})
-            if options.cloudflared_mode == "live"
-            else frozenset({INGRESS_PUBLIC_NETWORK})
+        expected_networks[ingress] = frozenset(
+            {"application_ingress", INGRESS_PUBLIC_NETWORK}
         )
     for name, expected in expected_networks.items():
         if _service_networks(services[name]) != expected:
@@ -1028,11 +1020,22 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if name == "minio-init":
             if service.get("restart") is not None:
                 errors.append("minio-init must remain a non-restarting one-shot service")
-        elif service.get("restart") != "unless-stopped":
-            errors.append(f"{name} must use restart unless-stopped")
+        elif service.get("restart") != "no":
+            errors.append(
+                f"{name} must use restart no under systemd lifecycle ownership"
+            )
 
-        expected_deploy = {"replicas": 1} if name in {"beat", "mcp-egress-gateway"} else {}
-        if _mapping(service.get("deploy")) != expected_deploy:
+        deploy = _mapping(service.get("deploy"))
+        if name in {"beat", "mcp-egress-gateway"}:
+            deploy_is_reviewed = (
+                deploy.get("replicas") == 1
+                and set(deploy).issubset({"replicas", "resources", "placement"})
+                and deploy.get("resources", {}) == {}
+                and deploy.get("placement", {}) == {}
+            )
+        else:
+            deploy_is_reviewed = not deploy
+        if not deploy_is_reviewed:
             errors.append(f"{name} deploy contract differs from the reviewed topology")
 
     for name, service in services.items():
@@ -1126,6 +1129,11 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         == services["beat"].get("image")
     ):
         errors.append("api, worker, and beat must use one exact application image digest")
+    if (
+        options.expected_api_image is not None
+        and services["api"].get("image") != options.expected_api_image
+    ):
+        errors.append("application image differs from --expected-api-image")
 
     for name in ("workspace_web", "dashboard_web", "landpage_web"):
         if list(_sequence(services[name].get("command"))) != [
@@ -1398,6 +1406,11 @@ def _parse_named_values(values: Sequence[str], flag: str) -> dict[str, str]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
+    parser.add_argument(
+        "--install-id",
+        required=True,
+        help="Exact immutable Geem installation label value",
+    )
     parser.add_argument("--mcp-enabled", required=True, choices=("true", "false"))
     parser.add_argument(
         "--ingress-service",
@@ -1424,16 +1437,14 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Permit local content-addressed sha256 image IDs for the explicit "
-            "single-host clean-slate deployment path"
+            "fresh single-host installation path"
         ),
     )
     parser.add_argument(
-        "--cloudflared-mode",
-        choices=("live", "maintenance"),
-        default="live",
+        "--expected-api-image",
         help=(
-            "Select the reviewed live-origin or fail-closed maintenance-only "
-            "Cloudflared topology"
+            "Require API, worker, and Beat to use the exact image that executes "
+            "this validator"
         ),
     )
     return parser
@@ -1464,7 +1475,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         physical_volumes=physical_volumes,
         required_blocked_networks=required_blocks,
         allow_local_image_ids=arguments.allow_local_image_ids,
-        cloudflared_mode=arguments.cloudflared_mode,
+        expected_api_image=arguments.expected_api_image,
+        install_id=arguments.install_id,
     )
     try:
         errors = validate_production_compose(config, options)

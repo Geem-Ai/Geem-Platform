@@ -1,0 +1,109 @@
+#!/bin/sh
+set -u
+
+project=geem-production
+install_label=com.geem.production.install
+install_file=/etc/geem/install-id
+allowed_services='postgres redis qdrant minio minio-init api worker beat app-egress-proxy mcp-egress-gateway mcp-egress-proxy workspace_web dashboard_web landpage_web cloudflared'
+status=0
+
+fail() {
+  echo "Geem production containment refused: $1" >&2
+  exit 1
+}
+
+[ -f "$install_file" ] || fail "installation identity file is missing"
+[ "$(/usr/bin/stat -c '%u:%g:%a' "$install_file")" = 0:0:400 ] \
+  || fail "installation identity ownership or mode is invalid"
+install_id=$(sed -n '1p' "$install_file")
+[ "$(wc -l < "$install_file" | tr -d ' ')" -eq 1 ] \
+  || fail "installation identity file must contain exactly one line"
+printf '%s\n' "$install_id" | grep -Eq '^[a-z0-9][a-z0-9_.-]{7,127}$' \
+  || fail "installation identity is invalid"
+
+validate_selection() {
+  ids=$(/usr/bin/docker ps -aq \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter "label=$install_label=$install_id" 2>/dev/null) \
+    || return 1
+  for id in $ids; do
+    labels=$(/usr/bin/docker inspect --format \
+      '{{ index .Config.Labels "com.docker.compose.project" }} {{ index .Config.Labels "com.docker.compose.service" }} {{ index .Config.Labels "com.geem.production.install" }}' \
+      "$id" 2>/dev/null) \
+      || return 1
+    container_project=${labels%% *}
+    remaining_labels=${labels#* }
+    service=${remaining_labels%% *}
+    container_install_id=${remaining_labels#* }
+    [ "$container_project" = "$project" ] || return 1
+    [ "$container_install_id" = "$install_id" ] || return 1
+    case " $allowed_services " in
+      *" $service "*) ;;
+      *) return 1 ;;
+    esac
+  done
+  for service in $allowed_services; do
+    service_ids=$(/usr/bin/docker ps -aq \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=$install_label=$install_id" \
+      --filter "label=com.docker.compose.service=$service" 2>/dev/null) \
+      || return 1
+    count=0
+    for id in $service_ids; do
+      count=$((count + 1))
+    done
+    [ "$count" -le 1 ] || return 1
+  done
+}
+
+stop_matching() {
+  service=$1
+  if [ -n "$service" ]; then
+    ids=$(/usr/bin/docker ps -aq \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=$install_label=$install_id" \
+      --filter "label=com.docker.compose.service=$service" 2>/dev/null) \
+      || return 1
+  else
+    ids=$(/usr/bin/docker ps -aq \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=$install_label=$install_id" 2>/dev/null) \
+      || return 1
+  fi
+  [ -n "$ids" ] || return 0
+
+  # Validate the complete immutable selection before mutating any member.
+  for id in $ids; do
+    labels=$(/usr/bin/docker inspect --format \
+      '{{ index .Config.Labels "com.docker.compose.project" }} {{ index .Config.Labels "com.geem.production.install" }}' \
+      "$id" 2>/dev/null) \
+      || return 1
+    [ "$labels" = "$project $install_id" ] || return 1
+  done
+
+  # Stop the validated set concurrently. With at most one container per
+  # reviewed service this keeps both passes below systemd's aggregate timeout.
+  pids=
+  for id in $ids; do
+    /usr/bin/docker stop --time 30 "$id" >/dev/null 2>&1 &
+    pids="$pids $!"
+  done
+  result=0
+  for pid in $pids; do
+    wait "$pid" || result=1
+  done
+  return "$result"
+}
+
+# Stop ingress first. The second pass contains only the exact fixed Compose
+# project plus immutable installation labels and is safe to repeat from both
+# ExecStop and ExecStopPost.
+validate_selection || fail "project selection contains an unknown or duplicate service"
+stop_matching cloudflared || status=1
+stop_matching '' || status=1
+remaining=$(/usr/bin/docker ps -q \
+  --filter "label=com.docker.compose.project=$project" \
+  --filter "label=$install_label=$install_id" 2>/dev/null) || status=1
+[ -z "${remaining:-}" ] || status=1
+
+exit "$status"

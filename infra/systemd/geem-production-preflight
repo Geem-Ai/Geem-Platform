@@ -1,0 +1,291 @@
+#!/bin/sh
+set -eu
+
+fail() {
+  echo "Geem production preflight failed: $1" >&2
+  exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || fail "must run as root"
+
+require_file() {
+  path=$1
+  owner=$2
+  group=$3
+  mode=$4
+  [ -f "$path" ] && [ ! -L "$path" ] \
+    || fail "$path is not a regular non-symlink file"
+  [ "$(/usr/bin/stat -c '%u:%g:%a' "$path")" = "$owner:$group:$mode" ] \
+    || fail "$path ownership or mode is invalid"
+}
+
+require_directory() {
+  path=$1
+  owner=$2
+  group=$3
+  mode=$4
+  [ -d "$path" ] && [ ! -L "$path" ] \
+    || fail "$path is not a non-symlink directory"
+  [ "$(/usr/bin/stat -c '%u:%g:%a' "$path")" = "$owner:$group:$mode" ] \
+    || fail "$path ownership or mode is invalid"
+}
+
+manifest=/etc/geem/start-artifacts.sha256
+image_file=/etc/geem/api-image-id
+arguments_file=/etc/geem/production-validator.args
+release_file=/etc/geem/release-sha
+install_file=/etc/geem/install-id
+compose=/usr/local/sbin/geem-prod-compose
+project=geem-production
+allowed_services='postgres redis qdrant minio minio-init api worker beat app-egress-proxy mcp-egress-gateway mcp-egress-proxy workspace_web dashboard_web landpage_web cloudflared'
+
+require_directory /etc/geem 0 0 711
+require_file "$manifest" 0 0 444
+require_file "$image_file" 0 0 400
+require_file "$arguments_file" 0 0 400
+require_file "$release_file" 0 0 400
+require_file "$install_file" 0 0 400
+require_file "$compose" 0 0 755
+
+release_sha=$(sed -n '1p' "$release_file")
+[ "$(wc -l < "$release_file" | tr -d ' ')" -eq 1 ] \
+  || fail "release identity file must contain exactly one line"
+printf '%s\n' "$release_sha" | grep -Eq '^[0-9a-f]{40}$' \
+  || fail "release identity is not a full Git SHA"
+expected_release=/opt/geem/releases/$release_sha
+require_directory /opt/geem 0 0 755
+require_directory /opt/geem/releases 0 0 755
+[ -L /opt/geem/current ] \
+  || fail "active release path is not a symlink"
+[ "$(/usr/bin/stat -c '%u:%g' /opt/geem/current)" = 0:0 ] \
+  || fail "active release symlink ownership is invalid"
+[ "$(/usr/bin/readlink -f /opt/geem/current)" = "$expected_release" ] \
+  || fail "active release symlink does not match the approved release"
+require_directory "$expected_release" 0 0 755
+[ -z "$(find "$expected_release" -xdev -perm /022 -print -quit)" ] \
+  || fail "approved release contains a group/world-writable path"
+[ "$(/usr/bin/git -C "$expected_release" rev-parse HEAD)" = "$release_sha" ] \
+  || fail "active release checkout does not match the approved release"
+
+install_id=$(sed -n '1p' "$install_file")
+[ "$(wc -l < "$install_file" | tr -d ' ')" -eq 1 ] \
+  || fail "installation identity file must contain exactly one line"
+printf '%s\n' "$install_id" | grep -Eq '^[a-z0-9][a-z0-9_.-]{7,127}$' \
+  || fail "installation identity is invalid"
+
+api_image=$(sed -n '1p' "$image_file")
+[ "$(wc -l < "$image_file" | tr -d ' ')" -eq 1 ] \
+  || fail "API image ID file must contain exactly one line"
+printf '%s\n' "$api_image" \
+  | grep -Eq '^sha256:[0-9a-f]{64}$' \
+  || fail "API image is not an exact local sha256 ID"
+
+require_file /etc/geem/production.env 0 0 600
+require_file /etc/geem/docker-compose.production-hardening.yml 0 0 600
+require_file /etc/geem/image-manifest 0 0 400
+require_file /etc/systemd/system/geem-production.service 0 0 644
+require_file /usr/local/sbin/geem-production-preflight 0 0 755
+require_file /usr/local/sbin/geem-production-verify 0 0 755
+require_file /usr/local/sbin/geem-production-stop 0 0 755
+require_file /opt/geem/current/infra/docker-compose.yml 0 0 644
+require_file /opt/geem/current/infra/docker-compose.tunnel.yml 0 0 644
+require_file /opt/geem/current/infra/mcp-egress/verify-isolation.sh 0 0 755
+require_file /opt/geem/current/infra/mcp-egress/proxy/static-deny-networks.txt 0 0 644
+require_directory /etc/geem/cloudflared 0 65532 750
+require_file /etc/geem/cloudflared/config.yml 0 65532 440
+require_file /etc/geem/cloudflared/credentials.json 0 65532 440
+require_directory /etc/geem/mcp-egress 0 0 755
+require_directory /etc/geem/mcp-egress/pki 0 0 755
+require_directory /etc/geem/mcp-egress/pki/ca 0 0 755
+require_directory /etc/geem/mcp-egress/pki/server 0 10001 750
+require_directory /etc/geem/mcp-egress/pki/client 0 0 700
+require_file /etc/geem/mcp-egress/pki/ca/ca.crt 0 0 644
+require_file /etc/geem/mcp-egress/pki/server/server.crt 0 10001 440
+require_file /etc/geem/mcp-egress/pki/server/server.key 0 10001 440
+require_file /etc/geem/mcp-egress/pki/client/client.crt 0 0 644
+require_file /etc/geem/mcp-egress/pki/client/client.key 0 0 400
+
+protected_paths='
+/usr/local/sbin/geem-prod-compose
+/etc/geem/production.env
+/etc/geem/docker-compose.production-hardening.yml
+/etc/systemd/system/geem-production.service
+/usr/local/sbin/geem-production-preflight
+/usr/local/sbin/geem-production-verify
+/usr/local/sbin/geem-production-stop
+/opt/geem/current/infra/docker-compose.yml
+/opt/geem/current/infra/docker-compose.tunnel.yml
+/opt/geem/current/infra/mcp-egress/verify-isolation.sh
+/opt/geem/current/infra/mcp-egress/proxy/static-deny-networks.txt
+/etc/geem/cloudflared/config.yml
+/etc/geem/cloudflared/credentials.json
+/etc/geem/image-manifest
+/etc/geem/release-sha
+/etc/geem/install-id
+/etc/geem/api-image-id
+/etc/geem/production-validator.args
+/etc/geem/mcp-egress/pki/ca/ca.crt
+/etc/geem/mcp-egress/pki/server/server.crt
+/etc/geem/mcp-egress/pki/server/server.key
+/etc/geem/mcp-egress/pki/client/client.crt
+/etc/geem/mcp-egress/pki/client/client.key'
+manifest_count=0
+while read -r checksum protected_path extra || [ -n "${checksum:-}" ]; do
+  [ -n "${checksum:-}" ] && [ -n "${protected_path:-}" ] && [ -z "${extra:-}" ] \
+    || fail "startup checksum manifest has an invalid record"
+  printf '%s\n' "$checksum" | grep -Eq '^[0-9a-f]{64}$' \
+    || fail "startup checksum manifest has an invalid digest"
+  case " $protected_paths " in
+    *" $protected_path "*) ;;
+    *) fail "startup checksum manifest contains an unapproved path" ;;
+  esac
+  manifest_count=$((manifest_count + 1))
+done < "$manifest"
+[ "$manifest_count" -eq 23 ] \
+  || fail "startup checksum manifest must contain exactly 23 paths"
+for protected_path in $protected_paths; do
+  path_count=$(awk -v expected="$protected_path" \
+    '$2 == expected { count += 1 } END { print count + 0 }' "$manifest")
+  [ "$path_count" -eq 1 ] \
+    || fail "startup checksum manifest path is missing or duplicated"
+done
+/usr/bin/sha256sum --check --strict --quiet "$manifest" \
+  || fail "a protected startup artifact changed"
+
+set --
+expected_argument=
+mcp_state_count=0
+postgres_volume_count=0
+redis_volume_count=0
+qdrant_volume_count=0
+minio_volume_count=0
+blocked_network_count=0
+while IFS= read -r argument || [ -n "$argument" ]; do
+  [ -n "$argument" ] || fail "validator argument file contains an empty line"
+  case "$argument" in
+    *[!A-Za-z0-9_./:=,@+-]*)
+      fail "validator argument contains an unsupported character"
+      ;;
+  esac
+  if [ -n "$expected_argument" ]; then
+    case "$expected_argument" in
+      mcp-state)
+        case "$argument" in
+          true|false) ;;
+          *) fail "validator MCP state is invalid" ;;
+        esac
+        ;;
+      volume)
+        case "$argument" in
+          postgres_data=*)
+            postgres_volume_count=$((postgres_volume_count + 1))
+            ;;
+          redis_data=*)
+            redis_volume_count=$((redis_volume_count + 1))
+            ;;
+          qdrant_data=*)
+            qdrant_volume_count=$((qdrant_volume_count + 1))
+            ;;
+          minio_data=*)
+            minio_volume_count=$((minio_volume_count + 1))
+            ;;
+          *) fail "validator volume identity is invalid" ;;
+        esac
+        ;;
+      blocked-network)
+        case "$argument" in
+          -*|*=*) fail "validator blocked-network value is invalid" ;;
+          *) blocked_network_count=$((blocked_network_count + 1)) ;;
+        esac
+        ;;
+    esac
+    expected_argument=
+  else
+    case "$argument" in
+      --mcp-enabled)
+        expected_argument=mcp-state
+        mcp_state_count=$((mcp_state_count + 1))
+        ;;
+      --volume) expected_argument=volume ;;
+      --required-blocked-network) expected_argument=blocked-network ;;
+      *) fail "validator argument file contains an unapproved flag" ;;
+    esac
+  fi
+  set -- "$@" "$argument"
+done < "$arguments_file"
+[ "$#" -gt 0 ] || fail "validator argument file is empty"
+[ -z "$expected_argument" ] || fail "validator argument file ends before a value"
+[ "$mcp_state_count" -eq 1 ] \
+  || fail "validator argument file must contain exactly one MCP state"
+for volume_count in \
+  "$postgres_volume_count" \
+  "$redis_volume_count" \
+  "$qdrant_volume_count" \
+  "$minio_volume_count"; do
+  [ "$volume_count" -eq 1 ] \
+    || fail "validator argument file must contain each volume exactly once"
+done
+[ "$blocked_network_count" -gt 0 ] \
+  || fail "validator argument file must contain a blocked network"
+
+# Compose must not silently adopt an old or foreign container. Inspect the
+# daemon directly so this gate remains useful even when the Compose model is
+# invalid. Zero containers is the expected state before the first start.
+project_ids=$(/usr/bin/docker ps -aq \
+  --filter "label=com.docker.compose.project=$project") \
+  || fail "could not inspect existing production project containers"
+for container_id in $project_ids; do
+  labels=$(/usr/bin/docker inspect --format \
+    '{{ index .Config.Labels "com.docker.compose.project" }} {{ index .Config.Labels "com.docker.compose.service" }} {{ index .Config.Labels "com.geem.production.install" }}' \
+    "$container_id") \
+    || fail "could not inspect production project container"
+  container_project=${labels%% *}
+  remaining_labels=${labels#* }
+  service=${remaining_labels%% *}
+  container_install_id=${remaining_labels#* }
+  [ "$container_project" = "$project" ] \
+    || fail "project-label selection returned a foreign container"
+  case " $allowed_services " in
+    *" $service "*) ;;
+    *) fail "unknown or orphaned service label in production project: $service" ;;
+  esac
+  [ "$container_install_id" = "$install_id" ] \
+    || fail "production project container has a foreign installation label"
+done
+
+running_ids=$(/usr/bin/docker ps -q \
+  --filter "label=com.docker.compose.project=$project" \
+  --filter "label=com.geem.production.install=$install_id") \
+  || fail "could not inspect running production containers"
+[ -z "$running_ids" ] \
+  || fail "managed start requires every production container to be stopped"
+
+for service in $allowed_services; do
+  service_ids=$(/usr/bin/docker ps -aq \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter "label=com.docker.compose.service=$service") \
+    || fail "could not inspect $service project cardinality"
+  count=0
+  for container_id in $service_ids; do
+    count=$((count + 1))
+  done
+  [ "$count" -le 1 ] \
+    || fail "$service has more than one container in the production project"
+done
+
+"$compose" config --quiet \
+  || fail "Compose configuration is invalid"
+
+"$compose" config --format json \
+  | /usr/bin/docker run --rm -i --pull never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --entrypoint python "$api_image" \
+      -m app.ops.validate_production_compose "$@" \
+      --project "$project" \
+      --allow-local-image-ids \
+      --expected-api-image "$api_image" \
+      --install-id "$install_id" \
+      --ingress-service cloudflared \
+  || fail "rendered production topology was rejected"
+
+echo "Geem production preflight passed"

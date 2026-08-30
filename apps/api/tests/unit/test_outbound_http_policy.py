@@ -1,4 +1,4 @@
-"""Phase 13A outbound-target policy regression tests."""
+"""Outbound-target policy regression tests."""
 
 from __future__ import annotations
 

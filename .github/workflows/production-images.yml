@@ -1,0 +1,536 @@
+name: Production image publication
+
+on:
+  workflow_run:
+    workflows:
+      - Phase 13 MCP release gate
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-images-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, verify, and publish exact production images
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_TAG: sha-${{ github.event.workflow_run.head_sha }}-run-${{ github.run_id }}-${{ github.run_attempt }}
+      API_REPOSITORY: ghcr.io/geem-ai/geem-platform-api
+      APP_PROXY_REPOSITORY: ghcr.io/geem-ai/geem-platform-app-egress-proxy
+      MCP_GATEWAY_REPOSITORY: ghcr.io/geem-ai/geem-platform-mcp-egress-gateway
+      MCP_PROXY_REPOSITORY: ghcr.io/geem-ai/geem-platform-mcp-egress-proxy
+      WORKSPACE_REPOSITORY: ghcr.io/geem-ai/geem-platform-workspace-web
+      DASHBOARD_REPOSITORY: ghcr.io/geem-ai/geem-platform-dashboard-web
+      LANDPAGE_REPOSITORY: ghcr.io/geem-ai/geem-platform-landpage-web
+    steps:
+      - name: Check out the exact gated commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Verify exact checkout and trusted upstream gate
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "${{ github.event.workflow_run.head_branch }}" = main
+          test "${{ github.event.workflow_run.id }}" != ""
+
+      - name: Validate reviewed production build bases
+        id: bases
+        run: |
+          set -eu
+          lock=infra/images/production-build-bases.env
+          test -f "$lock"
+          test "$(grep -Ec '^[A-Z_]+=[^[:space:]]+@sha256:[0-9a-f]{64}$' "$lock")" -eq 5
+          test "$(grep -Ec '^[A-Z_]+=' "$lock")" -eq 5
+          read_base() {
+            key=$1
+            test "$(grep -c "^${key}=" "$lock")" -eq 1
+            sed -n "s/^${key}=//p" "$lock"
+          }
+          api_python="$(read_base API_PYTHON_BASE_IMAGE)"
+          mcp_python="$(read_base MCP_GATEWAY_PYTHON_BASE_IMAGE)"
+          proxy_ubuntu="$(read_base PROXY_UBUNTU_BASE_IMAGE)"
+          frontend_node="$(read_base FRONTEND_NODE_BASE_IMAGE)"
+          frontend_nginx="$(read_base FRONTEND_NGINX_BASE_IMAGE)"
+          printf '%s\n' \
+            "api_python=$api_python" \
+            "mcp_python=$mcp_python" \
+            "proxy_ubuntu=$proxy_ubuntu" \
+            "frontend_node=$frontend_node" \
+            "frontend_nginx=$frontend_nginx" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Validate reviewed third-party runtimes
+        id: runtimes
+        run: |
+          set -eu
+          lock=infra/images/production-runtime-images.env
+          test -f "$lock"
+          test "$(grep -Ec '^[A-Z_]+=[^[:space:]]+@sha256:[0-9a-f]{64}$' "$lock")" -eq 5
+          test "$(grep -Ec '^[A-Z_]+=' "$lock")" -eq 5
+          read_runtime() {
+            key=$1
+            test "$(grep -c "^${key}=" "$lock")" -eq 1
+            sed -n "s/^${key}=//p" "$lock"
+          }
+          printf '%s\n' \
+            "postgres=$(read_runtime POSTGRES_RUNTIME_IMAGE)" \
+            "redis=$(read_runtime REDIS_RUNTIME_IMAGE)" \
+            "qdrant=$(read_runtime QDRANT_RUNTIME_IMAGE)" \
+            "minio=$(read_runtime MINIO_RUNTIME_IMAGE)" \
+            "cloudflared=$(read_runtime CLOUDFLARED_RUNTIME_IMAGE)" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Verify locked build-base platform manifests
+        env:
+          API_PYTHON_BASE: ${{ steps.bases.outputs.api_python }}
+          MCP_PYTHON_BASE: ${{ steps.bases.outputs.mcp_python }}
+          PROXY_UBUNTU_BASE: ${{ steps.bases.outputs.proxy_ubuntu }}
+          FRONTEND_NODE_BASE: ${{ steps.bases.outputs.frontend_node }}
+          FRONTEND_NGINX_BASE: ${{ steps.bases.outputs.frontend_nginx }}
+          POSTGRES_RUNTIME: ${{ steps.runtimes.outputs.postgres }}
+          REDIS_RUNTIME: ${{ steps.runtimes.outputs.redis }}
+          QDRANT_RUNTIME: ${{ steps.runtimes.outputs.qdrant }}
+          MINIO_RUNTIME: ${{ steps.runtimes.outputs.minio }}
+          CLOUDFLARED_RUNTIME: ${{ steps.runtimes.outputs.cloudflared }}
+        run: |
+          set -eu
+          for reference in \
+            "$API_PYTHON_BASE" \
+            "$MCP_PYTHON_BASE" \
+            "$PROXY_UBUNTU_BASE" \
+            "$FRONTEND_NODE_BASE" \
+            "$FRONTEND_NGINX_BASE" \
+            "$POSTGRES_RUNTIME" \
+            "$REDIS_RUNTIME" \
+            "$QDRANT_RUNTIME" \
+            "$MINIO_RUNTIME" \
+            "$CLOUDFLARED_RUNTIME"; do
+            docker buildx imagetools inspect "$reference" \
+              --format '{{json .Image}}' \
+              | jq -e '.os == "linux" and .architecture == "amd64"' >/dev/null
+          done
+
+      - name: Log in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        id: api
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.API_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            API_PYTHON_BASE_IMAGE=${{ steps.bases.outputs.api_python }}
+
+      - name: Build and publish application egress proxy image
+        id: app_proxy
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: infra/app-egress/proxy
+          file: infra/app-egress/proxy/Dockerfile
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.APP_PROXY_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            PROXY_UBUNTU_BASE_IMAGE=${{ steps.bases.outputs.proxy_ubuntu }}
+
+      - name: Build and publish MCP gateway image
+        id: mcp_gateway
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: apps/mcp_egress_gateway/Dockerfile
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.MCP_GATEWAY_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            MCP_GATEWAY_PYTHON_BASE_IMAGE=${{ steps.bases.outputs.mcp_python }}
+
+      - name: Build and publish MCP egress proxy image
+        id: mcp_proxy
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: infra/mcp-egress/proxy
+          file: infra/mcp-egress/proxy/Dockerfile
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.MCP_PROXY_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            PROXY_UBUNTU_BASE_IMAGE=${{ steps.bases.outputs.proxy_ubuntu }}
+
+      - name: Build and publish Workspace image
+        id: workspace
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/workspace_web
+          file: apps/workspace_web/Dockerfile.prod
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.WORKSPACE_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            FRONTEND_NODE_BASE_IMAGE=${{ steps.bases.outputs.frontend_node }}
+            FRONTEND_NGINX_BASE_IMAGE=${{ steps.bases.outputs.frontend_nginx }}
+
+      - name: Build and publish Platform Admin image
+        id: dashboard
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/dashboard_web
+          file: apps/dashboard_web/Dockerfile.prod
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.DASHBOARD_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            FRONTEND_NODE_BASE_IMAGE=${{ steps.bases.outputs.frontend_node }}
+            FRONTEND_NGINX_BASE_IMAGE=${{ steps.bases.outputs.frontend_nginx }}
+
+      - name: Build and publish marketing image
+        id: landpage
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: apps/landpage_web
+          file: apps/landpage_web/Dockerfile.prod
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.LANDPAGE_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            FRONTEND_NODE_BASE_IMAGE=${{ steps.bases.outputs.frontend_node }}
+            FRONTEND_NGINX_BASE_IMAGE=${{ steps.bases.outputs.frontend_nginx }}
+
+      - name: Pull the exact published image digests
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          APP_PROXY_DIGEST: ${{ steps.app_proxy.outputs.digest }}
+          MCP_GATEWAY_DIGEST: ${{ steps.mcp_gateway.outputs.digest }}
+          MCP_PROXY_DIGEST: ${{ steps.mcp_proxy.outputs.digest }}
+          WORKSPACE_DIGEST: ${{ steps.workspace.outputs.digest }}
+          DASHBOARD_DIGEST: ${{ steps.dashboard.outputs.digest }}
+          LANDPAGE_DIGEST: ${{ steps.landpage.outputs.digest }}
+          POSTGRES_RUNTIME: ${{ steps.runtimes.outputs.postgres }}
+          REDIS_RUNTIME: ${{ steps.runtimes.outputs.redis }}
+          QDRANT_RUNTIME: ${{ steps.runtimes.outputs.qdrant }}
+          MINIO_RUNTIME: ${{ steps.runtimes.outputs.minio }}
+          CLOUDFLARED_RUNTIME: ${{ steps.runtimes.outputs.cloudflared }}
+        run: |
+          set -eu
+          for reference in \
+            "$API_REPOSITORY@$API_DIGEST" \
+            "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST" \
+            "$MCP_GATEWAY_REPOSITORY@$MCP_GATEWAY_DIGEST" \
+            "$MCP_PROXY_REPOSITORY@$MCP_PROXY_DIGEST" \
+            "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" \
+            "$DASHBOARD_REPOSITORY@$DASHBOARD_DIGEST" \
+            "$LANDPAGE_REPOSITORY@$LANDPAGE_DIGEST" \
+            "$POSTGRES_RUNTIME" \
+            "$REDIS_RUNTIME" \
+            "$QDRANT_RUNTIME" \
+            "$MINIO_RUNTIME" \
+            "$CLOUDFLARED_RUNTIME"; do
+            docker pull "$reference"
+          done
+
+      - name: Run the full API regression in the exact published image
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          POSTGRES_RUNTIME: ${{ steps.runtimes.outputs.postgres }}
+        run: |
+          set -eu
+          test_network="geem-publish-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test_postgres="geem-publish-postgres-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            docker rm -f "$test_postgres" >/dev/null 2>&1 || true
+            docker network rm "$test_network" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT INT TERM
+          docker network create "$test_network"
+          docker run -d --name "$test_postgres" --network "$test_network" \
+            --network-alias postgres \
+            -e POSTGRES_USER=geem \
+            -e POSTGRES_PASSWORD=geem \
+            -e POSTGRES_DB=geem_test \
+            "$POSTGRES_RUNTIME"
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec "$test_postgres" \
+              pg_isready -U geem -d geem_test >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+          docker run --rm --network "$test_network" --read-only --tmpfs /tmp \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e TEST_DATABASE_URL=postgresql+psycopg://geem:geem@postgres:5432/geem_test \
+            -e DATABASE_URL=postgresql+psycopg://geem:geem@postgres:5432/geem_test \
+            "$API_REPOSITORY@$API_DIGEST" \
+            sh -c '
+              set -eu
+              test "$(alembic heads | wc -l | tr -d " ")" = 1
+              alembic upgrade head
+              alembic current | grep -F "0041_openwa_binding_backfill (head)"
+              python -m pytest -q -p no:cacheprovider tests/unit tests/integration
+            '
+
+      - name: Verify the exact published boundary images
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          APP_PROXY_DIGEST: ${{ steps.app_proxy.outputs.digest }}
+          MCP_GATEWAY_DIGEST: ${{ steps.mcp_gateway.outputs.digest }}
+          MCP_PROXY_DIGEST: ${{ steps.mcp_proxy.outputs.digest }}
+        run: |
+          set -eu
+          docker run --rm --network none --read-only \
+            --entrypoint /usr/sbin/squid \
+            "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST" \
+            -k parse -f /etc/squid/squid.conf
+          docker run --rm --network none --read-only \
+            --entrypoint python \
+            "$MCP_GATEWAY_REPOSITORY@$MCP_GATEWAY_DIGEST" \
+            -c 'import gateway.main, gateway.mcp_client'
+
+          boundary_network="geem-boundary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          app_proxy="geem-app-proxy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mcp_proxy="geem-mcp-proxy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_boundaries() {
+            docker rm -f "$app_proxy" "$mcp_proxy" >/dev/null 2>&1 || true
+            docker network rm "$boundary_network" >/dev/null 2>&1 || true
+          }
+          trap cleanup_boundaries EXIT INT TERM
+          docker network create "$boundary_network"
+          docker run -d --name "$app_proxy" --network "$boundary_network" \
+            --network-alias app-proxy --read-only \
+            --tmpfs /run:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            --tmpfs /var/log/squid:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            --tmpfs /var/spool/squid:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST"
+          docker run -d --name "$mcp_proxy" --network "$boundary_network" \
+            --network-alias mcp-proxy --read-only \
+            --tmpfs /run:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            --tmpfs /var/log/squid:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            --tmpfs /var/spool/squid:rw,noexec,nosuid,nodev,uid=13,gid=13,mode=0750 \
+            -e MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true \
+            -e MCP_PROXY_BLOCKED_NETWORKS=10.0.0.0/8 \
+            "$MCP_PROXY_REPOSITORY@$MCP_PROXY_DIGEST"
+          sleep 3
+          test "$(docker inspect --format '{{.State.Running}}' "$app_proxy")" = true
+          test "$(docker inspect --format '{{.State.Running}}' "$mcp_proxy")" = true
+          require_denied() {
+            docker run --rm --network "$boundary_network" --read-only \
+              --entrypoint python "$API_REPOSITORY@$API_DIGEST" \
+              -c 'import socket,sys; proxy=sys.argv[1]; target=sys.argv[2]; connection=socket.create_connection((proxy,3128),timeout=5); request=f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n"; connection.sendall(request.encode("ascii")); status=connection.recv(256).split(b"\r\n",1)[0]; connection.close(); assert b" 403 " in status,status' \
+              "$1" "$2"
+          }
+          require_denied app-proxy example.com:443
+          require_denied mcp-proxy 127.0.0.1:443
+          cleanup_boundaries
+          trap - EXIT INT TERM
+
+      - name: Exercise the exact locked third-party runtimes
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          REDIS_RUNTIME: ${{ steps.runtimes.outputs.redis }}
+          QDRANT_RUNTIME: ${{ steps.runtimes.outputs.qdrant }}
+          MINIO_RUNTIME: ${{ steps.runtimes.outputs.minio }}
+          CLOUDFLARED_RUNTIME: ${{ steps.runtimes.outputs.cloudflared }}
+        run: |
+          set -eu
+          runtime_network="geem-runtimes-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          redis_name="geem-redis-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          qdrant_name="geem-qdrant-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          minio_name="geem-minio-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_runtimes() {
+            docker rm -f "$redis_name" "$qdrant_name" "$minio_name" \
+              >/dev/null 2>&1 || true
+            docker network rm "$runtime_network" >/dev/null 2>&1 || true
+          }
+          trap cleanup_runtimes EXIT INT TERM
+          docker network create "$runtime_network"
+          docker run -d --name "$redis_name" --network "$runtime_network" \
+            --network-alias redis "$REDIS_RUNTIME"
+          docker run -d --name "$qdrant_name" --network "$runtime_network" \
+            --network-alias qdrant "$QDRANT_RUNTIME"
+          docker run -d --name "$minio_name" --network "$runtime_network" \
+            --network-alias minio \
+            -e MINIO_ROOT_USER=geemtestaccess \
+            -e MINIO_ROOT_PASSWORD=geemtestsecret123 \
+            "$MINIO_RUNTIME" server /data
+          ready=false
+          for attempt in $(seq 1 45); do
+            if docker run --rm --network "$runtime_network" --read-only \
+              --entrypoint sh "$API_REPOSITORY@$API_DIGEST" -c '
+                set -eu
+                curl -fsS --max-time 3 http://qdrant:6333/readyz >/dev/null
+                curl -fsS --max-time 3 http://minio:9000/minio/health/ready >/dev/null
+                python -c "import socket; s=socket.create_connection((\"redis\",6379),3); s.sendall(b\"*1\\r\\n\$4\\r\\nPING\\r\\n\"); assert b\"PONG\" in s.recv(64)"
+              ' >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+          docker run --rm --network none --read-only "$CLOUDFLARED_RUNTIME" version
+          cleanup_runtimes
+          trap - EXIT INT TERM
+
+      - name: Verify the exact published frontend images
+        env:
+          WORKSPACE_DIGEST: ${{ steps.workspace.outputs.digest }}
+          DASHBOARD_DIGEST: ${{ steps.dashboard.outputs.digest }}
+          LANDPAGE_DIGEST: ${{ steps.landpage.outputs.digest }}
+        run: |
+          set -eu
+          docker run --rm --network none --read-only \
+            --entrypoint nginx \
+            "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" -t
+          docker run --rm --network none --read-only --add-host api:127.0.0.1 \
+            --entrypoint nginx \
+            "$DASHBOARD_REPOSITORY@$DASHBOARD_DIGEST" -t
+          docker run --rm --network none --read-only \
+            --entrypoint nginx \
+            "$LANDPAGE_REPOSITORY@$LANDPAGE_DIGEST" -t
+
+      - name: Create exact-SHA production image manifest
+        env:
+          SOURCE_GATE_RUN_ID: ${{ github.event.workflow_run.id }}
+          PUBLICATION_RUN_ID: ${{ github.run_id }}
+          PUBLICATION_RUN_ATTEMPT: ${{ github.run_attempt }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          APP_PROXY_DIGEST: ${{ steps.app_proxy.outputs.digest }}
+          MCP_GATEWAY_DIGEST: ${{ steps.mcp_gateway.outputs.digest }}
+          MCP_PROXY_DIGEST: ${{ steps.mcp_proxy.outputs.digest }}
+          WORKSPACE_DIGEST: ${{ steps.workspace.outputs.digest }}
+          DASHBOARD_DIGEST: ${{ steps.dashboard.outputs.digest }}
+          LANDPAGE_DIGEST: ${{ steps.landpage.outputs.digest }}
+          API_PYTHON_BASE: ${{ steps.bases.outputs.api_python }}
+          MCP_PYTHON_BASE: ${{ steps.bases.outputs.mcp_python }}
+          PROXY_UBUNTU_BASE: ${{ steps.bases.outputs.proxy_ubuntu }}
+          FRONTEND_NODE_BASE: ${{ steps.bases.outputs.frontend_node }}
+          FRONTEND_NGINX_BASE: ${{ steps.bases.outputs.frontend_nginx }}
+          POSTGRES_RUNTIME: ${{ steps.runtimes.outputs.postgres }}
+          REDIS_RUNTIME: ${{ steps.runtimes.outputs.redis }}
+          QDRANT_RUNTIME: ${{ steps.runtimes.outputs.qdrant }}
+          MINIO_RUNTIME: ${{ steps.runtimes.outputs.minio }}
+          CLOUDFLARED_RUNTIME: ${{ steps.runtimes.outputs.cloudflared }}
+        run: |
+          set -eu
+          mkdir -p production-image-manifest
+          jq -n \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_gate_run_id "$SOURCE_GATE_RUN_ID" \
+            --arg publication_run_id "$PUBLICATION_RUN_ID" \
+            --arg publication_run_attempt "$PUBLICATION_RUN_ATTEMPT" \
+            --arg platform linux/amd64 \
+            --arg api "$API_REPOSITORY@$API_DIGEST" \
+            --arg app_proxy "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST" \
+            --arg mcp_gateway "$MCP_GATEWAY_REPOSITORY@$MCP_GATEWAY_DIGEST" \
+            --arg mcp_proxy "$MCP_PROXY_REPOSITORY@$MCP_PROXY_DIGEST" \
+            --arg workspace "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" \
+            --arg dashboard "$DASHBOARD_REPOSITORY@$DASHBOARD_DIGEST" \
+            --arg landpage "$LANDPAGE_REPOSITORY@$LANDPAGE_DIGEST" \
+            --arg api_python_base "$API_PYTHON_BASE" \
+            --arg mcp_python_base "$MCP_PYTHON_BASE" \
+            --arg proxy_ubuntu_base "$PROXY_UBUNTU_BASE" \
+            --arg frontend_node_base "$FRONTEND_NODE_BASE" \
+            --arg frontend_nginx_base "$FRONTEND_NGINX_BASE" \
+            --arg postgres_runtime "$POSTGRES_RUNTIME" \
+            --arg redis_runtime "$REDIS_RUNTIME" \
+            --arg qdrant_runtime "$QDRANT_RUNTIME" \
+            --arg minio_runtime "$MINIO_RUNTIME" \
+            --arg cloudflared_runtime "$CLOUDFLARED_RUNTIME" \
+            '{
+              schema_version: 1,
+              source_sha: $source_sha,
+              source_gate_run_id: $source_gate_run_id,
+              publication_run_id: $publication_run_id,
+              publication_run_attempt: $publication_run_attempt,
+              platform: $platform,
+              images: {
+                api: $api,
+                app_egress_proxy: $app_proxy,
+                mcp_egress_gateway: $mcp_gateway,
+                mcp_egress_proxy: $mcp_proxy,
+                workspace_web: $workspace,
+                dashboard_web: $dashboard,
+                landpage_web: $landpage
+              },
+              build_bases: {
+                api_python: $api_python_base,
+                mcp_gateway_python: $mcp_python_base,
+                proxy_ubuntu: $proxy_ubuntu_base,
+                frontend_node: $frontend_node_base,
+                frontend_nginx: $frontend_nginx_base
+              },
+              runtime_images: {
+                postgres: $postgres_runtime,
+                redis: $redis_runtime,
+                qdrant: $qdrant_runtime,
+                minio: $minio_runtime,
+                cloudflared: $cloudflared_runtime
+              }
+            }' > production-image-manifest/manifest.json
+          jq -e \
+            --arg source_sha "$SOURCE_SHA" \
+            '.schema_version == 1 and .source_sha == $source_sha and
+             .platform == "linux/amd64" and
+             (.images | length) == 7 and
+             (.build_bases | length) == 5 and
+             (.runtime_images | length) == 5 and
+             ([.images[] | test("^ghcr\\.io/geem-ai/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")] | all) and
+             ([.build_bases[] | test("^[a-z0-9._:/-]+@sha256:[0-9a-f]{64}$")] | all) and
+             ([.runtime_images[] | test("^[a-z0-9._:/-]+@sha256:[0-9a-f]{64}$")] | all)' \
+            production-image-manifest/manifest.json >/dev/null
+          (cd production-image-manifest && \
+            sha256sum manifest.json > manifest.json.sha256)
+          (cd production-image-manifest && \
+            sha256sum --check manifest.json.sha256)
+
+      - name: Upload immutable production image manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: geem-production-images-${{ github.event.workflow_run.head_sha }}-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: production-image-manifest
+          if-no-files-found: error
+          retention-days: 90

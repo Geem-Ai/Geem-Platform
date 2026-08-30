@@ -2,7 +2,8 @@
 
 How to run **Geem** on a developer machine. Product UI is `apps/workspace_web`. The API, Celery worker, PostgreSQL, Redis, Qdrant, and MinIO live under `infra/docker-compose.yml`.
 
-For production / aaPanel, see [deployment.md](./deployment.md). Architecture notes: [architecture.md](./architecture.md).
+For the shared production Linux server, see [deployment.md](./deployment.md).
+Architecture notes: [architecture.md](./architecture.md).
 
 ## Prerequisites
 
@@ -127,21 +128,14 @@ Do **not** start `docker-compose.tunnel.yml` on the UAT Mac (it would steal prod
 
 Cloudflare Free HTTP request bodies cap at **100 MB** (matches `MAX_UPLOAD_MB`). Missing credentials make `cloudflared` exit. Never commit `credentials.json`, `credentials-uat.json`, or ad-hoc dumps under `infra/cloudflared/` (the tree gitignores `*.json` and `Untitled`). If a tunnel credential file was ever pushed, rotate that tunnel’s secret in the Cloudflare dashboard and replace the local JSON.
 
-#### Production overlay (`geem-dalseen`)
+#### Production overlay
 
-Ingress: [`infra/cloudflared/config.yml`](../infra/cloudflared/config.yml). Credentials: `infra/cloudflared/credentials.json` (gitignored).
-
-```bash
-brew install cloudflared
-cloudflared tunnel login
-cloudflared tunnel create geem-dalseen
-cp ~/.cloudflared/<TUNNEL-UUID>.json infra/cloudflared/credentials.json
-cloudflared tunnel route dns geem-dalseen hub.geem.ai
-cloudflared tunnel route dns geem-dalseen api.geem.ai
-cloudflared tunnel route dns geem-dalseen geem.ai
-cloudflared tunnel route dns geem-dalseen mtfm.geem.ai
-cloudflared tunnel route dns geem-dalseen "*.geem.ai"
-```
+[`infra/cloudflared/config.yml`](../infra/cloudflared/config.yml) is a topology
+template and deliberately contains no production tunnel UUID. The
+[fresh Linux deployment guide](./deployment.md) creates a new tunnel, renders
+the template to `/etc/geem/cloudflared/config.yml`, and keeps its credentials
+outside the repository. Do not create, route, or start the production tunnel
+from a development machine.
 
 | Public hostname | Origin (Docker DNS) |
 |-----------------|---------------------|
@@ -151,11 +145,14 @@ cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 | `mtfm.geem.ai` | `http://dashboard_web:80` (Platform Admin nginx; `/api` proxied) |
 | `{slug}.geem.ai` | `http://workspace_web:80` (reserved labels stay on the rows above) |
 
-`.env` `CORS_ORIGINS` must include `https://hub.geem.ai` and `https://mtfm.geem.ai`. Set `APP_ADMIN_HOST=mtfm.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai`. The overlay rebuilds `workspace_web`, `landpage_web`, and `dashboard_web` as production nginx images with `VITE_*` / `PUBLIC_*` baked in, and sets `APP_URL` / `WORKSPACE_WEB_URL` plus `TRUST_PROXY_HEADERS=true`.
+Production `/etc/geem/production.env` must include `https://hub.geem.ai` and
+`https://mtfm.geem.ai` in `CORS_ORIGINS`. Set `APP_ADMIN_HOST=mtfm.geem.ai` and
+`APP_ROOT_DOMAIN=geem.ai`. The production images bake the documented `VITE_*`
+and `PUBLIC_*` URLs.
 
 Never run base + tunnel directly on production. Use the persistent wrapper and
-hardening overlay in the [Phase 13 production guide](integrations/mcp-production-deployment.md);
-the validator rejects builds, bind mounts, mutable images, and host ports.
+hardening overlay in the [fresh Linux deployment guide](./deployment.md); the
+validator rejects builds, bind mounts, mutable images, and host ports.
 
 OpenAPI: https://api.geem.ai/docs
 
@@ -204,18 +201,14 @@ OpenAPI: https://api-uat.geem.ai/docs
 
 ### Start on boot
 
-Compose services use `restart: unless-stopped`. To also run `docker compose … up -d` at boot (in case containers were removed):
+Development/UAT Compose services use `restart: unless-stopped`. The production
+hardening overlay resets every long-running service to `restart: "no"` so only
+the ingress-last systemd unit can restore Geem. To manage startup:
 
-**Production host** (`geem-stack`):
-
-```bash
-mkdir -p ~/.config/systemd/user
-cp infra/systemd/geem-stack.user.service ~/.config/systemd/user/geem-stack.service
-systemctl --user daemon-reload
-systemctl --user enable --now geem-stack.service
-```
-
-Root alternative: `sudo install -m 644 infra/systemd/geem-stack.service /etc/systemd/system/geem-stack.service && sudo systemctl enable --now geem-stack`.
+**Production host:** install only the root-owned `geem-production.service` and
+its reviewed preflight/verification/containment helpers through the
+[fresh Linux deployment procedure](./deployment.md#10-make-the-stack-persistent).
+Do not use a user unit or a raw two-file Compose command in production.
 
 **UAT / this Mac** (`geem-uat`; edit `WorkingDirectory` in the unit if the repo is not `~/PlaygroundProjects/Geem`):
 
@@ -226,7 +219,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now geem-uat.service
 ```
 
-macOS does not use systemd user units; start the UAT overlay from `infra/` (or Docker Desktop). Do not enable `geem-stack` and `geem-uat` on the same host.
+macOS does not use systemd user units; start the UAT overlay from `infra/` (or Docker Desktop). Do not enable `geem-production` and `geem-uat` on the same host.
 
 ## Path 1 — full stack with Docker (recommended)
 
@@ -413,5 +406,5 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 | Embedding dimension errors | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models |
 | `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
 | Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
-| Tunnel 1033 / cloudflared exits | Production: `credentials.json` + `-f docker-compose.tunnel.yml`. UAT: `credentials-uat.json` + `-f docker-compose.uat.yml`. Origins: prod nginx `:80` vs UAT Vite `:5174` / `:5175` / Astro `:4321` |
+| Tunnel 1033 / cloudflared exits | Production: inspect only through the fixed wrapper/unit; config and credentials are under `/etc/geem/cloudflared` per the fresh deployment guide. UAT: `credentials-uat.json` + `-f docker-compose.uat.yml`. Origins: prod nginx `:80` vs UAT Vite `:5174` / `:5175` / Astro `:4321` |
 | Tunnel CORS / login refresh fails | Production: `CORS_ORIGINS` includes `https://hub.geem.ai` (Workspace) and `https://mtfm.geem.ai` (Platform Admin); Workspace browser calls `https://api.geem.ai`; Platform Admin is same-origin on `mtfm.geem.ai` (`/api` proxied). UAT: `https://app-uat.geem.ai` (Workspace) and `https://admin-uat.geem.ai` (Platform Admin) in `CORS_ORIGINS`; browser calls `https://api-uat.geem.ai`. Recreate `workspace_web` / `dashboard_web` after switching overlays |

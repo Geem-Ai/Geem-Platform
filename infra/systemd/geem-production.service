@@ -1,0 +1,25 @@
+[Unit]
+Description=Geem production stack (validated Docker Compose and Cloudflare Tunnel)
+Documentation=file:///opt/geem/current/docs/deployment.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStartPre=/usr/local/sbin/geem-production-preflight
+ExecStart=/usr/local/sbin/geem-prod-compose up -d --wait --wait-timeout 300 postgres redis qdrant minio minio-init app-egress-proxy mcp-egress-proxy mcp-egress-gateway api worker beat workspace_web dashboard_web landpage_web
+ExecStart=/usr/local/sbin/geem-production-verify internal
+ExecStart=/usr/local/sbin/geem-prod-compose up -d --no-deps cloudflared
+ExecStart=/usr/local/sbin/geem-production-verify ingress
+ExecStop=/usr/local/sbin/geem-production-stop
+ExecStopPost=/usr/local/sbin/geem-production-stop
+TimeoutStartSec=900
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

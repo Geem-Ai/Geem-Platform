@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -494,376 +495,216 @@ def test_phase13_gate_covers_shared_provider_and_the_full_migration_chain() -> N
     assert "phase13-dashboard-regression-${{ github.sha }}" in workflow
 
 
-def test_production_runbooks_support_collision_safe_project_handoff() -> None:
-    production = (
-        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
+def test_fresh_production_docs_replace_phase_upgrade_artifacts() -> None:
+    deployment_path = REPO_ROOT / "docs/deployment.md"
+    connectors_path = REPO_ROOT / "docs/integrations/mcp-connectors.md"
+    obsolete_paths = (
+        REPO_ROOT / "docs/integrations/mcp-production-deployment.md",
+        REPO_ROOT / "docs/integrations/mcp-production-clean-slate.md",
+        REPO_ROOT / "infra/cloudflared/config.maintenance.yml",
+        REPO_ROOT / "infra/docker-compose.maintenance-ingress.yml",
+    )
+
+    assert deployment_path.is_file()
+    assert connectors_path.is_file()
+    for path in obsolete_paths:
+        assert not path.exists()
+
+    deployment = deployment_path.read_text()
+    connectors = connectors_path.read_text()
+    for obsolete_reference in (
+        "mcp-production-deployment.md",
+        "mcp-production-clean-slate.md",
+        "config.maintenance.yml",
+        "docker-compose.maintenance-ingress.yml",
+        "--cloudflared-mode",
+        "phase13-start-artifacts.sha256",
+    ):
+        assert obsolete_reference not in deployment
+        assert obsolete_reference not in connectors
+
+
+def test_fresh_deployment_is_geem_only_on_the_shared_host() -> None:
+    deployment = (REPO_ROOT / "docs/deployment.md").read_text()
+    words = " ".join(deployment.split())
+
+    assert "**law-firm**" in deployment
+    assert "remove only Docker objects that are proven to belong to Geem" in words
+    assert "Remove only those exact container IDs" in words
+    assert "delete only that exact tunnel UUID" in words
+    assert "Never remove `infra_default` while any law-firm or unknown" in words
+    assert (
+        "Any law-firm identity, state, mount, or endpoint change is a failure"
+        in words
+    )
+
+    for forbidden_global_action in (
+        "apt remove docker*",
+        "rm -rf /var/lib/docker",
+        "docker system prune",
+        "docker container prune",
+        "docker image prune",
+        "docker network prune",
+        "docker volume prune",
+        "docker compose down",
+        "systemctl restart docker",
+    ):
+        assert forbidden_global_action in deployment
+
+    assert "/opt/geem/releases/<full-sha>" in deployment
+    assert "four new, empty, explicitly named datastore volumes" in words
+    assert "one new locally managed Cloudflare Tunnel" in words
+    assert "six proxied `geem.ai` DNS routes" in words
+    assert "all six DNS record IDs target the new tunnel" in words
+
+
+def test_cloudflare_maintenance_and_lifecycle_authority_are_separate() -> None:
+    deployment = (REPO_ROOT / "docs/deployment.md").read_text()
+    maintenance = deployment.split(
+        "### Cloudflare maintenance credential", maxsplit=1
+    )[1].split("### Cloudflare tunnel lifecycle credential", maxsplit=1)[0]
+    lifecycle = deployment.split(
+        "### Cloudflare tunnel lifecycle credential", maxsplit=1
+    )[1].split("## Fixed production identities", maxsplit=1)[0]
+    lifecycle_words = " ".join(lifecycle.split())
+
+    assert "/etc/geem/cloudflare/maintenance.json" in maintenance
+    assert "Zone -> Zone -> Read" in maintenance
+    assert "Zone -> WAF -> Edit" in maintenance
+    assert (
+        "not** sufficient to list, delete, or create Cloudflare Tunnels"
+        in maintenance
+    )
+    assert "cannot update DNS" in maintenance
+    assert "Account -> Cloudflare Tunnel -> Edit" not in maintenance
+    assert "Zone -> DNS -> Edit" not in maintenance
+
+    assert "/etc/geem/cloudflare/tunnel-lifecycle.json" in lifecycle
+    assert "Account -> Cloudflare Tunnel -> Edit" in lifecycle
+    assert "Zone -> DNS -> Edit" in lifecycle
+    assert "Zone -> Zone -> Read" in lifecycle
+    assert "The WAF token does not fill that gap" in lifecycle_words
+    assert "NXDOMAIN/no route" in deployment
+    assert "unproxied production record is not protected by WAF" in deployment
+
+
+def test_fresh_production_pki_requires_exact_identities_and_no_symlinks() -> None:
+    readme = (REPO_ROOT / "infra/mcp-egress/pki/README.md").read_text()
+
+    assert "DNS:mcp-egress-gateway'" in readme
+    assert "TLSWebServerAuthentication'" in readme
+    assert "TLSWebClientAuthentication'" in readme
+    assert "'CA:TRUE,pathlen:0'" in readme
+    assert readme.count("'CA:FALSE'") == 2
+    assert "'CertificateSign,CRLSign'" in readme
+    assert "test ! -L \"$component\"" in readme
+    for destination in (
+        "/etc/geem/mcp-egress/pki/ca/ca.crt",
+        "/etc/geem/mcp-egress/pki/server/server.crt",
+        "/etc/geem/mcp-egress/pki/server/server.key",
+        "/etc/geem/mcp-egress/pki/client/client.crt",
+        "/etc/geem/mcp-egress/pki/client/client.key",
+    ):
+        assert destination in readme
+
+
+def test_fresh_production_hardening_template_is_complete() -> None:
+    overlay = (
+        REPO_ROOT / "infra/docker-compose.production-hardening.example.yml"
     ).read_text()
-    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
 
-    assert "GEEM_LEGACY_COMPOSE_PROJECT" in production
-    assert "GEEM_LEGACY_GEEM_CONTAINER_IDS" in production
-    assert "GEEM_LEGACY_POSTGRES_CONTAINER_ID" in production
-    assert 'docker exec "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" pg_dump' in production
-    assert 'docker compose -p "$GEEM_LEGACY_COMPOSE_PROJECT"' not in production
-    assert "com.docker.compose.project.working_dir" in production
-    assert "com.docker.compose.project.config_files" in production
-    assert "Compose-namespace transition, not a data copy" in production
-    assert "Do not stop/remove a foreign container" in production
-    assert "project='<approved-release-compose-project>'" in production
-    assert "project='<approved-existing-compose-project>'" not in production
-    assert "ExecStop=\nExecStopPost=" in production
-    assert "GEEM_LEGACY_STOP_IDS" in production
-    assert 'docker stop --time 60 "$container_id"' in production
-    assert production.count("TimeoutStopSec=240") == 2
-
-    identity_baseline = production.split(
-        "After review, record only the exact Geem-owned legacy IDs", maxsplit=1
-    )[1].split("Do not paste mount host paths", maxsplit=1)[0]
-    checked_state_assignment = (
-        'running=$(docker inspect "$container_id" --format \'{{.State.Running}}\')'
+    assert overlay.count("\n    pull_policy: never") == 15
+    assert overlay.count('\n    restart: "no"') == 14
+    assert overlay.count("com.geem.production.install:") == 15
+    required_subnets = (
+        "APPLICATION_DATA_SUBNET",
+        "APPLICATION_BROKER_SUBNET",
+        "APPLICATION_INGRESS_SUBNET",
+        "APPLICATION_PROVIDER_CONTROL_SUBNET",
+        "APPLICATION_PROVIDER_EGRESS_SUBNET",
+        "MCP_EGRESS_CONTROL_SUBNET",
+        "MCP_PROXY_CONTROL_SUBNET",
+        "MCP_PUBLIC_EGRESS_SUBNET",
+        "PUBLIC_EGRESS_SUBNET",
     )
-    assert "set -eu" in identity_baseline
-    assert checked_state_assignment in identity_baseline
-    assert 'if [ "$(docker inspect' not in identity_baseline
+    for variable in required_subnets:
+        assert overlay.count(f"${{{variable}:?required") == 1
 
-    mount_inventory = production.split(
-        "Record the exact live datastore mounts", maxsplit=1
-    )[1].split("Store this redacted mapping", maxsplit=1)[0]
-    assert "container_count=$((container_count + 1))" in mount_inventory
-    assert 'docker inspect "$container_id" --format \'{{json .Mounts}}\'' in mount_inventory
-    assert 'docker inspect "$container_ids"' not in mount_inventory
-
-    backup = production.split(
-        "A PostgreSQL custom-format example", maxsplit=1
-    )[1].split("The restore drill is mandatory", maxsplit=1)[0]
-    dump_call = 'docker exec "$GEEM_LEGACY_POSTGRES_CONTAINER_ID" pg_dump'
-    dump_call_index = backup.index(dump_call)
-    for required_check in (
-        "com.docker.compose.project.working_dir",
-        "com.docker.compose.project.config_files",
-        "com.docker.compose.service",
-        "{{.State.Running}}",
-        "legacy postgres physical volume changed",
+    for volume in (
+        "POSTGRES_VOLUME_NAME",
+        "REDIS_VOLUME_NAME",
+        "QDRANT_VOLUME_NAME",
+        "MINIO_VOLUME_NAME",
     ):
-        assert backup.index(required_check) < dump_call_index
+        assert f"name: ${{{volume}:?required fresh Geem" in overlay
+    assert overlay.count("external: true") == 4
 
-    handoff = production.split(
-        "If the reviewed legacy `ExecStop` was not invoked", maxsplit=1
-    )[1].split("Pre-Phase-13 datastores", maxsplit=1)[0]
-    assert "GEEM_LEGACY_RUNNING_CONTAINER_IDS" in handoff
-    assert "GEEM_LEGACY_NONRUNNING_CONTAINER_IDS" in handoff
-    assert "for container_id in $GEEM_LEGACY_GEEM_CONTAINER_IDS; do" in handoff
-    assert "legacy_running_after_handoff" in handoff
-    assert checked_state_assignment in handoff
-    assert 'if [ "$(docker inspect' not in handoff
-    assert handoff.index('docker stop --time 60 "$container_id"') < handoff.index(
-        'test -z "$legacy_running_after_handoff"'
-    )
-
-    migration = "geem-prod-compose run --rm --no-deps api alembic upgrade head"
-    normal_start = "geem-prod-compose up -d --wait --wait-timeout 300"
-    assert production.index(migration) < production.index(normal_start)
-    production_words = " ".join(production.split())
-    production_hold = (
-        "Before any release-project start, prove that this control still serves"
-    )
-    production_first_start = "geem-prod-compose up -d \\ postgres redis"
-    production_failure_test = (
-        "Before accepting the supervisor, prove fail-start containment deliberately"
-    )
-    production_reboot = "Perform a controlled reboot in the maintenance plan."
-    production_release = "release the independent ingress maintenance control"
-    assert (
-        production_words.index(production_hold)
-        < production_words.index(production_first_start)
-        < production_words.index(normal_start)
-        < production_words.index(production_failure_test)
-        < production_words.index(production_reboot)
-        < production_words.index(production_release)
-    )
-    assert "unrelated host Cloudflared or Apache service" in production_words
-    assert (
-        "running `cloudflared` container is not an ingress-release event"
-        in production_words
-    )
-
-    assert "legacy project label collides with another repository" in connectors
-    production_procedure = connectors.split(
-        "## Production deployment procedure", maxsplit=1
-    )[1]
-    assert production_procedure.count("geem_compose() {") == 1
-    assert production_procedure.count("\ndocker compose \\") == 0
-    helper_start = production_procedure.index("geem_compose() {")
-    helper_end = production_procedure.index("\n}\n", helper_start)
-    helper = production_procedure[helper_start:helper_end]
-    assert '--project-name "$COMPOSE_PROJECT_NAME"' in helper
-    connector_migration = (
-        "geem_compose run --rm --no-deps api alembic upgrade head"
-    )
-    connector_start = "geem_compose up -d --wait --wait-timeout 300"
-    assert production_procedure.index(
-        connector_migration
-    ) < production_procedure.index(connector_start)
-    connector_words = " ".join(production_procedure.split())
-    connector_hold = "Before the first release-project `geem_compose up`, prove"
-    connector_first_start = "geem_compose up -d \\ postgres redis"
-    assert (
-        connector_words.index(connector_hold)
-        < connector_words.index(connector_first_start)
-        < connector_words.index(connector_migration)
-        < connector_words.index(connector_start)
-    )
-    assert "The final `geem_compose up` starts `cloudflared`" in connector_words
-    assert "a running tunnel is not authorization to release traffic" in connector_words
-    assert "unrelated host Cloudflared or Apache service" in connector_words
+    assert overlay.count("- /etc/geem/production.env") == 2
+    assert "file: /etc/geem/cloudflared/config.yml" in overlay
+    assert "file: /etc/geem/cloudflared/credentials.json" in overlay
 
 
-def test_disposable_state_exception_is_fail_closed_and_non_destructive() -> None:
-    production = (
-        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
-    ).read_text()
-    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
-    production_words = " ".join(production.split())
-    connector_words = " ".join(connectors.split())
-
-    ordered_gates = (
-        "The state-preserving recovery path is the default",
-        "### Disposable-state exception: no application-data recovery",
-        "Before the initial proof, the integration owner must complete and "
-        "settle the revocation/disablement",
-        "First collect a read-only eligibility proof in audit mode",
-        "Then obtain a signed, bounded pre-proof maintenance authorization",
-        "Under that authorization, activate the named Geem-only ingress hold",
-        "Then repeat the decisive read-only proof",
-        "Before the final waiver is countersigned, a clean-reconstruction "
-        "rehearsal must pass outside production",
-        "Only after the final proof and rehearsal pass may all named owners "
-        "countersign and finalize the waiver",
-        "## 2. Fetch and fast-forward to the approved release",
-    )
-    gate_indexes = [production_words.index(gate) for gate in ordered_gates]
-    assert gate_indexes == sorted(gate_indexes)
-
-    for required_scope in (
-        "one exact host and release",
-        "current and target full Git SHA",
-        "current schema revision",
-        "database/role identity",
-        "maintenance window",
-        "evidence timestamp/checksum",
-        "exact name, Driver, Scope, labels/options inspection fingerprint",
-        "service mount destination",
-    ):
-        assert required_scope in production_words
-
-    assert "initial read-only eligibility proof" in production_words
-    assert "This authorization is not the data-loss waiver" in production_words
-    assert "perform no other mutation" in production_words
-    assert "Any drift before the first stage-2 mutation invalidates" in (
-        production_words
-    )
-    assert "unknown, skipped, or unclassified table blocks the waiver" in (
-        production_words
-    )
-    assert "only test users or no valuable data supports owner attestation" in (
-        production_words
-    )
-    assert "is not proof by itself" in production_words
-    assert "data owner, product/business owner" in production_words
-    assert "security/privacy/records owner" in production_words
-    assert "clean-reconstruction owner" in production_words
-    assert "no integration-cleanup mutation may occur between" in production_words
-    assert "already completed test-integration cleanup" in production_words
-    assert "without depending on data that will be waived" in (
-        production_words
-    )
-    assert "immutable configuration/reconstruction evidence pack" in (
-        production_words
-    )
-    assert (
-        "never put raw secrets or private keys in the ticket" in production_words
-    )
-
-    destructive_ban = production_words.split(
-        "It never authorizes", maxsplit=1
-    )[1].split("A clean reconstruction", maxsplit=1)[0]
-    for destructive_action in (
-        "`compose down -v`",
-        "`rm -v`",
-        "`docker volume rm`",
-        "`docker volume prune`",
-        "`docker system prune`",
-        "a name glob",
-    ):
-        assert destructive_action in destructive_ban
-    assert "does not expose a separate stable, portable object ID" in (
-        production_words
-    )
-    assert "never invent one" in production_words
-    assert "Old volumes stay detached and quarantined" in production_words
-    assert "No volume deletion is part of MODE 2" in production_words
-    assert "each exact volume name and approved inspection fingerprint" in (
-        production_words
-    )
-
-    rehearsal = production_words.split(
-        "Before the final waiver is countersigned", maxsplit=1
-    )[1].split("Only after the final proof", maxsplit=1)[0]
-    rehearsal_order = (
-        "render and validate the merged topology",
-        "start only the four new datastores",
-        "Verify all four exact new name/fingerprint/destination mappings",
-        "before any migration, initialization, or bootstrap write",
-        "Only then run the one-shot empty-schema migration and clean bootstrap",
-        "complete the topology start",
-    )
-    rehearsal_indexes = [rehearsal.index(step) for step in rehearsal_order]
-    assert rehearsal_indexes == sorted(rehearsal_indexes)
-
-    failure_path = production_words.split(
-        "### Disposable-state failure path", maxsplit=1
-    )[1].split("### Security-incident path", maxsplit=1)[0]
-    failure_order = (
-        "Render and validate the merged topology first",
-        "start only the four new datastores",
-        "require its exact new name/fingerprint/destination",
-        "before any migration, initialization, or bootstrap write",
-        "Only then run the one-shot empty-schema migration and clean bootstrap",
-        "complete the topology start",
-    )
-    failure_indexes = [failure_path.index(step) for step in failure_order]
-    assert failure_indexes == sorted(failure_indexes)
-
-    connector_failure = connector_words.split(
-        "When the release used the disposable-state exception", maxsplit=1
-    )[1].split("## Production release checklist", maxsplit=1)[0]
-    connector_failure_order = (
-        "then render and validate",
-        "start only the new datastores",
-        "verify all four exact new name/fingerprint/ destination mappings",
-        "before any migration/bootstrap write",
-        "Only then migrate, clean-bootstrap, complete the topology start",
-    )
-    connector_indexes = [
-        connector_failure.index(step) for step in connector_failure_order
-    ]
-    assert connector_indexes == sorted(connector_indexes)
-
-    assert "Stage 12 must not be its first execution" in production_words
-    assert "exact Geem release containers and their permitted stop/removal/" in (
-        production_words
-    )
-    assert "deployment-owned overlay's four external names" in production_words
-    assert "validator volume arguments" in production_words
-    assert "persistent wrapper inputs" in production_words
-    assert "Finalize a new canonical checksum manifest" in production_words
-    assert "exact new name/fingerprint/destination" in production_words
-    assert "effective encryption identity unchanged" in production_words
-    assert "This is clean reconstruction, not rollback or schema downgrade" in (
-        connector_words
-    )
-    assert "Exactly one data-recovery decision is approved" in production_words
-    assert "Exactly one data-recovery decision passes" in connector_words
-    assert "final countersigned exact disposable-state waiver" in production_words
-    assert "final countersigned exact disposable-state waiver" in connector_words
-    assert "disposable-state-exception-no-application-data-recovery" in connectors
-    assert "disposable-state-failure-path" in connectors
-    assert "only test users is not approval or proof" in connector_words
-    assert (
-        "authorizes no production-volume deletion in MODE 2" in connector_words
-    )
-
-
-def test_maintenance_tunnel_artifacts_are_fail_closed() -> None:
-    maintenance_config_path = (
-        REPO_ROOT / "infra/cloudflared/config.maintenance.yml"
-    )
-    maintenance_overlay_path = (
-        REPO_ROOT / "infra/docker-compose.maintenance-ingress.yml"
-    )
-    live_config = (REPO_ROOT / "infra/cloudflared/config.yml").read_text()
-    maintenance_config = maintenance_config_path.read_text()
-    maintenance_overlay = maintenance_overlay_path.read_text()
-
-    for identity_prefix in ("tunnel:", "credentials-file:"):
-        live_identity = next(
-            line for line in live_config.splitlines() if line.startswith(identity_prefix)
-        )
-        maintenance_identity = next(
-            line
-            for line in maintenance_config.splitlines()
-            if line.startswith(identity_prefix)
-        )
-        assert maintenance_identity == live_identity
-    maintenance_hosts = (
-        "hub.geem.ai",
-        "api.geem.ai",
-        "geem.ai",
-        "www.geem.ai",
-        "mtfm.geem.ai",
-        '"*.geem.ai"',
-    )
-    for hostname in maintenance_hosts:
-        assert (
-            f"  - hostname: {hostname}\n    service: http_status:503"
-            in maintenance_config
-        )
-    assert maintenance_config.count("service: http_status:503") == len(
-        maintenance_hosts
-    )
-    assert maintenance_config.rstrip().endswith("- service: http_status:404")
-    for forbidden_origin in (
-        "service: http://",
-        "service: https://",
-        "service: unix:",
-        "service: tcp:",
-        "service: ssh:",
-        "service: rdp:",
-        "service: smb:",
-        "service: bastion",
-        "service: hello_world",
-        "originRequest:",
-    ):
-        assert forbidden_origin not in maintenance_config
-
-    assert "depends_on: !reset {}" in maintenance_overlay
-    assert "networks: !override\n      - public_egress" in maintenance_overlay
-    assert "configs: !override" in maintenance_overlay
-    assert "source: cloudflared_maintenance_config" in maintenance_overlay
-    assert "cloudflared_config: !reset null" in maintenance_overlay
-    assert "file: /etc/geem/cloudflared/config.maintenance.yml" in maintenance_overlay
-    assert "CLOUDFLARED_MAINTENANCE_CONFIG_FILE" not in maintenance_overlay
-
-
-def test_maintenance_tunnel_overlay_merges_to_public_only_ingress(
-    tmp_path: Path,
-) -> None:
+def test_fresh_production_hardening_template_passes_rendered_validator() -> None:
     docker = shutil.which("docker")
     if docker is None:
         pytest.skip("Docker Compose CLI is unavailable")
-    maintenance_overlay_path = (
-        REPO_ROOT / "infra/docker-compose.maintenance-ingress.yml"
-    )
-    hardening_fixture = tmp_path / "docker-compose.production-hardening.yml"
-    hardening_fixture.write_text(
-        """services:
-  cloudflared:
-    volumes: !reset []
-    configs:
-      - source: cloudflared_config
-        target: /etc/cloudflared/config.yml
-        uid: \"65532\"
-        gid: \"65532\"
-        mode: 0444
-configs:
-  cloudflared_config:
-    file: /etc/geem/cloudflared/config.yml
-"""
+
+    def digest(character: str) -> str:
+        return f"sha256:{character * 64}"
+
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "POSTGRES_IMAGE": digest("1"),
+            "REDIS_IMAGE": digest("2"),
+            "QDRANT_IMAGE": digest("3"),
+            "MINIO_IMAGE": digest("4"),
+            "GEEM_API_IMAGE": digest("5"),
+            "APP_EGRESS_PROXY_IMAGE": digest("6"),
+            "MCP_EGRESS_GATEWAY_IMAGE": digest("7"),
+            "MCP_EGRESS_PROXY_IMAGE": digest("8"),
+            "WORKSPACE_WEB_IMAGE": digest("9"),
+            "DASHBOARD_WEB_IMAGE": digest("a"),
+            "LANDPAGE_WEB_IMAGE": digest("b"),
+            "CLOUDFLARED_IMAGE": digest("c"),
+            "GEEM_INSTALL_ID": "geem-install-test-0001",
+            "POSTGRES_USER": "geem",
+            "POSTGRES_PASSWORD": "not-a-default-password",
+            "POSTGRES_DB": "geem",
+            "DATABASE_URL": (
+                "postgresql+psycopg://geem:not-a-default-password@postgres:5432/geem"
+            ),
+            "MINIO_ACCESS_KEY": "geem-storage",
+            "MINIO_SECRET_KEY": "not-a-default-minio-secret",
+            "MINIO_BUCKET": "rag-documents",
+            "MCP_CONNECTOR_ENABLED": "false",
+            "MCP_EGRESS_BLOCKED_NETWORKS": (
+                "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+            ),
+            "MCP_EGRESS_PKI_DIR": "/etc/geem/mcp-egress/pki",
+            "POSTGRES_VOLUME_NAME": "geem-fresh-postgres",
+            "REDIS_VOLUME_NAME": "geem-fresh-redis",
+            "QDRANT_VOLUME_NAME": "geem-fresh-qdrant",
+            "MINIO_VOLUME_NAME": "geem-fresh-minio",
+            "APPLICATION_DATA_SUBNET": "172.30.10.0/24",
+            "APPLICATION_BROKER_SUBNET": "172.30.11.0/24",
+            "APPLICATION_INGRESS_SUBNET": "172.30.12.0/24",
+            "APPLICATION_PROVIDER_CONTROL_SUBNET": "172.30.13.0/24",
+            "APPLICATION_PROVIDER_EGRESS_SUBNET": "172.30.14.0/24",
+            "MCP_EGRESS_CONTROL_SUBNET": "172.30.15.0/24",
+            "MCP_PROXY_CONTROL_SUBNET": "172.30.16.0/24",
+            "MCP_PUBLIC_EGRESS_SUBNET": "172.30.17.0/24",
+            "PUBLIC_EGRESS_SUBNET": "172.30.18.0/24",
+        }
     )
     rendered = subprocess.run(
         [
             docker,
             "compose",
+            "--project-name",
+            "geem-production",
+            "--env-file",
+            "/dev/null",
             "--profile",
             "mcp",
             "-f",
@@ -871,299 +712,347 @@ configs:
             "-f",
             str(REPO_ROOT / "infra/docker-compose.tunnel.yml"),
             "-f",
-            str(hardening_fixture),
-            "-f",
-            str(maintenance_overlay_path),
+            str(
+                REPO_ROOT
+                / "infra/docker-compose.production-hardening.example.yml"
+            ),
             "config",
+            "--no-env-resolution",
             "--format",
             "json",
         ],
         cwd=REPO_ROOT,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,
     )
-    compose = json.loads(rendered.stdout)
-    cloudflared = compose["services"]["cloudflared"]
 
-    assert set(cloudflared["networks"]) == {"public_egress"}
-    assert cloudflared.get("depends_on") is None
-    assert not cloudflared.get("volumes")
-    assert cloudflared["configs"] == [
-        {
-            "source": "cloudflared_maintenance_config",
-            "target": "/etc/cloudflared/config.yml",
-            "uid": "65532",
-            "gid": "65532",
-            "mode": "0444",
-        }
+    validator_environment = dict(os.environ)
+    validator_environment["PYTHONPATH"] = str(REPO_ROOT / "apps/api")
+    validated = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.ops.validate_production_compose",
+            "--project",
+            "geem-production",
+            "--install-id",
+            "geem-install-test-0001",
+            "--mcp-enabled",
+            "false",
+            "--allow-local-image-ids",
+            "--ingress-service",
+            "cloudflared",
+            "--volume",
+            "postgres_data=geem-fresh-postgres",
+            "--volume",
+            "redis_data=geem-fresh-redis",
+            "--volume",
+            "qdrant_data=geem-fresh-qdrant",
+            "--volume",
+            "minio_data=geem-fresh-minio",
+            "--required-blocked-network",
+            "10.0.0.0/8",
+        ],
+        cwd=REPO_ROOT,
+        env=validator_environment,
+        input=rendered.stdout,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert validated.returncode == 0, validated.stderr
+    assert validated.stdout.strip() == "production Compose topology valid"
+
+
+def test_fresh_tunnel_template_has_no_retired_tunnel_identity() -> None:
+    config = (REPO_ROOT / "infra/cloudflared/config.yml").read_text()
+
+    assert "tunnel: REPLACE_WITH_NEW_TUNNEL_UUID" in config
+    assert "credentials-file: /etc/cloudflared/credentials.json" in config
+    assert "e054f188-97ca-4cab-80da-020f0ae4385b" not in config
+    assert config.count("  - hostname:") == 10
+    for hostname in (
+        "app-uat.geem.ai",
+        "api-uat.geem.ai",
+        "landpage-uat.geem.ai",
+        "admin-uat.geem.ai",
+    ):
+        assert f"  - hostname: {hostname}\n    service: http_status:404" in config
+        assert config.index(f"  - hostname: {hostname}") < config.index(
+            '  - hostname: "*.geem.ai"'
+        )
+    assert config.rstrip().endswith("- service: http_status:404")
+
+
+def test_production_systemd_starts_ingress_last_and_contains_stops() -> None:
+    unit = (REPO_ROOT / "infra/systemd/geem-production.service").read_text()
+    preflight = (REPO_ROOT / "infra/systemd/geem-production-preflight").read_text()
+    verify = (REPO_ROOT / "infra/systemd/geem-production-verify").read_text()
+    stop = (REPO_ROOT / "infra/systemd/geem-production-stop").read_text()
+    deployment = (REPO_ROOT / "docs/deployment.md").read_text()
+    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
+
+    start_lines = [
+        line for line in unit.splitlines() if line.startswith("ExecStart=")
     ]
-    assert compose["configs"] == {
-        "cloudflared_maintenance_config": {
-            "name": "infra_cloudflared_maintenance_config",
-            "file": "/etc/geem/cloudflared/config.maintenance.yml",
-        }
-    }
-
-
-def test_owner_authorized_clean_slate_path_is_explicit_and_non_destructive() -> None:
-    clean_slate_path = (
-        REPO_ROOT / "docs/integrations/mcp-production-clean-slate.md"
+    assert len(start_lines) == 4
+    assert start_lines[0].startswith(
+        "ExecStart=/usr/local/sbin/geem-prod-compose up"
     )
-    clean_slate = clean_slate_path.read_text()
-    clean_words = " ".join(clean_slate.split())
-    production = (
-        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
-    ).read_text()
+    assert "cloudflared" not in start_lines[0]
+    assert start_lines[1] == (
+        "ExecStart=/usr/local/sbin/geem-production-verify internal"
+    )
+    assert start_lines[2] == (
+        "ExecStart=/usr/local/sbin/geem-prod-compose up -d --no-deps cloudflared"
+    )
+    assert start_lines[3] == (
+        "ExecStart=/usr/local/sbin/geem-production-verify ingress"
+    )
+    assert (
+        "ExecStartPre=/usr/local/sbin/geem-production-preflight" in unit
+    )
+    assert "ExecStop=/usr/local/sbin/geem-production-stop" in unit
+    assert "ExecStopPost=/usr/local/sbin/geem-production-stop" in unit
+
+    assert "internal|runtime|ingress" in verify
+    assert "cloudflared started before internal verification" in verify
+    assert "require_one_running cloudflared" in verify
+    assert 'elif [ "$stage" = runtime ]; then' in verify
+    assert "verify_internal_health" in verify
+    assert "stability" in verify.lower()
+    assert 'while [ "$check" -le 6 ]; do' in verify
+    assert '[ "$check" -eq 6 ] || /usr/bin/sleep 5' in verify
+    assert "/usr/bin/sleep" in verify
+
+    assert "project=geem-production" in stop
+    assert "install_file=/etc/geem/install-id" in stop
+    assert "install_label=com.geem.production.install" in stop
+    project_filter = "--filter \"label=com.docker.compose.project=$project\""
+    ingress_filter = "stop_matching cloudflared"
+    assert project_filter in stop
+    assert '--filter "label=$install_label=$install_id"' in stop
+    assert '--filter "label=com.docker.compose.service=$service"' in stop
+    assert ingress_filter in stop
+    assert stop.index(ingress_filter) < stop.index("stop_matching ''")
+    assert '/usr/bin/docker stop --time 30 "$id"' in stop
+    assert '&\n    pids="$pids $!"' in stop
+    assert 'wait "$pid"' in stop
+    assert "docker compose down" not in stop
+    assert "prune" not in stop
+
+    assert "manifest=/etc/geem/start-artifacts.sha256" in preflight
+    assert "phase13-start-artifacts.sha256" not in preflight
+    assert "arguments_file=/etc/geem/production-validator.args" in preflight
+    assert "install_file=/etc/geem/install-id" in preflight
+    assert '"$compose" config --format json \\\n  | /usr/bin/docker run' in preflight
+    assert "--pull never --network none --read-only" in preflight
+    assert '--expected-api-image "$api_image"' in preflight
+    assert '--install-id "$install_id"' in preflight
+    assert '-m app.ops.validate_production_compose "$@" \\' in preflight
+    assert 'fail "validator argument file contains an unapproved flag"' in preflight
+    assert (
+        'fail "validator argument file must contain each volume exactly once"'
+        in preflight
+    )
+    assert 'fail "validator argument file must contain a blocked network"' in preflight
+    assert preflight.index('"$@" \\') < preflight.index('--project "$project"')
+    assert 'require_file /etc/geem/production.env 0 0 600' in preflight
+    assert (
+        'require_file /etc/geem/cloudflared/credentials.json 0 65532 440'
+        in preflight
+    )
+    assert (
+        'require_file /etc/geem/mcp-egress/pki/server/server.key 0 10001 440'
+        in preflight
+    )
+    assert 'startup checksum manifest must contain exactly 23 paths' in preflight
+
+    validator_contract = deployment.split(
+        "this validator contract:", maxsplit=1
+    )[1].split("Do not save the rendered JSON", maxsplit=1)[0]
+    assert "--allow-local-image-ids" in validator_contract
+    assert "--ingress-service cloudflared" in validator_contract
+    assert "--cloudflared-mode" not in validator_contract
+    assert "/etc/geem/cloudflared/config.yml" in deployment
+    assert "Do not put `--project`, `--allow-local-image-ids`," in deployment
+
+    for document in (deployment, connectors):
+        assert "/etc/geem/start-artifacts.sha256" in document
+        assert "phase13-start-artifacts.sha256" not in document
+
+
+def test_production_preflight_rejects_project_label_orphans_directly() -> None:
+    preflight = (REPO_ROOT / "infra/systemd/geem-production-preflight").read_text()
+
+    assert "project=geem-production" in preflight
+    assert "com.geem.production.install" in preflight
+    assert "/usr/bin/docker ps -aq" in preflight
+    assert (
+        '--filter "label=com.docker.compose.project=$project"'
+        in preflight
+    )
+    assert 'index .Config.Labels "com.docker.compose.project"' in preflight
+    assert 'index .Config.Labels "com.docker.compose.service"' in preflight
+    assert '--filter "label=com.docker.compose.service=$service"' in preflight
+    assert 'managed start requires every production container to be stopped' in preflight
+    assert '/usr/bin/docker ps -q \\' in preflight
+    assert '--filter "label=com.geem.production.install=$install_id"' in preflight
+    for allowed_service in (
+        "postgres",
+        "redis",
+        "qdrant",
+        "minio",
+        "minio-init",
+        "api",
+        "worker",
+        "beat",
+        "app-egress-proxy",
+        "mcp-egress-gateway",
+        "mcp-egress-proxy",
+        "workspace_web",
+        "dashboard_web",
+        "landpage_web",
+        "cloudflared",
+    ):
+        assert allowed_service in preflight
+    assert "orphan" in preflight.lower()
+    assert "duplicate" in preflight.lower() or "more than one" in preflight.lower()
+    assert '[ "$count" -le 1 ]' in preflight
+    assert "--remove-orphans" not in preflight
+
+
+def test_deployment_pins_image_staging_and_persistent_artifacts() -> None:
+    deployment = (REPO_ROOT / "docs/deployment.md").read_text()
+    image_staging = deployment.split(
+        "## 6. Retrieve and pin the CI-verified images", maxsplit=1
+    )[1].split("## 7. Create the new Cloudflare Tunnel", maxsplit=1)[0]
+    persistence = deployment.split(
+        "## 10. Make the stack persistent", maxsplit=1
+    )[1].split("## 11. Release traffic", maxsplit=1)[0]
+
+    assert "pull --ignore-buildable --policy always" not in image_staging
+    assert "\n  build --pull \\" not in image_staging
+    assert "@sha256:" in image_staging
+    assert "digest" in image_staging.lower()
+    assert "Production image publication" in image_staging
+    assert "production-images.yml" in image_staging
+    assert "successful run" in image_staging.lower()
+    assert "GHCR" in image_staging
+    assert "Never run a production-host `docker build`" in image_staging
+    assert "tag" in image_staging.lower()
+    assert "source_sha" in image_staging
+    assert "manifest.json.sha256" in image_staging
+
+    assert "install" in persistence
+    assert "0644" in persistence
+    assert "0755" in persistence
+    for source, destination in (
+        (
+            "infra/systemd/geem-production.service",
+            "/etc/systemd/system/geem-production.service",
+        ),
+        (
+            "infra/systemd/geem-production-preflight",
+            "/usr/local/sbin/geem-production-preflight",
+        ),
+        (
+            "infra/systemd/geem-production-verify",
+            "/usr/local/sbin/geem-production-verify",
+        ),
+        (
+            "infra/systemd/geem-production-stop",
+            "/usr/local/sbin/geem-production-stop",
+        ),
+    ):
+        assert source in persistence
+        assert destination in persistence
+    assert "/opt/geem/current/infra/mcp-egress/verify-isolation.sh" in persistence
+    assert "/etc/geem/install-id" in persistence
+    assert (
+        "/opt/geem/current/infra/mcp-egress/proxy/static-deny-networks.txt"
+        in persistence
+    )
+
+
+def test_production_publication_builds_and_verifies_exact_locked_images() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/production-images.yml").read_text()
+
+    uses = re.findall(r"^\s*uses:\s*([^\s#]+)", workflow, flags=re.MULTILINE)
+    assert uses
+    assert all(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", use) for use in uses)
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert "github.event.workflow_run.head_sha" in workflow
+    assert "platforms: linux/amd64" in workflow
+    assert workflow.count("uses: docker/build-push-action@") == 7
+    assert "python -m pytest -q -p no:cacheprovider tests/unit tests/integration" in workflow
+    assert "(.images | length) == 7" in workflow
+    assert "(.build_bases | length) == 5" in workflow
+    assert "(.runtime_images | length) == 5" in workflow
+    assert "sha256sum manifest.json > manifest.json.sha256" in workflow
+    assert "sha256sum --check manifest.json.sha256" in workflow
+
+    for relative_path, expected_keys in (
+        (
+            "infra/images/production-build-bases.env",
+            {
+                "API_PYTHON_BASE_IMAGE",
+                "MCP_GATEWAY_PYTHON_BASE_IMAGE",
+                "PROXY_UBUNTU_BASE_IMAGE",
+                "FRONTEND_NODE_BASE_IMAGE",
+                "FRONTEND_NGINX_BASE_IMAGE",
+            },
+        ),
+        (
+            "infra/images/production-runtime-images.env",
+            {
+                "POSTGRES_RUNTIME_IMAGE",
+                "REDIS_RUNTIME_IMAGE",
+                "QDRANT_RUNTIME_IMAGE",
+                "MINIO_RUNTIME_IMAGE",
+                "CLOUDFLARED_RUNTIME_IMAGE",
+            },
+        ),
+    ):
+        records = {}
+        for line in (REPO_ROOT / relative_path).read_text().splitlines():
+            if not line or line.startswith("#"):
+                continue
+            key, value = line.split("=", maxsplit=1)
+            records[key] = value
+        assert records.keys() == expected_keys
+        assert all(
+            re.fullmatch(r"[a-z0-9._:/-]+@sha256:[0-9a-f]{64}", value)
+            for value in records.values()
+        )
+
+
+def test_mcp_enable_uses_managed_restart_and_runtime_verification() -> None:
     connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
-    validator = (
-        REPO_ROOT / "apps/api/app/ops/validate_production_compose.py"
-    ).read_text()
-
-    assert "Required operator authorization" in clean_words
-    assert "Do not repeat the disposable-state audit" in clean_words
-    assert "create four previously nonexistent, explicitly named volumes" in (
-        clean_words
-    )
-    assert "final Compose model must contain no `build:` definitions" in clean_words
-    assert "`--allow-local-image-ids`" in clean_words
-    assert "`pull_policy: never`" in clean_words
-    assert "compare the rendered service image references bidirectionally" in (
-        clean_words
-    )
-    assert "Never run `geem-prod-compose pull`" in clean_words
-    assert "Do not reuse, empty, rename, or delete" in clean_words
-    assert "`docker volume rm` or either volume/system prune command" in clean_words
-    assert "`MCP_CONNECTOR_ENABLED=false`" in clean_words
-    assert "App still `coming_soon`" in clean_words
-    assert "remove the issuer private key from the production host" in clean_words
-    assert clean_words.index("clean-install bootstrap") < clean_words.index(
-        "Then run the MCP-only catalog reconciler"
-    )
-    assert clean_words.index(
-        "verify all internal readiness endpoints before Mode A starts Cloudflared"
-    ) < clean_words.index("start the new `cloudflared` service last")
-    assert "Never install or enable parallel system and user units" in clean_words
-    assert "If an exact legacy container has a repository source bind" in clean_words
-    assert "When no legacy container has such a bind" in clean_words
-    assert "first start must be a deliberate readiness-failure test" in clean_words
-    assert "leave zero new-project containers running" in clean_words
-    assert "stop and disable that exact unit first" in clean_words
-    assert "prove that unit inactive and disabled" in clean_words
-    assert "Leave the legacy repository `.env` unchanged" in clean_words
-    assert (
-        clean_words.index("Do not move `HEAD`")
-        < clean_words.index(
-            "Require all expected old Geem IDs to be stopped before continuing"
-        )
-        < clean_words.index("Only now fast-forward the clean shared checkout")
-    )
-    assert (
-        clean_words.index(
-            "Remove the bootstrap password first, then create the permanent"
-        )
-        < clean_words.index("Preserve those exact permanent manifest bytes")
-        < clean_words.index(
-            "Atomically install those temporary bytes at the canonical "
-            "checksum-manifest path"
-        )
-        < clean_words.index("Require a nonzero start result")
-        < clean_words.index(
-            "require failed-start containment to leave zero new-project "
-            "containers running"
-        )
-        < clean_words.index("restore the exact preserved permanent manifest bytes")
-        < clean_words.index(
-            "Require byte equality, ownership/mode, and strict checksum verification"
-        )
-        < clean_words.index("Start the unit normally")
-        < clean_words.index(
-            "Enable the replacement system unit only after that successful normal "
-            "start"
-        )
-    )
-    assert (
-        clean_words.index("stop and disable that exact unit first")
-        < clean_words.index("stop the new Cloudflared container first")
-        < clean_words.index("enumerate new-project container IDs")
-    )
-    assert "Do not reboot the host during this cutover" in clean_words
-    assert "Record controlled-reboot validation as a pending operations gate" in (
-        clean_words
-    )
-    assert "do not claim that reboot persistence was tested" in clean_words
-    assert "### Mode A: independent external hold" in clean_slate
-    assert "### Mode B: exact local maintenance tunnel" in clean_slate
-    assert (
-        "does not create or edit a Cloudflare tunnel, DNS record, route, or zone policy"
-        in clean_words
-    )
-    assert (
-        "Treat the complete Mode B maintenance runtime pack as one coupled, "
-        "immutable unit"
-        in clean_words
-    )
-    assert "/etc/geem/cloudflared/config.maintenance.yml" in clean_slate
-    assert "/etc/geem/docker-compose.maintenance-ingress.yml" in clean_slate
-    assert "The maintenance overlay must be the final Compose file" in clean_words
-    assert "four-file rendered-topology validation" in clean_words
-    assert "`--cloudflared-mode maintenance`" in clean_slate
-    assert "`--cloudflared-mode live`" in clean_slate
-    assert "no other connector replica can serve this tunnel" in clean_words
-    assert "sole intentional connector host" in clean_words
-    assert "unknown remote replica is a hard stop" in clean_words
-    assert (
-        "Never run legacy live-routing and candidate maintenance connectors concurrently"
-        in clean_words
-    )
-
-    cutover = clean_words.split(
-        "## 4. Execute the bounded offline cutover", maxsplit=1
-    )[1].split("## 5. Acceptance and persistence", maxsplit=1)[0]
-    cutover_order = (
-        "Stop and disable only the exact proven legacy Geem supervisor/recreator",
-        "restart policy `no`, stop that exact container first",
-        "Only now fast-forward the clean shared checkout",
-        "up -d --no-deps cloudflared",
-        "require status `503` on every exact Geem origin",
-        "Start only the new datastores, initializer, and three egress-boundary services",
-    )
-    cutover_indexes = [cutover.index(step) for step in cutover_order]
-    assert cutover_indexes == sorted(cutover_indexes)
-
-    failure_test = clean_words.split(
-        "The replacement unit's first start must be a deliberate readiness-failure test",
+    enable = connectors.split(
+        "### 11. Enable production MCP only after RC sign-off",
         maxsplit=1,
-    )[1].split("Do not reboot the host during this cutover", maxsplit=1)[0]
-    assert "leave zero new-project containers running" in failure_test
-    assert "Mode B" in failure_test
-    assert "offline" in failure_test or "tunnel-unavailable" in failure_test
+    )[1].split("## Kubernetes or non-Compose equivalent", maxsplit=1)[0]
 
-    release = clean_words.split(
-        "Release the selected hold only in a later owner-authorized operation",
-        maxsplit=1,
-    )[1].split("Success for this path means", maxsplit=1)[0]
-    assert "probe every exact and wildcard live origin" in release
-    assert "re-establish only that exact hold" in release
-    assert "stop candidate maintenance Cloudflared" in release
-    assert "--cloudflared-mode live" in release
-    assert "three-file" in release
-    assert "checksum manifest" in release
-    assert "leave zero project containers running" in release
-    assert release.count("start the unit normally") >= 2
-    assert "Require the unit active" in release
-    assert "restore the complete preserved maintenance runtime pack" in release
-    assert "--cloudflared-mode maintenance" in release
-
-    containment = clean_words.split(
-        "## Failure containment", maxsplit=1
-    )[1].split("## Stop conditions", maxsplit=1)[0]
-    assert "candidate wrapper is forbidden" in containment
-    assert "restart only that exact container ID directly" in containment
-    assert "Never recreate it through Compose at the legacy SHA" in containment
-
-    assert "shared legacy network makes firewall Mode A unsafe" in clean_words
-    assert "Candidate Cloudflared running under Mode B is the maintenance control" in (
-        clean_words
-    )
-    assert "do not release the selected ingress hold during this procedure" in (
-        clean_words
-    )
-    assert "`law-firm`" in clean_words
-    assert "Ollama/`ollama-bridge`" in clean_words
-    assert "Rollback never authorizes public traffic" in clean_words
-    assert "`compose_reference`" in clean_words
-    assert "`engine_image_id`" in clean_words
-    assert "returned `.Id` to equal the recorded `engine_image_id`" in clean_words
-    assert "The sole exception is the MinIO initializer" in clean_words
-    assert "have zero container references" in clean_words
-    assert "Never print the password" in clean_words
-    assert "mcp-production-clean-slate.md" in production
-    assert "mcp-production-clean-slate.md" in connectors
-    assert '"--allow-local-image-ids"' in validator
-
-
-def test_failure_test_manifest_is_activated_at_the_canonical_unit_path() -> None:
-    production = (
-        REPO_ROOT / "docs/integrations/mcp-production-deployment.md"
-    ).read_text()
-    connectors = (REPO_ROOT / "docs/integrations/mcp-connectors.md").read_text()
-    production_words = " ".join(production.split())
-    connector_words = " ".join(connectors.split())
-
-    permanent_preservation = (
-        "Before installing any deliberate-failure drop-in, preserve the exact "
-        "approved permanent manifest bytes"
-    )
-    temporary_evidence = (
-        "Create a separately named `root:root` mode-`0444` temporary evidence "
-        "manifest"
-    )
-    temporary_includes_dropin = (
-        "using the same exact path list as the permanent manifest plus this one "
-        "exact drop-in"
-    )
-    temporary_staging = (
-        "previously nonexistent staging file in `/etc/geem`, on the same "
-        "filesystem as the canonical manifest"
-    )
-    temporary_activation = "then rename it over the canonical path"
-    temporary_verification = (
-        "remains `root:root` mode `0444`, and passes `sha256sum --check --strict`"
-    )
-    reload_for_failure = "Reload the one discovered system/user scope and start"
-    failure_evidence = "deliberate readiness failure: zero project containers running"
-    confirmed_failure = (
-        "With the deliberate start job failed, the unit confirmed non-running, "
-        "zero project containers running"
-    )
-    remove_only_dropin = "remove only that exact temporary drop-in"
-    permanent_restore = (
-        "Put the exact preserved permanent manifest bytes—not a regenerated manifest—"
-        "into a new, previously nonexistent staging file in `/etc/geem`"
-    )
-    restored_verification = (
-        "Require the restored canonical file to remain `root:root` mode `0444`, "
-        "its checksum to equal the previously recorded permanent evidence checksum"
-    )
-    normal_start = "Only then reload the same scope and start normally"
-
+    preflight = "sudo /usr/local/sbin/geem-production-preflight"
+    managed_stop = "sudo systemctl stop geem-production.service"
+    managed_start = "sudo systemctl start geem-production.service"
+    runtime_verify = "sudo /usr/local/sbin/geem-production-verify runtime"
+    assert managed_stop in enable
+    assert preflight in enable
+    assert managed_start in enable
+    assert runtime_verify in enable
     assert (
-        production_words.index(permanent_preservation)
-        < production_words.index(temporary_evidence)
-        < production_words.index(temporary_includes_dropin)
-        < production_words.index(temporary_staging)
-        < production_words.index(temporary_activation)
-        < production_words.index(temporary_verification)
-        < production_words.index(reload_for_failure)
-        < production_words.index(failure_evidence)
-        < production_words.index(confirmed_failure)
-        < production_words.index(remove_only_dropin)
-        < production_words.index(permanent_restore)
-        < production_words.index(restored_verification)
-        < production_words.index(normal_start)
+        enable.index(managed_stop)
+        < enable.index(preflight)
+        < enable.index(managed_start)
+        < enable.index(runtime_verify)
     )
-    assert (
-        "An alternate filename alone is not active because `ExecStartPre` checks "
-        "only `/etc/geem/phase13-start-artifacts.sha256`"
-        in production_words
-    )
-    assert (
-        "a separately named test manifest is not active by itself"
-        in connector_words
-    )
-    assert (
-        "atomically install those temporary bytes at the canonical path before "
-        "reload/start"
-        in connector_words
-    )
-    assert (
-        "previously nonexistent staging file on the canonical path's filesystem"
-        in connector_words
-    )
-    assert "leave the canonical file `root:root` mode `0444`" in connector_words
-    assert "failed/non-running test state is proven" in connector_words
-    assert "do not regenerate the permanent manifest" in connector_words
+    assert "sudo systemctl restart geem-production.service" not in enable
+    assert "Cloudflare WAF maintenance hold" in enable
+    assert "sudo /usr/local/sbin/geem-production-verify internal" not in enable
 
 
 def test_uat_compose_starts_mcp_gateway_without_profile() -> None:

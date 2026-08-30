@@ -1,0 +1,325 @@
+# Production hardening overlay for a fresh, single-host Geem installation.
+#
+# Copy this file byte-for-byte to:
+#   /etc/geem/docker-compose.production-hardening.yml
+#
+# Apply it last, after docker-compose.yml and docker-compose.tunnel.yml, through
+# the fixed production project wrapper. This template intentionally targets the
+# local content-addressed image-ID deployment mode: every service uses
+# pull_policy: never, and the production validator must be invoked with
+# --allow-local-image-ids. Image variables may contain an exact local
+# sha256:<64-hex> image ID; minio-init remains fixed to its reviewed registry
+# digest. Every long-running container has restart policy "no" because the
+# ingress-last systemd unit is the sole production lifecycle owner; Docker must
+# never auto-restore Cloudflared before preflight. The deployment must allocate
+# nine explicit, non-overlapping subnets.
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?required immutable local image ID or registry digest}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    environment: !override
+      POSTGRES_USER: ${POSTGRES_USER:?required PostgreSQL user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required non-default PostgreSQL password}
+      POSTGRES_DB: ${POSTGRES_DB:?required PostgreSQL database}
+
+  redis:
+    image: ${REDIS_IMAGE:?required immutable local image ID or registry digest}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+
+  qdrant:
+    image: ${QDRANT_IMAGE:?required immutable local image ID or registry digest}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+
+  minio:
+    image: ${MINIO_IMAGE:?required immutable local image ID or registry digest}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !override
+      APP_ENV: production
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?required non-default MinIO access key}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?required non-default MinIO secret key}
+    ports: !reset []
+
+  minio-init:
+    # Keep the reviewed client image and fail-closed entrypoint inherited from
+    # docker-compose.yml. A local installation must pull this digest before
+    # first start, after which persistent starts are network-independent.
+    image: quay.io/minio/mc@sha256:993e8c454a7ec632923f7e3e61adf1d473261da6354cefd641aedd33a2cfe112
+    pull_policy: never
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !override
+      APP_ENV: production
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?required non-default MinIO access key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required non-default MinIO secret key}
+      MINIO_BUCKET: ${MINIO_BUCKET:?required MinIO bucket}
+
+  api:
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable local API image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !override
+      - /etc/geem/production.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required encoded internal PostgreSQL URL}
+      APP_ENV: production
+      AUTH_REQUIRED: "true"
+      MCP_CONNECTOR_ENABLED: ${MCP_CONNECTOR_ENABLED:?required true or false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?required non-default MinIO access key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required non-default MinIO secret key}
+      MINIO_BUCKET: ${MINIO_BUCKET:?required MinIO bucket}
+      MINIO_SECURE: "false"
+    ports: !reset []
+    volumes: !reset []
+
+  worker:
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable local API image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !override
+      - /etc/geem/production.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required encoded internal PostgreSQL URL}
+      APP_ENV: production
+      AUTH_REQUIRED: "true"
+      MCP_CONNECTOR_ENABLED: ${MCP_CONNECTOR_ENABLED:?required true or false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?required non-default MinIO access key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required non-default MinIO secret key}
+      MINIO_BUCKET: ${MINIO_BUCKET:?required MinIO bucket}
+      MINIO_SECURE: "false"
+    volumes: !reset []
+
+  beat:
+    build: !reset null
+    image: ${GEEM_API_IMAGE:?required immutable local API image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !override
+      APP_ENV: production
+      REDIS_URL: redis://redis:6379/0
+      MCP_CONNECTOR_ENABLED: "false"
+    volumes: !reset []
+    secrets: !reset []
+    command:
+      - celery
+      - -A
+      - app.worker.beat_app:beat_app
+      - beat
+      - --loglevel=INFO
+      - --schedule
+      - /tmp/celerybeat-schedule
+    deploy: !override
+      replicas: 1
+
+  app-egress-proxy:
+    build: !reset null
+    image: ${APP_EGRESS_PROXY_IMAGE:?required immutable local proxy image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !reset {}
+
+  mcp-egress-gateway:
+    build: !reset null
+    image: ${MCP_EGRESS_GATEWAY_IMAGE:?required immutable local MCP gateway image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment:
+      APP_ENV: production
+      EGRESS_ALLOW_PRIVATE: "false"
+      EGRESS_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:?required CIDRs covering every deployment network}
+    deploy: !override
+      replicas: 1
+
+  mcp-egress-proxy:
+    build: !reset null
+    image: ${MCP_EGRESS_PROXY_IMAGE:?required immutable local MCP proxy image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !override
+      MCP_PROXY_BLOCKED_NETWORKS: ${MCP_EGRESS_BLOCKED_NETWORKS:?required CIDRs covering every deployment network}
+      MCP_PROXY_REQUIRE_BLOCKED_NETWORKS: "true"
+
+  workspace_web:
+    build: !reset null
+    image: ${WORKSPACE_WEB_IMAGE:?required immutable local Workspace image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    environment: !reset {}
+    env_file: !reset []
+    ports: !reset []
+    volumes: !reset []
+
+  dashboard_web:
+    build: !reset null
+    image: ${DASHBOARD_WEB_IMAGE:?required immutable local Platform Admin image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    environment: !reset {}
+    env_file: !reset []
+    ports: !reset []
+    volumes: !reset []
+
+  landpage_web:
+    build: !reset null
+    image: ${LANDPAGE_WEB_IMAGE:?required immutable local marketing image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    environment: !reset {}
+    env_file: !reset []
+    ports: !reset []
+    volumes: !reset []
+
+  cloudflared:
+    image: ${CLOUDFLARED_IMAGE:?required immutable local image ID or registry digest}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    volumes: !reset []
+    env_file: !reset []
+    environment: !reset {}
+    user: "65532:65532"
+    command:
+      - tunnel
+      - --protocol
+      - http2
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+    configs: !override
+      - source: cloudflared_config
+        target: /etc/cloudflared/config.yml
+        uid: "65532"
+        gid: "65532"
+        mode: 0444
+    secrets: !override
+      - source: cloudflared_credentials
+        target: /etc/cloudflared/credentials.json
+        uid: "65532"
+        gid: "65532"
+        mode: 0400
+    read_only: true
+    tmpfs: !reset []
+    cap_drop: !override
+      - ALL
+    security_opt: !override
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+volumes:
+  postgres_data:
+    external: true
+    name: ${POSTGRES_VOLUME_NAME:?required fresh Geem PostgreSQL volume name}
+  redis_data:
+    external: true
+    name: ${REDIS_VOLUME_NAME:?required fresh Geem Redis volume name}
+  qdrant_data:
+    external: true
+    name: ${QDRANT_VOLUME_NAME:?required fresh Geem Qdrant volume name}
+  minio_data:
+    external: true
+    name: ${MINIO_VOLUME_NAME:?required fresh Geem MinIO volume name}
+
+configs:
+  cloudflared_config:
+    file: /etc/geem/cloudflared/config.yml
+
+secrets:
+  mcp_egress_ca_cert:
+    file: ${MCP_EGRESS_PKI_DIR:?required absolute MCP PKI directory}/ca/ca.crt
+  mcp_egress_server_cert:
+    file: ${MCP_EGRESS_PKI_DIR:?required absolute MCP PKI directory}/server/server.crt
+  mcp_egress_server_key:
+    file: ${MCP_EGRESS_PKI_DIR:?required absolute MCP PKI directory}/server/server.key
+  mcp_egress_client_cert:
+    file: ${MCP_EGRESS_PKI_DIR:?required absolute MCP PKI directory}/client/client.crt
+  mcp_egress_client_key:
+    file: ${MCP_EGRESS_PKI_DIR:?required absolute MCP PKI directory}/client/client.key
+  cloudflared_credentials:
+    file: /etc/geem/cloudflared/credentials.json
+
+networks:
+  application_data:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${APPLICATION_DATA_SUBNET:?required reviewed application-data CIDR}
+  application_broker:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${APPLICATION_BROKER_SUBNET:?required reviewed application-broker CIDR}
+  application_ingress:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${APPLICATION_INGRESS_SUBNET:?required reviewed application-ingress CIDR}
+  application_provider_control:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${APPLICATION_PROVIDER_CONTROL_SUBNET:?required reviewed provider-control CIDR}
+  application_provider_egress:
+    internal: false
+    ipam:
+      config:
+        - subnet: ${APPLICATION_PROVIDER_EGRESS_SUBNET:?required reviewed provider-egress CIDR}
+  mcp_egress_control:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${MCP_EGRESS_CONTROL_SUBNET:?required reviewed MCP control CIDR}
+  mcp_proxy_control:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${MCP_PROXY_CONTROL_SUBNET:?required reviewed MCP proxy-control CIDR}
+  mcp_public_egress:
+    internal: false
+    ipam:
+      config:
+        - subnet: ${MCP_PUBLIC_EGRESS_SUBNET:?required reviewed MCP public-egress CIDR}
+  public_egress:
+    internal: false
+    ipam:
+      config:
+        - subnet: ${PUBLIC_EGRESS_SUBNET:?required reviewed ingress public-egress CIDR}

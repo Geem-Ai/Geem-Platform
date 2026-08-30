@@ -358,8 +358,11 @@ def _valid_config() -> dict[str, object]:
         },
     }
     for name, service in services.items():
+        service["labels"] = {
+            "com.geem.production.install": "geem-install-test-0001"
+        }
         if name != "minio-init":
-            service["restart"] = "unless-stopped"
+            service["restart"] = "no"
     services["api"]["healthcheck"] = dict(API_HEALTHCHECK)
     services["mcp-egress-gateway"]["deploy"] = {"replicas": 1}
     services["mcp-egress-gateway"]["profiles"] = ["mcp"]
@@ -421,7 +424,8 @@ def _options(
     mcp_enabled: bool = False,
     ingress_services: frozenset[str] = frozenset({"cloudflared"}),
     allow_local_image_ids: bool = False,
-    cloudflared_mode: str = "live",
+    expected_api_image: str | None = None,
+    install_id: str = "geem-install-test-0001",
 ) -> ValidationOptions:
     return ValidationOptions(
         project="infra",
@@ -435,7 +439,8 @@ def _options(
         },
         required_blocked_networks=(),
         allow_local_image_ids=allow_local_image_ids,
-        cloudflared_mode=cloudflared_mode,
+        expected_api_image=expected_api_image,
+        install_id=install_id,
     )
 
 
@@ -447,153 +452,46 @@ def _errors(config: dict[str, object], **options: object) -> list[str]:
     return validate_production_compose(config, _options(**options))  # type: ignore[arg-type]
 
 
-def _maintenance_config() -> dict[str, object]:
-    config = _valid_config()
-    cloudflared = _services(config)["cloudflared"]
-    cloudflared["networks"] = {"public_egress": None}
-    cloudflared["configs"] = [
-        {
-            "source": "cloudflared_maintenance_config",
-            "target": "/etc/cloudflared/config.yml",
-            "uid": "65532",
-            "gid": "65532",
-            "mode": 0o444,
-        }
-    ]
-    cloudflared.pop("depends_on", None)
-    config["configs"] = {
-        "cloudflared_maintenance_config": {
-            "name": "infra_cloudflared_maintenance_config",
-            "file": "/etc/geem/cloudflared/config.maintenance.yml",
-        }
-    }
-    return config
-
-
 def test_accepts_exact_digest_pinned_isolated_topology() -> None:
     assert _errors(_valid_config()) == []
 
 
-def test_accepts_exact_fail_closed_maintenance_ingress_topology() -> None:
-    assert _errors(_maintenance_config(), cloudflared_mode="maintenance") == []
-
-
-def test_programmatic_cloudflared_mode_must_select_a_reviewed_contract() -> None:
-    assert _errors(
-        _valid_config(), cloudflared_mode="unreviewed"
-    ) == ["cloudflared mode is not one of the reviewed contracts"]
-
-
-def test_live_and_maintenance_ingress_contracts_are_not_interchangeable() -> None:
-    live_errors = _errors(_maintenance_config())
-    maintenance_errors = _errors(
-        _valid_config(), cloudflared_mode="maintenance"
-    )
-
-    assert "cloudflared does not have the exact reviewed config mount" in live_errors
-    assert (
-        "production config declarations differ from reviewed service bindings"
-        in live_errors
-    )
-    assert (
-        "cloudflared does not have the exact reviewed config mount"
-        in maintenance_errors
-    )
-    assert (
-        "production config declarations differ from reviewed service bindings"
-        in maintenance_errors
-    )
-    assert "cloudflared has an unexpected network membership" in maintenance_errors
-
-
-def test_maintenance_ingress_cannot_rejoin_application_ingress() -> None:
-    config = _maintenance_config()
-    _services(config)["cloudflared"]["networks"] = {
-        "application_ingress": None,
-        "public_egress": None,
+def test_every_service_requires_the_exact_installation_label() -> None:
+    config = _valid_config()
+    _services(config)["api"]["labels"] = {
+        "com.geem.production.install": "another-install"
     }
 
-    errors = _errors(config, cloudflared_mode="maintenance")
-
-    assert "cloudflared has an unexpected network membership" in errors
-
-
-@pytest.mark.parametrize(
-    "depends_on",
-    [
-        {"api": {"condition": "service_started"}},
-        [],
-        "api",
-        0,
-    ],
-)
-def test_maintenance_ingress_cannot_depend_on_application_services(
-    depends_on: object,
-) -> None:
-    config = _maintenance_config()
-    _services(config)["cloudflared"]["depends_on"] = depends_on
-
-    errors = _errors(config, cloudflared_mode="maintenance")
-
-    assert "maintenance cloudflared must not depend on application services" in errors
-
-
-@pytest.mark.parametrize("cloudflared_mode", ["live", "maintenance"])
-def test_cloudflared_config_binding_must_match_selected_mode(
-    cloudflared_mode: str,
-) -> None:
-    config = (
-        _valid_config()
-        if cloudflared_mode == "live"
-        else _maintenance_config()
+    assert (
+        "api does not carry the exact approved installation label"
+        in _errors(config)
     )
+
+
+def test_installation_identity_must_be_safe_and_immutable() -> None:
+    assert _errors(
+        _valid_config(), install_id="unsafe value"
+    ) == ["--install-id is not a valid immutable installation identity"]
+
+
+def test_cloudflared_config_binding_must_match_live_contract() -> None:
+    config = _valid_config()
     _services(config)["cloudflared"]["configs"][0]["source"] = "wrong_config"  # type: ignore[index]
 
-    errors = _errors(config, cloudflared_mode=cloudflared_mode)
+    errors = _errors(config)
 
     assert "cloudflared does not have the exact reviewed config mount" in errors
 
 
-@pytest.mark.parametrize(
-    ("cloudflared_mode", "wrong_path"),
-    [
-        ("live", "/etc/geem/cloudflared/config.maintenance.yml"),
-        ("maintenance", "/etc/geem/cloudflared/config.yml"),
-    ],
-)
-def test_cloudflared_host_config_path_must_match_selected_mode(
-    cloudflared_mode: str, wrong_path: str
-) -> None:
-    config = (
-        _valid_config()
-        if cloudflared_mode == "live"
-        else _maintenance_config()
+def test_cloudflared_host_config_path_must_match_live_contract() -> None:
+    config = _valid_config()
+    config["configs"]["cloudflared_config"]["file"] = (  # type: ignore[index]
+        "/etc/geem/cloudflared/alternate.yml"
     )
-    config_name = (
-        "cloudflared_config"
-        if cloudflared_mode == "live"
-        else "cloudflared_maintenance_config"
-    )
-    config["configs"][config_name]["file"] = wrong_path  # type: ignore[index]
 
-    errors = _errors(config, cloudflared_mode=cloudflared_mode)
+    errors = _errors(config)
 
     assert "cloudflared config uses the wrong reviewed host file" in errors
-
-
-def test_maintenance_mode_rejects_extra_live_config_declaration() -> None:
-    config = _maintenance_config()
-    config["configs"]["cloudflared_config"] = {  # type: ignore[index]
-        "name": "infra_cloudflared_config",
-        "file": "/etc/geem/cloudflared/config.yml",
-    }
-
-    errors = _errors(config, cloudflared_mode="maintenance")
-
-    assert (
-        "production config declarations differ from reviewed service bindings"
-        in errors
-    )
 
 
 def test_local_image_ids_require_explicit_single_host_opt_in() -> None:
@@ -621,6 +519,22 @@ def test_local_image_ids_require_explicit_single_host_opt_in() -> None:
     del services["worker"]["pull_policy"]
     errors = _errors(config, allow_local_image_ids=True)
     assert any("worker must use pull_policy never" in error for error in errors)
+
+
+def test_expected_api_image_binds_validator_to_application_runtime() -> None:
+    config = _valid_config()
+    expected = str(_services(config)["api"]["image"])
+
+    assert _errors(config, expected_api_image=expected) == []
+
+
+def test_expected_api_image_rejects_a_different_validator_runtime() -> None:
+    config = _valid_config()
+    unexpected = "example.invalid/geem/api@sha256:" + "f" * 64
+
+    errors = _errors(config, expected_api_image=unexpected)
+
+    assert "application image differs from --expected-api-image" in errors
 
 
 def test_local_image_opt_in_still_rejects_tags_and_malformed_ids() -> None:
@@ -1365,6 +1279,48 @@ def test_api_and_worker_may_use_rendered_env_files() -> None:
     assert _errors(config) == []
 
 
+@pytest.mark.parametrize("service_name", ["beat", "mcp-egress-gateway"])
+@pytest.mark.parametrize(
+    "normalized_fields",
+    [
+        {"resources": {}},
+        {"placement": {}},
+        {"resources": {}, "placement": {}},
+    ],
+)
+def test_single_replica_deploy_accepts_empty_compose_normalization(
+    service_name: str, normalized_fields: dict[str, object]
+) -> None:
+    config = _valid_config()
+    _services(config)[service_name]["deploy"] = {
+        "replicas": 1,
+        **normalized_fields,
+    }
+
+    assert _errors(config) == []
+
+
+@pytest.mark.parametrize("service_name", ["beat", "mcp-egress-gateway"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resources", {"limits": {"cpus": "1"}}),
+        ("placement", {"constraints": ["node.role == worker"]}),
+        ("update_config", {}),
+    ],
+)
+def test_single_replica_deploy_rejects_nonempty_or_unreviewed_fields(
+    service_name: str, field: str, value: object
+) -> None:
+    config = _valid_config()
+    _services(config)[service_name]["deploy"] = {"replicas": 1, field: value}
+
+    assert (
+        f"{service_name} deploy contract differs from the reviewed topology"
+        in _errors(config)
+    )
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [
@@ -1753,8 +1709,8 @@ def test_fail_closed_service_field_allowlist_rejects_provider_specific_fields(
         (
             "api",
             "restart",
-            "no",
-            "must use restart unless-stopped",
+            "unless-stopped",
+            "must use restart no under systemd lifecycle ownership",
         ),
         (
             "minio-init",
