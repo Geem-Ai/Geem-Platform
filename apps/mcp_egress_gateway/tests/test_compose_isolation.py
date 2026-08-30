@@ -716,6 +716,11 @@ def test_fresh_production_hardening_template_passes_rendered_validator() -> None
                 REPO_ROOT
                 / "infra/docker-compose.production-hardening.example.yml"
             ),
+            "-f",
+            str(
+                REPO_ROOT
+                / "apps/mcp_egress_gateway/tests/fixtures/production-no-env-files.yml"
+            ),
             "config",
             "--no-env-resolution",
             "--format",
