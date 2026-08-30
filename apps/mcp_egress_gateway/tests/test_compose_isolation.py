@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -1121,6 +1122,59 @@ def test_deployed_proxy_is_connect_only_deny_private_and_has_no_access_log() -> 
     assert "http_access allow fixed_provider" in app_config
     assert "http_access deny all" in app_config
     assert "access_log none" in app_config
+
+
+def test_static_proxy_manifest_matches_api_policy_representatives() -> None:
+    networks = tuple(
+        ipaddress.ip_network(line, strict=True)
+        for line in (
+            REPO_ROOT / "infra/mcp-egress/proxy/static-deny-networks.txt"
+        ).read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    blocked_addresses = (
+        "10.0.0.1",
+        "100.64.0.1",
+        "168.63.129.16",
+        "192.0.2.1",
+        "5f00::1",
+        "4000::1",
+        "6000::1",
+        "8000::1",
+        "2001::1",
+    )
+    public_controls = ("1.1.1.1", "2606:4700:4700::1111")
+
+    for address in blocked_addresses:
+        parsed_address = ipaddress.ip_address(address)
+        assert any(
+            parsed_address.version == network.version
+            and parsed_address in network
+            for network in networks
+        ), address
+
+    for address in public_controls:
+        parsed_address = ipaddress.ip_address(address)
+        assert not any(
+            parsed_address.version == network.version
+            and parsed_address in network
+            for network in networks
+        ), address
+
+
+def test_every_checked_in_api_launch_disables_uvicorn_request_line_logging() -> None:
+    launch_files = (
+        REPO_ROOT / "apps/api/Dockerfile",
+        REPO_ROOT / "infra/docker-compose.yml",
+        REPO_ROOT / "infra/docker-compose.tunnel.yml",
+        REPO_ROOT / "docs/deployment.md",
+        REPO_ROOT / "docs/development.md",
+    )
+
+    for path in launch_files:
+        text = path.read_text(encoding="utf-8")
+        assert "uvicorn" in text and "app.main:app" in text, path
+        assert "--no-access-log" in text, path
 
 
 def test_deployed_isolation_smoke_covers_live_release_boundaries() -> None:
