@@ -424,14 +424,17 @@ jobs:
           set -eu
           docker run --rm --network none --read-only \
             --tmpfs /run:rw,noexec,nosuid,nodev \
+            --tmpfs /var/cache/nginx:rw,noexec,nosuid,nodev \
             --entrypoint nginx \
             "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" -t
           docker run --rm --network none --read-only --add-host api:127.0.0.1 \
             --tmpfs /run:rw,noexec,nosuid,nodev \
+            --tmpfs /var/cache/nginx:rw,noexec,nosuid,nodev \
             --entrypoint nginx \
             "$DASHBOARD_REPOSITORY@$DASHBOARD_DIGEST" -t
           docker run --rm --network none --read-only \
             --tmpfs /run:rw,noexec,nosuid,nodev \
+            --tmpfs /var/cache/nginx:rw,noexec,nosuid,nodev \
             --entrypoint nginx \
             "$LANDPAGE_REPOSITORY@$LANDPAGE_DIGEST" -t
 
