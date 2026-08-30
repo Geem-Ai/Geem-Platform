@@ -856,6 +856,9 @@ before the first new container starts. Also require:
 
 - no unexpected service, network, config, secret, bind mount, host port,
   `build`, mutable image, or privileged/root override;
+- the API launch remains `uvicorn app.main:app` with
+  `--host 0.0.0.0 --port 8000 --no-access-log`, so request URLs are not
+  emitted by Uvicorn access logs;
 - the exact nine IPAM networks and four external volumes;
 - Cloudflared using only `/etc/geem/cloudflared/config.yml` and credentials;
 - API/worker/gateway/Beat public-route isolation; and
