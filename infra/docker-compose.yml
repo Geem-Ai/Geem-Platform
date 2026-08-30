@@ -3,6 +3,10 @@
 # /usr/local/sbin/geem-prod-compose. Base + tunnel alone retains development
 # credentials, builds, bind mounts, reload commands, and host ports and is
 # forbidden for production. See docs/integrations/mcp-production-deployment.md.
+# Local development without Cloudflare Tunnel (localhost / *.geem.dm):
+#   cd infra && ./scripts/dev-up.sh
+# or:
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local.yml up -d --build
 # This Mac / UAT (Vite/Astro reload + app-uat / api-uat / landpage-uat / admin-uat):
 #   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml up -d --build
 # MinIO credentials: MINIO_ACCESS_KEY / MINIO_SECRET_KEY in repo-root ../.env.
@@ -18,7 +22,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready"]
+      test: [CMD, pg_isready]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,7 +35,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [CMD, redis-cli, ping]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -44,7 +48,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      test: [CMD, bash, -c, exec 3<>/dev/tcp/127.0.0.1/6333]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -88,8 +92,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9100:9000"
-      - "9101:9001"
+      - 9100:9000
+      - 9101:9001
     networks:
       - application_data
 
@@ -159,6 +163,7 @@ services:
     env_file:
       - ../.env
     environment:
+      # checkov:skip=CKV_SECRET_4: Local development Postgres credentials
       DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
@@ -171,7 +176,7 @@ services:
       HTTPS_PROXY: http://app-egress-proxy:3128
       NO_PROXY: localhost,127.0.0.1,api,postgres,redis,qdrant,minio,mcp-egress-gateway
     ports:
-      - "8000:8000"
+      - 8000:8000
     volumes:
       - ../apps/api:/app
     secrets:
@@ -179,7 +184,7 @@ services:
         target: /run/secrets/mcp-egress/client.crt
       - source: mcp_egress_client_key
         target: /run/secrets/mcp-egress/client.key
-        mode: 0400
+        mode: "0400"
       - source: mcp_egress_ca_cert
         target: /run/secrets/mcp-egress/ca.crt
     depends_on:
@@ -199,7 +204,7 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
+      test: [CMD, curl, -f, http://localhost:8000/api/health/live]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -220,6 +225,7 @@ services:
     env_file:
       - ../.env
     environment:
+      # checkov:skip=CKV_SECRET_4: Local development Postgres credentials
       DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
@@ -238,7 +244,7 @@ services:
         target: /run/secrets/mcp-egress/client.crt
       - source: mcp_egress_client_key
         target: /run/secrets/mcp-egress/client.key
-        mode: 0400
+        mode: "0400"
       - source: mcp_egress_ca_cert
         target: /run/secrets/mcp-egress/ca.crt
     depends_on:
@@ -269,7 +275,7 @@ services:
       context: ./app-egress/proxy
       dockerfile: Dockerfile
     restart: unless-stopped
-    user: "13:13"
+    user: 13:13
     networks:
       - application_provider_control
       - application_provider_egress
@@ -320,7 +326,7 @@ services:
     env_file:
       - ../apps/workspace_web/.env
     ports:
-      - "5174:5174"
+      - 5174:5174
     volumes:
       - ../apps/workspace_web:/app
       - /app/node_modules
@@ -339,7 +345,7 @@ services:
     env_file:
       - ../apps/dashboard_web/.env
     ports:
-      - "5175:5175"
+      - 5175:5175
     volumes:
       - ../apps/dashboard_web:/app
       - /app/node_modules
@@ -358,7 +364,7 @@ services:
     env_file:
       - ../apps/landpage_web/.env
     ports:
-      - "4321:4321"
+      - 4321:4321
     volumes:
       - ../apps/landpage_web:/app
       - /app/node_modules
@@ -370,12 +376,12 @@ services:
   # internal control network. The gateway is deliberately absent from
   # application_data, receives no ../.env, and has no direct public network.
   mcp-egress-gateway:
-    profiles: ["mcp"]
+    profiles: [mcp]
     build:
       context: ..
       dockerfile: apps/mcp_egress_gateway/Dockerfile
     restart: unless-stopped
-    user: "10001:10001"
+    user: 10001:10001
     environment:
       # Fail-safe default: Compose interpolation does not inherit ../.env.
       # UAT explicitly overrides this to local below.
@@ -407,7 +413,7 @@ services:
         target: /run/secrets/mcp-egress/server.key
         uid: "10001"
         gid: "10001"
-        mode: 0400
+        mode: "0400"
       - source: mcp_egress_ca_cert
         target: /run/secrets/mcp-egress/ca.crt
     depends_on:
@@ -433,12 +439,12 @@ services:
   # a public-egress network. Squid accepts CONNECT to validated IPs only, denies
   # private/metadata ranges independently, and disables URL/body access logs.
   mcp-egress-proxy:
-    profiles: ["mcp"]
+    profiles: [mcp]
     build:
       context: ./mcp-egress/proxy
       dockerfile: Dockerfile
     restart: unless-stopped
-    user: "13:13"
+    user: 13:13
     environment:
       # The independent Squid boundary receives the same deployment CIDRs as
       # the Python gateway. Production overlays must require a non-empty set.
@@ -446,7 +452,7 @@ services:
       MCP_PROXY_REQUIRE_BLOCKED_NETWORKS: ${MCP_PROXY_REQUIRE_BLOCKED_NETWORKS:-false}
     # Keep the renderer explicit in the rendered Compose model so production
     # validation can detect an overlay that bypasses the dynamic deny policy.
-    entrypoint: ["python3", "/usr/local/lib/geem/render_mcp_proxy_config.py"]
+    entrypoint: [python3, /usr/local/lib/geem/render_mcp_proxy_config.py]
     networks:
       - mcp_proxy_control
       - mcp_public_egress

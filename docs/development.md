@@ -6,12 +6,12 @@ For production / aaPanel, see [deployment.md](./deployment.md). Architecture not
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
-| Docker Desktop (or Docker Engine + Compose v2) | current |
-| Node.js | 22.x (workspace UI) |
-| Python | 3.12 (API tests / host-run API) |
-| OpenRouter API key | required for OCR, embeddings, rerank, and chat. Each family is billed into the Workspace AI token pool using `AI_TOKEN_MULTIPLIER_*` (OCR defaults to 3×). |
+| Tool                                           | Version                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docker Desktop (or Docker Engine + Compose v2) | current                                                                                                                                                    |
+| Node.js                                        | 22.x (workspace UI)                                                                                                                                        |
+| Python                                         | 3.12 (API tests / host-run API)                                                                                                                            |
+| OpenRouter API key                             | required for OCR, embeddings, rerank, and chat. Each family is billed into the Workspace AI token pool using `AI_TOKEN_MULTIPLIER_*` (OCR defaults to 3×). |
 
 Optional for tenant-subdomain DX (`*.geem.dm`): `dnsmasq` or extra `/etc/hosts` entries.
 
@@ -19,16 +19,18 @@ You do **not** need the Metronic sample under `samples/` to run the stack. That 
 
 ## Repo layout (what you actually run)
 
-| Path | Role |
-|------|------|
-| `apps/api` | FastAPI + Celery |
-| `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
-| `apps/landpage_web` | Public marketing site (Astro, port **4321**) |
-| `apps/dashboard_web` | Platform Admin SPA (port **5175**) — not a tenant app; see [platform-admin.md](./platform-admin.md) |
-| `infra/docker-compose.yml` | Local full stack |
-| `.env` | API / worker / shared backend env (copy from `.env.example`) |
-| `apps/workspace_web/.env` | Vite env (copy from `apps/workspace_web/.env.example`) |
-| `apps/landpage_web/.env` | Marketing public env (copy from `apps/landpage_web/.env.example`) |
+| Path                             | Role                                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `apps/api`                       | FastAPI + Celery                                                                                    |
+| `apps/workspace_web`             | Geem Workspace SPA (port **5174**)                                                                  |
+| `apps/landpage_web`              | Public marketing site (Astro, port **4321**)                                                        |
+| `apps/dashboard_web`             | Platform Admin SPA (port **5175**) — not a tenant app; see [platform-admin.md](./platform-admin.md) |
+| `infra/docker-compose.yml`       | Local full stack (base)                                                                             |
+| `infra/docker-compose.local.yml` | Local overlay — no Cloudflare Tunnel                                                                |
+| `infra/scripts/dev-up.sh`        | Bootstrap env files and start local stack                                                           |
+| `.env`                           | API / worker / shared backend env (copy from `.env.example`)                                        |
+| `apps/workspace_web/.env`        | Vite env (copy from `apps/workspace_web/.env.example`)                                              |
+| `apps/landpage_web/.env`         | Marketing public env (copy from `apps/landpage_web/.env.example`)                                   |
 
 ## Environment files
 
@@ -77,7 +79,7 @@ Localhost and `*.geem.dm` work without a tunnel. Public HTTPS uses two Compose o
    ```
 
 2. Ensure `.env` `CORS_ORIGINS` includes `http://localhost:5174` (Workspace) and `http://localhost:5175` (Platform Admin).
-3. Open http://localhost:5174
+3. Open <http://localhost:5174>
 
 Workspace context is sent as `X-Workspace-Id` (and `X-Workspace-Slug` only while `APP_ENV=local` / `VITE_APP_ENV=local`). The API never trusts the slug header in production.
 
@@ -90,7 +92,7 @@ VITE_ADMIN_HOST=admin.localhost
 VITE_APP_ENV=local
 ```
 
-Open http://localhost:5175 (or http://admin.localhost:5175). This client must **not** send Workspace headers. **Workspace Owner ≠ Platform Admin.** See [platform-admin.md](./platform-admin.md).
+Open <http://localhost:5175> (or <http://admin.localhost:5175>). This client must **not** send Workspace headers. **Workspace Owner ≠ Platform Admin.** See [platform-admin.md](./platform-admin.md).
 
 ### B. `*.geem.dm` (tenant-host DX)
 
@@ -112,16 +114,16 @@ Add one line per workspace slug you care about (`acme.geem.dm`, …).
 address=/geem.dm/127.0.0.1
 ```
 
-Then open **http://app.geem.dm:5174**, not `http://api.geem.dm:5174` (that host is the API, not the SPA).
+Then open **<http://app.geem.dm:5174>**, not `http://api.geem.dm:5174` (that host is the API, not the SPA).
 
 Vite already allows Host headers for `.geem.dm` and `.geem.ai`. The API allows CORS for one-label hosts under `APP_ROOT_DOMAIN` in addition to the exact `CORS_ORIGINS` list (`http(s)` + optional port when `APP_ENV=local`; `https://{slug}.{root}` otherwise).
 
 ### C. Cloudflare Tunnel — two overlays (do not mix hosts)
 
-| Overlay | Host | Compose files | Public names | App servers |
-|---------|------|---------------|--------------|-------------|
-| **Production** | production server | base + tunnel + deployment-owned hardening overlay through the production wrapper | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `mtfm.geem.ai`, `*.geem.ai` | immutable nginx images |
-| **UAT / this Mac** | development machine | `docker-compose.yml` + `docker-compose.uat.yml` | `app-uat.geem.ai`, `api-uat.geem.ai`, `landpage-uat.geem.ai`, `admin-uat.geem.ai` | Vite / Astro / Uvicorn `--reload` |
+| Overlay            | Host                | Compose files                                                                     | Public names                                                                      | App servers                       |
+| ------------------ | ------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------- |
+| **Production**     | production server   | base + tunnel + deployment-owned hardening overlay through the production wrapper | `hub.geem.ai`, `api.geem.ai`, `geem.ai`, `mtfm.geem.ai`, `*.geem.ai`              | immutable nginx images            |
+| **UAT / this Mac** | development machine | `docker-compose.yml` + `docker-compose.uat.yml`                                   | `app-uat.geem.ai`, `api-uat.geem.ai`, `landpage-uat.geem.ai`, `admin-uat.geem.ai` | Vite / Astro / Uvicorn `--reload` |
 
 Do **not** start `docker-compose.tunnel.yml` on the UAT Mac (it would steal production DNS). UAT does **not** route `*.geem.ai`; workspace context is `https://app-uat.geem.ai` plus `X-Workspace-Id` (and `X-Workspace-Slug` while `APP_ENV` is local/dev). Prefer Cloudflare Access in front of both.
 
@@ -143,13 +145,13 @@ cloudflared tunnel route dns geem-dalseen mtfm.geem.ai
 cloudflared tunnel route dns geem-dalseen "*.geem.ai"
 ```
 
-| Public hostname | Origin (Docker DNS) |
-|-----------------|---------------------|
-| `hub.geem.ai` | `http://workspace_web:80` (production nginx) |
-| `api.geem.ai` | `http://api:8000` |
-| `geem.ai` / `www.geem.ai` | `http://landpage_web:80` (production nginx) |
-| `mtfm.geem.ai` | `http://dashboard_web:80` (Platform Admin nginx; `/api` proxied) |
-| `{slug}.geem.ai` | `http://workspace_web:80` (reserved labels stay on the rows above) |
+| Public hostname           | Origin (Docker DNS)                                                |
+| ------------------------- | ------------------------------------------------------------------ |
+| `hub.geem.ai`             | `http://workspace_web:80` (production nginx)                       |
+| `api.geem.ai`             | `http://api:8000`                                                  |
+| `geem.ai` / `www.geem.ai` | `http://landpage_web:80` (production nginx)                        |
+| `mtfm.geem.ai`            | `http://dashboard_web:80` (Platform Admin nginx; `/api` proxied)   |
+| `{slug}.geem.ai`          | `http://workspace_web:80` (reserved labels stay on the rows above) |
 
 `.env` `CORS_ORIGINS` must include `https://hub.geem.ai` and `https://mtfm.geem.ai`. Set `APP_ADMIN_HOST=mtfm.geem.ai`. `APP_ROOT_DOMAIN=geem.ai` also allows `https://{slug}.geem.ai`. The overlay rebuilds `workspace_web`, `landpage_web`, and `dashboard_web` as production nginx images with `VITE_*` / `PUBLIC_*` baked in, and sets `APP_URL` / `WORKSPACE_WEB_URL` plus `TRUST_PROXY_HEADERS=true`.
 
@@ -157,7 +159,7 @@ Never run base + tunnel directly on production. Use the persistent wrapper and
 hardening overlay in the [Phase 13 production guide](integrations/mcp-production-deployment.md);
 the validator rejects builds, bind mounts, mutable images, and host ports.
 
-OpenAPI: https://api.geem.ai/docs
+OpenAPI: <https://api.geem.ai/docs>
 
 #### UAT overlay (`geem-uat`, this Mac)
 
@@ -178,12 +180,12 @@ cloudflared tunnel route dns geem-uat admin-uat.geem.ai
 
 Specific CNAMEs override production `*.geem.ai` for those four names only.
 
-| Public hostname | Origin (Docker DNS) |
-|-----------------|---------------------|
-| `app-uat.geem.ai` | `http://workspace_web:5174` (Vite) |
-| `api-uat.geem.ai` | `http://api:8000` |
-| `landpage-uat.geem.ai` | `http://landpage_web:4321` (Astro `npm run dev`) |
-| `admin-uat.geem.ai` | `http://dashboard_web:5175` (Vite; not a tenant app) |
+| Public hostname        | Origin (Docker DNS)                                  |
+| ---------------------- | ---------------------------------------------------- |
+| `app-uat.geem.ai`      | `http://workspace_web:5174` (Vite)                   |
+| `api-uat.geem.ai`      | `http://api:8000`                                    |
+| `landpage-uat.geem.ai` | `http://landpage_web:4321` (Astro `npm run dev`)     |
+| `admin-uat.geem.ai`    | `http://dashboard_web:5175` (Vite; not a tenant app) |
 
 `.env` `CORS_ORIGINS` must include `https://app-uat.geem.ai` and `https://admin-uat.geem.ai`. Do not set `APP_ROOT_DOMAIN=geem.ai` on UAT (that would allow production `{slug}.geem.ai` origins on the UAT API). Overlay sets `APP_URL=https://api-uat.geem.ai`, `WORKSPACE_WEB_URL=https://app-uat.geem.ai`, and `TRUST_PROXY_HEADERS=true`. Local ports `8000` / `5174` / `5175` / `4321` stay published.
 
@@ -193,14 +195,14 @@ docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.ym
 docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.uat.yml logs -f cloudflared
 ```
 
-| Public (UAT) | Local (still works) |
-|--------------|---------------------|
-| https://app-uat.geem.ai | http://app.geem.dm:5174 |
-| https://api-uat.geem.ai | http://api.geem.dm:8000 |
-| https://landpage-uat.geem.ai | http://localhost:4321 |
-| https://admin-uat.geem.ai | http://localhost:5175 |
+| Public (UAT)                   | Local (still works)       |
+| ------------------------------ | ------------------------- |
+| <https://app-uat.geem.ai>      | <http://app.geem.dm:5174> |
+| <https://api-uat.geem.ai>      | <http://api.geem.dm:8000> |
+| <https://landpage-uat.geem.ai> | <http://localhost:4321>   |
+| <https://admin-uat.geem.ai>    | <http://localhost:5175>   |
 
-OpenAPI: https://api-uat.geem.ai/docs
+OpenAPI: <https://api-uat.geem.ai/docs>
 
 ### Start on boot
 
@@ -230,6 +232,8 @@ macOS does not use systemd user units; start the UAT overlay from `infra/` (or D
 
 ## Path 1 — full stack with Docker (recommended)
 
+Local development uses the **local overlay** (`docker-compose.local.yml`). It does **not** start `cloudflared` and does not require Cloudflare tunnel credentials. Use `localhost` or `*.geem.dm` URLs.
+
 ```bash
 cp .env.example .env
 # edit .env → OPENROUTER_API_KEY, optional BOOTSTRAP_ADMIN_*
@@ -238,18 +242,21 @@ cp apps/workspace_web/.env.example apps/workspace_web/.env
 # if you use localhost instead of geem.dm, set VITE_API_URL=http://localhost:8000
 
 cd infra
-docker compose --env-file ../.env up -d --build
+./scripts/dev-up.sh
+# or: docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-| Service | URL |
-|---------|-----|
-| Workspace UI | http://localhost:5174 or http://app.geem.dm:5174 |
-| Platform Admin UI | http://localhost:5175 (`apps/dashboard_web`; not a tenant app) |
-| API | http://localhost:8000 |
-| OpenAPI | http://localhost:8000/docs |
-| Live | http://localhost:8000/api/health/live |
-| Ready | http://localhost:8000/api/health/ready |
-| MinIO console | http://localhost:9101 (user `minio` / password from compose, default `change-me`) |
+The helper script creates missing `.env` files and picks the MCP overlay automatically when `MCP_CONNECTOR_ENABLED=true` in repo-root `.env` (run `./scripts/generate-dev-mcp-pki.sh` first in that case).
+
+| Service           | URL                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| Workspace UI      | <http://localhost:5174> or <http://app.geem.dm:5174>                                |
+| Platform Admin UI | <http://localhost:5175> (`apps/dashboard_web`; not a tenant app)                    |
+| API               | <http://localhost:8000>                                                             |
+| OpenAPI           | <http://localhost:8000/docs>                                                        |
+| Live              | <http://localhost:8000/api/health/live>                                             |
+| Ready             | <http://localhost:8000/api/health/ready>                                            |
+| MinIO console     | <http://localhost:9101> (user `minio` / password from compose, default `change-me`) |
 
 Compose starts Postgres, Redis, Qdrant, MinIO, runs `alembic upgrade head` on API boot, then Uvicorn (`--reload`) and a Celery worker (`concurrency=2`). API and workspace UI bind-mount source for live reload.
 
@@ -378,14 +385,14 @@ Paperclip → Images / PDF / Text. Files upload to ephemeral `chat_attachments` 
 
 ## Workspace UI scripts
 
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Vite on 5174 |
-| `npm run build` | Typecheck + production `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run typecheck` | `tsc -b` |
-| `npm run lint` | ESLint |
-| `npm test` | Vitest |
+| Command             | Purpose                            |
+| ------------------- | ---------------------------------- |
+| `npm run dev`       | Vite on 5174                       |
+| `npm run build`     | Typecheck + production `dist/`     |
+| `npm run preview`   | Serve the production build locally |
+| `npm run typecheck` | `tsc -b`                           |
+| `npm run lint`      | ESLint                             |
+| `npm test`          | Vitest                             |
 
 API access from the UI goes through `src/services/api/` only. `VITE_*` values are baked in at **build** time (`npm run build`); `npm run dev` reads them on each start.
 
@@ -403,15 +410,15 @@ API access from the UI goes through `src/services/api/` only. `VITE_*` values ar
 
 ## Troubleshooting
 
-| Symptom | What to check |
-|---------|----------------|
-| `/api/health/ready` is 503 | `docker compose ps`; `checks` in the JSON names postgres / redis / qdrant / minio |
-| Login works, refresh fails | SPA origin vs API host; cookie is host-only on the **API** host; CORS must list the SPA origin |
-| CORS errors on `*.geem.dm` | `APP_ENV=local` and `APP_ROOT_DOMAIN=geem.dm`; open `app.geem.dm:5174`, not `api.geem.dm:5174` |
-| Upload stays `queued` | `worker` container is up; `docker compose logs -f worker` |
-| OCR / chat failures | `OPENROUTER_API_KEY`, credits, and `checks.openrouter` on `/api/health/ready` |
-| Embedding dimension errors | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models |
-| `JWT_SECRET` startup error | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop |
-| Vite “blocked host” | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts` |
-| Tunnel 1033 / cloudflared exits | Production: `credentials.json` + `-f docker-compose.tunnel.yml`. UAT: `credentials-uat.json` + `-f docker-compose.uat.yml`. Origins: prod nginx `:80` vs UAT Vite `:5174` / `:5175` / Astro `:4321` |
+| Symptom                           | What to check                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/health/ready` is 503        | `docker compose ps`; `checks` in the JSON names postgres / redis / qdrant / minio                                                                                                                                                                                                                                                                                                                                                                               |
+| Login works, refresh fails        | SPA origin vs API host; cookie is host-only on the **API** host; CORS must list the SPA origin                                                                                                                                                                                                                                                                                                                                                                  |
+| CORS errors on `*.geem.dm`        | `APP_ENV=local` and `APP_ROOT_DOMAIN=geem.dm`; open `app.geem.dm:5174`, not `api.geem.dm:5174`                                                                                                                                                                                                                                                                                                                                                                  |
+| Upload stays `queued`             | `worker` container is up; `docker compose logs -f worker`                                                                                                                                                                                                                                                                                                                                                                                                       |
+| OCR / chat failures               | `OPENROUTER_API_KEY`, credits, and `checks.openrouter` on `/api/health/ready`                                                                                                                                                                                                                                                                                                                                                                                   |
+| Embedding dimension errors        | Do not mix embedding models in one Qdrant collection; change `QDRANT_COLLECTION` when switching models                                                                                                                                                                                                                                                                                                                                                          |
+| `JWT_SECRET` startup error        | Only raised when `APP_ENV` is not local/dev/test — keep `APP_ENV=local` on your laptop                                                                                                                                                                                                                                                                                                                                                                          |
+| Vite “blocked host”               | `allowedHosts` includes `.geem.dm` and `.geem.ai`; confirm you are not using a different TLD without updating `vite.config.ts`                                                                                                                                                                                                                                                                                                                                  |
+| Tunnel 1033 / cloudflared exits   | Production: `credentials.json` + `-f docker-compose.tunnel.yml`. UAT: `credentials-uat.json` + `-f docker-compose.uat.yml`. Origins: prod nginx `:80` vs UAT Vite `:5174` / `:5175` / Astro `:4321`                                                                                                                                                                                                                                                             |
 | Tunnel CORS / login refresh fails | Production: `CORS_ORIGINS` includes `https://hub.geem.ai` (Workspace) and `https://mtfm.geem.ai` (Platform Admin); Workspace browser calls `https://api.geem.ai`; Platform Admin is same-origin on `mtfm.geem.ai` (`/api` proxied). UAT: `https://app-uat.geem.ai` (Workspace) and `https://admin-uat.geem.ai` (Platform Admin) in `CORS_ORIGINS`; browser calls `https://api-uat.geem.ai`. Recreate `workspace_web` / `dashboard_web` after switching overlays |

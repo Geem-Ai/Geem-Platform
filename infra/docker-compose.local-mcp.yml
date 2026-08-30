@@ -1,0 +1,23 @@
+# Local MCP connector overlay — no Cloudflare Tunnel.
+# Prerequisite: ./scripts/generate-dev-mcp-pki.sh
+# Requires MCP_CONNECTOR_ENABLED=true in ../.env
+#
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local-mcp.yml up -d --build
+
+services:
+  api:
+    depends_on:
+      mcp-egress-gateway:
+        condition: service_started
+
+  mcp-egress-gateway:
+    profiles: !reset []
+    environment:
+      APP_ENV: local
+      EGRESS_FORWARD_PROXY_URL: ""
+    networks: !override
+      - mcp_egress_control
+      - public_egress
+
+  mcp-egress-proxy:
+    profiles: !reset []

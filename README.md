@@ -10,15 +10,15 @@ Stack: FastAPI, Celery, PostgreSQL, Redis, Qdrant, MinIO, React. OpenRouter prov
 
 Phases **0–8** of the multi-tenant SaaS plan are complete (through Workspace Storage inventory). Phase 9 is App Store foundations.
 
-| Ready | Not yet |
-|-------|---------|
-| Auth, workspaces, memberships | Platform Admin SPA (`apps/dashboard_web`) |
-| Tenant-scoped documents + Expert RAG | Marketing site (`apps/landpage_web`) |
-| Conversations + streaming Chat | App Store |
-| Plans, entitlements, usage meters, quotas | |
-| Billing checkout + Workspace billing UI | |
-| OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` (Expert via `X-Geem-Expert-Id`) | |
-| Workspace Storage inventory (`/storage`) — download + full purge | |
+| Ready                                                                                                    | Not yet                                   |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Auth, workspaces, memberships                                                                            | Platform Admin SPA (`apps/dashboard_web`) |
+| Tenant-scoped documents + Expert RAG                                                                     | Marketing site (`apps/landpage_web`)      |
+| Conversations + streaming Chat                                                                           | App Store                                 |
+| Plans, entitlements, usage meters, quotas                                                                |                                           |
+| Billing checkout + Workspace billing UI                                                                  |                                           |
+| OpenAI-compatible `POST /api/v1/chat/completions` + `GET /api/v1/models` (Expert via `X-Geem-Expert-Id`) |                                           |
+| Workspace Storage inventory (`/storage`) — download + full purge                                         |                                           |
 
 Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md).
 
@@ -31,13 +31,13 @@ Canonical plan: [`.cursor/plans/multi-tenant_saas_plan_e28c049c.plan.md`](.curso
 
 ## Repo layout
 
-| Path | Role |
-|------|------|
-| `apps/api` | FastAPI + Celery |
-| `apps/workspace_web` | Geem Workspace SPA (port **5174**) |
-| `apps/dashboard_web` | Platform Admin SPA (port **5175**; UAT `admin-uat.geem.ai`) |
-| `apps/landpage_web` | Marketing — placeholder only |
-| `infra/docker-compose.yml` | Local full stack |
+| Path                       | Role                                                        |
+| -------------------------- | ----------------------------------------------------------- |
+| `apps/api`                 | FastAPI + Celery                                            |
+| `apps/workspace_web`       | Geem Workspace SPA (port **5174**)                          |
+| `apps/dashboard_web`       | Platform Admin SPA (port **5175**; UAT `admin-uat.geem.ai`) |
+| `apps/landpage_web`        | Marketing — placeholder only                                |
+| `infra/docker-compose.yml` | Local full stack                                            |
 
 `samples/` is a **gitignored, read-only** UI reference (Metronic AI Concept). Production code must not import from or mutate it. Ports into `workspace_web` are listed in [`apps/workspace_web/METRONIC_PORT.md`](apps/workspace_web/METRONIC_PORT.md).
 
@@ -50,15 +50,16 @@ cp .env.example .env
 cp apps/workspace_web/.env.example apps/workspace_web/.env
 
 cd infra
-docker compose --env-file ../.env up -d --build
+./scripts/dev-up.sh
+# or: docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-| Service | URL |
-|---------|-----|
-| Workspace UI | http://localhost:5174 |
-| API docs | http://localhost:8000/docs |
-| API ready | http://localhost:8000/api/health/ready |
-| MinIO console | http://localhost:9101 (`minio` / `change-me`) |
+| Service       | URL                                             |
+| ------------- | ----------------------------------------------- |
+| Workspace UI  | <http://localhost:5174>                         |
+| API docs      | <http://localhost:8000/docs>                    |
+| API ready     | <http://localhost:8000/api/health/ready>        |
+| MinIO console | <http://localhost:9101> (`minio` / `change-me`) |
 
 Keep `AUTH_REQUIRED=true` and `LEGACY_MVP_WRITES_ENABLED=false`. Document, query, and job APIs require a logged-in Workspace user.
 
