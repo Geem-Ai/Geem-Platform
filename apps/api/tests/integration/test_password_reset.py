@@ -12,15 +12,17 @@ from app.identity.models import PasswordResetToken
 from app.identity.password_reset_tokens import hash_password_reset_token
 from app.identity.repository import PasswordResetTokenRepository, SessionRepository, UserRepository
 from app.identity.security import hash_refresh_token, verify_password
-from app.main import app
-from app.notifications.factory import get_email_provider
-from tests.support.fake_email import RecordingEmailProvider, token_from_reset_email
+from tests.support.fake_email import (
+    RecordingEmailProvider,
+    deliver_email_tasks_inline,
+    token_from_reset_email,
+)
 
 
 @pytest.fixture()
-def inbox(client: TestClient) -> RecordingEmailProvider:
+def inbox(client: TestClient, monkeypatch) -> RecordingEmailProvider:
     provider = RecordingEmailProvider()
-    app.dependency_overrides[get_email_provider] = lambda: provider
+    deliver_email_tasks_inline(monkeypatch, provider)
     return provider
 
 

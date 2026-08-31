@@ -49,6 +49,10 @@ from app.identity.security import (
     validate_password,
     verify_password,
 )
+from app.notifications.enqueue import (
+    enqueue_email_verification_after_commit,
+    enqueue_password_reset_after_commit,
+)
 from app.notifications.protocol import EmailMessage, EmailProvider
 
 
@@ -111,7 +115,9 @@ class AuthService:
         tokens: AuthTokens | None = None
         try:
             if verification_required:
-                self._create_and_send_verification(user, now=now)
+                # Delivery is the worker's job: an unreachable SMTP hop must not
+                # roll back a valid registration.
+                enqueue_email_verification_after_commit(self.db, user.id)
             else:
                 tokens = self._issue_session(user, user_agent=user_agent, ip_address=ip_address)
             self.db.commit()
@@ -314,44 +320,11 @@ class AuthService:
             security_log("auth.forgot_password_skipped", email=normalized, reason="unknown_or_disabled")
             return
 
-        if self.email is None:
-            security_log("auth.forgot_password_failed", user_id=str(user.id), reason="no_email_provider")
-            return
-
-        now = datetime.now(timezone.utc)
-        self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
-        raw = generate_password_reset_token()
-        expires_at = now + timedelta(hours=self.settings.effective_password_reset_ttl_hours)
-        row = PasswordResetToken(
-            user_id=user.id,
-            token_hash=hash_password_reset_token(raw, settings=self.settings),
-            expires_at=expires_at,
-        )
-        self.reset_tokens.create(row)
-        self.db.flush()
-
-        reset_link = password_reset_url(raw, settings=self.settings)
-        content = render_password_reset_email(
-            reset_url=reset_link,
-            expires_at=expires_at,
-            email=user.email,
-        )
-        try:
-            self.email.send(
-                EmailMessage(
-                    to=user.email,
-                    subject=content.subject,
-                    text_body=content.text_body,
-                    html_body=content.html_body,
-                )
-            )
-        except Exception:
-            self.db.rollback()
-            security_log("auth.forgot_password_failed", user_id=str(user.id), reason="email_delivery")
-            return
-
+        # The reset token is minted by the worker so an SMTP outage cannot leave
+        # a usable token behind for an email that was never delivered.
+        enqueue_password_reset_after_commit(self.db, user.id)
         self.db.commit()
-        security_log("auth.forgot_password_sent", user_id=str(user.id))
+        security_log("auth.forgot_password_queued", user_id=str(user.id))
 
     def reset_password(
         self,
@@ -448,19 +421,10 @@ class AuthService:
         if user.email_verified_at is not None:
             security_log("auth.resend_verification_skipped", user_id=str(user.id), reason="already_verified")
             return
-        if self.email is None:
-            security_log("auth.resend_verification_failed", user_id=str(user.id), reason="no_email_provider")
-            return
 
-        now = datetime.now(timezone.utc)
-        try:
-            self._create_and_send_verification(user, now=now)
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-            security_log("auth.resend_verification_failed", user_id=str(user.id), reason="email_delivery")
-            return
-        security_log("auth.resend_verification_sent", user_id=str(user.id))
+        enqueue_email_verification_after_commit(self.db, user.id)
+        self.db.commit()
+        security_log("auth.resend_verification_queued", user_id=str(user.id))
 
     def change_password(
         self,
@@ -544,38 +508,126 @@ class AuthService:
         security_log("auth.email_not_verified", user_id=str(user.id))
         raise AppError(ErrorCategory.EMAIL_NOT_VERIFIED, "Email is not verified.")
 
-    def _create_and_send_verification(self, user: User, *, now: datetime) -> None:
+    def deliver_verification_email(self, user_id: uuid.UUID) -> bool:
+        """Mint a verification token and send it. Worker-side entrypoint.
+
+        Returns False when the account no longer needs verification, so a queued
+        task that lost the race with a completed verification is not an error.
+        """
+        user = self.users.get_by_id(user_id)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            security_log(
+                "auth.verification_email_skipped",
+                user_id=str(user_id),
+                reason="unknown_or_disabled",
+            )
+            return False
+        if user.email_verified_at is not None:
+            security_log(
+                "auth.verification_email_skipped",
+                user_id=str(user_id),
+                reason="already_verified",
+            )
+            return False
         if self.email is None:
             raise AppError(ErrorCategory.EMAIL_DELIVERY_FAILED, "Email delivery is unavailable.")
 
-        self.verify_tokens.invalidate_unused_for_user(user.id, when=now)
-        raw = generate_email_verification_token()
+        recipient = user.email
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=self.settings.effective_email_verification_ttl_hours)
-        row = EmailVerificationToken(
-            user_id=user.id,
-            token_hash=hash_email_verification_token(raw, settings=self.settings),
-            expires_at=expires_at,
+        raw = generate_email_verification_token()
+        self.verify_tokens.invalidate_unused_for_user(user.id, when=now)
+        self.verify_tokens.create(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=hash_email_verification_token(raw, settings=self.settings),
+                expires_at=expires_at,
+            )
         )
-        self.verify_tokens.create(row)
-        self.db.flush()
+        # Commit before sending: a delivered link must already be usable. A
+        # failed send leaves an unused token that the next attempt invalidates.
+        self.db.commit()
 
-        verify_link = email_verification_url(raw, settings=self.settings)
         content = render_email_verification_email(
-            verify_url=verify_link,
+            verify_url=email_verification_url(raw, settings=self.settings),
             expires_at=expires_at,
-            email=user.email,
+            email=recipient,
         )
+        self._send(
+            recipient,
+            content,
+            failure_event="auth.verification_email_failed",
+            user_id=user_id,
+        )
+        security_log("auth.verification_email_sent", user_id=str(user_id))
+        return True
+
+    def deliver_password_reset_email(self, user_id: uuid.UUID) -> bool:
+        """Mint a password reset token and send it. Worker-side entrypoint."""
+        user = self.users.get_by_id(user_id)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            security_log(
+                "auth.password_reset_email_skipped",
+                user_id=str(user_id),
+                reason="unknown_or_disabled",
+            )
+            return False
+        if self.email is None:
+            raise AppError(ErrorCategory.EMAIL_DELIVERY_FAILED, "Email delivery is unavailable.")
+
+        recipient = user.email
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=self.settings.effective_password_reset_ttl_hours)
+        raw = generate_password_reset_token()
+        self.reset_tokens.invalidate_unused_for_user(user.id, when=now)
+        self.reset_tokens.create(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=hash_password_reset_token(raw, settings=self.settings),
+                expires_at=expires_at,
+            )
+        )
+        self.db.commit()
+
+        content = render_password_reset_email(
+            reset_url=password_reset_url(raw, settings=self.settings),
+            expires_at=expires_at,
+            email=recipient,
+        )
+        self._send(
+            recipient,
+            content,
+            failure_event="auth.password_reset_email_failed",
+            user_id=user_id,
+        )
+        security_log("auth.password_reset_email_sent", user_id=str(user_id))
+        return True
+
+    def _send(
+        self,
+        recipient: str,
+        content,
+        *,
+        failure_event: str,
+        user_id: uuid.UUID,
+    ) -> None:
+        assert self.email is not None
         try:
             self.email.send(
                 EmailMessage(
-                    to=user.email,
+                    to=recipient,
                     subject=content.subject,
                     text_body=content.text_body,
                     html_body=content.html_body,
                 )
             )
         except AppError:
+            security_log(failure_event, user_id=str(user_id), reason="email_delivery")
             raise
         except Exception as exc:
-            security_log("auth.verification_email_failed", user_id=str(user.id), reason="email_delivery")
-            raise AppError(ErrorCategory.EMAIL_DELIVERY_FAILED, "Email delivery failed.") from exc
+            security_log(failure_event, user_id=str(user_id), reason="email_delivery")
+            raise AppError(
+                ErrorCategory.EMAIL_DELIVERY_FAILED,
+                "Email delivery failed.",
+                retryable=True,
+            ) from exc

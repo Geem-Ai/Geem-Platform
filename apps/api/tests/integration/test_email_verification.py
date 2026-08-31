@@ -11,15 +11,17 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.identity.email_verification_tokens import hash_email_verification_token
 from app.identity.repository import EmailVerificationTokenRepository, UserRepository
-from app.main import app
-from app.notifications.factory import get_email_provider
-from tests.support.fake_email import RecordingEmailProvider, token_from_verify_email
+from tests.support.fake_email import (
+    RecordingEmailProvider,
+    deliver_email_tasks_inline,
+    token_from_verify_email,
+)
 
 
 @pytest.fixture()
-def inbox(client: TestClient) -> RecordingEmailProvider:
+def inbox(client: TestClient, monkeypatch) -> RecordingEmailProvider:
     provider = RecordingEmailProvider()
-    app.dependency_overrides[get_email_provider] = lambda: provider
+    deliver_email_tasks_inline(monkeypatch, provider)
     return provider
 
 

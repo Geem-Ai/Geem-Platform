@@ -110,7 +110,7 @@ verify_stable_cloudflared() {
   done
 }
 
-for service in postgres redis qdrant minio app-egress-proxy \
+for service in postgres redis qdrant minio app-egress-proxy mail-relay \
   mcp-egress-proxy mcp-egress-gateway api worker beat workspace_web \
   dashboard_web landpage_web; do
   require_one_running "$service"

@@ -37,7 +37,7 @@ release_file=/etc/geem/release-sha
 install_file=/etc/geem/install-id
 compose=/usr/local/sbin/geem-prod-compose
 project=geem-production
-allowed_services='postgres redis qdrant minio minio-init api worker beat app-egress-proxy mcp-egress-gateway mcp-egress-proxy workspace_web dashboard_web landpage_web cloudflared'
+allowed_services='postgres redis qdrant minio minio-init api worker beat app-egress-proxy mail-relay mcp-egress-gateway mcp-egress-proxy workspace_web dashboard_web landpage_web cloudflared'
 
 require_directory /etc/geem 0 0 711
 require_file "$manifest" 0 0 444

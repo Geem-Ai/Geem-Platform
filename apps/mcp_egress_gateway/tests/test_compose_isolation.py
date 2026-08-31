@@ -83,6 +83,7 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
         "application_broker",
         "application_ingress",
         "application_provider_control",
+        "mail_relay_control",
         "mcp_egress_control",
         "mcp_proxy_control",
     ):
@@ -179,6 +180,44 @@ def test_rendered_compose_keeps_gateway_off_datastore_and_public_networks() -> N
         for name, service in services.items()
         if "mcp_public_egress" in service.get("networks", {})
     } == {"mcp-egress-proxy"}
+
+    # The relay owns the only credentialed submission route: api and worker may
+    # reach it, but must never hold the upstream route themselves.
+    mail_relay = services["mail-relay"]
+    assert set(mail_relay["networks"]) == {"mail_relay_control", "mail_relay_egress"}
+    assert mail_relay.get("ports") is None
+    assert mail_relay["read_only"] is True
+    assert mail_relay["cap_drop"] == ["ALL"]
+    assert mail_relay["user"] == "10002:10002"
+    # msmtp spools through libc tmpfile(), so /tmp must be writable or the
+    # relay accepts mail it can never hand upstream.
+    assert sorted(
+        entry.split(":", maxsplit=1)[0] for entry in mail_relay["tmpfs"]
+    ) == ["/run", "/tmp"]
+    for entry in mail_relay["tmpfs"]:
+        assert "uid=10002,gid=10002,mode=0700" in entry
+    assert mail_relay["entrypoint"] == [
+        "python3",
+        "/usr/local/lib/geem/render_mail_relay_config.py",
+    ]
+    assert networks["mail_relay_egress"].get("internal") is not True
+    assert {
+        name
+        for name, service in services.items()
+        if "mail_relay_egress" in service.get("networks", {})
+    } == {"mail-relay"}
+    assert {
+        name
+        for name, service in services.items()
+        if "mail_relay_control" in service.get("networks", {})
+    } == {"api", "worker", "mail-relay"}
+    assert set(mail_relay["environment"]) == {
+        "MAIL_RELAY_UPSTREAM_HOST",
+        "MAIL_RELAY_UPSTREAM_PORT",
+        "MAIL_RELAY_UPSTREAM_USERNAME",
+        "MAIL_RELAY_UPSTREAM_PASSWORD",
+        "MAIL_RELAY_UPSTREAM_FROM",
+    }
 
     gateway_environment = set(gateway.get("environment", {}))
     assert not gateway_environment.intersection(
@@ -614,15 +653,17 @@ def test_fresh_production_hardening_template_is_complete() -> None:
         REPO_ROOT / "infra/docker-compose.production-hardening.example.yml"
     ).read_text()
 
-    assert overlay.count("\n    pull_policy: never") == 15
-    assert overlay.count('\n    restart: "no"') == 14
-    assert overlay.count("com.geem.production.install:") == 15
+    assert overlay.count("\n    pull_policy: never") == 16
+    assert overlay.count('\n    restart: "no"') == 15
+    assert overlay.count("com.geem.production.install:") == 16
     required_subnets = (
         "APPLICATION_DATA_SUBNET",
         "APPLICATION_BROKER_SUBNET",
         "APPLICATION_INGRESS_SUBNET",
         "APPLICATION_PROVIDER_CONTROL_SUBNET",
         "APPLICATION_PROVIDER_EGRESS_SUBNET",
+        "MAIL_RELAY_CONTROL_SUBNET",
+        "MAIL_RELAY_EGRESS_SUBNET",
         "MCP_EGRESS_CONTROL_SUBNET",
         "MCP_PROXY_CONTROL_SUBNET",
         "MCP_PUBLIC_EGRESS_SUBNET",
@@ -668,6 +709,12 @@ def test_fresh_production_hardening_template_passes_rendered_validator() -> None
             "DASHBOARD_WEB_IMAGE": digest("a"),
             "LANDPAGE_WEB_IMAGE": digest("b"),
             "CLOUDFLARED_IMAGE": digest("c"),
+            "MAIL_RELAY_IMAGE": digest("d"),
+            "MAIL_RELAY_UPSTREAM_HOST": "mail.geem.ai",
+            "MAIL_RELAY_UPSTREAM_PORT": "587",
+            "MAIL_RELAY_UPSTREAM_USERNAME": "noreply@geem.ai",
+            "MAIL_RELAY_UPSTREAM_PASSWORD": "not-a-default-submission-secret",
+            "MAIL_RELAY_UPSTREAM_FROM": "noreply@geem.ai",
             "GEEM_INSTALL_ID": "geem-install-test-0001",
             "POSTGRES_USER": "geem",
             "POSTGRES_PASSWORD": "not-a-default-password",
@@ -696,6 +743,8 @@ def test_fresh_production_hardening_template_passes_rendered_validator() -> None
             "MCP_PROXY_CONTROL_SUBNET": "172.30.16.0/24",
             "MCP_PUBLIC_EGRESS_SUBNET": "172.30.17.0/24",
             "PUBLIC_EGRESS_SUBNET": "172.30.18.0/24",
+            "MAIL_RELAY_CONTROL_SUBNET": "172.30.19.0/24",
+            "MAIL_RELAY_EGRESS_SUBNET": "172.30.20.0/24",
         }
     )
     rendered = subprocess.run(
@@ -808,6 +857,7 @@ def test_production_systemd_starts_ingress_last_and_contains_stops() -> None:
         "ExecStart=/usr/local/sbin/geem-prod-compose up"
     )
     assert "cloudflared" not in start_lines[0]
+    assert " mail-relay " in start_lines[0]
     assert start_lines[1] == (
         "ExecStart=/usr/local/sbin/geem-production-verify internal"
     )
@@ -825,6 +875,10 @@ def test_production_systemd_starts_ingress_last_and_contains_stops() -> None:
 
     assert "internal|runtime|ingress" in verify
     assert "cloudflared started before internal verification" in verify
+    # A stopped relay silently queues nothing and mail is lost, so managed
+    # starts must require it exactly like every other always-on service.
+    for artifact in (preflight, verify, stop):
+        assert "mail-relay" in artifact
     assert "require_one_running cloudflared" in verify
     assert 'elif [ "$stage" = runtime ]; then' in verify
     assert "verify_internal_health" in verify
@@ -1066,7 +1120,7 @@ def test_production_publication_builds_and_verifies_exact_locked_images() -> Non
     assert "github.event.workflow_run.conclusion == 'success'" in workflow
     assert "github.event.workflow_run.head_sha" in workflow
     assert "platforms: linux/amd64" in workflow
-    assert workflow.count("uses: docker/build-push-action@") == 7
+    assert workflow.count("uses: docker/build-push-action@") == 8
     assert "python -m pytest -q -p no:cacheprovider tests/unit tests/integration" in workflow
     frontend_verification = workflow.split(
         "- name: Verify the exact published frontend images", maxsplit=1
@@ -1074,9 +1128,17 @@ def test_production_publication_builds_and_verifies_exact_locked_images() -> Non
     assert frontend_verification.count(
         "--tmpfs /run:rw,noexec,nosuid,nodev"
     ) == 3
-    assert "(.images | length) == 7" in workflow
+    assert "(.images | length) == 8" in workflow
     assert "(.build_bases | length) == 5" in workflow
     assert "(.runtime_images | length) == 5" in workflow
+    relay_verification = workflow.split(
+        "- name: Verify the exact published mail relay image", maxsplit=1
+    )[1].split("- name: Exercise the exact locked third-party runtimes", maxsplit=1)[0]
+    # A relay that starts without a complete upstream account would submit mail
+    # unauthenticated, so publication must prove the renderer fails closed.
+    assert relay_verification.count("require_fail_closed") == 4
+    assert "MAIL_RELAY_UPSTREAM_PORT=25" in relay_verification
+    assert "not-a-real-secret /run/geem-msmtprc" in relay_verification
     assert "sha256sum manifest.json > manifest.json.sha256" in workflow
     assert "sha256sum --check manifest.json.sha256" in workflow
 

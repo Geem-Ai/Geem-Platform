@@ -194,6 +194,68 @@ def test_smtp_provider_rejects_cleartext_outside_local() -> None:
     assert exc.value.category == ErrorCategory.EMAIL_DELIVERY_FAILED
 
 
+def _relay_settings(**overrides) -> Settings:
+    return Settings(
+        _env_file=None,
+        app_env="production",
+        jwt_secret="a" * 40,
+        api_key_hash_pepper="b" * 40,
+        email_provider="smtp",
+        smtp_from_email="noreply@geem.ai",
+        smtp_use_tls=False,
+        smtp_allow_plaintext_relay=True,
+        **overrides,
+    )
+
+
+def test_smtp_provider_submits_cleartext_to_internal_relay(monkeypatch) -> None:
+    from app.notifications.smtp import SmtpEmailProvider
+
+    captured: dict = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None) -> None:
+            captured["host"] = host
+            captured["port"] = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self, *, context=None):
+            captured["starttls"] = True
+
+        def login(self, user, password):
+            captured["login"] = (user, password)
+
+        def send_message(self, msg):
+            captured["sent"] = True
+
+    monkeypatch.setattr("app.notifications.smtp.smtplib.SMTP", FakeSMTP)
+    settings = _relay_settings(smtp_host="mail-relay", smtp_port=25)
+    SmtpEmailProvider(settings).send(
+        EmailMessage(to="a@example.com", subject="Verify", text_body="body")
+    )
+    assert captured["host"] == "mail-relay"
+    assert captured["port"] == 25
+    assert captured["sent"] is True
+    # The relay owns the credentialed TLS hop, so the app tier must not attempt
+    # either STARTTLS or SMTP AUTH on the internal leg.
+    assert "starttls" not in captured
+    assert "login" not in captured
+
+
+@pytest.mark.parametrize("host", ["mail.example.com", "mail-relay:25", "10.0.0.5"])
+def test_smtp_provider_relay_optin_never_covers_remote_hosts(host: str) -> None:
+    from app.notifications.smtp import SmtpEmailProvider
+
+    with pytest.raises(AppError) as exc:
+        SmtpEmailProvider(_relay_settings(smtp_host=host))
+    assert exc.value.category == ErrorCategory.EMAIL_DELIVERY_FAILED
+
+
 def test_smtp_starttls_can_skip_certificate_verification_in_production(monkeypatch) -> None:
     import ssl
 

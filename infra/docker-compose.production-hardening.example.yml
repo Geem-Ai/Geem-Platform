@@ -12,7 +12,7 @@
 # digest. Every long-running container has restart policy "no" because the
 # ingress-last systemd unit is the sole production lifecycle owner; Docker must
 # never auto-restore Cloudflared before preflight. The deployment must allocate
-# nine explicit, non-overlapping subnets.
+# eleven explicit, non-overlapping subnets.
 
 services:
   postgres:
@@ -143,6 +143,21 @@ services:
       com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
     env_file: !reset []
     environment: !reset {}
+
+  mail-relay:
+    build: !reset null
+    image: ${MAIL_RELAY_IMAGE:?required immutable local mail relay image ID}
+    pull_policy: never
+    restart: "no"
+    labels:
+      com.geem.production.install: ${GEEM_INSTALL_ID:?required immutable Geem installation ID}
+    env_file: !reset []
+    environment: !override
+      MAIL_RELAY_UPSTREAM_HOST: ${MAIL_RELAY_UPSTREAM_HOST:?required external submission host}
+      MAIL_RELAY_UPSTREAM_PORT: ${MAIL_RELAY_UPSTREAM_PORT:?required submission port 587 or 465}
+      MAIL_RELAY_UPSTREAM_USERNAME: ${MAIL_RELAY_UPSTREAM_USERNAME:?required submission user}
+      MAIL_RELAY_UPSTREAM_PASSWORD: ${MAIL_RELAY_UPSTREAM_PASSWORD:?required submission password}
+      MAIL_RELAY_UPSTREAM_FROM: ${MAIL_RELAY_UPSTREAM_FROM:?required envelope sender}
 
   mcp-egress-gateway:
     build: !reset null
@@ -303,6 +318,16 @@ networks:
     ipam:
       config:
         - subnet: ${APPLICATION_PROVIDER_EGRESS_SUBNET:?required reviewed provider-egress CIDR}
+  mail_relay_control:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${MAIL_RELAY_CONTROL_SUBNET:?required reviewed mail-relay control CIDR}
+  mail_relay_egress:
+    internal: false
+    ipam:
+      config:
+        - subnet: ${MAIL_RELAY_EGRESS_SUBNET:?required reviewed mail-relay egress CIDR}
   mcp_egress_control:
     internal: true
     ipam:

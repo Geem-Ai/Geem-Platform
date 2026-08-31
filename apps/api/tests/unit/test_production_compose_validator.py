@@ -9,6 +9,7 @@ from app.ops.validate_production_compose import (
     API_HEALTHCHECK,
     BOUNDARY_RUNTIME_CONTRACTS,
     CLOUDFLARED_COMMAND,
+    MAIL_RELAY_ENTRYPOINT,
     MINIO_INIT_ENTRYPOINT,
     MINIO_INIT_IMAGE,
     MINIO_SERVER_ENTRYPOINT,
@@ -27,12 +28,15 @@ NETWORK_NAMES = (
     "application_broker",
     "application_ingress",
     "application_provider_control",
+    "mail_relay_control",
     "mcp_egress_control",
     "mcp_proxy_control",
     "application_provider_egress",
+    "mail_relay_egress",
     "mcp_public_egress",
     "public_egress",
 )
+INTERNAL_NETWORK_COUNT = 7
 BLOCKED_NETWORKS = ",".join(
     [*(f"10.80.{index}.0/24" for index in range(len(NETWORK_NAMES))), "172.17.0.0/16"]
 )
@@ -138,6 +142,16 @@ def _boundary_service(
     if environment is not None:
         service["environment"] = environment
     return service
+
+
+def _mail_relay_environment() -> dict[str, str]:
+    return {
+        "MAIL_RELAY_UPSTREAM_HOST": "mail.geem.ai",
+        "MAIL_RELAY_UPSTREAM_PORT": "587",
+        "MAIL_RELAY_UPSTREAM_USERNAME": "noreply@geem.ai",
+        "MAIL_RELAY_UPSTREAM_PASSWORD": "prod-submission-secret",
+        "MAIL_RELAY_UPSTREAM_FROM": "noreply@geem.ai",
+    }
 
 
 def _gateway_environment() -> dict[str, str]:
@@ -247,6 +261,7 @@ def _valid_config() -> dict[str, object]:
                 "application_broker",
                 "application_ingress",
                 "application_provider_control",
+                "mail_relay_control",
                 "mcp_egress_control",
             ],
             mcp_enabled="false",
@@ -264,6 +279,7 @@ def _valid_config() -> dict[str, object]:
                 "application_data",
                 "application_broker",
                 "application_provider_control",
+                "mail_relay_control",
                 "mcp_egress_control",
             ],
             mcp_enabled="false",
@@ -299,6 +315,12 @@ def _valid_config() -> dict[str, object]:
             name="app-egress-proxy",
             networks=["application_provider_control", "application_provider_egress"],
             user="13:13",
+        ),
+        "mail-relay": _boundary_service(
+            name="mail-relay",
+            networks=["mail_relay_control", "mail_relay_egress"],
+            user="10002:10002",
+            environment=_mail_relay_environment(),
         ),
         "mcp-egress-gateway": _boundary_service(
             name="mcp-egress-gateway",
@@ -372,11 +394,12 @@ def _valid_config() -> dict[str, object]:
         "python3",
         "/usr/local/lib/geem/render_mcp_proxy_config.py",
     ]
+    services["mail-relay"]["entrypoint"] = list(MAIL_RELAY_ENTRYPOINT)
 
     networks = {
         name: {
             "name": f"infra_{name}",
-            "internal": index < 6,
+            "internal": index < INTERNAL_NETWORK_COUNT,
             "ipam": {"config": [{"subnet": f"10.80.{index}.0/24"}]},
         }
         for index, name in enumerate(NETWORK_NAMES)
@@ -895,6 +918,75 @@ def test_rejects_external_boundary_membership() -> None:
 
     assert any("app-egress-proxy has an unexpected network membership" in e for e in errors)
     assert any("single-purpose boundary" in e for e in errors)
+
+
+def test_rejects_a_second_member_on_the_mail_egress_network() -> None:
+    config = _valid_config()
+    services = _services(config)
+    services["worker"]["networks"]["mail_relay_egress"] = None
+
+    errors = _errors(config)
+
+    assert any("worker has an unexpected network membership" in e for e in errors)
+    assert any("single-purpose boundary" in e for e in errors)
+
+
+def test_rejects_api_reaching_the_upstream_submission_route_directly() -> None:
+    config = _valid_config()
+    services = _services(config)
+    networks = services["api"]["networks"]
+    del networks["mail_relay_control"]
+    networks["mail_relay_egress"] = None
+
+    errors = _errors(config)
+
+    assert any("api has an unexpected network membership" in e for e in errors)
+    assert any("single-purpose boundary" in e for e in errors)
+
+
+def test_rejects_mail_relay_environment_outside_its_upstream_contract() -> None:
+    config = _valid_config()
+    _services(config)["mail-relay"]["environment"]["SMTP_PASSWORD"] = "leaked"
+
+    errors = _errors(config)
+
+    assert any(
+        "mail-relay environment differs from its exact upstream contract" in e
+        for e in errors
+    )
+
+
+@pytest.mark.parametrize("port", ["25", "2525", ""])
+def test_rejects_mail_relay_upstream_without_authenticated_submission(port: str) -> None:
+    config = _valid_config()
+    _services(config)["mail-relay"]["environment"]["MAIL_RELAY_UPSTREAM_PORT"] = port
+
+    errors = _errors(config)
+
+    assert any("mail-relay" in e for e in errors)
+
+
+def test_rejects_mail_relay_bypassing_the_configuration_renderer() -> None:
+    config = _valid_config()
+    services = _services(config)
+    services["mail-relay"]["entrypoint"] = ["/usr/bin/msmtpd"]
+
+    errors = _errors(config)
+
+    assert any(
+        "mail-relay bypasses the fail-closed configuration renderer" in e
+        for e in errors
+    )
+
+
+def test_rejects_mail_relay_inheriting_the_application_environment() -> None:
+    config = _valid_config()
+    services = _services(config)
+    services["mail-relay"]["env_file"] = ["/etc/geem/production.env"]
+
+    errors = _errors(config)
+
+    assert any("mail-relay inherits a whole-application env_file" in e for e in errors)
 
 
 def test_rejects_undeclared_network() -> None:

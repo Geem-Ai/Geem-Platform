@@ -31,6 +31,7 @@ jobs:
       RELEASE_TAG: sha-${{ github.event.workflow_run.head_sha }}-run-${{ github.run_id }}-${{ github.run_attempt }}
       API_REPOSITORY: ghcr.io/geem-ai/geem-platform-api
       APP_PROXY_REPOSITORY: ghcr.io/geem-ai/geem-platform-app-egress-proxy
+      MAIL_RELAY_REPOSITORY: ghcr.io/geem-ai/geem-platform-mail-relay
       MCP_GATEWAY_REPOSITORY: ghcr.io/geem-ai/geem-platform-mcp-egress-gateway
       MCP_PROXY_REPOSITORY: ghcr.io/geem-ai/geem-platform-mcp-egress-proxy
       WORKSPACE_REPOSITORY: ghcr.io/geem-ai/geem-platform-workspace-web
@@ -165,6 +166,20 @@ jobs:
           build-args: |
             PROXY_UBUNTU_BASE_IMAGE=${{ steps.bases.outputs.proxy_ubuntu }}
 
+      - name: Build and publish mail relay image
+        id: mail_relay
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: infra/mail-relay
+          file: infra/mail-relay/Dockerfile
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          push: true
+          tags: ${{ env.MAIL_RELAY_REPOSITORY }}:${{ env.RELEASE_TAG }}
+          build-args: |
+            PROXY_UBUNTU_BASE_IMAGE=${{ steps.bases.outputs.proxy_ubuntu }}
+
       - name: Build and publish MCP gateway image
         id: mcp_gateway
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -242,6 +257,7 @@ jobs:
         env:
           API_DIGEST: ${{ steps.api.outputs.digest }}
           APP_PROXY_DIGEST: ${{ steps.app_proxy.outputs.digest }}
+          MAIL_RELAY_DIGEST: ${{ steps.mail_relay.outputs.digest }}
           MCP_GATEWAY_DIGEST: ${{ steps.mcp_gateway.outputs.digest }}
           MCP_PROXY_DIGEST: ${{ steps.mcp_proxy.outputs.digest }}
           WORKSPACE_DIGEST: ${{ steps.workspace.outputs.digest }}
@@ -257,6 +273,7 @@ jobs:
           for reference in \
             "$API_REPOSITORY@$API_DIGEST" \
             "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST" \
+            "$MAIL_RELAY_REPOSITORY@$MAIL_RELAY_DIGEST" \
             "$MCP_GATEWAY_REPOSITORY@$MCP_GATEWAY_DIGEST" \
             "$MCP_PROXY_REPOSITORY@$MCP_PROXY_DIGEST" \
             "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" \
@@ -367,6 +384,84 @@ jobs:
           cleanup_boundaries
           trap - EXIT INT TERM
 
+      - name: Verify the exact published mail relay image
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          MAIL_RELAY_DIGEST: ${{ steps.mail_relay.outputs.digest }}
+        run: |
+          set -eu
+          # An incomplete account, or a port that cannot carry credentials, must
+          # stop the relay instead of silently submitting mail unauthenticated.
+          require_fail_closed() {
+            if docker run --rm --network none --read-only \
+              --tmpfs /run:rw,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700 \
+              --tmpfs /tmp:rw,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700 \
+              "$@" "$MAIL_RELAY_REPOSITORY@$MAIL_RELAY_DIGEST"; then
+              echo "mail relay started without a reviewed upstream account" >&2
+              exit 1
+            fi
+          }
+          require_fail_closed
+          require_fail_closed -e MAIL_RELAY_UPSTREAM_HOST=mail.example.com
+          require_fail_closed \
+            -e MAIL_RELAY_UPSTREAM_HOST=mail.example.com \
+            -e MAIL_RELAY_UPSTREAM_PORT=25 \
+            -e MAIL_RELAY_UPSTREAM_USERNAME=mailer \
+            -e MAIL_RELAY_UPSTREAM_PASSWORD=not-a-real-secret \
+            -e MAIL_RELAY_UPSTREAM_FROM=noreply@example.com
+          # A complete account is still not enough: msmtp spools every message
+          # through /tmp, so an unwritable spool must stop the relay rather than
+          # accept mail it can never hand upstream.
+          if docker run --rm --network none --read-only \
+            --tmpfs /run:rw,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700 \
+            -e MAIL_RELAY_UPSTREAM_HOST=mail.example.com \
+            -e MAIL_RELAY_UPSTREAM_PORT=587 \
+            -e MAIL_RELAY_UPSTREAM_USERNAME=mailer \
+            -e MAIL_RELAY_UPSTREAM_PASSWORD=not-a-real-secret \
+            -e MAIL_RELAY_UPSTREAM_FROM=noreply@example.com \
+            "$MAIL_RELAY_REPOSITORY@$MAIL_RELAY_DIGEST"; then
+            echo "mail relay started without a writable spool" >&2
+            exit 1
+          fi
+
+          relay_network="geem-mail-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          relay_name="geem-mail-relay-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_relay() {
+            docker rm -f "$relay_name" >/dev/null 2>&1 || true
+            docker network rm "$relay_network" >/dev/null 2>&1 || true
+          }
+          trap cleanup_relay EXIT INT TERM
+          docker network create --internal "$relay_network"
+          docker run -d --name "$relay_name" --network "$relay_network" \
+            --network-alias mail-relay --read-only \
+            --tmpfs /run:rw,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700 \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700 \
+            -e MAIL_RELAY_UPSTREAM_HOST=mail.example.com \
+            -e MAIL_RELAY_UPSTREAM_PORT=587 \
+            -e MAIL_RELAY_UPSTREAM_USERNAME=mailer \
+            -e MAIL_RELAY_UPSTREAM_PASSWORD=not-a-real-secret \
+            -e MAIL_RELAY_UPSTREAM_FROM=noreply@example.com \
+            "$MAIL_RELAY_REPOSITORY@$MAIL_RELAY_DIGEST"
+          sleep 3
+          test "$(docker inspect --format '{{.State.Running}}' "$relay_name")" = true
+          docker run --rm --network "$relay_network" --read-only \
+            --entrypoint python "$API_REPOSITORY@$API_DIGEST" \
+            -c 'import socket; connection=socket.create_connection(("mail-relay",25),timeout=5); greeting=connection.recv(256); connection.sendall(b"QUIT\r\n"); connection.close(); assert greeting.startswith(b"220"),greeting'
+          # Drive the whole submission path the API uses. The isolated network
+          # cannot resolve the upstream host, so the relay must fail on that
+          # lookup with a retryable 4xx; a spool or configuration fault would
+          # instead surface as a permanent 5xx and silently drop mail.
+          docker run --rm --network "$relay_network" --read-only \
+            --entrypoint python "$API_REPOSITORY@$API_DIGEST" \
+            -c 'import smtplib; smtp=smtplib.SMTP("mail-relay",25,timeout=20); smtp.ehlo(); assert smtp.docmd("MAIL","FROM:<noreply@example.com>")[0]==250; assert smtp.docmd("RCPT","TO:<verify@example.com>")[0]==250; assert smtp.docmd("DATA")[0]==354; smtp.send(b"Subject: relay verification\r\n\r\nrelay verification\r\n.\r\n"); code,detail=smtp.getreply(); smtp.close(); assert 400<=code<500,(code,detail)'
+          docker logs "$relay_name" 2>&1 | grep -q "cannot locate host mail.example.com"
+          ! docker logs "$relay_name" 2>&1 | grep -q "cannot create temporary file"
+          # The upstream password must stay in the environment, never on disk.
+          docker exec "$relay_name" sh -c \
+            'grep -q "passwordeval printenv MAIL_RELAY_UPSTREAM_PASSWORD" /run/geem-msmtprc && ! grep -q not-a-real-secret /run/geem-msmtprc'
+          cleanup_relay
+          trap - EXIT INT TERM
+
       - name: Exercise the exact locked third-party runtimes
         env:
           API_DIGEST: ${{ steps.api.outputs.digest }}
@@ -445,6 +540,7 @@ jobs:
           PUBLICATION_RUN_ATTEMPT: ${{ github.run_attempt }}
           API_DIGEST: ${{ steps.api.outputs.digest }}
           APP_PROXY_DIGEST: ${{ steps.app_proxy.outputs.digest }}
+          MAIL_RELAY_DIGEST: ${{ steps.mail_relay.outputs.digest }}
           MCP_GATEWAY_DIGEST: ${{ steps.mcp_gateway.outputs.digest }}
           MCP_PROXY_DIGEST: ${{ steps.mcp_proxy.outputs.digest }}
           WORKSPACE_DIGEST: ${{ steps.workspace.outputs.digest }}
@@ -471,6 +567,7 @@ jobs:
             --arg platform linux/amd64 \
             --arg api "$API_REPOSITORY@$API_DIGEST" \
             --arg app_proxy "$APP_PROXY_REPOSITORY@$APP_PROXY_DIGEST" \
+            --arg mail_relay "$MAIL_RELAY_REPOSITORY@$MAIL_RELAY_DIGEST" \
             --arg mcp_gateway "$MCP_GATEWAY_REPOSITORY@$MCP_GATEWAY_DIGEST" \
             --arg mcp_proxy "$MCP_PROXY_REPOSITORY@$MCP_PROXY_DIGEST" \
             --arg workspace "$WORKSPACE_REPOSITORY@$WORKSPACE_DIGEST" \
@@ -496,6 +593,7 @@ jobs:
               images: {
                 api: $api,
                 app_egress_proxy: $app_proxy,
+                mail_relay: $mail_relay,
                 mcp_egress_gateway: $mcp_gateway,
                 mcp_egress_proxy: $mcp_proxy,
                 workspace_web: $workspace,
@@ -521,7 +619,7 @@ jobs:
             --arg source_sha "$SOURCE_SHA" \
             '.schema_version == 1 and .source_sha == $source_sha and
              .platform == "linux/amd64" and
-             (.images | length) == 7 and
+             (.images | length) == 8 and
              (.build_bases | length) == 5 and
              (.runtime_images | length) == 5 and
              ([.images[] | test("^ghcr\\.io/geem-ai/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")] | all) and

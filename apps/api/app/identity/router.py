@@ -37,8 +37,6 @@ from app.identity.schemas import (
 )
 from app.identity.security import decode_access_token
 from app.identity.service import AuthService, AuthTokens, RegisterResult
-from app.notifications.factory import get_email_provider
-from app.notifications.protocol import EmailProvider
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -105,10 +103,10 @@ def register(
     response: Response,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-    email: EmailProvider = Depends(get_email_provider),
 ) -> RegisterResponse:
     check_auth_rate_limit("register", _rate_key(request, str(body.email)), settings=settings)
-    svc = AuthService(db, settings, email=email)
+    # No email provider here: verification mail is delivered by the worker.
+    svc = AuthService(db, settings)
     result = svc.register(
         email=str(body.email),
         password=body.password,
@@ -143,10 +141,9 @@ def forgot_password(
     request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-    email: EmailProvider = Depends(get_email_provider),
 ) -> OkResponse:
     check_auth_rate_limit("forgot_password", _rate_key(request, str(body.email)), settings=settings)
-    AuthService(db, settings, email=email).forgot_password(email=str(body.email))
+    AuthService(db, settings).forgot_password(email=str(body.email))
     return OkResponse(ok=True)
 
 
@@ -193,12 +190,11 @@ def resend_verification(
     request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-    email: EmailProvider = Depends(get_email_provider),
 ) -> OkResponse:
     check_auth_rate_limit(
         "resend_verification", _rate_key(request, str(body.email)), settings=settings
     )
-    AuthService(db, settings, email=email).resend_verification(email=str(body.email))
+    AuthService(db, settings).resend_verification(email=str(body.email))
     return OkResponse(ok=True)
 
 

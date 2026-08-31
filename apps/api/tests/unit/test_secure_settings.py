@@ -163,6 +163,42 @@ def test_assert_secure_settings_rejects_smtp_without_tls() -> None:
         )
 
 
+def test_assert_secure_settings_allows_cleartext_to_internal_relay() -> None:
+    assert_secure_settings(
+        Settings(
+            _env_file=None,
+            app_env="production",
+            jwt_secret="a" * 40,
+            cors_origins="https://app.geem.ai",
+            api_key_hash_pepper="b" * 40,
+            email_provider="smtp",
+            smtp_host="mail-relay",
+            smtp_port=25,
+            smtp_from_email="noreply@geem.ai",
+            smtp_use_tls=False,
+            smtp_allow_plaintext_relay=True,
+        )
+    )
+
+
+def test_assert_secure_settings_relay_optin_still_rejects_remote_host() -> None:
+    with pytest.raises(RuntimeError, match="SMTP_USE_TLS"):
+        assert_secure_settings(
+            Settings(
+                _env_file=None,
+                app_env="production",
+                jwt_secret="a" * 40,
+                cors_origins="https://app.geem.ai",
+                api_key_hash_pepper="b" * 40,
+                email_provider="smtp",
+                smtp_host="smtp.example.com",
+                smtp_from_email="noreply@geem.ai",
+                smtp_use_tls=False,
+                smtp_allow_plaintext_relay=True,
+            )
+        )
+
+
 def test_assert_secure_settings_allows_smtp_without_cert_verify(caplog) -> None:
     settings = Settings(
         _env_file=None,

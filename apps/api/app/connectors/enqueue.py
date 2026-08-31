@@ -7,40 +7,13 @@ run stuck in ``pending`` (blocking future syncs).
 
 from __future__ import annotations
 
-import logging
 import uuid
-from collections.abc import Callable
-from typing import Any
 
-from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from app.common.after_commit import run_after_commit
 
-
-def run_after_commit(db: Session, callback: Callable[[], Any]) -> None:
-    """Run ``callback`` after the current transaction commits.
-
-    If the session is not in a transaction (already committed / autobegin
-    idle), run immediately so unit tests with ``enqueue=False`` paths and
-    post-commit callers still work.
-    """
-    if not db.in_transaction():
-        callback()
-        return
-
-    # Capture once per registration; SQLAlchemy SessionEvents.after_commit.
-    @event.listens_for(db, "after_commit", once=True)
-    def _on_commit(_session: Session) -> None:  # noqa: ANN001
-        try:
-            callback()
-        except Exception:  # noqa: BLE001
-            logger.exception("connector_after_commit_hook_failed")
-
-    @event.listens_for(db, "after_rollback", once=True)
-    def _on_rollback(_session: Session) -> None:  # noqa: ANN001
-        # No-op: after_commit won't fire; avoid dangling expectations.
-        return
+__all__ = ["enqueue_connector_sync_after_commit", "run_after_commit"]
 
 
 def enqueue_connector_sync_after_commit(

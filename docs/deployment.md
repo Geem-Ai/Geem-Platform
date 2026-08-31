@@ -154,7 +154,7 @@ The installation must have these inputs before old Geem is stopped:
 1. A full, immutable Git commit SHA that is already green in CI and is a
    descendant of the intended release line. A branch name or `latest` is not a
    deployment identity.
-2. Read access to the Git repository, its Actions run artifacts, and the seven
+2. Read access to the Git repository, its Actions run artifacts, and the eight
    GHCR production packages. The exact SHA must have one explicitly selected,
    successful `Production image publication` run.
 3. An `x86_64`/`linux/amd64` host matching the published and tested image
@@ -166,7 +166,7 @@ The installation must have these inputs before old Geem is stopped:
 6. The independent `geem.ai` WAF credential described below.
 7. Separate Cloudflare Tunnel and DNS lifecycle authority, or a root-only
    Cloudflare account certificate for the account that owns `geem.ai`.
-8. A reviewed set of nine non-overlapping Docker CIDRs that collide with no
+8. A reviewed set of eleven non-overlapping Docker CIDRs that collide with no
    host, VPN, VPC, law-firm, or other Docker network.
 
 ### Cloudflare maintenance credential
@@ -552,7 +552,29 @@ MCP_EGRESS_PROXY_URL=http://mcp-egress-proxy:3128
 MCP_EGRESS_PKI_DIR=/etc/geem/mcp-egress/pki
 MCP_ALLOW_PRIVATE_EGRESS=false
 MCP_PROXY_REQUIRE_BLOCKED_NETWORKS=true
+
+EMAIL_PROVIDER=smtp
+EMAIL_VERIFICATION_REQUIRED=true
+SMTP_HOST=mail-relay
+SMTP_PORT=25
+SMTP_USE_TLS=false
+SMTP_ALLOW_PLAINTEXT_RELAY=true
+SMTP_FROM_EMAIL=<envelope-sender>
+MAIL_RELAY_UPSTREAM_HOST=<external-submission-host>
+MAIL_RELAY_UPSTREAM_PORT=587
+MAIL_RELAY_UPSTREAM_USERNAME=<mailbox-user>
+MAIL_RELAY_UPSTREAM_PASSWORD=<mailbox-password>
+MAIL_RELAY_UPSTREAM_FROM=<envelope-sender>
 ```
+
+The application tier has no mail egress route, so it submits in the clear to the
+`mail-relay` service on an internal network and the relay performs the only
+credentialed STARTTLS hop upstream. Keep `SMTP_USERNAME` and `SMTP_PASSWORD`
+empty: the mailbox credential belongs to `MAIL_RELAY_UPSTREAM_*` so only the
+relay holds it. `SMTP_ALLOW_PLAINTEXT_RELAY` is accepted only for a bare Compose
+service name; a host with a dot or a port must still negotiate TLS itself.
+Verification and reset mail is delivered by the Celery worker, so registration
+does not fail when the upstream submission host is unavailable.
 
 Generate independent, strong values for JWT, PostgreSQL, MinIO, bootstrap admin,
 credential encryption, OAuth/session signing, and every enabled provider. Do
@@ -565,7 +587,7 @@ disk/logs.
 
 ### Select network CIDRs
 
-Inspect host routes and every Docker network, including law-firm. Select nine
+Inspect host routes and every Docker network, including law-firm. Select eleven
 unused, non-overlapping CIDRs and set:
 
 ```text
@@ -574,6 +596,8 @@ APPLICATION_BROKER_SUBNET
 APPLICATION_INGRESS_SUBNET
 APPLICATION_PROVIDER_CONTROL_SUBNET
 APPLICATION_PROVIDER_EGRESS_SUBNET
+MAIL_RELAY_CONTROL_SUBNET
+MAIL_RELAY_EGRESS_SUBNET
 MCP_EGRESS_CONTROL_SUBNET
 MCP_PROXY_CONTROL_SUBNET
 MCP_PUBLIC_EGRESS_SUBNET
@@ -596,6 +620,7 @@ QDRANT_IMAGE
 MINIO_IMAGE
 GEEM_API_IMAGE
 APP_EGRESS_PROXY_IMAGE
+MAIL_RELAY_IMAGE
 MCP_EGRESS_GATEWAY_IMAGE
 MCP_EGRESS_PROXY_IMAGE
 WORKSPACE_WEB_IMAGE
@@ -656,7 +681,7 @@ Production never builds Geem images. Python and operating-system package
 repositories are mutable, so rebuilding a green source SHA later would not
 prove that production received the bytes tested by CI. The
 `Production image publication` workflow runs only after the exact main-branch
-release gate succeeds. It builds seven `linux/amd64` images once, pushes them
+release gate succeeds. It builds eight `linux/amd64` images once, pushes them
 to GHCR, exercises the exact pushed digests, and publishes an artifact mapping
 the source SHA and workflow run to those digests.
 
@@ -686,7 +711,7 @@ properties with `jq -e`:
   successful run;
 - `source_gate_run_id` identifies its successful upstream release gate;
 - `platform` is exactly `linux/amd64`;
-- `images` contains exactly `api`, `app_egress_proxy`,
+- `images` contains exactly `api`, `app_egress_proxy`, `mail_relay`,
   `mcp_egress_gateway`, `mcp_egress_proxy`, `workspace_web`,
   `dashboard_web`, and `landpage_web`; and
 - `build_bases` exactly matches the five reviewed direct `linux/amd64`
@@ -702,7 +727,7 @@ properties with `jq -e`:
 Use a root-only GitHub credential with read access to this repository's Actions
 artifacts and GHCR packages. Pass the token to `docker login ghcr.io` through
 standard input; never place it on a command line or in the repository. Pull
-each of the seven `images` values and five `runtime_images` values by its
+each of the eight `images` values and five `runtime_images` values by its
 complete digest reference. Do not resolve or pull their human-readable source
 tags. For each reference, record both the registry digest and the raw local
 image ID returned by:
@@ -712,7 +737,7 @@ sudo docker image inspect --format '{{.Id}}' \
   'ghcr.io/geem-ai/<expected-package>@sha256:<approved-64-hex-digest>'
 ```
 
-Set `GEEM_API_IMAGE`, `APP_EGRESS_PROXY_IMAGE`,
+Set `GEEM_API_IMAGE`, `APP_EGRESS_PROXY_IMAGE`, `MAIL_RELAY_IMAGE`,
 `MCP_EGRESS_GATEWAY_IMAGE`, `MCP_EGRESS_PROXY_IMAGE`,
 `WORKSPACE_WEB_IMAGE`, `DASHBOARD_WEB_IMAGE`, and `LANDPAGE_WEB_IMAGE` to
 those raw IDs. The API image is reused unchanged by API, worker, and Beat.
@@ -731,7 +756,7 @@ services use `pull_policy: never`, and every referenced image must already
 exist locally.
 
 Create `/etc/geem/image-manifest` as canonical JSON owned by `root:root` mode
-`0400`. It must preserve the downloaded publication identity and seven registry
+`0400`. It must preserve the downloaded publication identity and eight registry
 digests, five build-base identities, and five third-party runtime references;
 add the exact local IDs for all deployable images. Compare it bidirectionally with the rendered
 Compose model: every service appears exactly once, the API/worker/Beat mapping
@@ -859,9 +884,11 @@ before the first new container starts. Also require:
 - the API launch remains `uvicorn app.main:app` with
   `--host 0.0.0.0 --port 8000 --no-access-log`, so request URLs are not
   emitted by Uvicorn access logs;
-- the exact nine IPAM networks and four external volumes;
+- the exact eleven IPAM networks and four external volumes;
 - Cloudflared using only `/etc/geem/cloudflared/config.yml` and credentials;
-- API/worker/gateway/Beat public-route isolation; and
+- API/worker/gateway/Beat public-route isolation, including mail: they reach
+  `mail-relay` only over `mail_relay_control` and never hold the submission
+  route themselves; and
 - one authorized service on each external-route network.
 
 ## 9. Start the fresh stack
@@ -869,8 +896,8 @@ before the first new container starts. Also require:
 The WAF hold remains active throughout this section.
 
 1. Start only PostgreSQL, Redis, Qdrant, MinIO, `minio-init`, the app egress
-   proxy, MCP proxy, and MCP gateway. Do not start API, worker, Beat, frontend,
-   or Cloudflared yet.
+   proxy, the mail relay, MCP proxy, and MCP gateway. Do not start API, worker,
+   Beat, frontend, or Cloudflared yet.
 2. Require all four datastore containers to mount exactly the four new volumes
    at their canonical destinations. Require the initializer to finish
    successfully and all boundaries to be healthy.

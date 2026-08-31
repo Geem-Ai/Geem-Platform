@@ -33,6 +33,7 @@ REQUIRED_SERVICES = frozenset(
         "worker",
         "beat",
         "app-egress-proxy",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
         "workspace_web",
@@ -47,15 +48,22 @@ INTERNAL_NETWORKS = frozenset(
         "application_broker",
         "application_ingress",
         "application_provider_control",
+        "mail_relay_control",
         "mcp_egress_control",
         "mcp_proxy_control",
     }
 )
 APP_PUBLIC_NETWORK = "application_provider_egress"
+MAIL_PUBLIC_NETWORK = "mail_relay_egress"
 MCP_PUBLIC_NETWORK = "mcp_public_egress"
 INGRESS_PUBLIC_NETWORK = "public_egress"
 EXTERNAL_NETWORKS = frozenset(
-    {APP_PUBLIC_NETWORK, MCP_PUBLIC_NETWORK, INGRESS_PUBLIC_NETWORK}
+    {
+        APP_PUBLIC_NETWORK,
+        MAIL_PUBLIC_NETWORK,
+        MCP_PUBLIC_NETWORK,
+        INGRESS_PUBLIC_NETWORK,
+    }
 )
 REQUIRED_NETWORKS = INTERNAL_NETWORKS | EXTERNAL_NETWORKS
 
@@ -71,6 +79,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
             "application_broker",
             "application_ingress",
             "application_provider_control",
+            "mail_relay_control",
             "mcp_egress_control",
         }
     ),
@@ -79,6 +88,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
             "application_data",
             "application_broker",
             "application_provider_control",
+            "mail_relay_control",
             "mcp_egress_control",
         }
     ),
@@ -86,6 +96,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
     "app-egress-proxy": frozenset(
         {"application_provider_control", APP_PUBLIC_NETWORK}
     ),
+    "mail-relay": frozenset({"mail_relay_control", MAIL_PUBLIC_NETWORK}),
     "mcp-egress-gateway": frozenset({"mcp_egress_control", "mcp_proxy_control"}),
     "mcp-egress-proxy": frozenset({"mcp_proxy_control", MCP_PUBLIC_NETWORK}),
     "workspace_web": frozenset({"application_ingress"}),
@@ -134,6 +145,21 @@ GATEWAY_ENV_KEYS = frozenset(
         "EGRESS_TOTAL_TIMEOUT_SECONDS",
     }
 )
+
+MAIL_RELAY_ENV_KEYS = frozenset(
+    {
+        "MAIL_RELAY_UPSTREAM_HOST",
+        "MAIL_RELAY_UPSTREAM_PORT",
+        "MAIL_RELAY_UPSTREAM_USERNAME",
+        "MAIL_RELAY_UPSTREAM_PASSWORD",
+        "MAIL_RELAY_UPSTREAM_FROM",
+    }
+)
+MAIL_RELAY_ENTRYPOINT = (
+    "python3",
+    "/usr/local/lib/geem/render_mail_relay_config.py",
+)
+MAIL_RELAY_SUBMISSION_PORTS = frozenset({"587", "465"})
 
 MCP_CLIENT_SECRET_BINDINGS = frozenset(
     {
@@ -283,6 +309,7 @@ BOUNDARY_SERVICES = frozenset(
     {
         "app-egress-proxy",
         "cloudflared",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
     }
@@ -305,6 +332,17 @@ BOUNDARY_RUNTIME_CONTRACTS = {
         "pids_limit": 64,
         "mem_limit": "134217728",
         "tmpfs": (),
+    },
+    "mail-relay": {
+        "user": "10002:10002",
+        "pids_limit": 64,
+        "mem_limit": "134217728",
+        "tmpfs": (
+            "/run:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700",
+            # msmtp spools each message through libc tmpfile(), which is /tmp
+            # only, so the relay cannot send at all without this mount.
+            "/tmp:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700",
+        ),
     },
     "mcp-egress-gateway": {
         "user": "10001:10001",
@@ -667,6 +705,30 @@ def _validate_minio_identity(
             errors.append(f"{service_name} must use plain HTTP only on the internal MinIO route")
 
 
+def _validate_mail_relay(
+    service: Mapping[str, Any], errors: list[str]
+) -> None:
+    """The relay is the only credentialed submission hop, so pin its contract.
+
+    Values are secrets and are never echoed; only presence, the submission port,
+    and the fail-closed renderer entrypoint are asserted here.
+    """
+    environment = _environment(service)
+    if set(environment) != MAIL_RELAY_ENV_KEYS:
+        errors.append("mail-relay environment differs from its exact upstream contract")
+    for key in sorted(MAIL_RELAY_ENV_KEYS):
+        value = environment.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"mail-relay {key} must be a non-empty reviewed value")
+    port = environment.get("MAIL_RELAY_UPSTREAM_PORT")
+    if isinstance(port, str) and port.strip() not in MAIL_RELAY_SUBMISSION_PORTS:
+        errors.append("mail-relay must submit on an authenticated submission port")
+    if tuple(_sequence(service.get("entrypoint"))) != MAIL_RELAY_ENTRYPOINT:
+        errors.append("mail-relay bypasses the fail-closed configuration renderer")
+    if service.get("command"):
+        errors.append("mail-relay overrides its reviewed renderer command")
+
+
 def _validate_persistent_mounts(
     services: Mapping[str, Mapping[str, Any]],
     volumes: Mapping[str, Any],
@@ -869,6 +931,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
 
     expected_external_members = {
         APP_PUBLIC_NETWORK: {"app-egress-proxy"},
+        MAIL_PUBLIC_NETWORK: {"mail-relay"},
         MCP_PUBLIC_NETWORK: {"mcp-egress-proxy"},
         INGRESS_PUBLIC_NETWORK: set(options.ingress_services),
     }
@@ -1148,6 +1211,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
     least_privilege_services = (
         "minio",
         "minio-init",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
         "app-egress-proxy",
@@ -1183,6 +1247,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         "/usr/local/lib/geem/render_mcp_proxy_config.py",
     ]:
         errors.append("mcp-egress-proxy bypasses the fail-closed policy renderer")
+    _validate_mail_relay(services["mail-relay"], errors)
     if (
         tuple(_sequence(services["minio"].get("entrypoint")))
         != MINIO_SERVER_ENTRYPOINT

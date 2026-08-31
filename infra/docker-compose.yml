@@ -197,6 +197,8 @@ services:
         condition: service_completed_successfully
       app-egress-proxy:
         condition: service_started
+      mail-relay:
+        condition: service_started
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log"
@@ -212,6 +214,7 @@ services:
       - application_broker
       - application_ingress
       - application_provider_control
+      - mail_relay_control
       - mcp_egress_control
 
   worker:
@@ -258,11 +261,14 @@ services:
         condition: service_healthy
       app-egress-proxy:
         condition: service_started
+      mail-relay:
+        condition: service_started
     command: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2
     networks:
       - application_data
       - application_broker
       - application_provider_control
+      - mail_relay_control
       - mcp_egress_control
 
   # Datastore-capable services have no direct public route. This proxy exposes
@@ -284,6 +290,41 @@ services:
       - /run:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
       - /var/log/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
       - /var/spool/squid:size=8m,noexec,nosuid,nodev,uid=13,gid=13,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+
+  # API/worker cannot submit mail themselves: the fixed-provider proxy carries
+  # CONNECT on 443 only. This relay is the single credentialed submission hop,
+  # so the mailbox password lives here instead of in the application tier.
+  mail-relay:
+    build:
+      context: ./mail-relay
+      dockerfile: Dockerfile
+      args:
+        PROXY_UBUNTU_BASE_IMAGE: ${PROXY_UBUNTU_BASE_IMAGE:-ubuntu:24.04}
+    restart: unless-stopped
+    user: "10002:10002"
+    environment:
+      MAIL_RELAY_UPSTREAM_HOST: ${MAIL_RELAY_UPSTREAM_HOST:-}
+      MAIL_RELAY_UPSTREAM_PORT: ${MAIL_RELAY_UPSTREAM_PORT:-587}
+      MAIL_RELAY_UPSTREAM_USERNAME: ${MAIL_RELAY_UPSTREAM_USERNAME:-}
+      MAIL_RELAY_UPSTREAM_PASSWORD: ${MAIL_RELAY_UPSTREAM_PASSWORD:-}
+      MAIL_RELAY_UPSTREAM_FROM: ${MAIL_RELAY_UPSTREAM_FROM:-}
+    # Keep the renderer explicit in the rendered Compose model so production
+    # validation can detect an overlay that bypasses the fail-closed startup.
+    entrypoint: ["python3", "/usr/local/lib/geem/render_mail_relay_config.py"]
+    networks:
+      - mail_relay_control
+      - mail_relay_egress
+    read_only: true
+    tmpfs:
+      - /run:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700
+      # msmtp spools every message through libc tmpfile(), which is /tmp only.
+      - /tmp:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700
     cap_drop:
       - ALL
     security_opt:
@@ -509,6 +550,12 @@ networks:
   # Only the fixed-provider proxy receives this external default route. It is
   # deliberately separate from ingress and the tenant-selected MCP proxy.
   application_provider_egress:
+  # API/worker -> mail relay only; no public default route.
+  mail_relay_control:
+    internal: true
+  # Only the mail relay receives this external default route, and it carries
+  # authenticated submission traffic only.
+  mail_relay_egress:
   # API/worker -> gateway only; no public default route.
   mcp_egress_control:
     internal: true

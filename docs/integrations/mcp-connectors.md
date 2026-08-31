@@ -192,11 +192,13 @@ encryption key. It does not persist payloads or emit URL/body access logs.
 | MCP proxy | MCP proxy control, dedicated MCP public egress | Yes | CONNECT/443 with independent address denies |
 | App proxy | fixed-provider control, dedicated provider egress | Yes | Fixed reviewed provider hosts only |
 | Cloudflared | ingress, dedicated ingress public egress | Yes | Inbound application tunnel, not MCP |
+| Mail relay | mail relay control, dedicated mail relay egress | Yes | Authenticated submission to one reviewed host |
 
-The data/broker/control/ingress networks are `internal: true`. The three external-route
+The data/broker/control/ingress networks are `internal: true`. The four external-route
 networks are separate: `application_provider_egress` contains only the app
-proxy, `mcp_public_egress` only the MCP proxy, and `public_egress` only the
-reviewed ingress service (Cloudflared in this topology). This prevents a
+proxy, `mail_relay_egress` only the mail relay, `mcp_public_egress` only the MCP
+proxy, and `public_egress` only the reviewed ingress service (Cloudflared in
+this topology). This prevents a
 compromised app proxy or ingress peer from reaching the unauthenticated MCP
 proxy over a shared public bridge. Neither MCP service publishes a host port.
 API and worker set `HTTP_PROXY`/`HTTPS_PROXY` to the fixed-provider proxy, while
@@ -528,7 +530,7 @@ renderer rejects IPv4-mapped IPv6 entries. Confirm a policy change with
 any static entry.
 
 Prefer reviewed, explicit, non-overlapping IPAM subnets in the production
-overlay. Build one canonical normalized CIDR manifest from all nine final
+overlay. Build one canonical normalized CIDR manifest from all eleven final
 Compose subnets plus Docker defaults, host bridges, VPC/cloud, corporate,
 internal-public, metadata, and other deployment-owned ranges. If networks
 already exist, list their actual subnets without rendering
@@ -545,6 +547,7 @@ one project network:
 for logical_network in \
   application_data application_broker application_ingress \
   application_provider_control application_provider_egress \
+  mail_relay_control mail_relay_egress \
   mcp_egress_control mcp_proxy_control mcp_public_egress public_egress; do
   network_ids=$(docker network ls \
     --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" \
@@ -619,8 +622,8 @@ convenience overlay. Its effective model must:
   both proxies;
 - keep API/worker/gateway off every external-route network and preserve the
   network map above;
-- give app proxy, MCP proxy, and ingress three separate external-route networks
-  with exactly one authorized service on each;
+- give app proxy, mail relay, MCP proxy, and ingress four separate
+  external-route networks with exactly one authorized service on each;
 - run Beat through `app.worker.beat_app:beat_app` with only
   `APP_ENV=production`, the internal `REDIS_URL`, and
   `MCP_CONNECTOR_ENABLED=false`; reset its inherited `env_file`, mounts, and
@@ -720,6 +723,17 @@ services:
   app-egress-proxy:
     build: !reset null
     image: ${APP_EGRESS_PROXY_IMAGE:?required immutable local image ID}
+
+  mail-relay:
+    build: !reset null
+    image: ${MAIL_RELAY_IMAGE:?required immutable local image ID}
+    env_file: !reset []
+    environment: !override
+      MAIL_RELAY_UPSTREAM_HOST: ${MAIL_RELAY_UPSTREAM_HOST:?required}
+      MAIL_RELAY_UPSTREAM_PORT: ${MAIL_RELAY_UPSTREAM_PORT:?required}
+      MAIL_RELAY_UPSTREAM_USERNAME: ${MAIL_RELAY_UPSTREAM_USERNAME:?required}
+      MAIL_RELAY_UPSTREAM_PASSWORD: ${MAIL_RELAY_UPSTREAM_PASSWORD:?required}
+      MAIL_RELAY_UPSTREAM_FROM: ${MAIL_RELAY_UPSTREAM_FROM:?required}
 
   mcp-egress-gateway:
     build: !reset null
@@ -1105,6 +1119,10 @@ assert_network_services application_provider_control \
   api worker app-egress-proxy
 assert_network_services application_provider_egress \
   app-egress-proxy
+assert_network_services mail_relay_control \
+  api worker mail-relay
+assert_network_services mail_relay_egress \
+  mail-relay
 assert_network_services mcp_egress_control \
   api worker mcp-egress-gateway
 assert_network_services mcp_proxy_control \
@@ -1126,10 +1144,12 @@ more than one permits duplicate periodic dispatch. The rendered validator must
 also require `beat.deploy.replicas: 1`.
 
 `application_provider_egress` contains only `app-egress-proxy`,
-`mcp_public_egress` only `mcp-egress-proxy`, and `public_egress` only
-`cloudflared`. In particular:
+`mail_relay_egress` only `mail-relay`, `mcp_public_egress` only
+`mcp-egress-proxy`, and `public_egress` only `cloudflared`. In particular:
 
 - API, worker, Beat, gateway, and datastores must have no external-route network;
+- the mail relay must have only `mail_relay_control` and `mail_relay_egress`;
+  API and worker reach it over `mail_relay_control` only;
 - gateway must have only `mcp_egress_control` and `mcp_proxy_control`;
 - MCP proxy must have only `mcp_proxy_control` and `mcp_public_egress`;
 - app proxy must have only `application_provider_control` and
@@ -2034,7 +2054,7 @@ host-wide Docker cleanup on the shared server.
 ## Production release checklist
 
 - [ ] The exact release SHA has one explicitly selected successful production
-  image-publication run; its checksummed manifest records seven tested GHCR
+  image-publication run; its checksummed manifest records eight tested GHCR
   digests and their raw local IDs, plus approved third-party image identities.
   Production has no host build, no `build:` fallback, and every service uses
   `pull_policy: never`.
@@ -2058,8 +2078,9 @@ host-wide Docker cleanup on the shared server.
   finite all-service readiness starts both MCP services after a controlled
   service restart without an interactive login.
 - [ ] Running-container inspection matches the exact network map and only the
-  app proxy joins `application_provider_egress`, only MCP proxy joins
-  `mcp_public_egress`, and only reviewed ingress joins `public_egress`.
+  app proxy joins `application_provider_egress`, only the mail relay joins
+  `mail_relay_egress`, only MCP proxy joins `mcp_public_egress`, and only
+  reviewed ingress joins `public_egress`.
 - [ ] Every logical network label resolves to exactly one network; application
   and proxy CIDR sets were generated/applied atomically with recorded checksums.
 - [ ] API positive datastore controls pass while gateway negative datastore

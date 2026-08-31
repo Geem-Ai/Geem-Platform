@@ -12,7 +12,7 @@ User=root
 Group=root
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=/usr/local/sbin/geem-production-preflight
-ExecStart=/usr/local/sbin/geem-prod-compose up -d --wait --wait-timeout 300 postgres redis qdrant minio minio-init app-egress-proxy mcp-egress-proxy mcp-egress-gateway api worker beat workspace_web dashboard_web landpage_web
+ExecStart=/usr/local/sbin/geem-prod-compose up -d --wait --wait-timeout 300 postgres redis qdrant minio minio-init app-egress-proxy mail-relay mcp-egress-proxy mcp-egress-gateway api worker beat workspace_web dashboard_web landpage_web
 ExecStart=/usr/local/sbin/geem-production-verify internal
 ExecStart=/usr/local/sbin/geem-prod-compose up -d --no-deps cloudflared
 ExecStart=/usr/local/sbin/geem-production-verify ingress
