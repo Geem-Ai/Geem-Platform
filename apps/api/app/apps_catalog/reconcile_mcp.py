@@ -35,6 +35,11 @@ from app.apps_catalog.seed import (
 from app.core.config import Settings
 from app.db.session import SessionLocal
 
+# Querying any mapped class configures every mapper on the shared registry, so a
+# standalone entrypoint must register them all first. Workspace refers to User by
+# name, which stays unresolvable while only the catalog package is imported.
+import app.db.models  # noqa: E402,F401
+
 logger = logging.getLogger(__name__)
 
 Mode = Literal["dry-run", "apply", "verify"]
