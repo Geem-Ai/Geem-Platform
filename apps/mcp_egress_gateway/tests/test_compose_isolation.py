@@ -890,6 +890,80 @@ def test_production_systemd_starts_ingress_last_and_contains_stops() -> None:
         assert "phase13-start-artifacts.sha256" not in document
 
 
+def _preflight_manifest_gate() -> str:
+    """Extract the shipped manifest-approval gate as a runnable sh program.
+
+    The other preflight checks here assert on the script's text, which cannot
+    see whether the shell actually agrees. This runs the real code: everything
+    from the protected-path list through the duplicate check, stopping before
+    the sha256sum verification that needs the live files to exist.
+    """
+
+    preflight = (REPO_ROOT / "infra/systemd/geem-production-preflight").read_text()
+    start = preflight.index("protected_paths='")
+    end = preflight.index('/usr/bin/sha256sum --check --strict --quiet "$manifest"')
+    return (
+        "set -eu\n"
+        'fail() { echo "$1" >&2; exit 1; }\n'
+        "manifest=$1\n" + preflight[start:end]
+    )
+
+
+def _run_manifest_gate(tmp_path: Path, paths: list[str]) -> subprocess.CompletedProcess:
+    manifest = tmp_path / "start-artifacts.sha256"
+    manifest.write_text("".join(f"{'a' * 64}  {path}\n" for path in paths))
+    return subprocess.run(
+        ["sh", "-c", _preflight_manifest_gate(), "gate", str(manifest)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def _preflight_protected_paths() -> list[str]:
+    preflight = (REPO_ROOT / "infra/systemd/geem-production-preflight").read_text()
+    listing = re.search(r"protected_paths='\n(.*?)'", preflight, re.DOTALL)
+    assert listing is not None
+    return listing.group(1).split()
+
+
+def test_production_preflight_approves_its_own_protected_paths(
+    tmp_path: Path,
+) -> None:
+    """A manifest of exactly the protected paths must pass in a real shell."""
+
+    paths = _preflight_protected_paths()
+    assert len(paths) == 23
+
+    result = _run_manifest_gate(tmp_path, paths)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_production_preflight_still_rejects_bad_manifests(tmp_path: Path) -> None:
+    """The approval must stay exact, not merely permissive."""
+
+    paths = _preflight_protected_paths()
+
+    unapproved = _run_manifest_gate(tmp_path, paths[:-1] + ["/etc/geem/attacker"])
+    assert unapproved.returncode != 0
+    assert "unapproved path" in unapproved.stderr
+
+    substring = _run_manifest_gate(
+        tmp_path, paths[:-1] + [paths[-1] + ".attacker"]
+    )
+    assert substring.returncode != 0
+    assert "unapproved path" in substring.stderr
+
+    duplicated = _run_manifest_gate(tmp_path, paths[:-1] + [paths[0]])
+    assert duplicated.returncode != 0
+    assert "missing or duplicated" in duplicated.stderr
+
+    short = _run_manifest_gate(tmp_path, paths[:-1])
+    assert short.returncode != 0
+    assert "exactly 23 paths" in short.stderr
+
+
 def test_production_preflight_rejects_project_label_orphans_directly() -> None:
     preflight = (REPO_ROOT / "infra/systemd/geem-production-preflight").read_text()
 

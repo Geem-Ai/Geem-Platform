@@ -129,13 +129,17 @@ protected_paths='
 /etc/geem/mcp-egress/pki/server/server.key
 /etc/geem/mcp-egress/pki/client/client.crt
 /etc/geem/mcp-egress/pki/client/client.key'
+# The list above is newline-separated to stay readable, but membership below
+# tests for a space-delimited needle, so collapse it to a single space-separated
+# line first. Word splitting here is deliberate.
+approved_paths=$(printf '%s ' $protected_paths)
 manifest_count=0
 while read -r checksum protected_path extra || [ -n "${checksum:-}" ]; do
   [ -n "${checksum:-}" ] && [ -n "${protected_path:-}" ] && [ -z "${extra:-}" ] \
     || fail "startup checksum manifest has an invalid record"
   printf '%s\n' "$checksum" | grep -Eq '^[0-9a-f]{64}$' \
     || fail "startup checksum manifest has an invalid digest"
-  case " $protected_paths " in
+  case " $approved_paths" in
     *" $protected_path "*) ;;
     *) fail "startup checksum manifest contains an unapproved path" ;;
   esac
