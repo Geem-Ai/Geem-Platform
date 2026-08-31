@@ -516,6 +516,17 @@ inside that space. `2001::/23` intentionally overblocks its few globally
 routable exceptions; relaxing it requires a reviewed manifest, Python-policy
 parity tests, proxy-image rebuild, and live positive/negative evidence.
 
+The manifest states IPv4 and IPv6 policy separately, matching the Python
+checks, but Squid compares a single space in which IPv4 is IPv4-mapped IPv6.
+An IPv6 entry spanning `::ffff:0:0/96` is therefore a supernet of every IPv4
+entry, and Squid drops such a supernet to keep its splay tree predictable —
+silently voiding that IPv6 rule. The renderer resolves this by emitting any
+such entry minus the mapped range, so IPv6 policy is enforced and IPv4 policy
+stays owned by the IPv4 entries. Write IPv4 policy only as IPv4 CIDRs; the
+renderer rejects IPv4-mapped IPv6 entries. Confirm a policy change with
+`squid -k parse`, which must report no `ignored to keep splay tree` line for
+any static entry.
+
 Prefer reviewed, explicit, non-overlapping IPAM subnets in the production
 overlay. Build one canonical normalized CIDR manifest from all nine final
 Compose subnets plus Docker defaults, host bridges, VPC/cloud, corporate,

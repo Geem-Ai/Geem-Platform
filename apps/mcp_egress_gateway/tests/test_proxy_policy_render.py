@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import ipaddress
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,21 @@ def policy_template() -> str:
         f"{renderer.STATIC_TEMPLATE_MARKER}\n"
         f"{renderer.TEMPLATE_MARKER}\n"
         "http_access deny blocked_destination\n"
+    )
+
+
+def int_key(
+    network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+) -> tuple[int, int]:
+    return int(network.network_address), network.prefixlen
+
+
+def rendered_acl_networks() -> tuple[
+    ipaddress.IPv4Network | ipaddress.IPv6Network, ...
+]:
+    return tuple(
+        ipaddress.ip_network(value, strict=True)
+        for value in renderer.squid_acl_networks(STATIC_NETWORKS)
     )
 
 
@@ -133,8 +149,26 @@ def test_every_manifest_network_is_rendered_as_data() -> None:
     )
     assert renderer.STATIC_TEMPLATE_MARKER not in rendered
     assert renderer.TEMPLATE_MARKER not in rendered
+    emitted = {
+        line.removeprefix("acl blocked_destination dst ")
+        for line in rendered.splitlines()
+        if line.startswith("acl blocked_destination dst ")
+    }
+    # Entries appear verbatim unless the IPv4-mapped rewrite splits them, in
+    # which case the split must still cover the whole manifest network.
     for network in STATIC_NETWORKS:
-        assert f"acl blocked_destination dst {network}" in rendered
+        if network in emitted:
+            continue
+        parsed = ipaddress.ip_network(network, strict=True)
+        covering = [
+            candidate
+            for candidate in (
+                ipaddress.ip_network(value, strict=True) for value in emitted
+            )
+            if candidate.version == parsed.version and parsed.supernet_of(candidate)
+        ]
+        remaining = list(parsed.address_exclude(renderer.IPV4_MAPPED_PREFIX))
+        assert sorted(covering, key=int_key) == sorted(remaining, key=int_key), network
 
 
 @pytest.mark.parametrize(
@@ -149,3 +183,72 @@ def test_every_manifest_network_is_rendered_as_data() -> None:
 )
 def test_static_proxy_policy_independently_denies_special_ranges(network: str) -> None:
     assert network in STATIC_NETWORKS
+
+
+def test_no_rendered_entry_is_discarded_by_squid_supernet_collapse() -> None:
+    """Squid drops an entry that contains another, in one mapped address space.
+
+    A supernet/subnet pair silently removes the broader policy, so the rendered
+    set must be mutually disjoint once IPv4 is read as IPv4-mapped IPv6.
+    """
+    unified = []
+    for network in rendered_acl_networks():
+        if network.version == 4:
+            mapped = int(renderer.IPV4_MAPPED_PREFIX.network_address)
+            unified.append(
+                ipaddress.ip_network(
+                    (
+                        ipaddress.IPv6Address(mapped + int(network.network_address)),
+                        network.prefixlen + 96,
+                    )
+                )
+            )
+        else:
+            unified.append(network)
+    for outer in unified:
+        for inner in unified:
+            if outer is inner:
+                continue
+            assert not outer.supernet_of(inner), (str(outer), str(inner))
+
+
+def test_ipv6_policy_survives_rendering_without_capturing_ipv4() -> None:
+    rendered = rendered_acl_networks()
+
+    def denied(address: str) -> bool:
+        parsed = ipaddress.ip_address(address)
+        return any(
+            parsed.version == network.version and parsed in network
+            for network in rendered
+        )
+
+    # Every reason ::/3 exists must still be denied after the rewrite.
+    for address in ("::", "::1", "64:ff9b::1", "100::1", "1000::1", "1fff::1"):
+        assert denied(address), address
+    # The mapped range is the one carve-out, so IPv4 policy stays authoritative.
+    assert not denied("1.1.1.1")
+    assert denied("10.0.0.1")
+    assert renderer.IPV4_MAPPED_PREFIX not in rendered
+
+
+def test_renderer_rejects_ipv4_policy_written_as_ipv4_mapped_ipv6() -> None:
+    for value in ("::ffff:0:0/96", "::ffff:10.0.0.0/104"):
+        with pytest.raises(renderer.ProxyPolicyError):
+            renderer.squid_acl_networks((value,))
+
+
+def test_entries_not_covering_the_mapped_range_are_left_alone() -> None:
+    assert renderer.squid_acl_networks(
+        ("10.0.0.0/8", "2001::/23", "4000::/2", "8000::/1")
+    ) == ("10.0.0.0/8", "2001::/23", "4000::/2", "8000::/1")
+
+
+def test_deployment_networks_are_rewritten_by_the_same_rule() -> None:
+    rendered = renderer.render_policy(
+        policy_template(),
+        renderer.parse_networks("::/0"),
+        static_networks=STATIC_NETWORKS,
+        require_networks=True,
+    )
+    assert "acl blocked_destination dst ::/0" not in rendered
+    assert "acl blocked_destination dst 8000::/1" in rendered
