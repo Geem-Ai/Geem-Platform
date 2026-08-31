@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import stat
 
@@ -130,9 +131,18 @@ def test_writable_spool_is_accepted(tmp_path: Path) -> None:
     assert not list(tmp_path.iterdir())
 
 
-def test_unwritable_spool_fails_closed(tmp_path: Path) -> None:
+def test_unusable_spool_fails_closed(tmp_path: Path) -> None:
     # msmtp spools through libc tmpfile(), which only ever uses /tmp, so a relay
-    # without a writable spool would accept mail it can never hand upstream.
+    # without a usable spool would accept mail it can never hand upstream. A
+    # spool that is not a directory fails for any uid, including root.
+    spool = tmp_path / "spool"
+    spool.write_text("not a directory")
+    with pytest.raises(renderer.MailRelayConfigError):
+        renderer.require_writable_spool(spool)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+def test_spool_without_write_permission_fails_closed(tmp_path: Path) -> None:
     spool = tmp_path / "spool"
     spool.mkdir(mode=0o500)
     try:
