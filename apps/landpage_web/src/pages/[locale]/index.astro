@@ -4,9 +4,12 @@ import { getSiteCopy } from '../../content/site';
 import { isLocale, localeStaticPaths } from '../../lib/i18n';
 import Hero from '../../components/sections/Hero.astro';
 import ValueStrip from '../../components/sections/ValueStrip.astro';
+import PlatformFoundation from '../../components/sections/PlatformFoundation.astro';
 import Experts from '../../components/sections/Experts.astro';
 import Integrations from '../../components/sections/Integrations.astro';
 import Channels from '../../components/sections/Channels.astro';
+import UseCases from '../../components/sections/UseCases.astro';
+import RoboticsRoadmap from '../../components/sections/RoboticsRoadmap.astro';
 import DeveloperApi from '../../components/sections/DeveloperApi.astro';
 import Security from '../../components/sections/Security.astro';
 import FinalCTA from '../../components/sections/FinalCTA.astro';
@@ -28,14 +31,16 @@ const copy = getSiteCopy(locale);
   copy={copy}
   title={copy.meta.homeTitle}
   description={copy.meta.homeDescription}
-  preloadHero
 >
   <Hero locale={locale} copy={copy} />
   <ValueStrip copy={copy} />
+  <PlatformFoundation locale={locale} />
   <Experts copy={copy} />
+  <UseCases locale={locale} />
+  <RoboticsRoadmap locale={locale} />
   <Integrations copy={copy} />
   <Channels copy={copy} />
-  <DeveloperApi copy={copy} />
+  <DeveloperApi locale={locale} copy={copy} />
   <Security locale={locale} copy={copy} />
   <FinalCTA locale={locale} copy={copy} />
 </MarketingLayout>

@@ -1,0 +1,64 @@
+---
+import { Image } from 'astro:assets';
+import avatar from '../../assets/brand/geem-avatar.webp';
+
+type Props = {
+  size?: string;
+  variant?: 'portrait' | 'mascot';
+  alt?: string;
+  loading?: 'eager' | 'lazy';
+};
+
+const { size = '2rem', variant = 'portrait', alt = '', loading = 'lazy' } = Astro.props;
+---
+
+<span class:list={['geem-avatar', `geem-avatar--${variant}`]} style={{ '--avatar-size': size }}>
+  <!-- Keep the original portrait ratio; the compact frame crops only below the shoulders. -->
+  <Image src={avatar} width={240} alt={alt} loading={loading} />
+</span>
+
+<style>
+  .geem-avatar {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    inline-size: var(--avatar-size);
+    vertical-align: middle;
+    isolation: isolate;
+  }
+
+  .geem-avatar--portrait {
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid #d9e8e9;
+    border-radius: 26%;
+    background: linear-gradient(145deg, #fff, #e9f5f3);
+  }
+
+  .geem-avatar img {
+    display: block;
+    max-inline-size: none;
+    block-size: auto;
+  }
+
+  .geem-avatar--portrait img {
+    position: absolute;
+    inset-block-start: 8%;
+    inset-inline-start: 8%;
+    inline-size: 84%;
+  }
+
+  .geem-avatar--mascot {
+    aspect-ratio: 2 / 3;
+    border-radius: 45%;
+    background: radial-gradient(ellipse, #99dcd522, transparent 70%);
+  }
+
+  .geem-avatar--mascot img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+    padding: 4%;
+    filter: drop-shadow(0 6px 10px #0002);
+  }
+</style>

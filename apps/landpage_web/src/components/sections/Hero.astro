@@ -1,110 +1,53 @@
 ---
 import type { SiteCopy } from '../../content/site/types';
 import type { Locale } from '../../lib/i18n';
-import { Picture } from 'astro:assets';
-import hero from '../../assets/landing/riyadh-madinah-hero.webp';
-import brandLogo from '../../assets/brand/geem-logo-horizontal-white.svg?raw';
 import Button from '../ui/Button.astro';
+import ProductPreview from './ProductPreview.astro';
 import { getSiteConfig } from '../../lib/site';
 import { homeHash } from '../../lib/routes';
 
-type Props = {
-  locale: Locale;
-  copy: SiteCopy;
-};
-
+type Props = { locale: Locale; copy: SiteCopy };
 const { locale, copy } = Astro.props;
 const { signupUrl } = getSiteConfig();
-const questionMark = locale === 'ar' ? '؟' : '?';
-const specialtyPhrases = copy.hero.specialties.map((specialty) => `${specialty}${questionMark}`);
-const firstSpecialty = specialtyPhrases[0] ?? '';
 ---
 
-<section class="relative min-h-[min(92vh,56rem)] overflow-hidden text-white" id="product">
-  <div class="hero-media">
-    <Picture
-      src={hero}
-      formats={['avif', 'webp']}
-      widths={[640, 960, 1280, 1600, 1774]}
-      sizes="100vw"
-      width={1774}
-      height={887}
-      alt={copy.hero.imageAlt}
-      loading="eager"
-      fetchpriority="high"
-      decoding="async"
-    />
-    <div class="hero-overlay" aria-hidden="true"></div>
-    <div class="hero-grain" aria-hidden="true"></div>
-  </div>
-
-  <div class="relative container-shell flex min-h-[min(92vh,56rem)] flex-col justify-center py-24">
-    <div class="max-w-3xl" data-typewriter-container>
-      <div class="hero-enter hero-enter-1 mb-6 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="hero-brand-logo" aria-hidden="true" set:html={brandLogo}></span>
-        <p class="eyebrow !text-geem-sand m-0 min-w-0">{copy.hero.eyebrow}</p>
-        <button
-          class="hero-typewriter-toggle"
-          type="button"
-          data-typewriter-toggle
-          data-pause-label={copy.a11y.pauseTypewriter}
-          data-resume-label={copy.a11y.resumeTypewriter}
-          aria-label={copy.a11y.pauseTypewriter}
-        >
-          <svg data-typewriter-pause viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M5 3.25v9.5M11 3.25v9.5"></path>
-          </svg>
-          <svg class="is-hidden" data-typewriter-play viewBox="0 0 16 16" aria-hidden="true">
-            <path d="m5.25 3.25 7 4.75-7 4.75Z"></path>
-          </svg>
-        </button>
-      </div>
-
-      <h1 class="hero-typewriter-heading hero-enter hero-enter-2 min-w-0 text-balance text-4xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
-        <span class="visually-hidden">{copy.hero.specialtyPrompt} {firstSpecialty}</span>
-        <span class="hero-typewriter-heading-visual" aria-hidden="true">
-          <span>{copy.hero.specialtyPrompt}</span>
-          <span
-            class="hero-typewriter"
-            data-typewriter
-            data-phrases={JSON.stringify(specialtyPhrases)}
-          >
-            {
-              specialtyPhrases.map((specialty) => (
-                <span class="hero-typewriter-measure">{specialty}</span>
-              ))
-            }
-            <span class="hero-typewriter-output">
-              <span data-typewriter-text>{firstSpecialty}</span>
-              <span class="hero-typewriter-caret" aria-hidden="true"></span>
-            </span>
-          </span>
-        </span>
+<section class="platform-hero" id="product" aria-labelledby="hero-title">
+  <div class="hero-grid-lines" aria-hidden="true"></div>
+  <div class="container-shell hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow hero-enter hero-enter-1"><span aria-hidden="true"></span>{copy.hero.eyebrow}</p>
+      <h1 id="hero-title" class="hero-enter hero-enter-2">
+        {copy.hero.title}
+        <span>{copy.hero.titleAccent}</span>
       </h1>
-
-      <p class="hero-enter hero-enter-3 mt-5 max-w-2xl text-lg text-white/85 md:text-xl">
-        {copy.hero.description}
-      </p>
-
-      <div class="hero-enter hero-enter-4 mt-8 flex flex-wrap items-center gap-3">
-        <Button href={signupUrl} variant="primary">{copy.hero.primaryCta}</Button>
-        <Button href={homeHash(locale, 'experts')} variant="ghost">{copy.hero.tertiaryCta}</Button>
+      <p class="hero-enter hero-enter-3 hero-description">{copy.hero.description}</p>
+      <div class="hero-enter hero-enter-4 hero-actions">
+        <Button href={signupUrl} variant="primary">{copy.hero.primaryCta}<span aria-hidden="true">↗</span></Button>
+        <Button href={homeHash(locale, 'platform')} variant="ghost">{copy.hero.tertiaryCta}</Button>
       </div>
+      <p class="hero-foundation hero-enter hero-enter-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"/></svg>{copy.hero.foundationLine}</p>
     </div>
+    <div class="hero-visual hero-enter hero-enter-3"><ProductPreview locale={locale} /></div>
   </div>
 </section>
 
 <style>
-  .hero-brand-logo {
-    display: inline-flex;
-    flex: 0 0 auto;
-    inline-size: clamp(4.75rem, 8vw, 6.25rem);
-    aspect-ratio: 300 / 71.94;
-  }
-
-  .hero-brand-logo :global(svg) {
-    display: block;
-    inline-size: 100%;
-    block-size: 100%;
-  }
+  .platform-hero { position: relative; background: #0c2b3e; color: white; overflow: hidden; }
+  .hero-grid-lines { position: absolute; inset: 0; background-image: linear-gradient(#ffffff03 1px, transparent 1px), linear-gradient(90deg, #ffffff03 1px, transparent 1px); background-size: 72px 72px; mask-image: linear-gradient(transparent, #0008); pointer-events: none; }
+  .hero-grid { position: relative; display: grid; align-items: center; gap: 3rem; padding-block: clamp(3rem, 5vw, 4.5rem); }
+  .hero-copy { min-width: 0; }
+  .eyebrow { color: #a2d9d1; font-size: .78rem; letter-spacing: .045em; margin-block-end: 1.8rem; }
+  .eyebrow>span { width: .4rem; height: .4rem; border-radius: 50%; background: #94e3d4; }
+  h1 { font-size: clamp(2.5rem, 4.2vw, 3.55rem); font-weight: 500; line-height: 1.15; letter-spacing: -.045em; text-wrap: balance; }
+  h1>span { display: block; color: #95e3d4; margin-block-start: .12em; }
+  :global([lang='ar']) h1 { font-size: clamp(2.2rem, 3.6vw, 3.15rem); line-height: 1.5; letter-spacing: -.025em; }
+  .hero-description { margin-block-start: 1.6rem; max-inline-size: 32rem; color: #c2d5df; font-size: 1.04rem; line-height: 1.85; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.6rem; margin-block-start: 2rem; font-size: .9rem; }
+  .hero-actions :global(.btn-primary) { padding-inline: 1.5rem; gap: 1.1rem; }
+  .hero-foundation { display: flex; align-items: center; gap: .7rem; margin-block-start: 2.4rem; color: #93b2c2; font-size: .72rem; line-height: 1.8; }
+  .hero-foundation svg { width: 1.1rem; height: 1.1rem; flex: 0 0 auto; color: #8ecabe; }
+  .hero-visual { min-width: 0; }
+  @media (min-width: 1024px) { .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.03fr); gap: clamp(2.5rem, 5vw, 4rem); } }
+  @media (min-width: 768px) and (max-width: 1023px) { .hero-grid { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 2rem; } h1 { font-size: 2.6rem; } .hero-actions { gap: 1rem; } }
+  @media (max-width: 767px) { .hero-grid { padding-top: 2.7rem; } .hero-copy { max-width: 36rem; } .hero-description { font-size: 1rem; } .hero-foundation { margin-top: 1.6rem; } .eyebrow { margin-bottom: 1.3rem; } }
 </style>

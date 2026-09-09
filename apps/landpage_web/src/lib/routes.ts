@@ -4,6 +4,9 @@ import { localizedPath } from './site';
 /** Homepage section anchors (same across locales). */
 export const homeAnchors = {
   product: 'product',
+  platform: 'platform',
+  'use-cases': 'use-cases',
+  robotics: 'robotics',
   experts: 'experts',
   integrations: 'integrations',
   channels: 'channels',

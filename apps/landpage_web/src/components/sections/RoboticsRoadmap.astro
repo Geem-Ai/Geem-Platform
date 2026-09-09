@@ -1,0 +1,162 @@
+---
+import type { Locale } from '../../lib/i18n';
+import { getRoboticsRoadmapCopy } from '../../content/robotics-roadmap';
+import { contactHref } from '../../lib/site';
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const copy = getRoboticsRoadmapCopy(locale);
+const titleId = `robotics-title-${locale}`;
+---
+
+<section id="robotics" class="robotics-roadmap" aria-labelledby={titleId}>
+  <div class="container-shell">
+    <div class="robotics-intro">
+      <header class="robotics-copy">
+        <div class="robotics-eyebrow">
+          <p>{copy.eyebrow}</p>
+          <span class="robotics-status">{copy.status}</span>
+        </div>
+        <h2 id={titleId}>{copy.title}</h2>
+        <p class="robotics-description">{copy.description}</p>
+      </header>
+
+      <figure class="robotics-model" aria-label={copy.diagramLabel}>
+        <div class="robotics-model__flow">
+          <div class="robotics-model__node robotics-model__node--technology">
+            <div class="robotics-model__symbol" aria-hidden="true">
+              <svg viewBox="0 0 80 80" fill="none">
+                <rect x="20" y="20" width="40" height="40" rx="7" />
+                <rect x="29" y="29" width="22" height="22" rx="3" />
+                <path d="M30 12v8m10-8v8m10-8v8M30 60v8m10-8v8m10-8v8M12 30h8m-8 10h8m-8 10h8m40-20h8m-8 10h8m-8 10h8" />
+                <path class="robotics-model__detail" d="m34 41 4 4 9-10" />
+              </svg>
+            </div>
+            <p>{copy.technology}</p>
+          </div>
+
+          <span class="robotics-model__operator" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+          </span>
+
+          <div class="robotics-model__node robotics-model__node--hardware">
+            <div class="robotics-model__symbol" aria-hidden="true">
+              <svg viewBox="0 0 80 80" fill="none">
+                <rect x="19" y="14" width="42" height="52" rx="5" />
+                <rect x="27" y="23" width="26" height="17" rx="2" />
+                <path d="M27 49h14m-14 8h14M12 24h7m-7 12h7m-7 12h7m-7 12h7m42-36h7m-7 12h7m-7 12h7m-7 12h7" />
+                <circle class="robotics-model__detail" cx="51" cy="53" r="4" />
+              </svg>
+            </div>
+            <p>{copy.hardware}</p>
+          </div>
+
+          <span class="robotics-model__operator robotics-model__operator--arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>
+          </span>
+
+          <div class="robotics-model__node robotics-model__node--product">
+            <div class="robotics-model__symbol" aria-hidden="true">
+              <svg viewBox="0 0 96 96" fill="none">
+                <path d="M48 14v8" />
+                <circle cx="48" cy="10" r="3" />
+                <rect x="26" y="23" width="44" height="29" rx="10" />
+                <path d="M34 57h28l5 25H29l5-25ZM21 61l-5 15m59-15 5 15M37 82v7m22-7v7" />
+                <circle class="robotics-model__eye" cx="38" cy="37" r="2.5" />
+                <circle class="robotics-model__eye" cx="58" cy="37" r="2.5" />
+                <path class="robotics-model__detail" d="M41 44h14M41 66h14m-14 7h9" />
+              </svg>
+            </div>
+            <p>{copy.product}</p>
+          </div>
+        </div>
+        <figcaption>{copy.illustrationNote}</figcaption>
+      </figure>
+    </div>
+
+    <ol class="robotics-stages" aria-label={copy.roadmapLabel} role="list">
+      {copy.stages.map((stage, index) => (
+        <li class={`robotics-stage robotics-stage--${stage.id}`} aria-current={stage.id === 'development' ? 'step' : undefined}>
+          <div class="robotics-stage__meta">
+            <span class="robotics-stage__number" aria-hidden="true">0{index + 1}</span>
+            <span>{stage.status}</span>
+          </div>
+          <h3>{stage.title}</h3>
+          <p>{stage.description}</p>
+        </li>
+      ))}
+    </ol>
+
+    <div class="robotics-footer">
+      <p>{copy.launchNote}</p>
+      <a href={contactHref(locale)}>
+        {copy.contact}
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 10h13m-5-5 5 5-5 5" /></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .robotics-roadmap {
+    padding-block: clamp(2.75rem, 5vw, 4rem);
+    border-block: 1px solid #244153;
+    background: var(--geem-navy-950);
+    color: #f5f9fc;
+  }
+
+  .robotics-intro { display: grid; align-items: center; gap: 1.75rem; }
+  .robotics-copy { min-inline-size: 0; }
+  .robotics-eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1rem; }
+  .robotics-eyebrow > p { color: #a8bfee; font-size: 0.8rem; font-weight: 500; }
+  .robotics-status { padding: 0.2rem 0.6rem; border: 1px solid #558d804d; border-radius: 0.35rem; background: #163932; color: #b6e9db; font-size: 0.72rem; font-weight: 500; }
+  .robotics-copy h2 { margin-block: 1rem 0; color: white; font-size: clamp(1.9rem, 3.5vw, 2.75rem); font-weight: 600; line-height: 1.25; letter-spacing: -0.025em; text-wrap: balance; }
+  .robotics-description { max-inline-size: 35rem; margin-block: 1rem 0; color: #b5c8d5; font-size: 1rem; line-height: 1.75; }
+
+  .robotics-model { min-inline-size: 0; margin: 0; padding: clamp(1rem, 2vw, 1.4rem); border: 1px solid #31516a; border-radius: 0.8rem; background: #10283a; }
+  .robotics-model__flow { display: grid; grid-template-columns: minmax(0, 1fr) 1.25rem minmax(0, 1fr) 1.25rem minmax(0, 1.1fr); align-items: start; gap: 0.45rem; }
+  .robotics-model__node { min-inline-size: 0; text-align: center; }
+  .robotics-model__symbol { display: grid; block-size: 6rem; place-items: center; color: #a8bfee; }
+  .robotics-model__symbol svg { display: block; inline-size: min(100%, 4.75rem); block-size: 4.75rem; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+  .robotics-model__node--hardware .robotics-model__symbol { color: #b1c4d5; }
+  .robotics-model__node--product .robotics-model__symbol { color: #a5e1d2; }
+  .robotics-model__node--product svg { inline-size: min(100%, 5.7rem); block-size: 5.7rem; }
+  .robotics-model__detail { stroke: #a5e1d2; }
+  .robotics-model__eye { fill: #a5e1d2; stroke: none; }
+  .robotics-model__node p { margin: 0.5rem 0 0; color: #ecf3f8; font-size: 0.8rem; font-weight: 500; line-height: 1.5; }
+  .robotics-model__operator { display: grid; place-items: center; block-size: 6rem; color: #8ca7be; }
+  .robotics-model__operator svg { inline-size: 1.15rem; block-size: 1.15rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .robotics-model figcaption { margin-block-start: 1rem; padding-block-start: 0.8rem; border-block-start: 1px solid #ffffff1c; color: #9bb3c6; font-size: 0.7rem; line-height: 1.5; text-align: center; }
+
+  .robotics-stages { display: grid; gap: 1.3rem; list-style: none; padding: 0; margin: 2rem 0 0; }
+  .robotics-stage { --stage-color: #9fbdca; min-inline-size: 0; padding-inline-start: 1rem; border-inline-start: 2px solid var(--stage-color); }
+  .robotics-stage--partnerships { --stage-color: #99dfd1; }
+  .robotics-stage--development { --stage-color: #a4bdf7; }
+  .robotics-stage__meta { display: flex; align-items: baseline; gap: 0.6rem; color: var(--stage-color); font-size: 0.7rem; line-height: 1.4; }
+  .robotics-stage__number { font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .robotics-stage h3 { margin: 0.4rem 0 0; color: #f0f5f9; font-size: 1rem; font-weight: 500; line-height: 1.5; }
+  .robotics-stage > p { max-inline-size: 35rem; margin: 0.4rem 0 0; color: #a6bdcd; font-size: 0.82rem; line-height: 1.65; }
+
+  .robotics-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; margin-block-start: 1.75rem; padding-block-start: 1rem; border-block-start: 1px solid #ffffff21; }
+  .robotics-footer > p { margin: 0; color: #a5bbcd; font-size: 0.77rem; line-height: 1.6; }
+  .robotics-footer a { display: inline-flex; align-items: center; gap: 0.65rem; min-block-size: 2.5rem; color: #b4e9dc; font-size: 0.85rem; font-weight: 500; text-decoration: underline; text-underline-offset: 0.3em; text-decoration-color: transparent; }
+  .robotics-footer a:hover, .robotics-footer a:focus-visible { color: white; text-decoration-color: currentColor; }
+  .robotics-footer svg { inline-size: 1.1rem; block-size: 1.1rem; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  :global([dir='rtl']) .robotics-model__operator--arrow svg, :global([dir='rtl']) .robotics-footer svg { transform: scaleX(-1); }
+
+  @media (min-width: 900px) {
+    .robotics-intro { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(2rem, 4vw, 3.5rem); }
+    .robotics-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.75rem; margin-block-start: 2.25rem; }
+    .robotics-stage { padding-block-start: 0.85rem; padding-inline-start: 0; border-inline-start: 0; border-block-start: 2px solid var(--stage-color); }
+  }
+
+  @media (max-width: 479px) {
+    .robotics-model { padding: 0.85rem; }
+    .robotics-model__flow { grid-template-columns: minmax(0, 1fr) 0.85rem minmax(0, 1fr) 0.85rem minmax(0, 1.1fr); gap: 0.2rem; }
+    .robotics-model__symbol, .robotics-model__operator { block-size: 4.5rem; }
+    .robotics-model__symbol svg { block-size: 4rem; }
+    .robotics-model__node--product svg { block-size: 4.5rem; }
+    .robotics-model__operator svg { inline-size: 0.85rem; block-size: 0.85rem; }
+    .robotics-model__node p { font-size: 0.75rem; }
+  }
+</style>

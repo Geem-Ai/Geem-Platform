@@ -1,7 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import type { SiteCopy } from '../../content/site/types';
-import avatar from '../../assets/brand/geem-avatar.webp';
+import GeemAvatar from '../ui/GeemAvatar.astro';
 import chatWidgetIcon from '../../assets/apps/chat-widget.svg';
 import googleDriveIcon from '../../assets/apps/google-drive.svg';
 import oneDriveIcon from '../../assets/apps/microsoft-onedrive.svg';
@@ -73,7 +73,7 @@ const knowledgeSources = copy.knowledge.sources.slice(0, 4).map((label, index) =
       <section class="flow-stage flow-stage--expert">
         <div class="expert-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="expert-avatar">
-          <Image src={avatar} alt="" width={84} height={84} loading="lazy" />
+          <GeemAvatar size="100%" />
           <i aria-hidden="true"></i>
         </div>
         <p>{copy.experts.eyebrow}</p>
@@ -419,20 +419,13 @@ const knowledgeSources = copy.knowledge.sources.slice(0, 4).map((label, index) =
     place-items: center;
     inline-size: 5.3rem;
     block-size: 5.3rem;
+    transform: none;
     border: 3px solid color-mix(in oklab, var(--geem-sand) 86%, white);
     border-radius: 1.65rem;
     background: white;
     box-shadow:
       0 16px 32px color-mix(in oklab, black 22%, transparent),
       0 0 0 7px color-mix(in oklab, white 8%, transparent);
-    transform: rotate(-2deg);
-  }
-
-  .expert-avatar img {
-    inline-size: 100%;
-    block-size: 100%;
-    border-radius: 1.45rem;
-    object-fit: cover;
   }
 
   .expert-avatar i {
@@ -595,6 +588,15 @@ const knowledgeSources = copy.knowledge.sources.slice(0, 4).map((label, index) =
     .channel-item__icon img {
       inline-size: 1.4rem;
       block-size: 1.4rem;
+    }
+  }
+
+  @media (max-width: 520px), (min-width: 900px) and (max-width: 1100px) {
+    .source-item,
+    .channel-item {
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
     }
   }
 

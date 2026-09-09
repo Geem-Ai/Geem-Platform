@@ -1,0 +1,112 @@
+---
+import GeemAvatar from '../ui/GeemAvatar.astro';
+import type { Locale } from '../../lib/i18n';
+import { getProductPreview } from '../../content/product-preview';
+import { getSiteConfig } from '../../lib/site';
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const copy = getProductPreview(locale);
+const { loginUrl } = getSiteConfig();
+---
+
+<div class="product-preview" data-product-preview>
+  <div class="preview-topbar">
+    <span class="preview-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" /></svg> GEEM AI</span>
+    <span class="preview-label">{copy.label}</span>
+  </div>
+  <div class="preview-tabs" data-preview-tabs role="tablist" aria-label={copy.tabsLabel} hidden>
+    {copy.modes.map((mode, index) => (
+      <button type="button" role="tab" id={`preview-${locale}-${mode.id}-tab`} aria-controls={`preview-${locale}-${mode.id}`} aria-selected={index === 0 ? 'true' : 'false'} tabindex={index === 0 ? 0 : -1} data-preview-tab>{mode.label}</button>
+    ))}
+  </div>
+  <div class="preview-panels">
+    {copy.modes.map(mode => (
+      <article id={`preview-${locale}-${mode.id}`} data-preview-panel aria-label={mode.name}>
+        <div class="preview-context"><span class={`context-icon context-icon--${mode.id}`} aria-hidden="true">{mode.id === 'general' ? '✦' : mode.id === 'expert' ? '◇' : '↗'}</span><h2>{mode.name}</h2></div>
+        <div class="preview-prompt"><span class="sr-only">{copy.inputLabel}: </span>{mode.prompt}</div>
+        <div class="preview-response">
+          <GeemAvatar size="2rem" alt={copy.outputLabel} loading="eager" />
+          <div class="response-content">
+            <p class="response-intro">{mode.answer}</p>
+            <ol>{mode.steps.map((step,index) => (
+              <li><span aria-hidden="true">{String(index+1).padStart(2,'0')}</span><div><h3>{step.title}</h3><p>{step.detail}</p></div></li>
+            ))}</ol>
+          </div>
+        </div>
+        <p class={`preview-tag preview-tag--${mode.id}`}>{mode.tag}</p>
+      </article>
+    ))}
+  </div>
+  <div class="preview-bottom"><p>{copy.note}</p><a href={loginUrl}>{copy.open}<span aria-hidden="true">↗</span></a></div>
+</div>
+
+<script>
+  function initProductPreview() {
+    document.querySelectorAll<HTMLElement>('[data-product-preview]').forEach(root => {
+      if (root.dataset.ready) return;
+      const list = root.querySelector<HTMLElement>('[data-preview-tabs]');
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-preview-tab]'));
+      const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-preview-panel]'));
+      if (!list || tabs.length !== panels.length || !tabs.length) return;
+      function activate(index: number, focus = false) {
+        tabs.forEach((tab, i) => { tab.setAttribute('aria-selected', String(i === index)); tab.tabIndex = i === index ? 0 : -1; panels[i].hidden = i !== index; });
+        if (focus) tabs[index].focus();
+      }
+      panels.forEach((panel, i) => { panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tabs[i].id); panel.tabIndex = 0; });
+      tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => activate(i));
+        tab.addEventListener('keydown', event => {
+          const step = getComputedStyle(list).direction === 'rtl' ? -1 : 1;
+          let next: number;
+          if (event.key === 'ArrowRight') next = (i + step + tabs.length) % tabs.length;
+          else if (event.key === 'ArrowLeft') next = (i - step + tabs.length) % tabs.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = tabs.length - 1;
+          else return;
+          event.preventDefault(); activate(next, true);
+        });
+      });
+      activate(0); list.hidden = false; root.dataset.ready = 'true';
+    });
+  }
+  initProductPreview();
+  document.addEventListener('astro:page-load', initProductPreview);
+</script>
+
+<style>
+  .product-preview { color: #14364b; background: #fff; border: 1px solid #d4e7ec; border-radius: 1.25rem; overflow: hidden; box-shadow: 0 32px 90px #00101940, 0 0 0 8px #ffffff05; min-width: 0; text-align: start; }
+  .preview-topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.05rem 1.4rem; border-bottom: 1px solid #e8eff2; background: #fcfefe; }
+  .preview-brand { display: flex; align-items: center; gap: .5rem; font-family: 'IBM Plex Sans', sans-serif; font-size: .85rem; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
+  .preview-brand svg { width: 1.1rem; height: 1.1rem; fill: #147f83; }
+  .preview-label { color: #526e7a; font-size: .72rem; }
+  .preview-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .3rem; margin: 1rem 1.3rem 0; padding: .3rem; border: 1px solid #e1eaee; border-radius: .7rem; background: #f4f8f9; }
+  .preview-tabs[hidden], [data-preview-panel][hidden] { display: none; }
+  .preview-tabs button { min-height: 2.55rem; padding: .4rem .45rem; font: inherit; font-size: .73rem; font-weight: 500; color: #59717d; border: 1px solid transparent; border-radius: .5rem; cursor: pointer; }
+  .preview-tabs button:hover { color: #0c2f44; background: #fff9; }
+  .preview-tabs button[aria-selected='true'] { color: #0b6366; background: white; border-color: #dae6e9; box-shadow: 0 2px 4px #163c4a08; }
+  .product-preview :focus-visible { outline-color: #197d93; }
+  [data-preview-panel] { padding: 1.3rem 1.4rem 1.15rem; min-height: 24rem; }
+  .product-preview:not([data-ready]) [data-preview-panel]+[data-preview-panel] { border-top: 1px solid #dce7eb; }
+  .preview-context { display: flex; gap: .6rem; align-items: center; margin-bottom: 1.15rem; }
+  .context-icon { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: .5rem; color: #167e76; background: #e8f7f3; font-size: 1.15rem; }
+  .context-icon--expert { background: #f0ecfc; color: #795bba; }
+  .context-icon--action { background: #e9f2fe; color: #3875bb; }
+  .preview-context h2 { font-size: .85rem; font-weight: 600; }
+  .preview-prompt { margin-inline-start: 2.8rem; padding: .8rem 1rem; border-radius: .8rem .8rem .25rem .8rem; color: #284957; background: #edf5f6; font-size: .83rem; line-height: 1.65; }
+  :global([dir='rtl']) .preview-prompt { border-radius: .8rem .8rem .8rem .25rem; }
+  .preview-response { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .7rem; margin-top: 1.3rem; }
+  .response-intro { font-size: .82rem; font-weight: 500; line-height: 1.7; }
+  .response-content ol { list-style: none; display: grid; gap: .75rem; margin: 1rem 0 0; padding: 0; }
+  .response-content li { display: flex; gap: .6rem; align-items: baseline; }
+  .response-content li>span { font-size: .64rem; font-family: monospace; color: #78939c; }
+  .response-content h3 { font-size: .78rem; font-weight: 600; }
+  .response-content li p { font-size: .73rem; color: #617a87; line-height: 1.6; margin-top: .15rem; }
+  .preview-tag { display: inline-block; margin-top: 1.2rem; margin-inline-start: 2.7rem; color: #34776e; font-size: .66rem; }
+  .preview-tag--action { color: #896520; }
+  .preview-bottom { display: flex; justify-content: space-between; gap: 1rem; padding: .9rem 1.4rem; background: #f7fafb; border-top: 1px solid #e4edef; align-items: center; }
+  .preview-bottom p { font-size: .7rem; color: #526e7a; }
+  .preview-bottom a { display: flex; align-items: center; gap: .6rem; color: #146e70; font-size: .69rem; font-weight: 600; text-decoration: none; }
+  .preview-bottom a:hover { text-decoration: underline; text-underline-offset: .2em; }
+  @media (max-width: 480px) { .preview-label { max-width: 8rem; } .preview-tabs { margin-inline: .8rem; } [data-preview-panel] { padding-inline: .9rem; min-height: 25rem; } .preview-topbar { padding-inline: 1rem; } .preview-bottom { flex-direction: column; align-items: flex-start; gap: .4rem; padding-inline: 1rem; } }
+</style>

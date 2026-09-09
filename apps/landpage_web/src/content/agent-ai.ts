@@ -111,7 +111,7 @@ const en: AgentAiPageCopy = {
   },
   hero: {
     eyebrow: 'Agents AI · Client Agent API',
-    title: 'Build agents with your tools and Geem knowledge.',
+    title: 'Build agents with your tools and Geem knowledge',
     description:
       'Use an OpenAI Chat Completions-compatible API for client-owned tool loops. Geem grounds each model round in one Workspace Expert; your application executes every tool.',
     primaryCta: 'Open Agents AI',
@@ -135,7 +135,7 @@ const en: AgentAiPageCopy = {
   },
   overview: {
     eyebrow: 'Overview',
-    title: 'One model round, owned by your application.',
+    title: 'One model round, owned by your application',
     description:
       'Geem retrieves approved knowledge for one Expert and returns assistant text or standard tool calls. The caller owns conversation state, authorizes tools, executes them locally, and replays the resulting transcript.',
     facts: [
@@ -146,7 +146,7 @@ const en: AgentAiPageCopy = {
   },
   requirements: {
     eyebrow: 'Before the first call',
-    title: 'Activate each independent access layer.',
+    title: 'Activate each independent access layer',
     description:
       'A request runs only when the App, key, Expert, and Workspace allowances are all active.',
     items: [
@@ -160,7 +160,7 @@ const en: AgentAiPageCopy = {
   },
   access: {
     eyebrow: 'Authentication',
-    title: 'Use the Agent base URL and select the Expert by header.',
+    title: 'Use the Agent base URL and select the Expert by header',
     description:
       'Every request uses a Workspace API key as a bearer token. Completion requests additionally require the Expert header.',
     baseUrl: 'Base URL',
@@ -175,14 +175,14 @@ const en: AgentAiPageCopy = {
   },
   quickstart: {
     eyebrow: 'Quickstart',
-    title: 'Run one non-streaming model round.',
+    title: 'Run one non-streaming model round',
     description:
       'Declare the tools your application can execute. A response may contain final assistant text or choices[0].message.tool_calls.',
     requestLabel: 'cURL request',
   },
   toolLoop: {
     eyebrow: 'Caller-owned state',
-    title: 'Execute tools locally, then replay the complete step.',
+    title: 'Execute tools locally, then replay the complete step',
     description:
       'There is no hidden Geem conversation and no proprietary session header. Resend the relevant bounded history on every model step.',
     steps: [
@@ -199,7 +199,7 @@ const en: AgentAiPageCopy = {
   },
   sdks: {
     eyebrow: 'SDKs',
-    title: 'Use standard clients—no proprietary provider required.',
+    title: 'Use standard clients—no proprietary provider required',
     description:
       'Geem continuously tests exact Laravel AI and official OpenAI SDK versions through the production Agent wire contract.',
     laravelTitle: 'Laravel AI',
@@ -211,7 +211,7 @@ const en: AgentAiPageCopy = {
   },
   streaming: {
     eyebrow: 'Streaming and metering',
-    title: 'Standard SSE with transparent Geem metadata.',
+    title: 'Standard SSE with transparent Geem metadata',
     description:
       'Set stream: true. Tool calls arrive as indexed delta.tool_calls fragments and successful streams terminate with data: [DONE].',
     items: [
@@ -225,7 +225,7 @@ const en: AgentAiPageCopy = {
   },
   safety: {
     eyebrow: 'Trust boundary',
-    title: 'Your application remains the tool security boundary.',
+    title: 'Your application remains the tool security boundary',
     description:
       'Client instructions and tool material are treated as untrusted input. They cannot change Workspace identity, Expert selection, access, quota, or billing.',
     items: [
@@ -240,7 +240,7 @@ const en: AgentAiPageCopy = {
   },
   controls: {
     eyebrow: 'Request contract',
-    title: 'Unsupported behavior fails explicitly.',
+    title: 'Unsupported behavior fails explicitly',
     acceptedTitle: 'Accepted',
     accepted: [
       'temperature, top_p, max_tokens',
@@ -260,7 +260,7 @@ const en: AgentAiPageCopy = {
   },
   errors: {
     eyebrow: 'Errors',
-    title: 'Every Agent route uses the OpenAI error envelope.',
+    title: 'Every Agent route uses the OpenAI error envelope',
     description:
       'Authentication, access, transcript, model, quota, rate, and upstream failures retain stable HTTP statuses and machine-readable codes.',
     retry:
@@ -281,13 +281,13 @@ const ar: AgentAiPageCopy = {
   meta: {
     title: 'دليل التكامل مع Agents AI | جيم',
     description:
-      'اربط تطبيقك بخبراء جيم عبر Laravel AI أو أي عميل متوافق مع OpenAI، مع بقاء تنفيذ الأدوات وصلاحياتها تحت تحكمك.',
+      'اربط تطبيقك بخبراء جيم عبر Laravel AI أو عميل متوافق مع OpenAI، مع إدارة صلاحيات الأدوات وتنفيذها داخل تطبيقك.',
   },
   hero: {
     eyebrow: 'Agents AI · واجهة الوكلاء للتطبيقات',
-    title: 'ابنِ وكلاء ذكاء اصطناعي تستفيد من أدوات تطبيقك ومعرفة جيم.',
+    title: 'طوّر وكلاء ذكاء اصطناعي بأدوات تطبيقك ومعرفة جيم',
     description:
-      'استخدم واجهة متوافقة مع OpenAI Chat Completions لبناء وكيل يستفيد من أدوات تطبيقك. يزوّد جيم كل طلب بمعرفة خبير واحد من مساحة العمل، ويبقى القرار بشأن وقت تنفيذ الأدوات وطريقة تنفيذها بيد تطبيقك.',
+      'استخدم واجهة متوافقة مع OpenAI Chat Completions لإدارة استدعاء الأدوات من تطبيقك. يستند جيم في كل جولة للنموذج إلى معرفة خبير واحد من مساحة العمل، ويتولى تطبيقك تنفيذ جميع الأدوات.',
     primaryCta: 'افتح Agents AI',
     secondaryCta: 'ابدأ التكامل',
     availability: 'متاح باشتراك مدفوع في متجر جيم',
@@ -297,7 +297,7 @@ const ar: AgentAiPageCopy = {
     items: [
       { id: 'overview', label: 'نظرة عامة' },
       { id: 'requirements', label: 'المتطلبات' },
-      { id: 'access', label: 'الوصول والنماذج' },
+      { id: 'access', label: 'المصادقة والنماذج' },
       { id: 'quickstart', label: 'بدء سريع' },
       { id: 'tool-loop', label: 'آلية عمل الأدوات' },
       { id: 'sdks', label: 'أمثلة حزم التطوير' },
@@ -309,20 +309,20 @@ const ar: AgentAiPageCopy = {
   },
   overview: {
     eyebrow: 'نظرة عامة',
-    title: 'جيم يدير جولة النموذج، وتطبيقك يتولى تنفيذ الأدوات.',
+    title: 'جولة واحدة للنموذج، يديرها تطبيقك',
     description:
-      'يبحث جيم في المصادر المعتمدة لدى الخبير، ثم يعيد إجابة نصية أو طلبات لاستدعاء أدواتك. يحتفظ تطبيقك بسجل المحادثة، ويتحقق من صلاحية كل أداة، وينفّذها محليًا، ثم يرسل النتيجة في الطلب التالي.',
+      'يسترجع جيم المعرفة المعتمدة لخبير واحد، ثم يعيد نصًا من المساعد أو استدعاءات أدوات قياسية. يدير تطبيقك حالة المحادثة، ويتحقق من صلاحيات تنفيذ الأدوات، وينفّذها محليًا، ثم يعيد إرسال سجل المحادثة مع النتائج.',
     facts: [
       { value: 'OpenAI', label: 'طلبات واستجابات متوافقة مع Chat Completions' },
       { value: 'خبير واحد', label: 'تحدّده بوضوح في كل طلب إكمال' },
-      { value: 'صفر', label: 'أداة ينفّذها جيم؛ التنفيذ داخل تطبيقك فقط' },
+      { value: 'صفر', label: 'أداة ينفّذها جيم. تطبيقك يتولى التنفيذ.' },
     ],
   },
   requirements: {
     eyebrow: 'قبل أول طلب',
-    title: 'جهّز الوصول قبل إرسال أول طلب.',
+    title: 'جهّز متطلبات التكامل قبل أول طلب',
     description:
-      'لا يُنفّذ الطلب إلا إذا كان الاشتراك والمفتاح والخبير وحصص الاستخدام كلها جاهزة.',
+      'لا يُنفّذ الطلب إلا بعد تفعيل التطبيق والمفتاح والخبير، مع توفّر حصص الاستخدام المطلوبة.',
     items: [
       'اشترك في تطبيق Agents AI وثبّته في مساحة العمل.',
       'أنشئ مفتاح API جديدًا، أو أعد إصدار مفتاح قائم، مع تفعيل نطاق agent:write.',
@@ -334,7 +334,7 @@ const ar: AgentAiPageCopy = {
   },
   access: {
     eyebrow: 'المصادقة',
-    title: 'استخدم عنوان واجهة Agent، وحدّد الخبير في ترويسة الطلب.',
+    title: 'استخدم عنوان واجهة Agent، وحدّد الخبير في ترويسة الطلب',
     description:
       'أرسل مفتاح API الخاص بمساحة العمل في ترويسة Authorization بصيغة Bearer. وفي طلبات الإكمال، أضف أيضًا ترويسة الخبير.',
     baseUrl: 'عنوان الواجهة',
@@ -345,37 +345,37 @@ const ar: AgentAiPageCopy = {
       'معرّف النموذج ليس معرّف الخبير. استخدم X-Geem-Expert-Id للإشارة إلى خبير تملكه مساحة العمل المرتبطة بالمفتاح.',
     modelsTitle: 'استعرض النماذج من دون استهلاك الحصص',
     modelsDescription:
-      'تتطلب قائمة النماذج وصفحة تفاصيل النموذج اشتراكًا فعالًا ونطاق agent:write، لكنها لا تخصم من حد الطلبات في الدقيقة أو حصة الرموز أو الحصة اليومية. ويمكن أن يحتوي معرّف النموذج في مسار التفاصيل على شرطة مائلة.',
+      'تتطلب طلبات قائمة النماذج وتفاصيلها اشتراكًا مدفوعًا فعّالًا ونطاق agent:write. ولا تستهلك حصة من معدل الطلبات في الدقيقة، أو رموز الذكاء الاصطناعي، أو الحصة اليومية لطلبات Agents AI. يقبل مسار التفاصيل الشرطة المائلة داخل معرّف النموذج العام.',
   },
   quickstart: {
     eyebrow: 'ابدأ الآن',
-    title: 'أرسل أول طلب إكمال من دون بث.',
+    title: 'أرسل أول طلب إكمال من دون بث',
     description:
-      'أرسل إلى النموذج تعريف الأدوات التي يستطيع تطبيقك تنفيذها. وستحصل في الاستجابة على نص نهائي من المساعد، أو على طلبات أدوات داخل choices[0].message.tool_calls.',
+      'أرسل تعريفات الأدوات التي يستطيع تطبيقك تنفيذها. قد تتضمن الاستجابة نصًا نهائيًا من المساعد أو استدعاءات أدوات داخل choices[0].message.tool_calls.',
     requestLabel: 'طلب cURL',
   },
   toolLoop: {
     eyebrow: 'تطبيقك يدير المحادثة',
-    title: 'نفّذ الأداة في تطبيقك، ثم أرسل النتيجة إلى جيم.',
+    title: 'نفّذ الأدوات في تطبيقك، ثم أعد إرسال الاستدعاءات ونتائجها',
     description:
       'لا يحتفظ جيم بمحادثة مخفية، ولا تحتاج إلى ترويسة جلسة خاصة. في كل جولة، أرسل الجزء المطلوب من سجل المحادثة من جديد.',
     steps: [
-      { title: 'أرسل سؤال المستخدم', description: 'أرفق تعريفات الأدوات المتاحة لهذه الجولة.' },
-      { title: 'استقبل طلبات الأدوات', description: 'احتفظ بمعرّف كل طلب ونوعه واسم الدالة ووسائطها من دون تعديل.' },
-      { title: 'تحقق ثم نفّذ', description: 'تحقق من الوسائط ومن صلاحية المستخدم قبل تنفيذ الأداة داخل تطبيقك.' },
-      { title: 'أعد إرسال النتائج', description: 'أرسل رسالة واحدة بدور role: tool لكل طلب أداة، ثم تابع المحادثة.' },
+      { title: 'أرسل رسالة المستخدم', description: 'أرفق تعريفات الأدوات المتاحة لهذه الجولة.' },
+      { title: 'استقبل استدعاءات الأدوات', description: 'احتفظ بمعرّف كل استدعاء ونوعه واسم الدالة ووسائطها من دون تعديل.' },
+      { title: 'تحقق ثم نفّذ', description: 'تحقق من صحة الوسائط وصلاحيات تنفيذ كل أداة داخل تطبيقك.' },
+      { title: 'أعد إرسال النتائج', description: 'أرسل نتيجة واحدة بدور role: tool لكل استدعاء سابق، قبل إضافة أي رسالة جديدة من المستخدم أو المساعد.' },
     ],
-    replayTitle: 'سجل الطلب التالي',
+    replayTitle: 'سجل المحادثة للمتابعة',
     replayDescription:
-      'يمكن للنموذج طلب عدة أدوات بالتوازي. يجب أن تعيد نتيجة واحدة لكل طلب قبل إضافة رسالة مستخدم أو مساعد جديدة. يرفض جيم الطلبات الناقصة أو المكررة أو غير المعلنة قبل استرجاع المعرفة أو احتساب الاستخدام.',
+      'يمكن للنموذج استدعاء عدة أدوات بالتوازي. يجب إرسال نتيجة واحدة لكل استدعاء قبل إضافة رسالة جديدة من المستخدم أو المساعد. يتحقق جيم من السجل ويرفض النتائج التي لا يقابلها استدعاء، والاستدعاءات المكررة أو غير المكتملة أو غير المعلنة، والرسائل المتداخلة بين الاستدعاءات ونتائجها، قبل استرجاع المعرفة أو قبول الطلب للاستخدام المدفوع.',
     billingNote:
-      'يُحتسب كل طلب إكمال عبر HTTP كجولة نموذج واحدة، ويخصم وحدة واحدة من الحصة اليومية بعد قبوله. أما تنفيذ الأداة داخل تطبيقك فلا يحتسبه جيم.',
+      'كل طلب إكمال عبر HTTP هو جولة نموذج واحدة قابلة للفوترة، ويستهلك وحدة واحدة من الحصة اليومية لـ Agents AI بعد قبول الطلب. ولا يحتسب جيم تنفيذ الأدوات محليًا ضمن الاستخدام.',
   },
   sdks: {
     eyebrow: 'حزم التطوير',
-    title: 'استخدم الحزم المعتادة؛ لا تحتاج إلى مزود مخصص.',
+    title: 'استخدم حزم التطوير المعتادة دون مزوّد مخصص',
     description:
-      'يختبر جيم إصدارات محددة من Laravel AI وحزمة OpenAI الرسمية مباشرةً مع واجهة Agent، لضمان توافق التكامل مع السلوك الفعلي.',
+      'يختبر جيم باستمرار إصدارات محددة من Laravel AI وحزمة OpenAI الرسمية مع واجهة Agent في بيئة الإنتاج.',
     laravelTitle: 'Laravel AI',
     laravelDescription:
       'استخدم المشغّل openai-compatible، وثبّت إصدار الحزمة بدقة، وأرسل ترويسة الخبير. الإصدار v0.10.3 هو أقدم إصدار مدعوم.',
@@ -385,11 +385,11 @@ const ar: AgentAiPageCopy = {
   },
   streaming: {
     eyebrow: 'البث واحتساب الاستخدام',
-    title: 'بث SSE قياسي مع بيانات استخدام واضحة.',
+    title: 'بث SSE قياسي مع بيانات استخدام واضحة',
     description:
       'عند ضبط stream: true، تصل طلبات الأدوات على أجزاء مفهرسة داخل delta.tool_calls، وتنتهي الاستجابة الناجحة بالرسالة data: [DONE].',
     items: [
-      { title: 'بيانات الاستخدام', description: 'يرسل stream_options.include_usage جزءًا واحدًا في نهاية البث، ويتضمن عدد رموز النموذج الفعلي.' },
+      { title: 'بيانات الاستخدام', description: 'يضيف stream_options.include_usage جزءًا أخيرًا مخصصًا لبيانات الاستخدام فقط، يتضمن أعداد الرموز الخام.' },
       { title: 'بيانات جيم الإضافية', description: 'يظهر كائن geem مرة واحدة، ويعرض حالة الاسترجاع والمصادر الآمنة وكفاية السياق والرموز المحتسبة.' },
       { title: 'خطأ بعد بدء البث', description: 'إذا حدث خطأ بعد HTTP 200، يرسل الخادم إطار خطأ واحدًا بصيغة OpenAI، ثم يغلق البث من دون [DONE].' },
     ],
@@ -399,29 +399,29 @@ const ar: AgentAiPageCopy = {
   },
   safety: {
     eyebrow: 'الأمان وحدود الثقة',
-    title: 'تطبيقك هو المسؤول عن أمان الأدوات.',
+    title: 'تطبيقك هو المسؤول عن أمان الأدوات',
     description:
       'يتعامل جيم مع تعليمات العميل وتعريفات الأدوات ونتائجها كمدخلات غير موثوقة. ولا تستطيع هذه المدخلات تغيير مساحة العمل أو الخبير أو صلاحيات الوصول أو الحصص أو الفوترة.',
     items: [
-      'يخفّض جيم أولوية رسائل system وdeveloper الموجودة في بداية المحادثة، ويجمعها بعد معالجتها بأمان في كتلة واحدة موسومة بوضوح بأنها تعليمات عميل غير موثوقة.',
+      'يخفّض جيم أولوية رسائل system وdeveloper في بداية المحادثة، ويجمعها في كتلة واحدة من تعليمات العميل غير الموثوقة، مع ترميز المحارف الخاصة.',
       'لا تضع بيانات اعتماد أو أسرارًا في اسم الأداة أو وصفها أو مخططها أو وسائطها أو نتائجها.',
       'تحقق من صلاحية كل أداة ومن صحة كل وسيط قبل التنفيذ داخل تطبيقك.',
       'لا تفعّل الخبير إلا إذا كان مسموحًا لحامل المفتاح وبيئة تشغيل الأدوات بالاطلاع على معرفته.',
     ],
     warningTitle: 'قد يضمّن النموذج جزءًا من المعرفة في وسائط الأداة',
     warning:
-      'لا يمكن لمنظومة التعليمات أن تمنع ذلك دائمًا. لذلك اعتبر حامل المفتاح وبيئة تشغيل أدواته جهتين مخوّلتين بالاطلاع على معرفة الخبير المحدد.',
+      'لا يضمن تسلسل أولوية التعليمات ألّا يضمّن النموذج المحتوى المسترجع في وسائط الأدوات. لذلك تعامل مع حامل مفتاح API وبيئة تشغيل أدواته بوصفهما جهتين تتلقيان معرفة الخبير المحدد.',
   },
   controls: {
     eyebrow: 'ما الذي تقبله الواجهة؟',
-    title: 'تقبل الواجهة الخيارات التالية، وتعيد خطأً واضحًا لأي خيار آخر.',
+    title: 'تعيد الواجهة خطأً واضحًا عند طلب سلوك غير مدعوم',
     acceptedTitle: 'خيارات مدعومة',
     accepted: [
       'temperature وtop_p وmax_tokens',
       'parallel_tool_calls',
       'stream_options.include_usage',
       'n: 1 وresponse_format: {"type":"text"}',
-      'أدوات الدوال بمخطط JSON يبدأ بكائن object ويستخدم مراجع محلية',
+      'أدوات الدوال بمخطط JSON Schema يكون جذره كائن object، مع دعم المراجع المحلية',
     ],
     rejectedTitle: 'خيارات غير مدعومة',
     rejected: [
@@ -429,21 +429,21 @@ const ar: AgentAiPageCopy = {
       'المخرجات المنظمة أو محتوى الصور والصوت',
       'واجهتا functions وfunction_call القديمتان',
       'طلبات واجهة Responses API',
-      'رسائل system أو developer التي تظهر بعد بدء المحادثة',
+      'رسائل system أو developer اللاحقة أو المتداخلة مع بقية الرسائل',
     ],
   },
   errors: {
     eyebrow: 'الأخطاء',
-    title: 'تعيد جميع مسارات Agent الأخطاء بصيغة OpenAI.',
+    title: 'تعيد جميع مسارات Agent الأخطاء بصيغة OpenAI',
     description:
-      'يعيد كل خطأ حالة HTTP ورمزًا ثابتًا يمكن لتطبيقك التعامل معهما، سواء كان الخطأ مرتبطًا بالمصادقة أو الوصول أو سجل المحادثة أو النموذج أو الحصة أو مزود الخدمة.',
+      'تحافظ أخطاء المصادقة والوصول وسجل المحادثة والنموذج والحصص ومعدل الطلبات ومزود الخدمة على حالات HTTP ثابتة ورموز قابلة للقراءة آليًا.',
     retry:
       'التزم بقيمة Retry-After عند تجاوز معدل الطلبات أو الحصة. ويتضمن خطأ الحصة اليومية داخل error.details الحقول metric وlimit وused وremaining، إضافةً إلى reset_at بتوقيت UTC وبتنسيق RFC 3339.',
   },
   cta: {
     title: 'جاهز لربط أول وكيل بتطبيقك؟',
     description:
-      'اشترك في Agents AI، وأنشئ مفتاحًا بالنطاق المطلوب، وفعّل خبيرًا، ثم دع تطبيقك يقرر متى تُنفّذ الأدوات وكيف.',
+      'اشترك في Agents AI، وأنشئ مفتاحًا بالنطاق المطلوب، وفعّل خبيرًا، مع إبقاء التحقق من صلاحيات تنفيذ الأدوات داخل تطبيقك.',
     primary: 'افتح Agents AI',
     secondary: 'إدارة مفاتيح API',
   },

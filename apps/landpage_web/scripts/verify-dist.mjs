@@ -162,10 +162,10 @@ assert(ar.includes('خبراء') || ar.includes('خبير'), 'AR homepage mentio
 assert(ar.includes('مستندات') || ar.includes('معرفة'), 'AR homepage mentions documents/knowledge');
 assert(ar.includes('WhatsApp') || ar.includes('واتساب'), 'AR homepage mentions WhatsApp');
 assert(ar.includes('موقع') || ar.includes('ودجت'), 'AR homepage mentions website');
-assert(ar.includes('chat/completions') || ar.includes('dalseen/geem-1.0'), 'AR homepage includes API sample');
+assert(ar.includes('href="/ar/agent-ai"') && ar.includes('Client Agent API') && ar.includes('MCP Connectors'), 'AR homepage links to integration docs and explains both action paths');
 assert(en.includes('Experts'), 'EN homepage mentions Experts');
 assert(en.includes('documents') || en.includes('knowledge'), 'EN homepage mentions documents/knowledge');
-assert(en.includes('chat/completions') || en.includes('dalseen/geem-1.0'), 'EN homepage includes API sample');
+assert(en.includes('href="/en/agent-ai"') && en.includes('Client Agent API') && en.includes('MCP Connectors'), 'EN homepage links to integration docs and explains both action paths');
 assert(!ar.includes('RAG'), 'AR homepage should avoid RAG jargon');
 assert(!en.includes('RAG'), 'EN homepage should avoid RAG jargon');
 assert(!en.includes('OpenWA'), 'EN homepage should avoid OpenWA jargon');

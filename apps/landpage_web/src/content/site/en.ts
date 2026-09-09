@@ -2,9 +2,9 @@ import type { SiteCopy } from './types';
 
 export const en: SiteCopy = {
   meta: {
-    homeTitle: 'Geem | AI Experts grounded in your organization',
+    homeTitle: 'Geem | AI for everyday work and business',
     homeDescription:
-      'Turn your organization’s knowledge into AI Experts your team can use in chat, WhatsApp, your website, and your systems.',
+      'Explore Geem: fine-tuned AI running on our own GPU infrastructure. Write, create, get help with code, and connect business Experts to your knowledge, channels and systems.',
     aboutTitle: 'About Geem and DALSEEN',
     aboutDescription:
       'Meet Geem, the AI product of DALSEEN—a Saudi technology company that began in Jeddah and is now based in Madinah.',
@@ -27,12 +27,10 @@ export const en: SiteCopy = {
     primaryNavigation: 'Primary navigation',
     mobileNavigation: 'Mobile navigation',
     languageSwitch: 'العربية',
-    pauseTypewriter: 'Pause rotating phrases',
-    resumeTypewriter: 'Resume rotating phrases',
   },
   brand: {
     product: 'Geem',
-    tagline: 'AI that works with your organization’s knowledge',
+    tagline: 'AI for everyday work and business',
   },
   nav: {
     items: [
@@ -46,73 +44,66 @@ export const en: SiteCopy = {
     login: 'Workspace Login',
   },
   hero: {
-    eyebrow: 'An AI platform purpose-built for the Saudi market',
-    specialtyPrompt: 'Need an Expert in',
-    specialties: [
-      'Human Resources',
-      'Finance',
-      'Marketing',
-      'Sales',
-      'Operations',
-      'Customer Support',
-    ],
+    eyebrow: 'GEEM AI · Built in Saudi Arabia',
+    title: 'One AI experience',
+    titleAccent: 'More ways to work',
     description:
-      'Create a Geem Expert for each function, connect the documents it should use, and make it available in your workspace, on your website, through WhatsApp, or in internal systems.',
+      'Write, explore ideas and get help with code. Bring Geem into your business with Experts that use your knowledge and connect to your channels and systems.',
     primaryCta: 'Start with Geem',
-    tertiaryCta: 'See how it works',
-    imageAlt: 'Riyadh and Madinah skyline at night — Geem hero image',
+    tertiaryCta: 'Explore the platform',
+    foundationLine: 'Our fine-tuned AI. Our GPUs. Your possibilities.',
   },
   valueStrip: {
     items: [
       {
-        title: 'Built for Saudi organizations first',
-        description: 'An Arabic-first platform, built in Madinah around the needs of organizations in Saudi Arabia.',
+        title: 'Everyday intelligence',
+        description: 'Go from a question or idea to clearer thinking, useful writing and your next step.',
       },
       {
-        title: 'Core data stored in Saudi Arabia',
-        description: 'Core workspace data is stored on infrastructure located in Saudi Arabia.',
+        title: 'Our own AI foundation',
+        description: 'Geem’s fine-tuned AI builds on multiple models and continues to evolve.',
       },
       {
-        title: 'First-class Arabic support',
-        description: 'Geem is designed for a complete Arabic experience, with seamless use of other supported languages.',
+        title: 'Our GPUs and our infrastructure',
+        description: 'We run open-source models locally on Geem’s own GPUs, servers and infrastructure.',
       },
     ],
   },
   experts: {
     number: '01',
-    eyebrow: 'Everything starts with an Expert',
-    title: 'Build an Expert for every job your team needs.',
+    eyebrow: 'Make it work for your business',
+    title: 'Give AI a role in your business',
     description:
-      'Define its role, connect the knowledge it may use, and give your team answers with sources they can review.',
+      'Start with general AI, then create Experts for work that needs your business context. Give each Expert a purpose, instructions, selected knowledge and the connections it may use.',
     flowExpertLabel: 'Geem Expert',
-    formula: ['Its role', 'Approved knowledge', 'Answers with sources', 'Workspace context'],
+    formula: ['Purpose', 'Instructions', 'Business knowledge', 'Controlled access'],
     cards: [
       {
         title: 'HR Expert',
-        description: 'Answers leave and hiring questions from your approved HR documents.',
+        description: 'Connects HR policies to employee service requests through your configured systems.',
       },
       {
         title: 'Finance Expert',
-        description: 'Helps your finance team with answers based on internal knowledge.',
+        description: 'Pairs expense policies with authorized lookups in your finance tools.',
       },
       {
         title: 'Operations Expert',
-        description: 'Guides staff using your playbooks and day-to-day procedures.',
+        description: 'Combines operating procedures with authorized lookups and requests in your tools.',
       },
     ],
-    diagramCaption: 'Organization knowledge → Expert → Chat / Systems / WhatsApp / Website',
-    note: 'Examples only — your organization defines the Experts it needs.',
+    diagramCaption: 'Business knowledge → Expert → Channels & connected systems',
+    note: 'Illustrative roles. Your organization defines its Experts and their permitted use.',
   },
   knowledge: {
     eyebrow: 'Approved knowledge',
-    sources: ['PDF', 'Text documents', 'Google Drive', 'Microsoft OneDrive'],
+    sources: ['PDF', 'Text & Markdown', 'Google Drive', 'Microsoft OneDrive'],
   },
   integrations: {
     number: '02',
     eyebrow: 'Apps & integrations',
-    title: 'Connect the sources and channels your team already uses.',
+    title: 'Bring your knowledge and connect your channels',
     description:
-      'Bring approved files from Drive or OneDrive into Geem, then make an Expert available through WhatsApp or your website.',
+      'Upload documents or connect selected files from Google Drive and OneDrive. Then choose where people can reach your Experts.',
     items: [
       {
         id: 'google-drive',
@@ -136,19 +127,19 @@ export const en: SiteCopy = {
       },
     ],
     systemCard: {
-      eyebrow: 'Beyond chat',
-      title: 'Geem is more than a chatbot.',
+      eyebrow: 'Business systems',
+      title: 'Connect knowledge to action',
       description:
-        'Through the API, your technical team can bring Geem Expert answers grounded in your organization’s knowledge into ERP and internal tools, supporting employees with relevant information as decisions are made.',
-      tags: ['ERP systems', 'Internal tools', 'Human decision support'],
+        'Your technical team can connect Experts to internal tools and business systems, so they can request permitted actions using relevant business knowledge. Your application or a connected service executes the action.',
+      tags: ['Custom integrations', 'Internal tools', 'Permitted actions'],
     },
   },
   channels: {
     number: '03',
     eyebrow: 'Channels',
-    title: 'One Expert, available where work happens.',
+    title: 'One Expert, available where work happens',
     description:
-      'Configure an Expert once, then make it available to your team and customers in Geem Chat, WhatsApp, your website, or internal systems.',
+      'Connect an Expert to the channels your team and customers use. Add configured tools where you want it to support actions as well as conversations.',
     nodes: [
       {
         id: 'chat',
@@ -160,7 +151,7 @@ export const en: SiteCopy = {
         id: 'api',
         label: 'API & systems',
         context: 'For your systems',
-        description: 'Bring Expert answers into your internal tools.',
+        description: 'Bring Expert answers and requests for authorized actions into your applications.',
       },
       {
         id: 'whatsapp',
@@ -178,23 +169,31 @@ export const en: SiteCopy = {
   },
   api: {
     number: '04',
-    eyebrow: 'For developers & technical teams',
-    title: 'Bring the same Expert into your internal tools.',
+    eyebrow: 'Connect your business systems',
+    title: 'Put AI to work in your applications',
     description:
-      'Use a familiar Chat Completions request format, choose the Expert by header, and manage keys and usage from the workspace.',
+      'Your technical team connects the Expert to the systems that run your business. Choose how actions are executed, with the required integrations, access and permissions in place.',
     points: [
-      'Familiar Chat Completions format',
-      'Scoped, revocable workspace keys',
-      'Expert selection and usage visibility',
+      'Choose which Expert your application uses',
+      'Control and revoke access keys',
+      'Review usage from your workspace',
     ],
-    sampleLabel: 'Example for your technical team',
-    copyLabel: 'Copy',
-    copiedLabel: 'Copied',
+    paths: [
+      {
+        title: 'Client Agent API',
+        description: 'The Expert requests an action. Your application checks authorization, executes it and sends the result back to Geem.',
+      },
+      {
+        title: 'MCP Connectors',
+        description: 'Geem coordinates calls to tools you have granted access to. The connected service executes the action, subject to configured permissions and approvals.',
+      },
+    ],
+    docsLabel: 'Explore the Agent API documentation',
   },
   security: {
     number: '05',
     eyebrow: 'Trust & privacy',
-    title: 'Clear boundaries for your organization’s knowledge.',
+    title: 'Clear boundaries for your organization’s knowledge',
     description:
       'Access is separated by workspace and enforced by the backend. Your organization controls members, roles, sources, integrations, and API keys.',
     points: [
@@ -215,7 +214,7 @@ export const en: SiteCopy = {
     page: {
       hero: {
         eyebrow: 'Security & privacy at Geem',
-        title: 'Clear boundaries for your organization’s knowledge.',
+        title: 'Clear boundaries for your organization’s knowledge',
         description:
           'Geem is built with logical workspace isolation, server-enforced permissions, and protection for integration secrets and access keys.',
         primaryCta: 'Discuss your requirements',
@@ -240,7 +239,7 @@ export const en: SiteCopy = {
       ],
       controls: {
         eyebrow: 'Core safeguards',
-        title: 'Protection starts before an answer is returned.',
+        title: 'Protection starts before an answer is returned',
         description:
           'Controls work in connected layers, from resolving the workspace and member to scoping the Expert and the sources it may use.',
         items: [
@@ -284,7 +283,7 @@ export const en: SiteCopy = {
       },
       governance: {
         eyebrow: 'Shared responsibility',
-        title: 'Geem provides the controls. Your organization decides who can reach what.',
+        title: 'Geem provides the controls and your organization decides who can reach what',
         description:
           'Access and knowledge remain deliberate choices for your organization, while Geem enforces the technical boundaries inside the platform.',
         geemTitle: 'What Geem protects',
@@ -304,7 +303,7 @@ export const en: SiteCopy = {
       },
       transparency: {
         eyebrow: 'Clarity before badges',
-        title: 'Clear controls, accurately described.',
+        title: 'Clear controls, accurately described',
         description:
           'Core workspace data is stored in Saudi Arabia. Some AI features and external integrations may require the minimum necessary data to be processed by service providers, as described in the agreement and Privacy Policy.',
         note:
@@ -320,13 +319,25 @@ export const en: SiteCopy = {
     },
   },
   finalCta: {
-    title: 'Ready to build Geem Experts for your organization?',
+    title: 'Start with an idea and see where Geem takes it',
     description:
-      'Create a workspace, set up your Experts, and connect your documents and channels in one place.',
+      'Open Geem for your next question, draft or idea. Ready to bring AI into your business? Let’s connect your knowledge, Experts and systems.',
     primaryCta: 'Start with Geem',
-    secondaryCta: 'Contact the team',
+    secondaryCta: 'Discuss your use case',
   },
   footer: {
+    by: 'by',
+    ownership: 'AI developed and operated by DALSEEN',
+    visitCompany: 'Discover DALSEEN',
+    contactLabel: 'Let’s talk',
+    whatsapp: 'WhatsApp',
+    companyDetails: 'The company behind GEEM',
+    vatLabel: 'VAT number',
+    unifiedNumberLabel: 'Unified national number',
+    nationalAddressLabel: 'Short national address',
+    geemPolicies: 'GEEM policies',
+    socialLabel: 'Follow DALSEEN',
+    backToTop: 'Back to top',
     product: 'Product',
     resources: 'Resources',
     company: 'Company',
@@ -334,6 +345,8 @@ export const en: SiteCopy = {
     productLinks: [
       { label: 'Platform', href: 'product' },
       { label: 'Experts', href: 'experts' },
+      { label: 'Use cases', href: 'use-cases' },
+      { label: 'Geem robotics · In development', href: 'robotics' },
       { label: 'Integrations', href: 'integrations' },
       { label: 'Developers', href: 'api' },
       { label: 'Workspace Login', href: 'login' },
@@ -345,19 +358,20 @@ export const en: SiteCopy = {
     companyLinks: [
       { label: 'About DALSEEN', href: 'about' },
       { label: 'Contact', href: 'contact' },
+      { label: 'DALSEEN Platform policies', href: 'dalseen-legal' },
     ],
     legalLinks: [
       { label: 'Privacy', href: 'privacy' },
       { label: 'Terms', href: 'terms' },
       { label: 'Data protection', href: 'pdpl' },
     ],
-    rights: 'All rights reserved by Dal Seen Information Technology Company.',
+    rights: 'DALSEEN. All rights reserved.',
     madeIn: 'Made in Madinah',
   },
   about: {
     hero: {
       eyebrow: 'About Geem',
-      title: 'From Madinah, we build AI around how organizations really work.',
+      title: 'From Madinah, we build AI around how organizations really work',
       description:
         'Geem is the AI product of Dal Seen Information Technology Company—a Saudi technology company that began in Jeddah and is now based in Madinah.',
       primaryCta: 'See how Geem works',
@@ -372,7 +386,7 @@ export const en: SiteCopy = {
     ],
     story: {
       eyebrow: 'Our story',
-      title: 'We started with a practical need and grew alongside Saudi organizations.',
+      title: 'We started with a practical need and grew alongside Saudi organizations',
       description:
         'DALSEEN began as a small team building digital solutions around real operating needs. As its work expanded across the Kingdom, it continued developing products that make technology clearer and more useful in the working day.',
       milestones: [
@@ -395,7 +409,7 @@ export const en: SiteCopy = {
     },
     principles: {
       eyebrow: 'How we build',
-      title: 'Three principles connect DALSEEN and Geem.',
+      title: 'Three principles connect DALSEEN and Geem',
       description: 'We measure technology by how well it helps teams do real work—not by the number of features or technical terms.',
       items: [
         { title: 'Start with real work', description: 'Design around workflows that teams actually use.' },
@@ -405,7 +419,7 @@ export const en: SiteCopy = {
     },
     geem: {
       eyebrow: 'Carrying the approach forward',
-      title: 'Geem turns operating experience into intelligence your team can use.',
+      title: 'Geem turns operating experience into intelligence your team can use',
       description:
         'Geem is not a generic chatbot. Your organization creates Experts grounded in approved knowledge, then makes them available to teams and customers through the right channels and systems.',
       points: [
@@ -415,7 +429,7 @@ export const en: SiteCopy = {
       ],
     },
     cta: {
-      title: 'Let’s build an Expert around how your organization works.',
+      title: 'Let’s build an Expert around how your organization works',
       description: 'Tell us which knowledge you want to activate and which teams and systems need access to it.',
       primaryCta: 'Talk with the Geem team',
       secondaryCta: 'Explore the product',
@@ -441,7 +455,7 @@ export const en: SiteCopy = {
       privacy: {
         hero: {
           eyebrow: 'Privacy at Geem',
-          title: 'A privacy policy written in plain language.',
+          title: 'A privacy policy written in plain language',
           description: 'This policy explains what we process to operate Geem, your organization’s role in managing its workspace, and the choices available to you.',
         },
         highlights: [
@@ -540,7 +554,7 @@ export const en: SiteCopy = {
       terms: {
         hero: {
           eyebrow: 'Using Geem',
-          title: 'Clear terms for using the platform.',
+          title: 'Clear terms for using the platform',
           description: 'These terms explain the responsibilities of Dal Seen, customer organizations, and users when creating a workspace or using Geem Experts and channels.',
         },
         highlights: [
@@ -636,7 +650,7 @@ export const en: SiteCopy = {
       pdpl: {
         hero: {
           eyebrow: 'Personal data protection',
-          title: 'Your rights under Saudi law.',
+          title: 'Your rights under Saudi law',
           description: 'This notice supplements the Privacy Policy and explains roles, rights, and how to submit a personal data request.',
         },
         highlights: [

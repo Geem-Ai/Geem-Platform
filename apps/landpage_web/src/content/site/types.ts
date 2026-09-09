@@ -147,8 +147,6 @@ export type SiteCopy = {
     primaryNavigation: string;
     mobileNavigation: string;
     languageSwitch: string;
-    pauseTypewriter: string;
-    resumeTypewriter: string;
   };
   brand: {
     product: string;
@@ -161,12 +159,12 @@ export type SiteCopy = {
   };
   hero: {
     eyebrow: string;
-    specialtyPrompt: string;
-    specialties: string[];
+    title: string;
+    titleAccent: string;
     description: string;
     primaryCta: string;
     tertiaryCta: string;
-    imageAlt: string;
+    foundationLine: string;
   };
   valueStrip: {
     items: { title: string; description: string }[];
@@ -217,9 +215,8 @@ export type SiteCopy = {
     title: string;
     description: string;
     points: string[];
-    sampleLabel: string;
-    copyLabel: string;
-    copiedLabel: string;
+    paths: { title: string; description: string }[];
+    docsLabel: string;
   };
   security: {
     number: string;
@@ -237,6 +234,18 @@ export type SiteCopy = {
     secondaryCta: string;
   };
   footer: {
+    by: string;
+    ownership: string;
+    visitCompany: string;
+    contactLabel: string;
+    whatsapp: string;
+    companyDetails: string;
+    vatLabel: string;
+    unifiedNumberLabel: string;
+    nationalAddressLabel: string;
+    geemPolicies: string;
+    socialLabel: string;
+    backToTop: string;
     product: string;
     resources: string;
     company: string;
