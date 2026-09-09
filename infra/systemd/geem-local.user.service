@@ -1,0 +1,18 @@
+[Unit]
+Description=Geem local development stack (Docker Compose, no Cloudflare Tunnel)
+After=default.target
+# docker.service is a system unit; wait for the socket before compose up.
+# Do not enable this unit on production or UAT tunnel hosts.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h/Projects/Geem-Platform/infra
+Environment=PATH=/usr/local/bin:/opt/homebrew/bin:%h/.local/bin:/usr/bin:/bin
+ExecStartPre=/bin/sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+ExecStart=%h/Projects/Geem-Platform/infra/scripts/dev-up.sh
+ExecStop=docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local.yml stop
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target

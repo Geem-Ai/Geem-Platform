@@ -1,123 +1,145 @@
 ---
 import type { Locale } from '../../lib/i18n';
+import { otherLocale } from '../../lib/i18n';
 import type { SiteCopy } from '../../content/site/types';
 import { company } from '../../lib/company';
-import { homeHash } from '../../lib/routes';
+import { homeHash, switchLocalePath } from '../../lib/routes';
 import { getSiteConfig, localizedPath } from '../../lib/site';
-import { Image } from 'astro:assets';
-import avatar from '../../assets/brand/geem-avatar.webp';
+import logo from '../../assets/brand/geem-logo-horizontal-white.svg?raw';
 
-type Props = {
-  locale: Locale;
-  copy: SiteCopy;
-};
-
+type Props = { locale: Locale; copy: SiteCopy };
 const { locale, copy } = Astro.props;
 const { loginUrl, docsUrl } = getSiteConfig();
-const madeIn = locale === 'ar' ? company.madeInMadinahAr : company.madeInMadinahEn;
+const legalName = locale === 'ar' ? company.legalNameAr : company.legalNameEn;
+const languageHref = switchLocalePath(locale, otherLocale(locale), Astro.url.pathname);
 
 function resolveHref(href: string) {
   if (href === 'login') return loginUrl;
-  if (href === 'security') return localizedPath(locale, 'security');
-  if (href === 'agent-ai') return localizedPath(locale, 'agent-ai');
-  if (href === 'about') return localizedPath(locale, 'about');
-  if (href === 'contact') return localizedPath(locale, 'contact');
-  if (href === 'privacy') return localizedPath(locale, 'privacy');
-  if (href === 'terms') return localizedPath(locale, 'terms');
-  if (href === 'pdpl') return localizedPath(locale, 'pdpl');
-  if (href === 'product' || href === 'experts' || href === 'integrations' || href === 'api') {
-    return homeHash(locale, href);
-  }
+  if (href === 'docs') return docsUrl;
+  if (href === 'about') return company.companySite;
+  if (href === 'dalseen-legal') return locale === 'ar' ? company.platformLegalAr : company.platformLegalEn;
+  if (['security', 'agent-ai', 'contact', 'privacy', 'terms', 'pdpl'].includes(href)) return localizedPath(locale, href);
+  if (href === 'product' || href === 'experts' || href === 'integrations' || href === 'api' || href === 'use-cases' || href === 'robotics') return homeHash(locale, href);
   return localizedPath(locale);
 }
-
-const resourceLinks = [
-  ...copy.footer.resourceLinks,
-  ...(docsUrl ? [{ label: locale === 'ar' ? 'التوثيق' : 'Documentation', href: 'docs' }] : []),
+const groups = [
+  { title: copy.footer.product, links: copy.footer.productLinks.filter(link => link.href !== 'login') },
+  { title: copy.footer.resources, links: [...copy.footer.resourceLinks, ...(docsUrl ? [{ label: locale === 'ar' ? 'التوثيق' : 'Documentation', href: 'docs' }] : [])] },
+  { title: copy.footer.company, links: copy.footer.companyLinks },
+];
+const details = [
+  { label: copy.footer.vatLabel, value: company.vatNumber },
+  { label: copy.footer.unifiedNumberLabel, value: company.unifiedNationalNumber },
 ];
 ---
 
-<footer class="section-dark border-t border-white/10">
-  <div class="container-shell py-14">
-    <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-5" data-reveal>
-      <div class="lg:col-span-1 space-y-4">
-        <div class="flex items-center gap-3">
-          <Image src={avatar} alt="" width={44} height={44} class="size-11 rounded-full" loading="lazy" />
-          <div>
-            <div class="font-semibold text-lg">{copy.brand.product}</div>
-            <div class="text-sm text-white/65">{copy.brand.tagline}</div>
-          </div>
+<footer class="site-footer">
+  <div class="container-shell">
+    <div class="footer-main">
+      <div class="footer-brand">
+        <div class="footer-lockup">
+          <a href={localizedPath(locale)} class="footer-wordmark" aria-label={copy.brand.product}>
+            <span aria-hidden="true" set:html={logo}></span>
+          </a>
+          <a href={company.companySite} class="footer-parent" aria-label={locale === 'ar' ? 'جيم من دال سين' : 'GEEM by DALSEEN'}>
+            <span>{copy.footer.by}</span><strong dir="ltr">DALSEEN</strong>
+          </a>
         </div>
-        <p class="text-sm text-geem-sand/90">{madeIn}</p>
+        <p class="footer-ownership">{copy.footer.ownership}</p>
+        <div class="footer-contact">
+          <a href={'mailto:' + company.emails.info}><bdi dir="ltr">{company.emails.info}</bdi></a>
+          <a href={'tel:' + company.phoneTel}><bdi dir="ltr">{company.phoneDisplay}</bdi></a>
+        </div>
+        <div class="footer-socials" aria-label={copy.footer.socialLabel}>
+          <a href={company.whatsappUrl}>{copy.footer.whatsapp}</a>
+          <a href={company.socials.linkedin} aria-label="LinkedIn — DALSEEN">LinkedIn</a>
+          <a href={company.socials.instagram} aria-label="Instagram — DALSEEN">Instagram</a>
+          <a href={company.socials.x} aria-label="X — DALSEEN">X</a>
+        </div>
       </div>
-
-      <div>
-        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.product}</h2>
-        <ul class="space-y-2 text-sm text-white/70">
-          {
-            copy.footer.productLinks.map((link) => (
-              <li>
-                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
-                  {link.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
-
-      <div>
-        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.resources}</h2>
-        <ul class="space-y-2 text-sm text-white/70">
-          {
-            resourceLinks.map((link) => (
-              <li>
-                <a
-                  class="hover:text-white no-underline"
-                  href={link.href === 'docs' ? docsUrl : resolveHref(link.href)}
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
-
-      <div>
-        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.company}</h2>
-        <ul class="space-y-2 text-sm text-white/70">
-          {
-            copy.footer.companyLinks.map((link) => (
-              <li>
-                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
-                  {link.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
-
-      <div>
-        <h2 class="mb-3 text-sm font-semibold tracking-wide text-white/90">{copy.footer.legal}</h2>
-        <ul class="space-y-2 text-sm text-white/70">
-          {
-            copy.footer.legalLinks.map((link) => (
-              <li>
-                <a class="hover:text-white no-underline" href={resolveHref(link.href)}>
-                  {link.label}
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-      </div>
+      <nav class="footer-links" aria-label={locale === 'ar' ? 'روابط التذييل' : 'Footer navigation'}>
+        {groups.map(group => (
+          <div class="footer-link-group">
+            <h2>{group.title}</h2>
+            <ul>{group.links.map(link => (
+              <li><a href={resolveHref(link.href)}>{link.label}{['about', 'dalseen-legal', 'docs'].includes(link.href) && <span class="external-arrow" aria-hidden="true">↗</span>}</a></li>
+            ))}</ul>
+          </div>
+        ))}
+      </nav>
     </div>
-
-    <div class="mt-12 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
+    <div class="footer-legal-line">
+      <p>{legalName}</p>
+      <dl>{details.map(detail => <div><dt>{detail.label}</dt><dd><bdi dir="ltr">{detail.value}</bdi></dd></div>)}</dl>
+    </div>
+    <div class="footer-bottom">
       <p>© {new Date().getFullYear()} {copy.footer.rights}</p>
-      <p>{locale === 'ar' ? company.legalNameAr : company.legalNameEn}</p>
+      <nav class="footer-policies" aria-label={copy.footer.geemPolicies}>
+        {copy.footer.legalLinks.map(link => <a href={resolveHref(link.href)}>{link.label}</a>)}
+      </nav>
+      <div class="footer-utilities">
+        <a href={languageHref} hreflang={otherLocale(locale)} lang={otherLocale(locale)}>{locale === 'ar' ? 'English' : 'العربية'}</a>
+        <a href="#main" aria-label={copy.footer.backToTop} title={copy.footer.backToTop}><span aria-hidden="true">↑</span></a>
+      </div>
     </div>
   </div>
 </footer>
+
+<style>
+  .site-footer { padding-block: 2rem .75rem; border-block-start: 1px solid #a1ded430; background: var(--geem-navy-950); color: #fff; }
+  .site-footer a { text-decoration: none; }
+  .site-footer a:hover { color: var(--geem-sand); }
+  .site-footer a:focus-visible { outline: 2px solid var(--geem-sand); outline-offset: 4px; border-radius: .15rem; }
+  .footer-main { display: grid; gap: 1.5rem; padding-block-end: 1.25rem; }
+  .footer-brand { min-inline-size: 0; }
+  .footer-lockup { display: flex; align-items: center; gap: .85rem; }
+  .footer-wordmark { display: inline-flex; color: white; flex: none; }
+  .footer-wordmark>span { display: block; inline-size: 6.5rem; aspect-ratio: 300 / 71.94; }
+  .footer-wordmark :global(svg) { display: block; inline-size: 100%; block-size: 100%; }
+  .footer-parent { display: inline-flex; align-items: baseline; gap: .4rem; padding-inline-start: .85rem; border-inline-start: 1px solid #ffffff2b; color: #dce9eb; line-height: 1.5; }
+  .footer-parent>span { color: #9fb5be; font-size: .75rem; }
+  .footer-parent strong { font-family: 'IBM Plex Sans', sans-serif; font-size: .75rem; font-weight: 600; letter-spacing: .06em; }
+  .footer-ownership { margin: .85rem 0 .4rem; color: #a8bcc4; font-size: .83rem; line-height: 1.65; }
+  .footer-contact, .footer-socials { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem 1rem; }
+  .footer-contact a { padding-block: .25rem; color: #c6d8de; font-size: .78rem; }
+  .footer-socials { margin-block-start: .25rem; }
+  .footer-socials a { padding-block: .35rem; color: #a8bcc4; font-size: .73rem; }
+  .footer-links { display: grid; align-content: start; gap: .6rem; }
+  .footer-link-group { display: grid; gap: .15rem; }
+  .footer-link-group h2 { margin: 0; padding-block: .3rem; color: #e0eaed; font-size: .78rem; font-weight: 500; line-height: 1.6; }
+  .footer-link-group ul { display: flex; align-items: baseline; flex-wrap: wrap; gap: .15rem 1.15rem; margin: 0; padding: 0; list-style: none; }
+  .footer-link-group a { display: inline-flex; align-items: baseline; gap: .35rem; padding-block: .3rem; color: #a8bcc4; font-size: .8rem; line-height: 1.6; }
+  .footer-link-group a:hover { text-decoration: underline; text-underline-offset: .25em; }
+  .external-arrow { flex: none; font-family: sans-serif; }
+  :global([dir='rtl']) .external-arrow { transform: scaleX(-1); }
+  .footer-legal-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1.5rem; padding-block: .8rem; border-block: 1px solid #ffffff14; color: #91a9b3; font-size: .7rem; line-height: 1.7; }
+  .footer-legal-line p { margin: 0; }
+  .footer-legal-line dl { display: flex; flex-wrap: wrap; gap: .3rem 1.5rem; margin: 0; }
+  .footer-legal-line dl>div { display: inline-flex; align-items: baseline; gap: .5rem; }
+  .footer-legal-line dd { margin: 0; color: #bfd0d6; font-family: 'IBM Plex Sans', sans-serif; font-variant-numeric: tabular-nums; }
+  .footer-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem 1.5rem; padding-block-start: .5rem; }
+  .footer-bottom>p { margin: 0; color: #91a9b3; font-size: .7rem; line-height: 1.7; }
+  .footer-policies, .footer-utilities { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+  .footer-bottom a { display: inline-flex; align-items: center; min-block-size: 2rem; color: #a8bcc4; font-size: .73rem; }
+  .footer-utilities>a:last-child { justify-content: center; inline-size: 2rem; border: 1px solid #ffffff1a; border-radius: .4rem; }
+  @media (min-width: 640px) {
+    .footer-link-group { grid-template-columns: 5rem minmax(0, 1fr); column-gap: 1rem; }
+  }
+  @media (min-width: 1000px) {
+    .footer-main { grid-template-columns: minmax(0, .85fr) minmax(0, 1.65fr); column-gap: 3.5rem; }
+  }
+  @media (max-width: 639px) {
+    .site-footer { padding-block-start: 1.5rem; }
+    .footer-main { gap: 1rem; }
+    .footer-link-group { grid-template-columns: 3.75rem minmax(0, 1fr); column-gap: .6rem; }
+    .footer-link-group ul { gap: 0 .85rem; }
+    .footer-link-group a, .footer-socials a, .footer-contact a { min-block-size: 2rem; }
+    .footer-legal-line { gap: .4rem; }
+    .footer-legal-line dl { gap: .3rem 1rem; }
+    .footer-bottom { gap: .2rem .75rem; }
+    .footer-bottom>p { flex-basis: 100%; }
+    .footer-policies { gap: .8rem; }
+    .footer-utilities { gap: .55rem; }
+    .footer-bottom a { min-block-size: 2.25rem; }
+  }
+</style>

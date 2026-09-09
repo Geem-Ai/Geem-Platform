@@ -1,4 +1,5 @@
 ---
+import GeemAvatar from '../ui/GeemAvatar.astro';
 import type { SiteCopy } from '../../content/site/types';
 import type { Locale } from '../../lib/i18n';
 import Section from '../ui/Section.astro';
@@ -10,13 +11,85 @@ const { locale, copy } = Astro.props;
 const { signupUrl } = getSiteConfig();
 ---
 
-<Section tone="dark">
-  <div class="mx-auto max-w-3xl text-center" data-reveal>
-    <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">{copy.finalCta.title}</h2>
-    <p class="mt-4 text-lg text-white/75">{copy.finalCta.description}</p>
-    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-      <Button href={signupUrl} variant="primary">{copy.finalCta.primaryCta}</Button>
-      <Button href={contactHref(locale)} variant="secondary">{copy.finalCta.secondaryCta}</Button>
+<Section tone="dark" class="closing-section">
+  <div class="closing-layout" data-reveal>
+    <div class="closing-copy">
+      <span class="closing-rule" aria-hidden="true"></span>
+      <h2>{copy.finalCta.title}</h2>
+      <p>{copy.finalCta.description}</p>
+    </div>
+    <div class="closing-next-step">
+      <div class="closing-avatar" aria-hidden="true">
+        <GeemAvatar size="100%" variant="mascot" />
+      </div>
+      <div class="closing-actions">
+        <Button href={signupUrl} variant="primary" class="closing-primary">
+          {copy.finalCta.primaryCta}
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 10h13m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </Button>
+        <a href={contactHref(locale)} class="closing-contact">{copy.finalCta.secondaryCta}</a>
+      </div>
     </div>
   </div>
 </Section>
+
+<style>
+  :global(.closing-section) {
+    padding-block: clamp(4.5rem, 8vw, 7rem);
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+    background: var(--geem-navy-900);
+    color: white;
+  }
+
+  .closing-layout { display: grid; align-items: center; gap: 2.75rem; }
+  .closing-copy { min-inline-size: 0; }
+  .closing-rule { display: block; inline-size: 3rem; block-size: 0.18rem; margin-block-end: 1.8rem; background: var(--geem-sand); }
+
+  .closing-copy h2 {
+    margin: 0;
+    max-inline-size: 18ch;
+    color: white;
+    font-size: clamp(2rem, 4.3vw, 3.5rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  .closing-copy p {
+    margin-block: 1.5rem 0;
+    max-inline-size: 55ch;
+    color: rgb(255 255 255 / 68%);
+    font-size: clamp(1rem, 1.4vw, 1.1rem);
+    line-height: 1.8;
+  }
+
+  .closing-next-step { display: flex; align-items: center; gap: 1.5rem; }
+  .closing-avatar { flex: none; inline-size: clamp(4.5rem, 9vw, 7rem); }
+  .closing-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 1.15rem; }
+
+  .closing-actions :global(.closing-primary) {
+    min-block-size: 3.1rem;
+    gap: 1.25rem;
+    padding-inline: 1.3rem;
+    border-radius: 0.55rem;
+    font-size: 0.95rem;
+  }
+
+  .closing-actions svg { inline-size: 1.15rem; block-size: 1.15rem; }
+  :global(html[dir='rtl']) .closing-actions svg { transform: scaleX(-1); }
+  .closing-contact { color: rgb(255 255 255 / 82%); font-size: 0.9rem; text-decoration: underline; text-underline-offset: 0.35em; text-decoration-color: rgb(255 255 255 / 32%); }
+  .closing-contact:hover,
+  .closing-contact:focus-visible { color: var(--geem-sand); text-decoration-color: var(--geem-sand); }
+
+  @media (min-width: 900px) {
+    .closing-layout { grid-template-columns: minmax(0, 1.45fr) minmax(14rem, 0.7fr); gap: clamp(3rem, 8vw, 7rem); }
+    .closing-next-step { flex-direction: column; align-items: flex-start; gap: 1.8rem; padding-inline-start: clamp(1.5rem, 3vw, 3rem); border-inline-start: 1px solid rgb(255 255 255 / 16%); }
+  }
+
+  @media (max-width: 380px) {
+    .closing-next-step { align-items: flex-start; gap: 1rem; }
+    .closing-avatar { inline-size: 3.75rem; }
+    .closing-actions :global(.closing-primary) { gap: 0.6rem; padding-inline: 0.95rem; }
+  }
+</style>

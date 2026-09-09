@@ -1,0 +1,420 @@
+---
+import { Image } from 'astro:assets';
+import { getUseCasesCopy } from '../../content/use-cases';
+import type { Locale } from '../../lib/i18n';
+import customer from '../../assets/landing/geem-customer-men.webp';
+import employee from '../../assets/landing/geem-team-men.webp';
+import operations from '../../assets/landing/geem-operations-men.webp';
+import sales from '../../assets/landing/geem-sales.webp';
+import finance from '../../assets/landing/geem-finance.webp';
+import it from '../../assets/landing/geem-it.webp';
+import research from '../../assets/landing/geem-research.webp';
+import Section from '../ui/Section.astro';
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const copy = getUseCasesCopy(locale);
+const photos = { customer, employee, operations, sales, finance, it, research };
+const prefix = `use-case-${locale}`;
+---
+
+<Section id="use-cases" tone="light">
+  <div class="use-cases" data-use-cases>
+    <header class="use-cases__intro">
+      <p class="eyebrow">{copy.eyebrow}</p>
+      <h2>{copy.title}</h2>
+      <p class="use-cases__description">{copy.description}</p>
+    </header>
+
+    <!-- Without JavaScript the controls stay hidden and every scenario is readable. -->
+    <div class="use-cases__tabs" role="tablist" aria-label={copy.tabsLabel} aria-orientation="horizontal" hidden data-use-case-tabs>
+      {copy.cases.map((item, index) => (
+        <button
+          type="button"
+          id={`${prefix}-tab-${item.id}`}
+          class={`use-cases__tab use-cases__tab--${item.id}`}
+          role="tab"
+          aria-controls={`${prefix}-panel-${item.id}`}
+          aria-selected={index === 0 ? 'true' : 'false'}
+          tabindex={index === 0 ? 0 : -1}
+          data-use-case-tab
+        >
+          <Image src={photos[item.id]} width={96} height={72} alt="" loading="lazy" class="use-cases__tab-photo" aria-hidden="true" />
+          <span class="use-cases__tab-number" aria-hidden="true">0{index + 1}</span>
+          <span>{item.label}</span>
+          {item.id === 'research' && <span class="use-cases__technology" dir="ltr" aria-hidden="true">OCR · HTR</span>}
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7" /></svg>
+        </button>
+      ))}
+    </div>
+
+    <div class="use-cases__panels">
+      {copy.cases.map((item) => (
+        <article
+          id={`${prefix}-panel-${item.id}`}
+          class={`use-case use-case--${item.id}`}
+          aria-labelledby={`${prefix}-title-${item.id}`}
+          data-use-case-panel
+        >
+          <div class="use-case__visual">
+            <Image
+              src={photos[item.id]}
+              alt={item.imageAlt}
+              widths={[480, 720, 960, 1440]}
+              sizes="(min-width: 1152px) 490px, (min-width: 900px) 44vw, calc(100vw - 2rem)"
+              loading="lazy"
+              decoding="async"
+              class="use-case__photo"
+            />
+            <span class="use-case__example">{copy.exampleLabel}</span>
+            <div class="use-case__request">
+              <p>{copy.requestLabel}</p>
+              <blockquote>{item.question}</blockquote>
+            </div>
+          </div>
+
+          <div class="use-case__details">
+            <p class="use-case__channel">{item.channel}</p>
+            <h3 id={`${prefix}-title-${item.id}`}>{item.title}</h3>
+            <p class="use-case__description">{item.description}</p>
+            <ol class="use-case__steps" aria-label={copy.flowLabel}>
+              {item.steps.map((step, index) => (
+                <li>
+                  <span class="use-case__step-number" aria-hidden="true">0{index + 1}</span>
+                  <div>
+                    <h4>{step.label}</h4>
+                    <p>{step.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <p class="use-cases__note">{copy.note}</p>
+  </div>
+</Section>
+
+<script>
+  function initializeUseCases() {
+    document.querySelectorAll<HTMLElement>('[data-use-cases]').forEach((root) => {
+      if (root.dataset.enhanced === 'true') return;
+
+      const tablist = root.querySelector<HTMLElement>('[data-use-case-tabs]');
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-use-case-tab]'));
+      const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-use-case-panel]'));
+      if (!tablist || !tabs.length || tabs.length !== panels.length) return;
+
+      function activate(index: number, moveFocus = false) {
+        tabs.forEach((tab, tabIndex) => {
+          const selected = tabIndex === index;
+          tab.setAttribute('aria-selected', String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+          panels[tabIndex].hidden = !selected;
+        });
+        if (moveFocus) tabs[index].focus();
+      }
+
+      panels.forEach((panel, index) => {
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tabs[index].id);
+        panel.tabIndex = 0;
+      });
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activate(index));
+        tab.addEventListener('keydown', (event) => {
+          const direction = getComputedStyle(tablist).direction === 'rtl' ? -1 : 1;
+          let nextIndex: number;
+          switch (event.key) {
+            case 'ArrowRight': nextIndex = (index + direction + tabs.length) % tabs.length; break;
+            case 'ArrowLeft': nextIndex = (index - direction + tabs.length) % tabs.length; break;
+            case 'Home': nextIndex = 0; break;
+            case 'End': nextIndex = tabs.length - 1; break;
+            default: return;
+          }
+          event.preventDefault();
+          activate(nextIndex, true);
+        });
+      });
+
+      activate(0);
+      tablist.hidden = false;
+      root.dataset.enhanced = 'true';
+    });
+  }
+
+  initializeUseCases();
+  document.addEventListener('astro:page-load', initializeUseCases);
+</script>
+
+<style>
+  .use-cases {
+    --use-case-accent: #177568;
+    min-inline-size: 0;
+  }
+
+  .use-cases__intro { max-inline-size: 48rem; }
+
+  .use-cases__intro h2 {
+    margin-block-start: 0.75rem;
+    font-size: clamp(1.875rem, 3.6vw, 2.7rem);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .use-cases__description {
+    max-inline-size: 43rem;
+    margin-block-start: 1rem;
+    color: var(--geem-muted);
+    font-size: 1.125rem;
+    line-height: 1.8;
+  }
+
+  .use-cases__tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-block: 2.5rem 1rem;
+    padding: 0.4rem;
+    border: 1px solid var(--geem-border);
+    border-radius: 1rem;
+    background: #edf3f5;
+  }
+
+  .use-cases__tabs[hidden], .use-case[hidden] { display: none; }
+
+  .use-cases__tab {
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: 3.5rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.7rem;
+    color: var(--geem-muted);
+    background: transparent;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.45;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .use-cases__tab:hover { background: #ffffff9c; color: var(--geem-navy-900); }
+  .use-cases__tab:focus-visible { outline-color: #197d93; }
+
+  .use-cases__tab-photo { flex: none; inline-size: 3.25rem; block-size: 2.75rem; border-radius: .4rem; object-fit: cover; }
+  .use-cases__technology { flex: none; margin-inline-start: auto; padding: .25rem .55rem; border-radius: .35rem; background: #e4eee9; color: #326c5a; font-family: 'IBM Plex Sans', sans-serif; font-size: .72rem; white-space: nowrap; }
+  .use-cases__technology + svg { margin-inline-start: 0; }
+
+  .use-cases__tab[aria-selected='true'] {
+    border-color: var(--geem-border);
+    background: white;
+    color: var(--geem-navy-900);
+    box-shadow: 0 3px 10px #0e2f4408;
+  }
+
+  .use-cases__tab-number {
+    color: var(--use-case-accent);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .use-cases__tab svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-inline-start: auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+    opacity: 0.45;
+  }
+
+  :global([dir='rtl']) .use-cases__tab svg { transform: scaleX(-1); }
+  .use-cases__tab--employee, .use-case--employee { --use-case-accent: #315f87; }
+  .use-cases__tab--operations, .use-case--operations { --use-case-accent: #946227; }
+  .use-cases__tab--sales, .use-case--sales { --use-case-accent: #7453a3; }
+  .use-cases__tab--finance, .use-case--finance { --use-case-accent: #286a78; }
+  .use-cases__tab--it, .use-case--it { --use-case-accent: #4258a4; }
+  .use-cases__tab--research, .use-case--research { --use-case-accent: #79612e; }
+
+  .use-cases__panels { display: grid; gap: 1.5rem; }
+  .use-cases:not([data-enhanced='true']) .use-cases__panels { margin-block-start: 2.5rem; }
+
+  .use-case {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid var(--geem-border);
+    border-radius: 1.35rem;
+    background: white;
+    box-shadow: 0 18px 50px #0e2f4408;
+  }
+
+  .use-case__visual {
+    position: relative;
+    min-inline-size: 0;
+    min-block-size: 22rem;
+    overflow: hidden;
+    background: var(--geem-navy-900);
+    isolation: isolate;
+  }
+
+  .use-case__visual::after {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: linear-gradient(180deg, #07141d12 35%, #07141dba 78%, #07141de6 100%);
+    content: '';
+  }
+
+  .use-case__photo {
+    position: absolute;
+    z-index: -2;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: 53% center;
+  }
+
+  .use-case--employee .use-case__photo { object-position: 62% center; }
+  .use-case--operations .use-case__photo { object-position: 66% center; }
+
+  .use-case__example {
+    position: absolute;
+    inset-block-start: 1.25rem;
+    inset-inline-start: 1.25rem;
+    max-inline-size: calc(100% - 2.5rem);
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #ffffff45;
+    border-radius: 999px;
+    background: #07141dba;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .use-case__request {
+    position: absolute;
+    inset-inline: clamp(1.25rem, 3vw, 2rem);
+    inset-block-end: clamp(1.5rem, 3vw, 2rem);
+    color: white;
+  }
+
+  .use-case__request p { color: #e4d2ae; font-size: 0.75rem; }
+
+  .use-case__request blockquote {
+    max-inline-size: 24rem;
+    margin: 0.55rem 0 0;
+    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+    font-weight: 500;
+    line-height: 1.5;
+    text-wrap: balance;
+  }
+
+  .use-case__details { min-inline-size: 0; padding: clamp(1.25rem, 3.4vw, 2.5rem); }
+
+  .use-case__channel {
+    color: var(--use-case-accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.7;
+  }
+
+  .use-case__details h3 {
+    margin-block-start: 0.75rem;
+    color: var(--geem-navy-900);
+    font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .use-case__description { margin-block-start: 0.8rem; color: var(--geem-muted); font-size: 0.95rem; line-height: 1.8; }
+
+  .use-case__steps {
+    display: grid;
+    gap: 1.1rem;
+    margin: 1.6rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .use-case__steps li { position: relative; display: flex; gap: 0.9rem; align-items: flex-start; }
+
+  .use-case__steps li:not(:last-child)::after {
+    position: absolute;
+    inset-inline-start: 1.1rem;
+    inset-block-start: 2.2rem;
+    inset-block-end: -1.1rem;
+    inline-size: 1px;
+    background: var(--geem-border);
+    content: '';
+  }
+
+  .use-case__step-number {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 2.2rem;
+    block-size: 2.2rem;
+    border: 1px solid color-mix(in oklab, var(--use-case-accent) 20%, white);
+    border-radius: 0.65rem;
+    background: color-mix(in oklab, var(--use-case-accent) 7%, white);
+    color: var(--use-case-accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .use-case__steps h4 { color: var(--geem-navy-900); font-size: 0.875rem; font-weight: 600; }
+  .use-case__steps p { margin-block-start: 0.15rem; color: var(--geem-muted); font-size: 0.825rem; line-height: 1.65; }
+
+  .use-cases__note {
+    max-inline-size: 60rem;
+    margin-block-start: 1.15rem;
+    padding-inline-start: 1rem;
+    border-inline-start: 2px solid #b1c5bd;
+    color: var(--geem-muted);
+    font-size: 0.8rem;
+    line-height: 1.8;
+  }
+
+  @media (min-width: 900px) {
+    .use-cases__tab--research { grid-column: 1 / -1; }
+    .use-case { grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr); }
+    .use-case__visual { min-block-size: 34rem; }
+  }
+
+  @media (min-width: 640px) and (max-width: 899px) {
+    .use-cases__tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .use-cases__tab--research { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 639px) {
+    .use-cases__tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; padding: 0.3rem; }
+    .use-cases__tab--research { grid-column: 1 / -1; }
+    .use-cases__tab { gap: .5rem; padding: .5rem; font-size: 0.8rem; text-align: start; }
+    .use-cases__tab-photo { inline-size: 2.2rem; block-size: 2.6rem; }
+    .use-cases__tab-number, .use-cases__tab svg { display: none; }
+    .use-case__visual { min-block-size: 21rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .use-cases__tab { transition: none; }
+  }
+</style>

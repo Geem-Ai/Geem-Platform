@@ -1,7 +1,6 @@
 ---
-import { Image } from 'astro:assets';
+import GeemAvatar from '../ui/GeemAvatar.astro';
 import type { SiteCopy } from '../../content/site/types';
-import avatar from '../../assets/brand/geem-avatar.webp';
 import chatWidgetIcon from '../../assets/apps/chat-widget.svg';
 import whatsappIcon from '../../assets/apps/whatsapp.svg';
 import Section from '../ui/Section.astro';
@@ -26,7 +25,7 @@ const nodes = nodeOrder
     <header class="expert-rail">
       <div class="expert-rail__identity">
         <span class="expert-rail__avatar">
-          <Image src={avatar} alt="" width={64} height={64} loading="lazy" />
+          <GeemAvatar size="100%" />
           <i aria-hidden="true"></i>
         </span>
         <span>
@@ -85,7 +84,7 @@ const nodes = nodeOrder
                     <span class="preview-lines preview-lines--short"><i></i><i></i></span>
                   </div>
                   <div class="chat-preview__message chat-preview__message--expert">
-                    <Image src={avatar} alt="" width={30} height={30} loading="lazy" />
+                    <GeemAvatar size="1.85rem" />
                     <span class="preview-lines"><i></i><i></i><i></i></span>
                   </div>
                   <div class="chat-preview__sources"><i></i><i></i></div>
@@ -119,8 +118,8 @@ const nodes = nodeOrder
                   </div>
                   <div class="widget-preview__window">
                     <div>
-                      <Image src={avatar} alt="" width={24} height={24} loading="lazy" />
-                      <span></span>
+                      <GeemAvatar size="1.65rem" />
+                      <span class="widget-preview__name"></span>
                     </div>
                     <i></i><i></i>
                   </div>
@@ -212,13 +211,6 @@ const nodes = nodeOrder
     border-radius: 1.1rem;
     background: white;
     box-shadow: 0 10px 25px color-mix(in oklab, black 20%, transparent);
-  }
-
-  .expert-rail__avatar img {
-    inline-size: 100%;
-    block-size: 100%;
-    border-radius: 0.95rem;
-    object-fit: cover;
   }
 
   .expert-rail__avatar i {
@@ -467,13 +459,6 @@ const nodes = nodeOrder
     background: color-mix(in oklab, white 6%, transparent);
   }
 
-  .chat-preview__message--expert img {
-    flex: 0 0 auto;
-    inline-size: 1.65rem;
-    block-size: 1.65rem;
-    border-radius: 0.55rem;
-  }
-
   .chat-preview__sources {
     display: flex;
     gap: 0.35rem;
@@ -649,13 +634,7 @@ const nodes = nodeOrder
     background: var(--geem-navy-900);
   }
 
-  .widget-preview__window img {
-    inline-size: 1.35rem;
-    block-size: 1.35rem;
-    border-radius: 0.4rem;
-  }
-
-  .widget-preview__window div span {
+  .widget-preview__name {
     inline-size: 46%;
     block-size: 0.28rem;
     border-radius: 999px;

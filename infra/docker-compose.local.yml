@@ -1,0 +1,27 @@
+# Local development overlay — no Cloudflare Tunnel.
+# Use localhost or *.geem.dm only. Do NOT combine with docker-compose.uat.yml or
+# docker-compose.tunnel.yml on the same host (those start cloudflared).
+#
+#   cd infra
+#   ./scripts/dev-up.sh
+# or:
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# MCP connector testing (requires ./scripts/generate-dev-mcp-pki.sh and
+# MCP_CONNECTOR_ENABLED=true in ../.env):
+#   docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.local-mcp.yml up -d --build
+
+services:
+  api:
+    secrets: !reset []
+    environment:
+      MCP_EGRESS_CLIENT_CERT_FILE: ""
+      MCP_EGRESS_CLIENT_KEY_FILE: ""
+      MCP_EGRESS_CA_CERT_FILE: ""
+
+  worker:
+    secrets: !reset []
+    environment:
+      MCP_EGRESS_CLIENT_CERT_FILE: ""
+      MCP_EGRESS_CLIENT_KEY_FILE: ""
+      MCP_EGRESS_CA_CERT_FILE: ""
