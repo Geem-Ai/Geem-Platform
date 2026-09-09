@@ -9,24 +9,30 @@ import sales from '../../assets/landing/geem-sales.webp';
 import finance from '../../assets/landing/geem-finance.webp';
 import it from '../../assets/landing/geem-it.webp';
 import research from '../../assets/landing/geem-research.webp';
-import Section from '../ui/Section.astro';
+import devices from '../../assets/landing/geem-facilities.webp';
+import municipal from '../../assets/landing/geem-government.webp';
+import visitor from '../../assets/landing/geem-tourism.webp';
 
 type Props = { locale: Locale };
 const { locale } = Astro.props;
 const copy = getUseCasesCopy(locale);
-const photos = { customer, employee, operations, sales, finance, it, research };
+const photos = { customer, employee, operations, sales, finance, it, research, arabic: employee, developer: it, devices, municipal, visitor };
 const prefix = `use-case-${locale}`;
 ---
 
-<Section id="use-cases" tone="light">
   <div class="use-cases" data-use-cases>
     <header class="use-cases__intro">
-      <p class="eyebrow">{copy.eyebrow}</p>
-      <h2>{copy.title}</h2>
+      <h3>{copy.title}</h3>
       <p class="use-cases__description">{copy.description}</p>
     </header>
 
     <!-- Without JavaScript the controls stay hidden and every scenario is readable. -->
+    <div class="use-cases__mobile-control" hidden data-use-case-mobile>
+      <label for={`${prefix}-select`}>{copy.selectionLabel}</label>
+      <select id={`${prefix}-select`} data-use-case-select>
+        {copy.cases.map((item) => <option value={item.id}>{item.label}</option>)}
+      </select>
+    </div>
     <div class="use-cases__tabs" role="tablist" aria-label={copy.tabsLabel} aria-orientation="horizontal" hidden data-use-case-tabs>
       {copy.cases.map((item, index) => (
         <button
@@ -37,12 +43,12 @@ const prefix = `use-case-${locale}`;
           aria-controls={`${prefix}-panel-${item.id}`}
           aria-selected={index === 0 ? 'true' : 'false'}
           tabindex={index === 0 ? 0 : -1}
+          data-use-case-id={item.id}
           data-use-case-tab
         >
           <Image src={photos[item.id]} width={96} height={72} alt="" loading="lazy" class="use-cases__tab-photo" aria-hidden="true" />
-          <span class="use-cases__tab-number" aria-hidden="true">0{index + 1}</span>
+          <span class="use-cases__tab-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
           <span>{item.label}</span>
-          {item.id === 'research' && <span class="use-cases__technology" dir="ltr" aria-hidden="true">OCR · HTR</span>}
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7" /></svg>
         </button>
       ))}
@@ -66,7 +72,7 @@ const prefix = `use-case-${locale}`;
               decoding="async"
               class="use-case__photo"
             />
-            <span class="use-case__example">{copy.exampleLabel}</span>
+            <span class:list={['use-case__example', item.proposed && 'use-case__example--proposed']}>{item.proposed ? copy.proposedLabel : copy.exampleLabel}</span>
             <div class="use-case__request">
               <p>{copy.requestLabel}</p>
               <blockquote>{item.question}</blockquote>
@@ -77,6 +83,10 @@ const prefix = `use-case-${locale}`;
             <p class="use-case__channel">{item.channel}</p>
             <h3 id={`${prefix}-title-${item.id}`}>{item.title}</h3>
             <p class="use-case__description">{item.description}</p>
+            <div class="use-case__challenge">
+              <h4>{copy.challengeLabel}</h4>
+              <p>{item.challenge}</p>
+            </div>
             <ol class="use-case__steps" aria-label={copy.flowLabel}>
               {item.steps.map((step, index) => (
                 <li>
@@ -88,6 +98,14 @@ const prefix = `use-case-${locale}`;
                 </li>
               ))}
             </ol>
+            <div class="use-case__outcome">
+              <h4>{copy.outcomeLabel}</h4>
+              <p>{item.outcome}</p>
+            </div>
+          </div>
+          <div class="use-case__related">
+            <h4>{copy.relatedLabel}</h4>
+            <ul>{item.related.map((related) => <li>{related}</li>)}</ul>
           </div>
         </article>
       ))}
@@ -95,7 +113,6 @@ const prefix = `use-case-${locale}`;
 
     <p class="use-cases__note">{copy.note}</p>
   </div>
-</Section>
 
 <script>
   function initializeUseCases() {
@@ -105,6 +122,8 @@ const prefix = `use-case-${locale}`;
       const tablist = root.querySelector<HTMLElement>('[data-use-case-tabs]');
       const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-use-case-tab]'));
       const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-use-case-panel]'));
+      const select = root.querySelector<HTMLSelectElement>('[data-use-case-select]');
+      const mobileControl = root.querySelector<HTMLElement>('[data-use-case-mobile]');
       if (!tablist || !tabs.length || tabs.length !== panels.length) return;
 
       function activate(index: number, moveFocus = false) {
@@ -114,7 +133,15 @@ const prefix = `use-case-${locale}`;
           tab.tabIndex = selected ? 0 : -1;
           panels[tabIndex].hidden = !selected;
         });
+        if (select) select.value = tabs[index].dataset.useCaseId || '';
         if (moveFocus) tabs[index].focus();
+      }
+
+      function activateFromHash() {
+        let id: string;
+        try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+        const index = panels.findIndex((panel) => panel.id === id);
+        if (index >= 0) activate(index);
       }
 
       panels.forEach((panel, index) => {
@@ -140,8 +167,16 @@ const prefix = `use-case-${locale}`;
         });
       });
 
+      select?.addEventListener('change', () => {
+        const index = tabs.findIndex((tab) => tab.dataset.useCaseId === select.value);
+        if (index >= 0) activate(index);
+      });
+
       activate(0);
+      activateFromHash();
+      window.addEventListener('hashchange', activateFromHash);
       tablist.hidden = false;
+      if (mobileControl) mobileControl.hidden = false;
       root.dataset.enhanced = 'true';
     });
   }
@@ -158,9 +193,8 @@ const prefix = `use-case-${locale}`;
 
   .use-cases__intro { max-inline-size: 48rem; }
 
-  .use-cases__intro h2 {
-    margin-block-start: 0.75rem;
-    font-size: clamp(1.875rem, 3.6vw, 2.7rem);
+  .use-cases__intro h3 {
+    font-size: 1.35rem;
     font-weight: 600;
     line-height: 1.3;
     letter-spacing: -0.025em;
@@ -169,17 +203,19 @@ const prefix = `use-case-${locale}`;
 
   .use-cases__description {
     max-inline-size: 43rem;
-    margin-block-start: 1rem;
+    margin-block-start: 0.5rem;
     color: var(--geem-muted);
-    font-size: 1.125rem;
+    font-size: 1rem;
     line-height: 1.8;
   }
 
+  .use-cases__mobile-control { display: none; }
+
   .use-cases__tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.5rem;
-    margin-block: 2.5rem 1rem;
+    margin-block: 1.25rem 1rem;
     padding: 0.4rem;
     border: 1px solid var(--geem-border);
     border-radius: 1rem;
@@ -193,14 +229,14 @@ const prefix = `use-case-${locale}`;
     min-inline-size: 0;
     min-block-size: 3.5rem;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.8rem 1rem;
+    gap: 0.5rem;
+    padding: 0.6rem;
     border: 1px solid transparent;
     border-radius: 0.7rem;
     color: var(--geem-muted);
     background: transparent;
     font: inherit;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 500;
     line-height: 1.45;
     text-align: start;
@@ -211,9 +247,7 @@ const prefix = `use-case-${locale}`;
   .use-cases__tab:hover { background: #ffffff9c; color: var(--geem-navy-900); }
   .use-cases__tab:focus-visible { outline-color: #197d93; }
 
-  .use-cases__tab-photo { flex: none; inline-size: 3.25rem; block-size: 2.75rem; border-radius: .4rem; object-fit: cover; }
-  .use-cases__technology { flex: none; margin-inline-start: auto; padding: .25rem .55rem; border-radius: .35rem; background: #e4eee9; color: #326c5a; font-family: 'IBM Plex Sans', sans-serif; font-size: .72rem; white-space: nowrap; }
-  .use-cases__technology + svg { margin-inline-start: 0; }
+  .use-cases__tab-photo { flex: none; inline-size: 2.65rem; block-size: 2.75rem; border-radius: .4rem; object-fit: cover; }
 
   .use-cases__tab[aria-selected='true'] {
     border-color: var(--geem-border);
@@ -248,11 +282,17 @@ const prefix = `use-case-${locale}`;
   .use-cases__tab--finance, .use-case--finance { --use-case-accent: #286a78; }
   .use-cases__tab--it, .use-case--it { --use-case-accent: #4258a4; }
   .use-cases__tab--research, .use-case--research { --use-case-accent: #79612e; }
+  .use-cases__tab--arabic, .use-case--arabic { --use-case-accent: #315f87; }
+  .use-cases__tab--developer, .use-case--developer { --use-case-accent: #4258a4; }
+  .use-cases__tab--devices, .use-case--devices { --use-case-accent: #286a78; }
+  .use-cases__tab--municipal, .use-case--municipal { --use-case-accent: #946227; }
+  .use-cases__tab--visitor, .use-case--visitor { --use-case-accent: #177568; }
 
   .use-cases__panels { display: grid; gap: 1.5rem; }
   .use-cases:not([data-enhanced='true']) .use-cases__panels { margin-block-start: 2.5rem; }
 
   .use-case {
+    scroll-margin-block-start: 6.5rem;
     display: grid;
     min-inline-size: 0;
     grid-template-columns: minmax(0, 1fr);
@@ -292,6 +332,9 @@ const prefix = `use-case-${locale}`;
 
   .use-case--employee .use-case__photo { object-position: 62% center; }
   .use-case--operations .use-case__photo { object-position: 66% center; }
+  .use-case--arabic .use-case__photo { object-position: 62% center; }
+  .use-case--municipal .use-case__photo { object-position: 80% center; }
+  .use-case--visitor .use-case__photo { object-position: 65% center; }
 
   .use-case__example {
     position: absolute;
@@ -306,6 +349,8 @@ const prefix = `use-case-${locale}`;
     font-size: 0.75rem;
     font-weight: 500;
   }
+
+  .use-case__example--proposed { background: #fff4d9; border-color: #dec789; color: #6d4c16; }
 
   .use-case__request {
     position: absolute;
@@ -345,6 +390,16 @@ const prefix = `use-case-${locale}`;
   }
 
   .use-case__description { margin-block-start: 0.8rem; color: var(--geem-muted); font-size: 0.95rem; line-height: 1.8; }
+
+  .use-case__challenge { margin-block-start: 1rem; padding-inline-start: .8rem; border-inline-start: 2px solid #b1c5bd; }
+  .use-case__challenge h4, .use-case__outcome h4 { color: var(--geem-navy-900); font-size: .75rem; font-weight: 600; }
+  .use-case__challenge p, .use-case__outcome p { margin-block-start: .25rem; font-size: .85rem; color: var(--geem-muted); line-height: 1.7; }
+  .use-case__outcome { margin-block-start: 1.35rem; padding: .85rem 1rem; border-radius: .6rem; background: #edf7f2; }
+  .use-case__outcome p { color: #315b50; }
+  .use-case__related { grid-column: 1 / -1; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; border-block-start: 1px solid var(--geem-border); background: #f8fafb; }
+  .use-case__related h4 { flex: none; color: var(--geem-navy-900); font-size: .8rem; font-weight: 600; }
+  .use-case__related ul { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+  .use-case__related li { padding: .25rem .65rem; border: 1px solid var(--geem-border); border-radius: .4rem; background: #fff; font-size: .75rem; color: var(--geem-muted); }
 
   .use-case__steps {
     display: grid;
@@ -395,23 +450,22 @@ const prefix = `use-case-${locale}`;
   }
 
   @media (min-width: 900px) {
-    .use-cases__tab--research { grid-column: 1 / -1; }
     .use-case { grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr); }
     .use-case__visual { min-block-size: 34rem; }
   }
 
   @media (min-width: 640px) and (max-width: 899px) {
-    .use-cases__tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .use-cases__tab--research { grid-column: 1 / -1; }
+    .use-cases__tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .use-cases__tab-number { display: none; }
   }
 
   @media (max-width: 639px) {
-    .use-cases__tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; padding: 0.3rem; }
-    .use-cases__tab--research { grid-column: 1 / -1; }
-    .use-cases__tab { gap: .5rem; padding: .5rem; font-size: 0.8rem; text-align: start; }
-    .use-cases__tab-photo { inline-size: 2.2rem; block-size: 2.6rem; }
-    .use-cases__tab-number, .use-cases__tab svg { display: none; }
+    .use-cases__tabs { display: none; }
+    .use-cases__mobile-control:not([hidden]) { display: grid; gap: .5rem; margin-block: 1.25rem 1rem; }
+    .use-cases__mobile-control label { color: var(--geem-navy-900); font-size: .85rem; font-weight: 600; }
+    .use-cases__mobile-control select { inline-size: 100%; min-inline-size: 0; min-block-size: 3rem; padding: .65rem .85rem; border: 1px solid #88b2a8; border-radius: .65rem; background: #fff; color: var(--geem-navy-900); font: inherit; font-size: .95rem; }
     .use-case__visual { min-block-size: 21rem; }
+    .use-case__related { flex-direction: column; align-items: flex-start; gap: .65rem; padding: 1rem 1.25rem; }
   }
 
   @media (prefers-reduced-motion: reduce) {

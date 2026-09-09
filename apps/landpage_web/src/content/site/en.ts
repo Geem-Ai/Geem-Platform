@@ -36,6 +36,7 @@ export const en: SiteCopy = {
     items: [
       { id: 'product', label: 'Product', href: 'product' },
       { id: 'experts', label: 'Experts', href: 'experts' },
+      { id: 'solutions', label: 'Solutions', href: 'use-cases' },
       { id: 'integrations', label: 'Integrations', href: 'integrations' },
       { id: 'api', label: 'Developers', href: 'api' },
       { id: 'security', label: 'Security', href: 'security' },
@@ -48,7 +49,7 @@ export const en: SiteCopy = {
     title: 'One AI experience',
     titleAccent: 'More ways to work',
     description:
-      'Write, explore ideas and get help with code. Bring Geem into your business with Experts that use your knowledge and connect to your channels and systems.',
+      'GEEM simplifies bringing AI into your work, from writing and coding to Experts connected to your knowledge, channels and systems. Start with a practical need and expand across your organization.',
     primaryCta: 'Start with Geem',
     tertiaryCta: 'Explore the platform',
     foundationLine: 'Our fine-tuned AI. Our GPUs. Your possibilities.',
@@ -319,9 +320,9 @@ export const en: SiteCopy = {
     },
   },
   finalCta: {
-    title: 'Start with an idea and see where Geem takes it',
+    title: 'Start with the work you want to improve',
     description:
-      'Open Geem for your next question, draft or idea. Ready to bring AI into your business? Let’s connect your knowledge, Experts and systems.',
+      'Write, explore and build with GEEM. For your organization, start with one workflow, connect its knowledge and systems, then reuse that foundation across teams and channels.',
     primaryCta: 'Start with Geem',
     secondaryCta: 'Discuss your use case',
   },
@@ -345,7 +346,7 @@ export const en: SiteCopy = {
     productLinks: [
       { label: 'Platform', href: 'product' },
       { label: 'Experts', href: 'experts' },
-      { label: 'Use cases', href: 'use-cases' },
+      { label: 'Solutions', href: 'use-cases' },
       { label: 'Geem robotics · In development', href: 'robotics' },
       { label: 'Integrations', href: 'integrations' },
       { label: 'Developers', href: 'api' },

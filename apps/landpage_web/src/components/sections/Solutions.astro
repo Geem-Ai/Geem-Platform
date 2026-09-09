@@ -1,0 +1,307 @@
+---
+import { Image } from 'astro:assets';
+import { getSolutionsCopy } from '../../content/solutions';
+import { getUseCasesCopy } from '../../content/use-cases';
+import type { Locale } from '../../lib/i18n';
+import { contactHref } from '../../lib/site';
+import government from '../../assets/landing/geem-government.webp';
+import tourism from '../../assets/landing/geem-tourism.webp';
+import research from '../../assets/landing/geem-research.webp';
+import retail from '../../assets/landing/geem-customer-men.webp';
+import industry from '../../assets/landing/geem-operations-men.webp';
+import facilities from '../../assets/landing/geem-facilities.webp';
+import education from '../../assets/landing/geem-education.webp';
+import professional from '../../assets/landing/geem-sales.webp';
+import Section from '../ui/Section.astro';
+import UseCases from './UseCases.astro';
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const copy = getSolutionsCopy(locale);
+const useCaseLabels = new Map(getUseCasesCopy(locale).cases.map((item) => [item.id, item.label]));
+const photos = { government, tourism, research, retail, industry, facilities, education, professional };
+const prefix = `solutions-${locale}`;
+const views = [{ id: 'sectors', label: copy.sectorView }, { id: 'workflows', label: copy.useCaseView }];
+---
+
+<!-- Retain the existing anchor so shared links continue to reach this section. -->
+<Section id="use-cases" tone="light">
+  <div class="solutions" data-solutions>
+    <header class="solutions__intro">
+      <p class="eyebrow">{copy.eyebrow}</p>
+      <h2>{copy.title}</h2>
+      <p class="solutions__description">{copy.description}</p>
+    </header>
+
+    <ul class="solutions__foundations" aria-label={copy.foundationsLabel}>
+      {copy.foundations.map((item, index) => (
+        <li>
+          <span class="solutions__foundation-icon" aria-hidden="true">{index === 0 ? 'ع' : index === 1 ? '↗' : '✦'}</span>
+          <div><h3>{item.title}</h3><p>{item.description}</p></div>
+        </li>
+      ))}
+    </ul>
+
+    <!-- Progressively enhanced tabs: all sectors and workflows remain readable without JS. -->
+    <div class="solutions__views" role="tablist" aria-label={copy.viewsLabel} hidden data-solution-tabs>
+      {views.map((view, index) => (
+        <button type="button" role="tab" id={`${prefix}-${view.id}-tab`}
+          aria-controls={`${prefix}-${view.id}`} aria-selected={index === 0 ? 'true' : 'false'}
+          tabindex={index === 0 ? 0 : -1}>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            {index === 0
+              ? <path d="M4 21V7h9v14M13 12h7v9M2 21h20M7 10h3M7 14h3M7 18h3M16 15h1M16 18h1M7 7V3h3v4" />
+              : <path d="M4 4h6v6H4zM14 14h6v6h-6zM14 7h3v4M10 17H7v-4" />}
+          </svg>
+          {view.label}
+        </button>
+      ))}
+    </div>
+
+    <div id={`${prefix}-sectors`} class="solutions__view" aria-labelledby={`${prefix}-sectors-heading`} data-solution-view>
+      <h3 class="solutions__fallback-heading" id={`${prefix}-sectors-heading`}>{copy.sectorView}</h3>
+      <div class="solutions__sectors" role="tablist" aria-label={copy.sectorsLabel} hidden data-solution-tabs>
+        {copy.sectors.map((sector, index) => (
+          <button type="button" role="tab" id={`${prefix}-${sector.id}-tab`}
+            aria-controls={`${prefix}-${sector.id}`} aria-selected={index === 0 ? 'true' : 'false'}
+            tabindex={index === 0 ? 0 : -1} class="solutions__sector-tab">
+            <Image src={photos[sector.id]} width={112} height={112} alt="" loading="lazy" class="solutions__thumbnail" />
+            <span>{sector.label}</span>
+            <svg class="solutions__selected" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>
+          </button>
+        ))}
+      </div>
+
+      <div class="solutions__details">
+        {copy.sectors.map((sector, index) => (
+          <article class={`sector-panel sector-panel--${sector.id}`} id={`${prefix}-${sector.id}`}
+            aria-labelledby={`${prefix}-${sector.id}-heading`} data-sector-panel>
+            <div class="sector-panel__context">
+              <figure class="sector-panel__visual">
+                <Image src={photos[sector.id]} alt={sector.imageAlt}
+                  widths={[480, 720, 960, 1400]} sizes="(min-width: 1152px) 415px, (min-width: 900px) 37vw, calc(100vw - 2rem)"
+                  loading="lazy" decoding="async" class="sector-panel__photo" />
+                <figcaption>{copy.illustrationLabel}</figcaption>
+              </figure>
+              <dl class="sector-panel__impact">
+                <div><dt>{copy.challengeLabel}</dt><dd>{sector.challenge}</dd></div>
+                <div><dt>{copy.outcomeLabel}</dt><dd>{sector.outcome}</dd></div>
+              </dl>
+            </div>
+            <div class="sector-panel__body">
+              <p class="sector-panel__label"><span aria-hidden="true">0{index + 1}</span>{sector.label}</p>
+              <h3 id={`${prefix}-${sector.id}-heading`}>{sector.title}</h3>
+              <p class="sector-panel__description">{sector.description}</p>
+              <p class="sector-panel__audience"><span>{copy.audienceLabel}</span> {sector.audience}</p>
+              <ul class="sector-panel__applications" aria-label={copy.applicationsLabel}>
+                {sector.applications.map((application) => (
+                  <li>
+                    <span class="sector-panel__bullet" aria-hidden="true">✦</span>
+                    <div>
+                      <div class="sector-panel__application-title">
+                        <h4>{application.title}</h4>
+                        {application.proposed && <span class="sector-panel__proposed">{copy.proposedLabel}</span>}
+                      </div>
+                      <p>{application.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div class="sector-panel__related">
+                <h4>{copy.relatedLabel}</h4>
+                <ul>
+                  {sector.useCaseIds.map((id) => (
+                    <li><a href={`#use-case-${locale}-panel-${id}`} data-workflow-link>{useCaseLabels.get(id)}<span aria-hidden="true">↗</span></a></li>
+                  ))}
+                </ul>
+              </div>
+              <a href={contactHref(locale)} class="sector-panel__cta">
+                {copy.ctaLabel}
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" /></svg>
+              </a>
+            </div>
+          </article>
+        ))}
+      </div>
+      <p class="solutions__note">{copy.note}</p>
+    </div>
+
+    <div id={`${prefix}-workflows`} class="solutions__view" aria-labelledby={`${prefix}-workflows-heading`} data-solution-view>
+      <h3 class="solutions__fallback-heading" id={`${prefix}-workflows-heading`}>{copy.useCaseView}</h3>
+      <UseCases locale={locale} />
+    </div>
+  </div>
+</Section>
+
+<script>
+  function initializeSolutions() {
+    document.querySelectorAll<HTMLElement>('[data-solutions]').forEach((root) => {
+      if (root.dataset.enhanced === 'true') return;
+      const controllers: { panels: (HTMLElement | null)[]; activate: (index: number, focus?: boolean) => void }[] = [];
+      root.querySelectorAll<HTMLElement>('[data-solution-tabs]').forEach((tablist) => {
+        const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+        const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls') || ''));
+        if (!tabs.length || panels.some((panel) => !panel || !root.contains(panel))) return;
+
+        const activate = (index: number, focus = false) => {
+          tabs.forEach((tab, position) => {
+            const selected = position === index;
+            tab.setAttribute('aria-selected', String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            panels[position]!.hidden = !selected;
+          });
+          if (focus) tabs[index].focus({ preventScroll: true });
+        };
+        panels.forEach((panel, index) => {
+          panel!.setAttribute('role', 'tabpanel');
+          panel!.setAttribute('aria-labelledby', tabs[index].id);
+          panel!.tabIndex = 0;
+        });
+        tabs.forEach((tab, index) => {
+          tab.addEventListener('click', () => activate(index));
+          tab.addEventListener('keydown', (event) => {
+            const direction = getComputedStyle(tablist).direction === 'rtl' ? -1 : 1;
+            let next: number;
+            switch (event.key) {
+              case 'ArrowRight': next = (index + direction + tabs.length) % tabs.length; break;
+              case 'ArrowLeft': next = (index - direction + tabs.length) % tabs.length; break;
+              case 'Home': next = 0; break;
+              case 'End': next = tabs.length - 1; break;
+              default: return;
+            }
+            event.preventDefault();
+            activate(next, true);
+          });
+        });
+        activate(0);
+        controllers.push({ panels, activate });
+        tablist.hidden = false;
+      });
+
+      function followHash(moveFocus = false) {
+        let id: string;
+        try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+        const target = document.getElementById(id);
+        if (!target || !root.contains(target)) {
+          // Back to a homepage section restores sector browsing without losing the selected sector.
+          controllers[0]?.activate(0);
+          return;
+        }
+        controllers.forEach(({ panels, activate }) => {
+          const index = panels.findIndex((panel) => panel === target || panel?.contains(target));
+          if (index >= 0) activate(index);
+        });
+        // The inner workflow controller handles the same hash. Wait for both levels to reveal the target.
+        requestAnimationFrame(() => {
+          target.scrollIntoView({ block: 'start', behavior: 'instant' });
+          if (moveFocus) target.focus({ preventScroll: true });
+        });
+      }
+      root.querySelectorAll<HTMLAnchorElement>('[data-workflow-link]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          if (link.hash === location.hash) {
+            event.preventDefault();
+            // Reopen the same linked workflow even after the visitor switches views manually.
+            root.querySelector<HTMLButtonElement>(`[data-use-case-tab][aria-controls="${link.hash.slice(1)}"]`)?.click();
+            followHash(true);
+          }
+        });
+      });
+      window.addEventListener('hashchange', () => followHash(true));
+      root.dataset.enhanced = 'true';
+      followHash();
+    });
+  }
+  initializeSolutions();
+  document.addEventListener('astro:page-load', initializeSolutions);
+</script>
+
+<style>
+  .solutions { min-inline-size: 0; }
+  .solutions__intro { max-inline-size: 51rem; }
+  .solutions__intro h2 { margin-block-start: .75rem; font-size: clamp(1.875rem, 3.6vw, 2.7rem); font-weight: 600; line-height: 1.3; letter-spacing: -.025em; text-wrap: balance; }
+  .solutions__description { margin-block-start: 1rem; max-inline-size: 49rem; color: var(--geem-muted); font-size: 1.1rem; line-height: 1.8; }
+  .solutions__foundations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; margin: 1.75rem 0 0; padding: 1.25rem 0; border-block: 1px solid var(--geem-border); list-style: none; }
+  .solutions__foundations li { display: flex; gap: .8rem; min-inline-size: 0; }
+  .solutions__foundation-icon { flex: none; display: grid; place-items: center; inline-size: 2rem; block-size: 2rem; border-radius: .5rem; background: #e4f3ed; color: #276e5e; font-size: 1.2rem; font-weight: 500; }
+  .solutions__foundations h3 { font-size: .9rem; font-weight: 600; color: var(--geem-navy-900); }
+  .solutions__foundations p { margin-block-start: .3rem; color: var(--geem-muted); font-size: .82rem; line-height: 1.7; }
+  .solutions__views { display: inline-flex; gap: .3rem; max-inline-size: 100%; padding: .3rem; margin-block: 1.75rem 1.5rem; border: 1px solid var(--geem-border); border-radius: .85rem; background: #eaf0f2; }
+  .solutions__views button { display: flex; align-items: center; justify-content: center; gap: .65rem; min-block-size: 2.75rem; padding: .65rem 1.15rem; border: 1px solid transparent; border-radius: .6rem; color: var(--geem-muted); font: inherit; font-size: .95rem; font-weight: 500; cursor: pointer; }
+  .solutions__views button[aria-selected='true'] { color: #fff; background: var(--geem-navy-900); }
+  .solutions__views svg { inline-size: 1.15rem; block-size: 1.15rem; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .solutions__sectors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin-block-end: 1rem; }
+  .solutions__sector-tab { display: flex; align-items: center; gap: .7rem; min-inline-size: 0; min-block-size: 4.8rem; padding: .55rem; border: 1px solid var(--geem-border); border-radius: .8rem; color: var(--geem-navy-900); background: #fff; text-align: start; font: inherit; font-size: .875rem; font-weight: 500; line-height: 1.4; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
+  .solutions__sector-tab:hover { background: #f0f8f5; border-color: #8ab5ab; }
+  .solutions__sector-tab[aria-selected='true'] { border-color: #2e8372; background: #e9f6f1; box-shadow: inset 0 0 0 1px #2e8372; }
+  .solutions__thumbnail { inline-size: 3.2rem; block-size: 3.5rem; border-radius: .45rem; object-fit: cover; flex: none; }
+  .solutions__selected { inline-size: 1rem; block-size: 1rem; margin-inline-start: auto; fill: none; stroke: #236a5c; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; visibility: hidden; }
+  .solutions__sector-tab[aria-selected='true'] .solutions__selected { visibility: visible; }
+  .solutions__details { display: grid; gap: 1.5rem; }
+  .sector-panel { scroll-margin-block-start: 6.5rem; display: grid; grid-template-columns: minmax(0, .74fr) minmax(0, 1.26fr); overflow: hidden; border: 1px solid var(--geem-border); border-radius: 1.1rem; background: #fff; box-shadow: 0 12px 40px #0e2f4408; }
+  .sector-panel__context { display: flex; flex-direction: column; min-inline-size: 0; background: #edf5f2; }
+  .sector-panel__visual { position: relative; flex: 1; min-block-size: 18rem; min-inline-size: 0; margin: 0; background: #dce6e9; }
+  .sector-panel__photo { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; object-position: center; }
+  .sector-panel--government .sector-panel__photo { object-position: 80% center; }
+  .sector-panel--tourism .sector-panel__photo { object-position: 65% center; }
+  .sector-panel--industry .sector-panel__photo { object-position: 72% center; }
+  .sector-panel__visual figcaption { position: absolute; inset-inline-start: 1rem; inset-block-end: 1rem; max-inline-size: calc(100% - 2rem); padding: .3rem .65rem; border-radius: .4rem; background: #07141dce; color: #fff; font-size: .7rem; }
+  .sector-panel__body { min-inline-size: 0; padding: clamp(1.25rem, 2.5vw, 2rem); }
+  .sector-panel__impact { display: grid; gap: 1rem; padding: 1.25rem 1.5rem; margin: 0; }
+  .sector-panel__impact dt { color: #2c715f; font-size: .75rem; font-weight: 600; }
+  .sector-panel__impact dd { margin: .25rem 0 0; color: var(--geem-navy-900); font-size: .9rem; line-height: 1.7; }
+  .sector-panel__label { display: flex; align-items: center; gap: .65rem; color: #287361; font-size: .8rem; font-weight: 600; }
+  .sector-panel__label > span { display: grid; place-items: center; inline-size: 1.65rem; block-size: 1.65rem; border-radius: .4rem; background: #e9f6f1; font-size: .7rem; }
+  .sector-panel__body h3 { margin-block-start: .7rem; color: var(--geem-navy-900); font-size: clamp(1.4rem, 2.2vw, 1.75rem); font-weight: 600; line-height: 1.35; letter-spacing: -.02em; text-wrap: balance; }
+  .sector-panel__description { margin-block-start: .6rem; color: var(--geem-muted); font-size: .94rem; line-height: 1.7; }
+  .sector-panel__audience { margin-block-start: .85rem; padding-block-start: .8rem; border-block-start: 1px solid var(--geem-border); font-size: .79rem; color: var(--geem-muted); line-height: 1.7; }
+  .sector-panel__audience > span { font-weight: 600; color: var(--geem-navy-900); margin-inline-end: .25rem; }
+  .sector-panel__applications { display: grid; gap: .85rem; margin: 1.1rem 0 0; padding: 0; list-style: none; }
+  .sector-panel__applications li { display: flex; align-items: flex-start; gap: .7rem; }
+  .sector-panel__bullet { color: #2c8c79; line-height: 1.4; font-size: 1rem; }
+  .sector-panel__application-title { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .65rem; }
+  .sector-panel__applications h4 { color: var(--geem-navy-900); font-size: .88rem; font-weight: 600; }
+  .sector-panel__applications p { margin-block-start: .12rem; color: var(--geem-muted); font-size: .82rem; line-height: 1.65; }
+  .sector-panel__related { margin-block-start: 1.25rem; padding-block-start: 1rem; border-block-start: 1px solid var(--geem-border); }
+  .sector-panel__related h4 { color: var(--geem-navy-900); font-size: .8rem; font-weight: 600; }
+  .sector-panel__related ul { display: flex; flex-wrap: wrap; gap: .5rem; margin: .65rem 0 0; padding: 0; list-style: none; }
+  .sector-panel__related a { display: inline-flex; align-items: center; gap: .55rem; min-block-size: 2.4rem; padding: .35rem .65rem; border: 1px solid #c4d9d1; border-radius: .4rem; background: #f3f8f5; color: #2d6959; font-size: .78rem; font-weight: 500; text-decoration: none; }
+  .sector-panel__related a:hover { border-color: #78a493; background: #e6f2eb; }
+  :global([dir='rtl']) .sector-panel__related a span { transform: scaleX(-1); }
+  .sector-panel__proposed { display: inline-block; padding: .1rem .45rem; border: 1px solid #e5cf9d; border-radius: .3rem; background: #fff8e7; color: #755414; font-size: .65rem; font-weight: 500; white-space: nowrap; }
+  .sector-panel__cta { display: inline-flex; align-items: center; gap: .7rem; margin-block-start: 1.25rem; min-block-size: 2.75rem; padding: .65rem 1rem; border-radius: .6rem; background: var(--geem-navy-900); color: #fff; font-size: .85rem; font-weight: 500; text-decoration: none; transition: background-color 160ms ease; }
+  .sector-panel__cta:hover { background: #1a4d60; }
+  .sector-panel__cta svg { inline-size: 1rem; block-size: 1rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  :global([dir='rtl']) .sector-panel__cta svg { transform: scaleX(-1); }
+  .solutions__note { max-inline-size: 65rem; margin-block-start: 1rem; color: var(--geem-muted); font-size: .78rem; line-height: 1.75; }
+  .solutions__fallback-heading { margin-block: 2rem 1rem; font-size: 1.4rem; font-weight: 600; }
+  .solutions[data-enhanced='true'] .solutions__fallback-heading { display: none; }
+  .solutions__views[hidden], .solutions__sectors[hidden], .solutions__view[hidden], .sector-panel[hidden] { display: none; }
+  @media (max-width: 899px) {
+    .solutions__sectors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sector-panel { grid-template-columns: minmax(0, 1fr); }
+    .sector-panel__visual { flex: none; aspect-ratio: 2 / 1; min-block-size: 0; }
+    .sector-panel__photo { object-position: center 40%; }
+    .sector-panel__body { padding: 1.5rem; }
+    .sector-panel__impact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 639px) {
+    .solutions__foundations { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    .sector-panel__impact { grid-template-columns: minmax(0, 1fr); padding: 1.25rem; }
+  }
+  @media (max-width: 479px) {
+    .solutions__description { font-size: 1rem; }
+    .solutions__views { display: flex; }
+    .solutions__views button { flex: 1; padding: .6rem .75rem; gap: .45rem; font-size: .875rem; }
+    .solutions__sectors { gap: .4rem; }
+    .solutions__sector-tab { gap: .45rem; padding: .4rem; font-size: .78rem; min-block-size: 4.5rem; }
+    .solutions__thumbnail { inline-size: 2.25rem; block-size: 3.2rem; }
+    .solutions__selected { display: none; }
+    .sector-panel__visual { aspect-ratio: 3 / 2; }
+    .sector-panel__body { padding: 1.2rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .solutions__sector-tab, .sector-panel__cta { transition: none; }
+  }
+</style>

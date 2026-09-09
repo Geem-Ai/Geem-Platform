@@ -1,7 +1,7 @@
 export type NavItem = {
   id: string;
   label: string;
-  href: 'product' | 'experts' | 'integrations' | 'api' | 'security' | 'contact';
+  href: 'product' | 'experts' | 'use-cases' | 'integrations' | 'api' | 'security' | 'contact';
 };
 
 export type SecurityPageCopy = {

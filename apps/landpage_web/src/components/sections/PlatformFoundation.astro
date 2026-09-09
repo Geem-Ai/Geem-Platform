@@ -142,7 +142,8 @@ const titleId = `platform-title-${locale}`;
   .platform-values li:nth-child(3) span { color: #8065b0; }
   .platform-values p { color: #425b70; font-size: 0.88rem; line-height: 1.75; }
   @media (min-width: 700px) {
-    .platform-controls, .platform-outputs, .platform-values { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .platform-controls, .platform-outputs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .platform-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .platform-flow--branch { display: flex; }
     .platform-flow--mobile { display: none; }
     .platform-output { flex-direction: column; padding: 1.35rem; }

@@ -41,3 +41,58 @@ Use case: photorealistic-natural. Create a professional editorial photograph for
 ### geem-it.webp
 
 Use case: photorealistic-natural. Create a professional editorial photograph for Geem's IT support use case. A male IT specialist in his 30s wearing a navy long-sleeved business shirt, holding an open laptop on a small standing workstation in a modern server room, calmly reviewing a technical issue. An orderly row of server racks with restrained blue indicator lights, one other male engineer softly blurred in the distance, no other people. Natural realistic hands, professional everyday work, balanced cool server-room light with warm accurate skin, no sci-fi or holograms. Medium-wide crop with main subject centered in upper two-thirds and clear room at bottom for caption overlay. Landscape 4:3. Every person must be male, including reflections. No visible company brands, text overlays, readable code, or watermark.
+
+### geem-government.webp
+
+Reused from the existing AI-generated `geem-madinah-leadership/assets/residents.png` presentation asset. Illustrative public-service scene: a male resident and a male field-services worker review a tablet on a landscaped street. This is not a photograph of an actual government deployment, customer, employee or documented location.
+
+Source file: `/Users/mkpro/.codex/visualizations/2026/09/09/01a086a6-4cd7-7b82-a324-b63aae9405e0/geem-madinah-leadership/assets/residents.png`.
+
+Prepared for the website on 2026-09-10 as a 1400 × 1050 WebP at quality 85. The full original composition is retained; only proportional resizing and format compression were applied. Both visible people are men.
+
+### geem-tourism.webp
+
+Reused from the existing AI-generated `geem-aseer-leadership/assets/visitors-aseer.png` presentation asset. Illustrative tourism scene: a male visitor-services representative and a male traveller review a tablet in a heritage-inspired visitor centre overlooking mountains and stone buildings. This is not a photograph of an actual tourism deployment, customer, employee or documented visitor centre.
+
+Source file: `/Users/mkpro/.codex/visualizations/2026/09/09/01a086a6-4cd7-7b82-a324-b63aae9405e0/geem-aseer-leadership/assets/visitors-aseer.png`.
+
+Prepared for the website on 2026-09-10 as a 1400 × 862 WebP at quality 85. The full original composition is retained; only proportional resizing and format compression were applied. Both visible people are men.
+# GEEM sector image provenance
+
+Created 10 September 2026 with the built-in image_gen tool, one separate generation per asset, in parallel. No CLI/API fallback. Original generated PNG files remain intact. Final copies were resized with bundled Sharp (no crop) to 1400×1050 and encoded as WebP at quality 85, effort 6.
+
+Both generated originals were inspected at full size. Each scene is an illustrative generated photograph, not a photograph of an actual GEEM customer or deployment. Both compositions use adult men, natural light, central faces/device, no branding, and no legible display text. Facilities engineer wears white hardhat and high-visibility safety vest. No image-content concerns found.
+
+## Education
+
+- Final asset: /Users/mkpro/Projects/Geem-Platform/apps/landpage_web/src/assets/landing/geem-education.webp
+- Original: /Users/mkpro/.codex/generated_images/01a086c3-8c9f-7200-bf59-594bdfba8d46/exec-7ec5f46f-6586-4d64-ac14-0a772d45ea4b.png
+- Dimensions: 1400×1050 (4:3)
+- Size: 98,856 bytes
+- Suggested alt: Male lecturer helping an adult student at a laptop in a university learning-resource centre
+
+### Exact generation prompt
+
+Use case: photorealistic-natural
+Asset type: premium editorial website sector photograph, landscape 4:3
+Primary request: A realistic modern Saudi university learning-resource centre. One male adult lecturer, approximately 40, in a clean white thobe and neat Saudi headwear, helps one male adult university student, approximately 23, in a dark navy casual shirt at a laptop on a study table. Both are naturally engaged in reviewing the screen, with one subtle explanatory hand gesture. Bookshelves and a light glass campus interior establish an unmistakable university study setting.
+Composition/framing: eye-level medium-wide editorial photo, both faces and the shared laptop grouped within the central 55 percent of the frame. Comfortable headroom and environmental space on each side allow a later central vertical crop without losing either face. Landscape 4:3 aspect ratio.
+Style/lighting: premium but candid corporate editorial photography, natural skin texture and believable hands, soft daylight through large windows, warm wood and cool neutral architecture, subtle navy accents, realistic depth of field. Professional, approachable and contemporary, matching polished Saudi business website photography.
+Constraints: All depicted people are adult men. Exactly two principal people. No text, no readable writing, no logos, no institution names, no watermarks, no infographic, no glowing interface, no science-fiction styling. Laptop screen content is indistinct and angled naturally away from the viewer.
+
+## Facilities management
+
+- Final asset: /Users/mkpro/Projects/Geem-Platform/apps/landpage_web/src/assets/landing/geem-facilities.webp
+- Original: /Users/mkpro/.codex/generated_images/01a086c3-8c9f-7200-bf59-594bdfba8d46/exec-c825ea51-67e6-4797-ae87-c8afd7b4894a.png
+- Dimensions: 1400×1050 (4:3)
+- Size: 121,142 bytes
+- Suggested alt: Facilities manager and maintenance engineer reviewing a tablet beside commercial building systems
+
+### Exact generation prompt
+
+Use case: photorealistic-natural
+Asset type: premium editorial website sector photograph, landscape 4:3
+Primary request: A male Saudi facilities manager in a clean white thobe and neat Saudi headwear and a male maintenance engineer in a white hardhat, high-visibility safety vest and navy workwear inspect a commercial building's systems together using a tablet. They stand in a clean, bright modern commercial building service area opening off a polished lobby. Orderly building-services panels and neatly arranged pipework or mechanical infrastructure visible through glass establish facilities management, not a construction site. Both men focus on the same tablet, with a natural restrained gesture towards the building systems.
+Composition/framing: eye-level medium-wide realistic editorial photo. Both faces, engineer's hardhat, hands and tablet grouped within the central 55 percent of the frame. Comfortable headroom and architectural space at both sides support a later central vertical mobile crop. Landscape 4:3 aspect ratio.
+Style/lighting: premium natural-light corporate photography with realistic skin and hands, contemporary Saudi setting, cool white architecture, restrained navy details, clean daylight and gentle shadows, believable equipment and modest depth of field.
+Constraints: All people are adult men. Exactly two principal people. No text, readable signs, logos or watermarks. No cartoon or 3D illustration, no glowing interface, no dramatic sparks, no exposed live electrical work, no building under construction. Tablet display is indistinct.
