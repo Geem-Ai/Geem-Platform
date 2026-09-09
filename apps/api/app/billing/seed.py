@@ -19,6 +19,11 @@ from app.billing.service import CreditPackService, PlanService
 from app.core.config import Settings, get_settings
 from app.entitlements.keys import EntitlementKey
 
+# Querying any mapped class configures every mapper on the shared registry, so a
+# standalone entrypoint must register them all first. Workspace refers to User by
+# name, which stays unresolvable while only the billing package is imported.
+import app.db.models  # noqa: E402,F401
+
 DEMO_CATALOG_ENVS = frozenset({"local", "dev", "development"})
 
 DEMO_CATALOG_METADATA = {

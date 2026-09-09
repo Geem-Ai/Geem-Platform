@@ -37,7 +37,8 @@ _RETRY = {
     "bind": True,
     "max_retries": 3,
     "autoretry_for": (Exception,),
-    "dont_retry_for": (ValueError,),
+    # Celery reads this exact name; "dont_retry_for" is silently ignored.
+    "dont_autoretry_for": (ValueError,),
     "retry_backoff": True,
     "retry_jitter": True,
     "retry_backoff_max": 120,

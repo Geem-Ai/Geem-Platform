@@ -8,7 +8,8 @@
 # and host-published ports.
 # Does not replace local geem.dm / localhost DX on a laptop:
 #
-# Requires infra/cloudflared/credentials.json (see infra/cloudflared/config.yml).
+# The fresh deployment renders infra/cloudflared/config.yml with a newly created
+# tunnel UUID and installs config/credentials below /etc/geem/cloudflared.
 # Development/UAT on this Mac: docker-compose.uat.yml + config.uat.yml.
 # Ingress:
 #   hub.geem.ai   →  http://workspace_web:80  (production nginx, not Vite)
@@ -46,6 +47,8 @@ services:
       context: ../apps/workspace_web
       dockerfile: Dockerfile.prod
       args:
+        FRONTEND_NODE_BASE_IMAGE: ${FRONTEND_NODE_BASE_IMAGE:-node:22-alpine}
+        FRONTEND_NGINX_BASE_IMAGE: ${FRONTEND_NGINX_BASE_IMAGE:-nginx:1.27-alpine}
         VITE_API_URL: https://api.geem.ai
         VITE_ROOT_DOMAIN: geem.ai
         VITE_APP_ENV: production
@@ -62,6 +65,8 @@ services:
       context: ../apps/landpage_web
       dockerfile: Dockerfile.prod
       args:
+        FRONTEND_NODE_BASE_IMAGE: ${FRONTEND_NODE_BASE_IMAGE:-node:22-alpine}
+        FRONTEND_NGINX_BASE_IMAGE: ${FRONTEND_NGINX_BASE_IMAGE:-nginx:1.27-alpine}
         PUBLIC_SITE_URL: https://geem.ai
         PUBLIC_WORKSPACE_URL: https://hub.geem.ai
         PUBLIC_API_BASE_URL: https://api.geem.ai
@@ -77,6 +82,8 @@ services:
       context: ../apps/dashboard_web
       dockerfile: Dockerfile.prod
       args:
+        FRONTEND_NODE_BASE_IMAGE: ${FRONTEND_NODE_BASE_IMAGE:-node:22-alpine}
+        FRONTEND_NGINX_BASE_IMAGE: ${FRONTEND_NGINX_BASE_IMAGE:-nginx:1.27-alpine}
         VITE_API_URL: https://mtfm.geem.ai
         VITE_ADMIN_HOST: mtfm.geem.ai
         VITE_APP_ENV: production

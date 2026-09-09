@@ -16,6 +16,7 @@ import subprocess
 
 STATIC_TEMPLATE_MARKER = "# __GEEM_STATIC_BLOCKS__"
 TEMPLATE_MARKER = "# __GEEM_DEPLOYMENT_BLOCKS__"
+IPV4_MAPPED_PREFIX = ipaddress.ip_network("::ffff:0:0/96")
 DEFAULT_TEMPLATE = Path("/etc/squid/squid.conf")
 STATIC_DENY_MANIFEST = Path(
     "/etc/geem/mcp-egress/static-deny-networks.txt"
@@ -89,9 +90,41 @@ def parse_static_manifest(raw: str) -> tuple[str, ...]:
     return networks
 
 
+def squid_acl_networks(networks: tuple[str, ...]) -> tuple[str, ...]:
+    """Rewrite policy CIDRs into the address space Squid actually compares in.
+
+    Squid holds every destination as IPv4-mapped IPv6, so an IPv6 entry that
+    contains ::ffff:0:0/96 is a supernet of every IPv4 entry. Squid resolves
+    such an overlap by discarding the supernet to keep its splay tree
+    predictable, which would silently drop the IPv6 half of the policy. Emit
+    the entry minus the mapped range instead: the IPv6 policy stays enforced
+    and IPv4 policy remains owned by the IPv4 entries.
+    """
+    rendered: list[str] = []
+    for value in networks:
+        network = ipaddress.ip_network(value, strict=False)
+        if network.version == 6:
+            if IPV4_MAPPED_PREFIX.supernet_of(network):
+                raise ProxyPolicyError(
+                    "IPv4 policy must use IPv4 CIDRs, not IPv4-mapped IPv6"
+                )
+            if network.supernet_of(IPV4_MAPPED_PREFIX):
+                rendered.extend(
+                    str(part)
+                    for part in sorted(
+                        network.address_exclude(IPV4_MAPPED_PREFIX),
+                        key=lambda part: (int(part.network_address), part.prefixlen),
+                    )
+                )
+                continue
+        rendered.append(str(network))
+    return tuple(rendered)
+
+
 def _acl_lines(networks: tuple[str, ...]) -> str:
     return "\n".join(
-        f"acl blocked_destination dst {network}" for network in networks
+        f"acl blocked_destination dst {network}"
+        for network in squid_acl_networks(networks)
     )
 
 

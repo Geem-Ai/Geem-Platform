@@ -3,6 +3,12 @@
 # non-global regions inside it. The 2001::/23 supernet intentionally also
 # blocks its few globally routable anycast/assignment exceptions; a future
 # relaxation requires a reviewed policy and parity-test change.
+#
+# Entries are separate IPv4 and IPv6 policy, as in the API-side allow checks.
+# Squid instead compares one unified space where IPv4 is IPv4-mapped IPv6, so
+# the renderer rewrites any IPv6 entry containing ::ffff:0:0/96 into that entry
+# minus the mapped range. Never express IPv4 policy as IPv4-mapped IPv6 here;
+# the renderer rejects it so the two halves cannot silently clobber each other.
 0.0.0.0/8
 10.0.0.0/8
 100.64.0.0/10

@@ -36,6 +36,11 @@ from app.apps_catalog.runtime_locks import acquire_app_runtime_mutation_fence
 from app.billing.money import parse_decimal_money
 from app.core.config import Settings, get_settings
 
+# Querying any mapped class configures every mapper on the shared registry, so a
+# standalone entrypoint must register them all first. Workspace refers to User by
+# name, which stays unresolvable while only the catalog package is imported.
+import app.db.models  # noqa: E402,F401
+
 logger = logging.getLogger(__name__)
 
 

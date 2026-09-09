@@ -47,6 +47,9 @@ todos:
   - id: phase-13
     content: "Phase 13: PENDING — paid MCP Connectors App Store subscription with public-HTTPS remote MCP client/host, supported auth, discovery/grants, isolated egress, current single/compound runtime App gate, atomic tool quota, Geem-owned loops, write approval safety, and exact default-off Chat Widget/WhatsApp surface bindings in 13E."
     status: pending
+  - id: mail-relay
+    content: "Mail egress (operations): IMPLEMENTED, ROLLOUT PENDING — a sealed msmtpd `mail-relay` container on `mail_relay_control`/`mail_relay_egress` owns the only credentialed submission hop, and verification/reset mail moved to Celery so registration cannot fail on SMTP. Host rollout (two subnets, production.env values, the 8th published image, EMAIL_VERIFICATION_REQUIRED back to true) is outstanding. Detail: smtp_relay_container_116a9a64.plan.md."
+    status: in_progress
   - id: phase-14
     content: "Phase 14: PENDING — paid Agents AI non-connector App Store subscription at `/api/v1/agent`; current runtime App gate with one access data SELECT after a lightweight fence statement, atomic daily request quota, exact OpenAI client-owned tool protocol, stateless replay, instruction isolation, streaming, and real SDK tests."
     status: pending
@@ -1871,6 +1874,42 @@ replay and instruction demotion. An exact-locked official OpenAI SDK base-URL/he
 Models allowlisting, complete parallel call-ID linkage, stateless cache hit/miss/revision equivalence,
 positive/adversarial instruction behavior, tenant/scope/Expert gates, exact error/usage/SSE fixtures,
 and unchanged Phase 7 behavior/contract under deterministic regression fixtures all pass.
+
+---
+
+### Mail egress — sealed SMTP relay + async delivery (operations)
+
+**Status:** in_progress — code, gates, and CI publication are **complete**; the host rollout is
+outstanding. Canonical detail: [`smtp_relay_container_116a9a64.plan.md`](smtp_relay_container_116a9a64.plan.md).
+
+**Why:** `api`/`worker` sit only on `internal: true` networks and their sole outbound route is the
+fixed-provider Squid proxy (`CONNECT` to 443 only), so `SmtpEmailProvider` timed out, registration
+returned 502, and the browser reported it as a CORS failure. Signups were unblocked only by
+`EMAIL_VERIFICATION_REQUIRED=false`.
+
+**Locked shape:**
+
+- A single-purpose `mail-relay` container (msmtpd on the existing `PROXY_UBUNTU_BASE_IMAGE`) accepts
+  plain SMTP on port 25 over the new `internal: true` `mail_relay_control` network and performs the
+  only credentialed STARTTLS/SASL hop over `mail_relay_egress`, which is the fourth external-route
+  network and admits exactly that one service.
+- The mailbox credential lives only in the relay's `MAIL_RELAY_UPSTREAM_*` environment. The renderer
+  fails closed on any missing value, a non-submission port, a local upstream, an injected newline, or
+  an unwritable spool, and the password is never written to disk (`passwordeval`).
+- The app keeps its TLS guard: plaintext submission is permitted only when
+  `SMTP_ALLOW_PLAINTEXT_RELAY=true` **and** the host is a bare Compose service name, so the flag can
+  never enable plaintext to a public MX.
+- Verification and password-reset mail is delivered by Celery tasks that create the token themselves
+  from an ID-only payload, so no secret enters Redis and registration can no longer fail on SMTP.
+  Workspace invitations keep the inline pre-commit path for now.
+- Production topology grows to 15 services + `cloudflared`, eleven networks, and eight published
+  images; the startup checksum manifest stays at 23 paths.
+
+**Remaining rollout:** two reviewed CIDRs, the new `production.env` values, extended
+`MCP_EGRESS_BLOCKED_NETWORKS`, the 8th image pulled by digest, restage + regenerated checksum
+manifest, restart, proof that `api` reaches `mail-relay:25` while direct 587 egress still fails, one
+real verification email, then `EMAIL_VERIFICATION_REQUIRED=true` and retirement of the mitigation
+deviation record.
 
 ---
 

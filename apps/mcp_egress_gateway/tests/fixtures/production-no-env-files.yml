@@ -1,0 +1,9 @@
+# Test-only final overlay. CI renders the production topology without access to
+# the root-owned /etc/geem/production.env installed on the production server.
+# Runtime environment values needed by the validator are supplied explicitly by
+# the test process; this file is never part of the deployment Compose pack.
+services:
+  api:
+    env_file: !reset []
+  worker:
+    env_file: !reset []

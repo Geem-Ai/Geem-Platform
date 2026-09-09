@@ -28,6 +28,7 @@ celery_app = Celery(
     include=[
         "app.worker.tasks",
         "app.connectors.tasks",
+        "app.notifications.tasks",
         "app.retention.tasks",
         "app.usage.tasks",
     ],

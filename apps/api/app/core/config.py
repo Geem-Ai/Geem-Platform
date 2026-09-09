@@ -307,6 +307,11 @@ class Settings(BaseSettings):
     # false skips SMTP server cert verification (self-signed hosts).
     smtp_tls_verify: bool = True
     smtp_timeout_seconds: float = 10.0
+    # Production has no mail egress path from the application tier, so it submits
+    # in the clear to the internal mail-relay service, which owns the only
+    # credentialed TLS hop upstream. Accepted for a bare Compose service name
+    # only; see smtp_plaintext_relay_allowed.
+    smtp_allow_plaintext_relay: bool = False
     # Empty → reuse API-key HMAC pepper (local derives from JWT_SECRET).
     invitation_token_hash_pepper: str = Field(default="", repr=False, exclude=True)
 
@@ -667,6 +672,18 @@ INSECURE_API_KEY_PEPPERS = frozenset(
 )
 
 
+def smtp_plaintext_relay_allowed(settings: Settings) -> bool:
+    """Whether plaintext submission to the internal mail relay is permitted.
+
+    A bare Compose service name cannot resolve to a public host, so restricting
+    the opt-in to a hostname without a dot or a port keeps it from ever covering
+    submission across the internet.
+    """
+    host = (settings.smtp_host or "").strip()
+    internal_relay = bool(host) and "." not in host and ":" not in host
+    return bool(settings.smtp_allow_plaintext_relay) and internal_relay
+
+
 def assert_secure_settings(settings: Settings) -> None:
     """Fail fast in non-local environments when auth secrets are unsafe."""
     if settings.is_local:
@@ -707,10 +724,12 @@ def assert_secure_settings(settings: Settings) -> None:
         raise RuntimeError(
             "SMTP_HOST and SMTP_FROM_EMAIL are required when EMAIL_PROVIDER=smtp."
         )
-    if not settings.smtp_use_tls:
+    if not settings.smtp_use_tls and not smtp_plaintext_relay_allowed(settings):
         raise RuntimeError(
             "SMTP_USE_TLS must be true in non-local environments so invitation "
-            "tokens and SMTP credentials are not sent in the clear."
+            "tokens and SMTP credentials are not sent in the clear. Plaintext "
+            "submission is accepted only with SMTP_ALLOW_PLAINTEXT_RELAY=true and "
+            "SMTP_HOST set to the internal relay service name."
         )
     if not settings.smtp_tls_verify:
         logger.warning(

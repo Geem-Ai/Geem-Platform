@@ -2,7 +2,7 @@
 Description=Geem development/UAT stack (Docker Compose + Cloudflare Tunnel)
 After=default.target
 # docker.service is a system unit; wait for the socket before compose up.
-# Do not enable this unit on the production host (use geem-stack.service instead).
+# Do not enable this unit on the production host (use geem-production.service instead).
 
 [Service]
 Type=oneshot

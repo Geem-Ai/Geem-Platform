@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Phase 13A deployed-boundary smoke gate. Run only after the base application
+# MCP deployed-boundary smoke gate. Run only after the base application
 # and the `mcp` profile are healthy. It intentionally tests the actual Compose
 # network namespaces and mounted certificates; unit tests cannot substitute for
 # this check.

@@ -33,6 +33,7 @@ REQUIRED_SERVICES = frozenset(
         "worker",
         "beat",
         "app-egress-proxy",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
         "workspace_web",
@@ -47,15 +48,22 @@ INTERNAL_NETWORKS = frozenset(
         "application_broker",
         "application_ingress",
         "application_provider_control",
+        "mail_relay_control",
         "mcp_egress_control",
         "mcp_proxy_control",
     }
 )
 APP_PUBLIC_NETWORK = "application_provider_egress"
+MAIL_PUBLIC_NETWORK = "mail_relay_egress"
 MCP_PUBLIC_NETWORK = "mcp_public_egress"
 INGRESS_PUBLIC_NETWORK = "public_egress"
 EXTERNAL_NETWORKS = frozenset(
-    {APP_PUBLIC_NETWORK, MCP_PUBLIC_NETWORK, INGRESS_PUBLIC_NETWORK}
+    {
+        APP_PUBLIC_NETWORK,
+        MAIL_PUBLIC_NETWORK,
+        MCP_PUBLIC_NETWORK,
+        INGRESS_PUBLIC_NETWORK,
+    }
 )
 REQUIRED_NETWORKS = INTERNAL_NETWORKS | EXTERNAL_NETWORKS
 
@@ -71,6 +79,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
             "application_broker",
             "application_ingress",
             "application_provider_control",
+            "mail_relay_control",
             "mcp_egress_control",
         }
     ),
@@ -79,6 +88,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
             "application_data",
             "application_broker",
             "application_provider_control",
+            "mail_relay_control",
             "mcp_egress_control",
         }
     ),
@@ -86,6 +96,7 @@ EXPECTED_SERVICE_NETWORKS: dict[str, frozenset[str]] = {
     "app-egress-proxy": frozenset(
         {"application_provider_control", APP_PUBLIC_NETWORK}
     ),
+    "mail-relay": frozenset({"mail_relay_control", MAIL_PUBLIC_NETWORK}),
     "mcp-egress-gateway": frozenset({"mcp_egress_control", "mcp_proxy_control"}),
     "mcp-egress-proxy": frozenset({"mcp_proxy_control", MCP_PUBLIC_NETWORK}),
     "workspace_web": frozenset({"application_ingress"}),
@@ -135,6 +146,21 @@ GATEWAY_ENV_KEYS = frozenset(
     }
 )
 
+MAIL_RELAY_ENV_KEYS = frozenset(
+    {
+        "MAIL_RELAY_UPSTREAM_HOST",
+        "MAIL_RELAY_UPSTREAM_PORT",
+        "MAIL_RELAY_UPSTREAM_USERNAME",
+        "MAIL_RELAY_UPSTREAM_PASSWORD",
+        "MAIL_RELAY_UPSTREAM_FROM",
+    }
+)
+MAIL_RELAY_ENTRYPOINT = (
+    "python3",
+    "/usr/local/lib/geem/render_mail_relay_config.py",
+)
+MAIL_RELAY_SUBMISSION_PORTS = frozenset({"587", "465"})
+
 MCP_CLIENT_SECRET_BINDINGS = frozenset(
     {
         ("mcp_egress_client_cert", "/run/secrets/mcp-egress/client.crt"),
@@ -159,12 +185,8 @@ MCP_SECRET_NAMES = frozenset(
     }
 )
 CLOUDFLARED_CONFIG_NAME = "cloudflared_config"
-CLOUDFLARED_MAINTENANCE_CONFIG_NAME = "cloudflared_maintenance_config"
 CLOUDFLARED_CREDENTIALS_NAME = "cloudflared_credentials"
-CLOUDFLARED_CONFIG_FILES = {
-    "live": "/etc/geem/cloudflared/config.yml",
-    "maintenance": "/etc/geem/cloudflared/config.maintenance.yml",
-}
+CLOUDFLARED_CONFIG_FILE = "/etc/geem/cloudflared/config.yml"
 CLOUDFLARED_COMMAND = (
     "tunnel",
     "--protocol",
@@ -176,6 +198,8 @@ CLOUDFLARED_COMMAND = (
 
 DIGEST_IMAGE_RE = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")
 LOCAL_IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+INSTALL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{7,127}$")
+INSTALL_LABEL = "com.geem.production.install"
 
 # Exact scripts rendered from infra/docker-compose.yml. The production
 # validator runs in an isolated image and therefore cannot read the repository;
@@ -285,6 +309,7 @@ BOUNDARY_SERVICES = frozenset(
     {
         "app-egress-proxy",
         "cloudflared",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
     }
@@ -307,6 +332,17 @@ BOUNDARY_RUNTIME_CONTRACTS = {
         "pids_limit": 64,
         "mem_limit": "134217728",
         "tmpfs": (),
+    },
+    "mail-relay": {
+        "user": "10002:10002",
+        "pids_limit": 64,
+        "mem_limit": "134217728",
+        "tmpfs": (
+            "/run:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700",
+            # msmtp spools each message through libc tmpfile(), which is /tmp
+            # only, so the relay cannot send at all without this mount.
+            "/tmp:size=8m,noexec,nosuid,nodev,uid=10002,gid=10002,mode=0700",
+        ),
     },
     "mcp-egress-gateway": {
         "user": "10001:10001",
@@ -337,6 +373,7 @@ REVIEWED_SERVICE_FIELDS = frozenset(
         "environment",
         "healthcheck",
         "image",
+        "labels",
         "mem_limit",
         "networks",
         "pids_limit",
@@ -395,7 +432,8 @@ class ValidationOptions:
     physical_volumes: Mapping[str, str]
     required_blocked_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = ()
     allow_local_image_ids: bool = False
-    cloudflared_mode: str = "live"
+    expected_api_image: str | None = None
+    install_id: str = ""
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -667,6 +705,30 @@ def _validate_minio_identity(
             errors.append(f"{service_name} must use plain HTTP only on the internal MinIO route")
 
 
+def _validate_mail_relay(
+    service: Mapping[str, Any], errors: list[str]
+) -> None:
+    """The relay is the only credentialed submission hop, so pin its contract.
+
+    Values are secrets and are never echoed; only presence, the submission port,
+    and the fail-closed renderer entrypoint are asserted here.
+    """
+    environment = _environment(service)
+    if set(environment) != MAIL_RELAY_ENV_KEYS:
+        errors.append("mail-relay environment differs from its exact upstream contract")
+    for key in sorted(MAIL_RELAY_ENV_KEYS):
+        value = environment.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"mail-relay {key} must be a non-empty reviewed value")
+    port = environment.get("MAIL_RELAY_UPSTREAM_PORT")
+    if isinstance(port, str) and port.strip() not in MAIL_RELAY_SUBMISSION_PORTS:
+        errors.append("mail-relay must submit on an authenticated submission port")
+    if tuple(_sequence(service.get("entrypoint"))) != MAIL_RELAY_ENTRYPOINT:
+        errors.append("mail-relay bypasses the fail-closed configuration renderer")
+    if service.get("command"):
+        errors.append("mail-relay overrides its reviewed renderer command")
+
+
 def _validate_persistent_mounts(
     services: Mapping[str, Mapping[str, Any]],
     volumes: Mapping[str, Any],
@@ -773,15 +835,14 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             "this production topology requires the exact reviewed cloudflared ingress"
         )
         return errors
-    if options.cloudflared_mode not in CLOUDFLARED_CONFIG_FILES:
-        errors.append("cloudflared mode is not one of the reviewed contracts")
-        return errors
 
-    cloudflared_config_name = (
-        CLOUDFLARED_CONFIG_NAME
-        if options.cloudflared_mode == "live"
-        else CLOUDFLARED_MAINTENANCE_CONFIG_NAME
-    )
+    if INSTALL_ID_RE.fullmatch(options.install_id) is None:
+        errors.append("--install-id is not a valid immutable installation identity")
+        return errors
+    expected_install_label = {INSTALL_LABEL: options.install_id}
+    for name, service in services.items():
+        if _mapping(service.get("labels")) != expected_install_label:
+            errors.append(f"{name} does not carry the exact approved installation label")
 
     # The ingress flag approves one complete, fixed Cloudflared contract. It
     # cannot be used to bless an arbitrary public service or credential mount.
@@ -800,7 +861,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if not _has_exact_resource_binding(
             service,
             field="configs",
-            source=cloudflared_config_name,
+            source=CLOUDFLARED_CONFIG_NAME,
             target="/etc/cloudflared/config.yml",
             uid="65532",
             gid="65532",
@@ -819,17 +880,12 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
             errors.append("cloudflared does not have the exact reviewed credential mount")
         if service.get("volumes"):
             errors.append("cloudflared ingress must not receive volume or bind mounts")
-        if (
-            options.cloudflared_mode == "maintenance"
-            and service.get("depends_on") not in (None, {})
-        ):
-            errors.append("maintenance cloudflared must not depend on application services")
 
     has_cloudflared = "cloudflared" in options.ingress_services
     expected_secret_names = MCP_SECRET_NAMES | (
         {CLOUDFLARED_CREDENTIALS_NAME} if has_cloudflared else set()
     )
-    expected_config_names = {cloudflared_config_name} if has_cloudflared else set()
+    expected_config_names = {CLOUDFLARED_CONFIG_NAME} if has_cloudflared else set()
     if not MCP_SECRET_NAMES.issubset(secrets):
         errors.append("production is missing a reviewed MCP PKI secret source")
     if set(secrets) != expected_secret_names:
@@ -851,23 +907,21 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
                 "cloudflared credentials must use one non-empty absolute file source"
             )
         if not _is_exact_absolute_file_declaration(
-            configs.get(cloudflared_config_name),
-            name=f"{options.project}_{cloudflared_config_name}",
+            configs.get(CLOUDFLARED_CONFIG_NAME),
+            name=f"{options.project}_{CLOUDFLARED_CONFIG_NAME}",
         ):
             errors.append(
                 "cloudflared config must use one non-empty absolute file source"
             )
         elif (
-            _mapping(configs.get(cloudflared_config_name)).get("file")
-            != CLOUDFLARED_CONFIG_FILES[options.cloudflared_mode]
+            _mapping(configs.get(CLOUDFLARED_CONFIG_NAME)).get("file")
+            != CLOUDFLARED_CONFIG_FILE
         ):
             errors.append("cloudflared config uses the wrong reviewed host file")
     expected_networks = dict(EXPECTED_SERVICE_NETWORKS)
     for ingress in options.ingress_services:
-        expected_networks[ingress] = (
-            frozenset({"application_ingress", INGRESS_PUBLIC_NETWORK})
-            if options.cloudflared_mode == "live"
-            else frozenset({INGRESS_PUBLIC_NETWORK})
+        expected_networks[ingress] = frozenset(
+            {"application_ingress", INGRESS_PUBLIC_NETWORK}
         )
     for name, expected in expected_networks.items():
         if _service_networks(services[name]) != expected:
@@ -877,6 +931,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
 
     expected_external_members = {
         APP_PUBLIC_NETWORK: {"app-egress-proxy"},
+        MAIL_PUBLIC_NETWORK: {"mail-relay"},
         MCP_PUBLIC_NETWORK: {"mcp-egress-proxy"},
         INGRESS_PUBLIC_NETWORK: set(options.ingress_services),
     }
@@ -1028,11 +1083,22 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         if name == "minio-init":
             if service.get("restart") is not None:
                 errors.append("minio-init must remain a non-restarting one-shot service")
-        elif service.get("restart") != "unless-stopped":
-            errors.append(f"{name} must use restart unless-stopped")
+        elif service.get("restart") != "no":
+            errors.append(
+                f"{name} must use restart no under systemd lifecycle ownership"
+            )
 
-        expected_deploy = {"replicas": 1} if name in {"beat", "mcp-egress-gateway"} else {}
-        if _mapping(service.get("deploy")) != expected_deploy:
+        deploy = _mapping(service.get("deploy"))
+        if name in {"beat", "mcp-egress-gateway"}:
+            deploy_is_reviewed = (
+                deploy.get("replicas") == 1
+                and set(deploy).issubset({"replicas", "resources", "placement"})
+                and deploy.get("resources", {}) == {}
+                and deploy.get("placement", {}) == {}
+            )
+        else:
+            deploy_is_reviewed = not deploy
+        if not deploy_is_reviewed:
             errors.append(f"{name} deploy contract differs from the reviewed topology")
 
     for name, service in services.items():
@@ -1126,6 +1192,11 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         == services["beat"].get("image")
     ):
         errors.append("api, worker, and beat must use one exact application image digest")
+    if (
+        options.expected_api_image is not None
+        and services["api"].get("image") != options.expected_api_image
+    ):
+        errors.append("application image differs from --expected-api-image")
 
     for name in ("workspace_web", "dashboard_web", "landpage_web"):
         if list(_sequence(services[name].get("command"))) != [
@@ -1140,6 +1211,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
     least_privilege_services = (
         "minio",
         "minio-init",
+        "mail-relay",
         "mcp-egress-gateway",
         "mcp-egress-proxy",
         "app-egress-proxy",
@@ -1175,6 +1247,7 @@ def validate_production_compose(config: Any, options: ValidationOptions) -> list
         "/usr/local/lib/geem/render_mcp_proxy_config.py",
     ]:
         errors.append("mcp-egress-proxy bypasses the fail-closed policy renderer")
+    _validate_mail_relay(services["mail-relay"], errors)
     if (
         tuple(_sequence(services["minio"].get("entrypoint")))
         != MINIO_SERVER_ENTRYPOINT
@@ -1398,6 +1471,11 @@ def _parse_named_values(values: Sequence[str], flag: str) -> dict[str, str]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
+    parser.add_argument(
+        "--install-id",
+        required=True,
+        help="Exact immutable Geem installation label value",
+    )
     parser.add_argument("--mcp-enabled", required=True, choices=("true", "false"))
     parser.add_argument(
         "--ingress-service",
@@ -1424,16 +1502,14 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Permit local content-addressed sha256 image IDs for the explicit "
-            "single-host clean-slate deployment path"
+            "fresh single-host installation path"
         ),
     )
     parser.add_argument(
-        "--cloudflared-mode",
-        choices=("live", "maintenance"),
-        default="live",
+        "--expected-api-image",
         help=(
-            "Select the reviewed live-origin or fail-closed maintenance-only "
-            "Cloudflared topology"
+            "Require API, worker, and Beat to use the exact image that executes "
+            "this validator"
         ),
     )
     return parser
@@ -1464,7 +1540,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         physical_volumes=physical_volumes,
         required_blocked_networks=required_blocks,
         allow_local_image_ids=arguments.allow_local_image_ids,
-        cloudflared_mode=arguments.cloudflared_mode,
+        expected_api_image=arguments.expected_api_image,
+        install_id=arguments.install_id,
     )
     try:
         errors = validate_production_compose(config, options)

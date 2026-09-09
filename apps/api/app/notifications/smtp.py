@@ -8,7 +8,7 @@ import ssl
 from email.message import EmailMessage as StdlibEmailMessage
 from email.utils import formataddr
 
-from app.core.config import Settings
+from app.core.config import Settings, smtp_plaintext_relay_allowed
 from app.core.errors import AppError, ErrorCategory
 from app.notifications.protocol import EmailMessage
 
@@ -32,7 +32,11 @@ class SmtpEmailProvider:
                 ErrorCategory.EMAIL_DELIVERY_FAILED,
                 "SMTP is not configured.",
             )
-        if not self._use_tls and not self._is_local:
+        if (
+            not self._use_tls
+            and not self._is_local
+            and not smtp_plaintext_relay_allowed(settings)
+        ):
             raise AppError(
                 ErrorCategory.EMAIL_DELIVERY_FAILED,
                 "SMTP TLS is required outside local/test.",

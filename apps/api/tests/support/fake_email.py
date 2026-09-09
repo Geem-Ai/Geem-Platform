@@ -24,6 +24,30 @@ class FailingEmailProvider:
         raise self.error
 
 
+def deliver_email_tasks_inline(monkeypatch, provider) -> None:
+    """Run the notification tasks in-process with ``provider``.
+
+    Production hands verification and reset mail to the worker, so tests drive
+    the real task body instead of a live broker.
+    """
+    from app.notifications import enqueue as email_enqueue
+    from app.notifications import tasks as email_tasks
+
+    monkeypatch.setattr(
+        email_tasks, "build_email_provider", lambda settings=None: provider
+    )
+    monkeypatch.setattr(
+        email_enqueue,
+        "enqueue_email_verification",
+        lambda user_id: email_tasks.send_email_verification.apply(args=[str(user_id)]),
+    )
+    monkeypatch.setattr(
+        email_enqueue,
+        "enqueue_password_reset",
+        lambda user_id: email_tasks.send_password_reset.apply(args=[str(user_id)]),
+    )
+
+
 def token_from_invite_email(message: EmailMessage) -> str:
     url = url_from_invite_email(message)
     token = parse_qs(urlparse(url).query).get("token", [""])[0]
