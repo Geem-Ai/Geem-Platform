@@ -83,7 +83,7 @@ jobs:
         run: |
           test "$(alembic heads | wc -l | tr -d ' ')" = "1"
           alembic upgrade head
-          alembic current | grep -F "0041_openwa_binding_backfill (head)"
+          alembic current | grep -F "0042_workspace_pending_status (head)"
       - name: Run MCP persistence, commercial, and WhatsApp surface contracts
         run: >-
           pytest -q

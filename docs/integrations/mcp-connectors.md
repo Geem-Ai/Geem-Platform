@@ -275,7 +275,7 @@ Before turning on MCP, the normal SaaS stack must already have:
 - `OPENROUTER_API_KEY` plus reviewed primary and fallback model IDs;
 - for the direct-WhatsApp release canary, `OPENWA_BASE_URL`, a non-empty
   `OPENWA_API_KEY`, and a reviewed `OPENWA_TIMEOUT_SECONDS`;
-- PostgreSQL migrations through `0041_openwa_binding_backfill`;
+- PostgreSQL migrations through `0042_workspace_pending_status`;
 - healthy Postgres, Redis, Qdrant, MinIO, API, and worker services;
 - the normal billing provider and paid App installation flow configured.
 

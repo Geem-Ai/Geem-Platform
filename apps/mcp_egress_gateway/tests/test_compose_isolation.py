@@ -521,7 +521,7 @@ def test_phase13_gate_covers_shared_provider_and_the_full_migration_chain() -> N
     assert "tests/unit/test_agent_*.py" in workflow
     assert "tests/unit/test_openrouter_contracts.py" in workflow
     assert "alembic upgrade head" in workflow
-    assert "0041_openwa_binding_backfill (head)" in workflow
+    assert "0042_workspace_pending_status (head)" in workflow
     full_api_job = workflow.split("api-full-regression:", maxsplit=1)[1].split(
         "gateway-and-compose:", maxsplit=1
     )[0]

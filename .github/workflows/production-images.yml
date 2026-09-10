@@ -326,7 +326,7 @@ jobs:
               set -eu
               test "$(alembic heads | wc -l | tr -d " ")" = 1
               alembic upgrade head
-              alembic current | grep -F "0041_openwa_binding_backfill (head)"
+              alembic current | grep -F "0042_workspace_pending_status (head)"
               python -m pytest -q -p no:cacheprovider tests/unit tests/integration
             '
 
