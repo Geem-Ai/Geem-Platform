@@ -9,7 +9,7 @@ type Props = {
   copy: AgentAiPageCopy;
 };
 
-const { copy } = Astro.props;
+const { copy, locale } = Astro.props;
 const { apiBaseUrl, workspaceUrl } = getSiteConfig();
 const agentBaseUrl = `${apiBaseUrl.replace(/\/+$/, '')}/api/v1/agent`;
 const appUrl = `${workspaceUrl}/apps/agents-ai`;
@@ -250,7 +250,7 @@ const errorSample = [
         </div>
         <div class="agent-code">
           <div class="agent-code__bar">
-            <span>Models</span>
+            <span>{locale === 'ar' ? 'النماذج' : 'Models'}</span>
             <button type="button" data-copy="agent-models" data-copied-label={copy.copiedLabel}>{copy.copyLabel}</button>
           </div>
           <pre id="agent-models" dir="ltr"><code>{modelsSample}</code></pre>
@@ -388,7 +388,7 @@ const errorSample = [
       <div class="agent-subsection">
         <p>{copy.errors.retry}</p>
         <div class="agent-code">
-          <div class="agent-code__bar"><span>OpenAI error</span></div>
+          <div class="agent-code__bar"><span>{locale === 'ar' ? 'خطأ بصيغة OpenAI' : 'OpenAI error'}</span></div>
           <pre dir="ltr"><code>{errorSample}</code></pre>
         </div>
       </div>
@@ -449,6 +449,17 @@ const errorSample = [
     max-inline-size: 41rem;
     color: color-mix(in oklab, white 76%, transparent);
     font-size: clamp(1.05rem, 2vw, 1.25rem);
+  }
+
+  :global(html[lang='ar']) .agent-hero {
+    padding-block: clamp(3rem, 5vw, 4.5rem);
+  }
+
+  :global(html[lang='ar']) .agent-hero__copy h1 {
+    max-inline-size: 20ch;
+    font-size: clamp(2.2rem, 4vw, 3.4rem);
+    line-height: 1.4;
+    text-wrap: balance;
   }
 
   .agent-hero__badge,

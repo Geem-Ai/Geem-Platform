@@ -1,0 +1,172 @@
+---
+import type { ComparisonCopy } from '../../content/comparison';
+import type { Locale } from '../../lib/i18n';
+import { contactHref, localizedPath } from '../../lib/site';
+import Button from '../ui/Button.astro';
+
+type Props = { locale: Locale; copy: ComparisonCopy };
+const { locale, copy } = Astro.props;
+const contact = contactHref(locale);
+---
+
+<section class="comparison-hero section-dark" aria-labelledby="comparison-title">
+  <div class="container-shell comparison-hero__grid">
+    <header>
+      <p class="eyebrow">{copy.hero.eyebrow}</p>
+      <h1 id="comparison-title">{copy.hero.title}</h1>
+      <p class="comparison-hero__lead">{copy.hero.description}</p>
+      <div class="comparison-actions">
+        <Button href={contact}>{copy.hero.primary}</Button>
+        <Button href="#platforms" variant="secondary">{copy.hero.secondary}</Button>
+      </div>
+      <p class="comparison-updated"><time datetime="2026-09-10">{copy.updated}</time></p>
+    </header>
+    <aside class="comparison-guide" aria-labelledby="comparison-guide-title">
+      <h2 id="comparison-guide-title">{copy.guide.label}</h2>
+      <ol>
+        {copy.guide.items.map((item, index) => (
+          <li>
+            <span class="comparison-guide__number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <div><h3>{item.title}</h3><p>{item.description}</p></div>
+          </li>
+        ))}
+      </ol>
+    </aside>
+  </div>
+</section>
+
+<section id="platforms" class="section-shell comparison-landscape" aria-labelledby="platforms-title">
+  <div class="container-shell">
+    <header class="comparison-intro">
+      <p class="eyebrow">{copy.landscape.eyebrow}</p>
+      <h2 id="platforms-title">{copy.landscape.title}</h2>
+      <p>{copy.landscape.description}</p>
+    </header>
+    <div class="comparison-platforms">
+      {copy.platforms.map((platform) => (
+        <article class:list={['comparison-platform', { 'comparison-platform--geem': platform.id === 'geem' }]} aria-labelledby={`platform-${platform.id}`}>
+          <header class="comparison-platform__header">
+            <div>
+              <h3 id={`platform-${platform.id}`}><bdi dir="ltr">{platform.name}</bdi></h3>
+              <p>{platform.category}</p>
+            </div>
+            {platform.id === 'geem' && <span class="comparison-platform__badge">{copy.labels.geem}</span>}
+          </header>
+          <dl class="comparison-platform__details">
+            <div><dt>{copy.labels.offering}</dt><dd>{platform.offering}</dd></div>
+            <div><dt>{copy.labels.deployment}</dt><dd>{platform.deployment}</dd></div>
+            <div><dt>{copy.labels.evaluation}</dt><dd>{platform.evaluation}</dd></div>
+          </dl>
+          <div class="comparison-sources">
+            <span>{copy.labels.sources}</span>
+            <ul>
+              {platform.sources.map((source) => (
+                <li><a href={source.href}><bdi>{source.label}</bdi></a></li>
+              ))}
+            </ul>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<section id="cost-evaluation" class="section-shell comparison-costs" aria-labelledby="costs-title">
+  <div class="container-shell">
+    <header class="comparison-intro">
+      <p class="eyebrow">{copy.costs.eyebrow}</p>
+      <h2 id="costs-title">{copy.costs.title}</h2>
+      <p>{copy.costs.description}</p>
+    </header>
+    <ol class="comparison-checklist">
+      {copy.costs.items.map((item, index) => (
+        <li>
+          <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <div><h3>{item.title}</h3><p>{item.description}</p></div>
+        </li>
+      ))}
+    </ol>
+    <p class="comparison-costs__conclusion">{copy.costs.conclusion}</p>
+  </div>
+</section>
+
+<section class="section-shell section-dark comparison-cta" aria-labelledby="comparison-cta-title">
+  <div class="container-shell comparison-cta__grid">
+    <div>
+      <p class="eyebrow">{copy.cta.eyebrow}</p>
+      <h2 id="comparison-cta-title">{copy.cta.title}</h2>
+      <p class="comparison-cta__description">{copy.cta.description}</p>
+    </div>
+    <div class="comparison-actions">
+      <Button href={contact}>{copy.cta.primary}</Button>
+      <Button href={`${localizedPath(locale)}#use-cases`} variant="secondary">{copy.cta.secondary}</Button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .comparison-hero { padding-block: clamp(3.5rem, 7vw, 6.5rem); }
+  .comparison-hero__grid { display: grid; gap: 3rem; align-items: center; }
+  .comparison-hero h1 { max-inline-size: 17ch; margin-block-start: 1.15rem; font-size: clamp(2.5rem, 4.9vw, 4.2rem); line-height: 1.1; font-weight: 600; letter-spacing: -0.04em; text-wrap: balance; }
+  .comparison-hero__lead { max-inline-size: 42rem; margin-block-start: 1.5rem; color: #c7d9e1; font-size: 1.1rem; line-height: 1.85; }
+  .comparison-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: 1.8rem; }
+  .comparison-updated { margin-block-start: 1.8rem; color: #a9c3ce; font-size: 0.8rem; }
+  .comparison-guide { min-inline-size: 0; padding: clamp(1.4rem, 3vw, 2rem); border: 1px solid #355365; border-radius: 1.5rem; background: color-mix(in oklab, white 5%, transparent); }
+  .comparison-guide h2 { color: #b7e7df; font-size: 0.9rem; font-weight: 500; }
+  .comparison-guide ol { display: grid; gap: 1.5rem; margin-block-start: 1.5rem; list-style: none; padding: 0; }
+  .comparison-guide li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.85rem; align-items: start; }
+  .comparison-guide li + li { padding-block-start: 1.5rem; border-block-start: 1px solid #355365; }
+  .comparison-guide__number { padding-block-start: 0.12rem; color: #99dfd1; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+  .comparison-guide h3 { font-size: 1.1rem; font-weight: 600; }
+  .comparison-guide li p { margin-block-start: 0.35rem; color: #bed0d9; font-size: 0.95rem; }
+  .comparison-intro { max-inline-size: 48rem; margin-block-end: 2.2rem; }
+  .comparison-intro h2, .comparison-cta h2 { margin-block-start: 0.75rem; font-size: clamp(1.9rem, 3.4vw, 2.8rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; text-wrap: balance; }
+  .comparison-intro > p:last-child { margin-block-start: 1rem; color: var(--geem-muted); font-size: 1.05rem; line-height: 1.8; }
+  .comparison-platforms { display: grid; gap: 1.5rem; }
+  .comparison-platform { min-inline-size: 0; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--geem-border); border-radius: 1.25rem; background: white; }
+  .comparison-platform--geem { border-color: #73b9ab; box-shadow: inset 0 3px 0 #73b9ab; background: linear-gradient(120deg, #f0faf7, white 65%); }
+  .comparison-platform__header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: start; justify-content: space-between; }
+  .comparison-platform__header > div { min-inline-size: 0; }
+  .comparison-platform h3 { color: var(--geem-navy-900); font-size: clamp(1.15rem, 2vw, 1.4rem); font-weight: 600; overflow-wrap: anywhere; }
+  .comparison-platform__header p { margin-block-start: 0.35rem; color: var(--geem-muted); font-size: 0.92rem; }
+  .comparison-platform__badge { flex-shrink: 0; padding: 0.25rem 0.75rem; border: 1px solid #aed8ce; border-radius: 999px; color: #1b6355; background: #e5f5ee; font-size: 0.8rem; font-weight: 600; }
+  .comparison-platform__details { display: grid; gap: 1.5rem; margin-block: 1.5rem 0; }
+  .comparison-platform__details > div { min-inline-size: 0; }
+  .comparison-platform dt { margin-block-end: 0.55rem; color: #1f6874; font-size: 0.8rem; font-weight: 600; }
+  .comparison-platform dd { margin: 0; color: #425d6c; font-size: 0.95rem; line-height: 1.8; overflow-wrap: break-word; }
+  .comparison-sources { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: baseline; margin-block-start: 1.5rem; padding-block-start: 1rem; border-block-start: 1px solid var(--geem-border); font-size: 0.8rem; }
+  .comparison-sources > span { color: var(--geem-muted); }
+  .comparison-sources ul { display: flex; flex-wrap: wrap; gap: 0.3rem 1.25rem; list-style: none; padding: 0; margin: 0; }
+  .comparison-sources a { display: inline-block; padding-block: 0.25rem; color: #155e71; text-decoration: underline; text-underline-offset: 0.22em; }
+  .comparison-sources a:hover { color: var(--geem-navy-950); }
+  .comparison-costs { background: #eaf1f5; border-block: 1px solid var(--geem-border); }
+  .comparison-checklist { display: grid; gap: 1rem; padding: 0; margin: 0; list-style: none; }
+  .comparison-checklist li { display: flex; gap: 1.2rem; padding: 1.5rem; border: 1px solid #d3e0e8; border-radius: 1rem; background: #f8fbfc; }
+  .comparison-checklist li > span { color: #32788b; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .comparison-checklist li > div { min-inline-size: 0; }
+  .comparison-checklist h3 { font-weight: 600; font-size: 1.1rem; line-height: 1.4; }
+  .comparison-checklist p { margin-block-start: 0.55rem; color: #4a6574; font-size: 0.95rem; line-height: 1.8; }
+  .comparison-costs__conclusion { max-inline-size: 55rem; margin-block-start: 1.75rem; color: #426171; font-size: 0.95rem; }
+  .comparison-cta__grid { display: grid; gap: 1rem; }
+  .comparison-cta h2 { max-inline-size: 22ch; }
+  .comparison-cta__description { max-inline-size: 45rem; margin-block-start: 1.1rem; color: #c7d9e1; line-height: 1.85; }
+  :global(html[dir='rtl']) .comparison-hero h1 { max-inline-size: 18ch; line-height: 1.4; letter-spacing: 0; }
+  :global(html[dir='rtl']) .comparison-platform h3 { line-height: 1.45; }
+  @media (min-width: 700px) {
+    .comparison-checklist { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 900px) {
+    .comparison-platform__details { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .comparison-platform__details > div + div { padding-inline-start: 1.5rem; border-inline-start: 1px solid var(--geem-border); }
+  }
+  @media (min-width: 1000px) {
+    .comparison-hero__grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 4rem; }
+    .comparison-cta__grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: center; gap: 3rem; }
+    .comparison-cta .comparison-actions { justify-content: flex-end; margin: 0; }
+  }
+  @media (max-width: 899px) {
+    .comparison-platform__details > div + div { padding-block-start: 1.1rem; border-block-start: 1px solid var(--geem-border); }
+    .comparison-platform__details { gap: 1.1rem; }
+    .comparison-checklist li { padding: 1.25rem; gap: 0.9rem; }
+  }
+</style>

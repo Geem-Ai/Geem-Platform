@@ -5,6 +5,7 @@ import { isLocale, localeStaticPaths } from '../../lib/i18n';
 import Hero from '../../components/sections/Hero.astro';
 import ValueStrip from '../../components/sections/ValueStrip.astro';
 import PlatformFoundation from '../../components/sections/PlatformFoundation.astro';
+import Deployment from '../../components/sections/Deployment.astro';
 import Experts from '../../components/sections/Experts.astro';
 import Integrations from '../../components/sections/Integrations.astro';
 import Channels from '../../components/sections/Channels.astro';
@@ -35,10 +36,11 @@ const copy = getSiteCopy(locale);
   <Hero locale={locale} copy={copy} />
   <ValueStrip copy={copy} />
   <PlatformFoundation locale={locale} />
+  <Deployment locale={locale} />
   <Experts copy={copy} />
   <Solutions locale={locale} />
   <RoboticsRoadmap locale={locale} />
-  <Integrations copy={copy} />
+  <Integrations locale={locale} copy={copy} />
   <Channels copy={copy} />
   <DeveloperApi locale={locale} copy={copy} />
   <Security locale={locale} copy={copy} />

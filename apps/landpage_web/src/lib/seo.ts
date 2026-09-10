@@ -1,5 +1,6 @@
 import type { Locale } from './i18n';
 import { absoluteUrl, getSiteConfig, localizedPath } from './site';
+import { company } from './company';
 
 export type SeoInput = {
   locale: Locale;
@@ -50,18 +51,19 @@ export function organizationJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'Geem',
-    legalName: 'Dal Seen Information Technology Company',
+    legalName: company.legalNameEn,
     url: siteUrl,
     logo: `${siteUrl}/favicon.svg`,
-    email: 'info@dalseen.sa',
-    telephone: '+966920014079',
+    email: company.emails.info,
+    telephone: company.phoneTel,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: 'King Khalid Road, Al Aqoul',
-      addressLocality: 'Medina',
+      streetAddress: 'Prince Mohammed bin Abdulaziz Road',
+      addressLocality: 'Madinah',
+      postalCode: '42311',
       addressCountry: 'SA',
     },
-    sameAs: ['https://dalseen.sa'],
+    sameAs: [company.companySite],
   };
 }
 
@@ -76,11 +78,11 @@ export function softwareApplicationJsonLd(locale: Locale) {
     url: `${siteUrl}/${locale}`,
     description:
       locale === 'ar'
-        ? 'منصة جيم: خبراء ذكاء اصطناعي مبنيون على معرفة منشأتك، عبر الدردشة وواتساب والموقع وأنظمتك.'
-        : 'Geem: AI Experts grounded in your organization’s knowledge, available through chat, WhatsApp, your website, and your systems.',
+        ? 'جيم: ذكاء اصطناعي للكتابة والبرمجة وخبراء متصلون بمعرفة المنشأة وأنظمتها، عبر الدردشة وWhatsApp والموقع، مع خيارات تشغيل على سحابة جيم أو داخل المنشأة.'
+        : 'GEEM: AI for writing, coding and Experts connected to business knowledge and systems, across chat, WhatsApp and websites. Run on GEEM cloud or at your premises.',
     publisher: {
       '@type': 'Organization',
-      name: 'Dal Seen Information Technology Company',
+      name: company.legalNameEn,
     },
   };
 }

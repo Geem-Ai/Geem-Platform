@@ -6,7 +6,7 @@ const failures = [];
 const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://geem.ai').replace(/\/$/, '');
 const socialImageName = 'og-geem.jpg';
 const socialImageUrl = `${siteUrl}/${socialImageName}`;
-const localizedPages = ['', 'about', 'agent-ai', 'contact', 'pdpl', 'privacy', 'security', 'terms'];
+const localizedPages = ['', 'about', 'agent-ai', 'compare', 'contact', 'pdpl', 'privacy', 'security', 'terms'];
 const imageAlt = {
   ar: 'هوية جيم البصرية مع خبير ذكاء اصطناعي متصل بمعرفة المنشأة وأنظمتها فوق أفق سعودي',
   en: 'Geem AI Expert connected to an organization’s knowledge and systems over a Saudi skyline',

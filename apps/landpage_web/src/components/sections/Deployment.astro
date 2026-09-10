@@ -1,0 +1,98 @@
+---
+import type { Locale } from '../../lib/i18n';
+import { contactHref, localizedPath } from '../../lib/site';
+import { getDeploymentCopy } from '../../content/deployment';
+import Button from '../ui/Button.astro';
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const copy = getDeploymentCopy(locale);
+---
+
+<section id="deployment" class="deployment section-shell" aria-labelledby="deployment-title">
+  <div class="container-shell">
+    <header class="deployment-heading">
+      <p class="eyebrow">{copy.eyebrow}</p>
+      <h2 id="deployment-title">{copy.title}</h2>
+      <p class="deployment-description">{copy.description}</p>
+    </header>
+
+    <div class="deployment-options">
+      {copy.options.map((option) => (
+        <article class:list={['deployment-option', `deployment-option--${option.id}`]}>
+          <div class="option-label">
+            <span class="option-icon" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                {option.id === 'cloud' ? <><path d="M10 23H8a6 6 0 0 1-1-11.9A9 9 0 0 1 24.5 9 7 7 0 0 1 25 23h-3"/><path d="M12 21h8v7h-8zM16 15v6"/></> : <><rect x="6" y="4" width="20" height="10" rx="2"/><rect x="6" y="18" width="20" height="10" rx="2"/><path d="M11 9h.01M11 23h.01M17 9h5M17 23h5M16 14v4"/></>}
+              </svg>
+            </span>
+            <p>{option.label}</p>
+          </div>
+          <h3>{option.title}</h3>
+          <p class="option-description">{option.description}</p>
+          <ul>{option.points.map((point) => <li><svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 4 4 8-8"/></svg><span>{point}</span></li>)}</ul>
+        </article>
+      ))}
+    </div>
+
+    <div class="deployment-cost">
+      <span class="cost-icon" aria-hidden="true"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v18h18M10 17l5-5 4 3 5-8M20 7h4v4"/></svg></span>
+      <div><h3>{copy.costTitle}</h3><p>{copy.costDescription}</p></div>
+    </div>
+
+    <details class="deployment-planning">
+      <summary>{copy.planningTitle}<span aria-hidden="true">+</span></summary>
+      <ul>{copy.planningItems.map((item) => <li><h4>{item.title}</h4><p>{item.text}</p></li>)}</ul>
+    </details>
+
+    <div class="deployment-actions">
+      <Button href={contactHref(locale)}>{copy.contactCta}</Button>
+      <a href={localizedPath(locale, 'compare')} class="comparison-link">{copy.compareCta}<span aria-hidden="true">↗</span></a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .deployment { background: #0b2535; color: #fff; }
+  .deployment-heading { max-inline-size: 49rem; margin-block-end: 2rem; }
+  .eyebrow { margin: 0 0 .7rem; color: var(--geem-sand); }
+  h2 { margin: 0; font-size: clamp(1.9rem, 3.3vw, 2.7rem); font-weight: 600; line-height: 1.18; letter-spacing: -.035em; text-wrap: balance; }
+  .deployment-description { max-inline-size: 67ch; margin: 1rem 0 0; color: #c3d4df; font-size: 1.02rem; line-height: 1.8; }
+  .deployment-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+  .deployment-option { display: grid; grid-template-rows: auto auto 1fr auto; padding: clamp(1.3rem, 3vw, 2rem); border: 1px solid #ffffff30; border-radius: 1rem; background: #103247; }
+  .deployment-option--on-site { background: linear-gradient(120deg, #17423e, #143442); border-color: #99dfd159; }
+  .option-label { display: flex; align-items: center; gap: .8rem; margin-block-end: 1.35rem; color: #b8e7f0; }
+  .deployment-option--on-site .option-label { color: #a9eadb; }
+  .option-label p { margin: 0; font-size: .87rem; font-weight: 600; }
+  .option-icon { display: flex; align-items: center; justify-content: center; inline-size: 2.9rem; block-size: 2.9rem; border: 1px solid currentColor; border-radius: .7rem; }
+  .option-icon svg { inline-size: 1.85rem; block-size: 1.85rem; }
+  h3 { margin: 0; font-size: 1.28rem; font-weight: 600; line-height: 1.4; text-wrap: balance; }
+  .option-description { margin: .6rem 0 1.25rem; color: #d0e0e7; font-size: .95rem; line-height: 1.8; }
+  .deployment-option ul { display: grid; gap: .6rem; list-style: none; margin: 0; padding: 1rem 0 0; border-block-start: 1px solid #ffffff26; }
+  .deployment-option li { display: flex; align-items: start; gap: .6rem; font-size: .86rem; line-height: 1.65; color: #dce9ef; }
+  .deployment-option li svg { flex: none; inline-size: 1rem; block-size: 1rem; margin-block-start: .2rem; color: var(--geem-sand); }
+  .deployment-cost { display: flex; align-items: start; gap: 1rem; padding-block: 1.6rem; }
+  .cost-icon { display: flex; flex: none; color: var(--geem-sand); margin-block-start: .1rem; }
+  .cost-icon svg { inline-size: 1.7rem; block-size: 1.7rem; }
+  .deployment-cost h3 { font-size: 1.08rem; }
+  .deployment-cost p { margin: .4rem 0 0; max-inline-size: 98ch; color: #c3d4df; font-size: .92rem; line-height: 1.8; }
+  .deployment-planning { border-block: 1px solid #ffffff29; }
+  summary { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-block: 1rem; cursor: pointer; font-size: .95rem; font-weight: 500; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary span { font-size: 1.3rem; line-height: 1; color: var(--geem-sand); }
+  details[open] summary span { transform: rotate(45deg); }
+  .deployment-planning ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; padding: .3rem 0 1.35rem; margin: 0; list-style: none; }
+  .deployment-planning h4 { margin: 0; color: #c6eee7; font-size: .9rem; font-weight: 600; }
+  .deployment-planning p { margin: .3rem 0 0; color: #c3d4df; font-size: .88rem; line-height: 1.75; }
+  .deployment-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem 1.7rem; padding-block-start: 1.75rem; }
+  .comparison-link { display: inline-flex; align-items: center; gap: .75rem; min-block-size: 2.75rem; color: #e3efef; font-size: .92rem; text-underline-offset: .3em; }
+  .comparison-link:hover { color: var(--geem-sand); }
+  :global(html[dir='rtl']) .comparison-link span { transform: scaleX(-1); }
+  @media (max-width: 650px) {
+    .deployment-options { grid-template-columns: 1fr; gap: 1rem; }
+    .deployment-planning ul { grid-template-columns: 1fr; gap: 1rem; }
+    .deployment-cost { gap: .8rem; }
+    .deployment-actions { align-items: flex-start; flex-direction: column; gap: .7rem; }
+    .option-label { margin-block-end: 1rem; }
+  }
+</style>

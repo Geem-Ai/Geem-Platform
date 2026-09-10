@@ -2,23 +2,23 @@ import type { SiteCopy } from './types';
 
 export const en: SiteCopy = {
   meta: {
-    homeTitle: 'Geem | AI for everyday work and business',
+    homeTitle: 'GEEM | Business AI in the cloud or on your premises',
     homeDescription:
-      'Explore Geem: fine-tuned AI running on our own GPU infrastructure. Write, create, get help with code, and connect business Experts to your knowledge, channels and systems.',
-    aboutTitle: 'About Geem and DALSEEN',
+      'Use GEEM cloud or tailored infrastructure we provide at your site. Connect AI Experts to your knowledge and systems, with capacity planned around your business.',
+    aboutTitle: 'About GEEM and DALSEEN',
     aboutDescription:
-      'Meet Geem, the AI product of DALSEEN—a Saudi technology company that began in Jeddah and is now based in Madinah.',
-    contactTitle: 'Contact Geem',
-    contactDescription: 'Talk with the Geem team about Experts, knowledge, and channels for your organization.',
+      'Meet GEEM, the AI product of DALSEEN—a Saudi technology company that began in Jeddah and is now based in Madinah.',
+    contactTitle: 'Contact GEEM',
+    contactDescription: 'Discuss GEEM cloud or client-site infrastructure, business integrations, capacity and operating costs with our team.',
     privacyTitle: 'Privacy Policy',
-    privacyDescription: 'What Geem processes, why it is needed, how organizations manage workspaces, and how you can exercise your rights.',
+    privacyDescription: 'What GEEM processes, why it is needed, how organizations manage workspaces, and how you can exercise your rights.',
     termsTitle: 'Terms of Use',
-    termsDescription: 'Terms for using Geem workspaces, Experts, integrations, and the responsibilities of organizations and users.',
+    termsDescription: 'Terms for using GEEM workspaces, Experts, integrations, and the responsibilities of organizations and users.',
     pdplTitle: 'Personal Data Protection Notice',
-    pdplDescription: 'Personal data protection notice for Geem users.',
+    pdplDescription: 'Personal data protection notice for GEEM users.',
     securityTitle: 'Security and your organization’s privacy',
     securityDescription:
-      'Learn how Geem isolates workspaces, enforces server-side permissions, and protects integration secrets and access keys.',
+      'Explore GEEM workspace controls and review the operating environment, data flows and access requirements for cloud or client-site deployment.',
   },
   a11y: {
     skipToContent: 'Skip to content',
@@ -29,7 +29,7 @@ export const en: SiteCopy = {
     languageSwitch: 'العربية',
   },
   brand: {
-    product: 'Geem',
+    product: 'GEEM',
     tagline: 'AI for everyday work and business',
   },
   nav: {
@@ -41,7 +41,7 @@ export const en: SiteCopy = {
       { id: 'api', label: 'Developers', href: 'api' },
       { id: 'security', label: 'Security', href: 'security' },
     ],
-    primaryCta: 'Start with Geem',
+    primaryCta: 'Start with GEEM',
     login: 'Workspace Login',
   },
   hero: {
@@ -49,24 +49,24 @@ export const en: SiteCopy = {
     title: 'One AI experience',
     titleAccent: 'More ways to work',
     description:
-      'GEEM simplifies bringing AI into your work, from writing and coding to Experts connected to your knowledge, channels and systems. Start with a practical need and expand across your organization.',
-    primaryCta: 'Start with Geem',
+      'Write, explore ideas and get help with code. Bring GEEM into your business through Experts connected to your knowledge, channels and systems. Choose GEEM cloud or client-site deployment, then expand from a practical need.',
+    primaryCta: 'Start with GEEM',
     tertiaryCta: 'Explore the platform',
-    foundationLine: 'Our fine-tuned AI. Our GPUs. Your possibilities.',
+    foundationLine: 'Our fine-tuned AI · GEEM cloud or your premises',
   },
   valueStrip: {
     items: [
       {
         title: 'Everyday intelligence',
-        description: 'Go from a question or idea to clearer thinking, useful writing and your next step.',
+        description: 'Write, code and put business knowledge to work across reusable Experts and workflows.',
       },
       {
         title: 'Our own AI foundation',
-        description: 'Geem’s fine-tuned AI builds on multiple models and continues to evolve.',
+        description: 'GEEM’s fine-tuned AI builds on multiple models and continues to evolve.',
       },
       {
-        title: 'Our GPUs and our infrastructure',
-        description: 'We run open-source models locally on Geem’s own GPUs, servers and infrastructure.',
+        title: 'Cloud or your premises',
+        description: 'Use GEEM cloud or infrastructure we tailor and provide at your site, with capacity planned for your workload.',
       },
     ],
   },
@@ -76,7 +76,7 @@ export const en: SiteCopy = {
     title: 'Give AI a role in your business',
     description:
       'Start with general AI, then create Experts for work that needs your business context. Give each Expert a purpose, instructions, selected knowledge and the connections it may use.',
-    flowExpertLabel: 'Geem Expert',
+    flowExpertLabel: 'GEEM Expert',
     formula: ['Purpose', 'Instructions', 'Business knowledge', 'Controlled access'],
     cards: [
       {
@@ -144,7 +144,7 @@ export const en: SiteCopy = {
     nodes: [
       {
         id: 'chat',
-        label: 'Geem Chat',
+        label: 'GEEM Chat',
         context: 'For your team',
         description: 'Ask the Expert in your workspace and trace answers to their sources.',
       },
@@ -182,11 +182,11 @@ export const en: SiteCopy = {
     paths: [
       {
         title: 'Client Agent API',
-        description: 'The Expert requests an action. Your application checks authorization, executes it and sends the result back to Geem.',
+        description: 'The Expert requests an action. Your application checks authorization, executes it and sends the result back to GEEM.',
       },
       {
         title: 'MCP Connectors',
-        description: 'Geem coordinates calls to tools you have granted access to. The connected service executes the action, subject to configured permissions and approvals.',
+        description: 'GEEM coordinates calls to tools you have granted access to. The connected service executes the action, subject to configured permissions and approvals.',
       },
     ],
     docsLabel: 'Explore the Agent API documentation',
@@ -214,10 +214,10 @@ export const en: SiteCopy = {
     linkLabel: 'Read more about security',
     page: {
       hero: {
-        eyebrow: 'Security & privacy at Geem',
+        eyebrow: 'Security & privacy at GEEM',
         title: 'Clear boundaries for your organization’s knowledge',
         description:
-          'Geem is built with logical workspace isolation, server-enforced permissions, and protection for integration secrets and access keys.',
+          'GEEM provides workspace isolation and server-enforced permissions. Review these controls alongside your cloud or client-site operating environment and connected systems.',
         primaryCta: 'Discuss your requirements',
         secondaryCta: 'Explore the controls',
       },
@@ -230,11 +230,11 @@ export const en: SiteCopy = {
           { id: 'knowledge', label: 'Sources you approve' },
           { id: 'permissions', label: 'Role-based permissions' },
           { id: 'credentials', label: 'Revocable keys' },
-          { id: 'residency', label: 'Core data in Saudi Arabia' },
+          { id: 'residency', label: 'Cloud data storage' },
         ],
       },
       facts: [
-        { value: 'In Saudi Arabia', label: 'Core workspace data storage' },
+        { value: 'In Saudi Arabia', label: 'GEEM cloud core data' },
         { value: 'Logically isolated', label: 'Each organization’s knowledge' },
         { value: 'Server enforced', label: 'Roles and permissions' },
       ],
@@ -284,10 +284,10 @@ export const en: SiteCopy = {
       },
       governance: {
         eyebrow: 'Shared responsibility',
-        title: 'Geem provides the controls and your organization decides who can reach what',
+        title: 'GEEM provides the controls and your organization decides who can reach what',
         description:
-          'Access and knowledge remain deliberate choices for your organization, while Geem enforces the technical boundaries inside the platform.',
-        geemTitle: 'What Geem protects',
+          'Access and knowledge remain deliberate choices for your organization, while GEEM enforces the technical boundaries inside the platform.',
+        geemTitle: 'What GEEM protects',
         geemItems: [
           'Workspace data separation',
           'Permissions enforced in the platform',
@@ -306,14 +306,14 @@ export const en: SiteCopy = {
         eyebrow: 'Clarity before badges',
         title: 'Clear controls, accurately described',
         description:
-          'Core workspace data is stored in Saudi Arabia. Some AI features and external integrations may require the minimum necessary data to be processed by service providers, as described in the agreement and Privacy Policy.',
+          'GEEM cloud stores core workspace data in Saudi Arabia. Client-site storage and processing arrangements follow the agreed deployment scope. Some AI features and external integrations may require processing by service providers under the agreement and Privacy Policy.',
         note:
-          'Before contracting, your team can request a data-flow overview and the agreed processing scope. We do not display certifications or compliance levels that have not been verified.',
+          'Before contracting, your team can review the operating environment, data flows and processing scope. We do not display certifications or compliance levels that have not been verified.',
       },
       cta: {
         title: 'Does your team have specific security requirements?',
-        description: 'Talk with us to review the controls, data flow, and your organization’s needs before you start.',
-        primaryCta: 'Contact the Geem team',
+        description: 'Review the deployment environment, data flows, permissions and operating responsibilities with our team before launch.',
+        primaryCta: 'Contact the GEEM team',
         privacyCta: 'Privacy Policy',
         pdplCta: 'Data Protection Notice',
       },
@@ -322,8 +322,8 @@ export const en: SiteCopy = {
   finalCta: {
     title: 'Start with the work you want to improve',
     description:
-      'Write, explore and build with GEEM. For your organization, start with one workflow, connect its knowledge and systems, then reuse that foundation across teams and channels.',
-    primaryCta: 'Start with Geem',
+      'Write, explore and build with GEEM. For your organization, start with one workflow, connect its knowledge and systems, then reuse that foundation across teams and channels. Choose the cloud or client-site operating environment that fits your needs.',
+    primaryCta: 'Start with GEEM',
     secondaryCta: 'Discuss your use case',
   },
   footer: {
@@ -347,14 +347,16 @@ export const en: SiteCopy = {
       { label: 'Platform', href: 'product' },
       { label: 'Experts', href: 'experts' },
       { label: 'Solutions', href: 'use-cases' },
-      { label: 'Geem robotics · In development', href: 'robotics' },
+      { label: 'Robotics · In development', href: 'robotics' },
       { label: 'Integrations', href: 'integrations' },
       { label: 'Developers', href: 'api' },
       { label: 'Workspace Login', href: 'login' },
     ],
     resourceLinks: [
-      { label: 'Agents AI API', href: 'agent-ai' },
+      { label: 'Client Agent API', href: 'agent-ai' },
       { label: 'Security', href: 'security' },
+      { label: 'Deployment options', href: 'deployment' },
+      { label: 'Compare platforms', href: 'compare' },
     ],
     companyLinks: [
       { label: 'About DALSEEN', href: 'about' },
@@ -371,17 +373,17 @@ export const en: SiteCopy = {
   },
   about: {
     hero: {
-      eyebrow: 'About Geem',
+      eyebrow: 'About GEEM',
       title: 'From Madinah, we build AI around how organizations really work',
       description:
-        'Geem is the AI product of Dal Seen Information Technology Company—a Saudi technology company that began in Jeddah and is now based in Madinah.',
-      primaryCta: 'See how Geem works',
+        'GEEM is the AI product of Dal Seen Information Technology Company—a Saudi technology company that began in Jeddah and is now based in Madinah.',
+      primaryCta: 'See how GEEM works',
       secondaryCta: 'Talk with the team',
       companyLabel: 'Saudi technology company',
-      productLabel: 'AI Experts for organizations',
+      productLabel: 'AI for people and organizations',
     },
     facts: [
-      { value: 'DALSEEN', label: 'The Saudi company building Geem' },
+      { value: 'DALSEEN', label: 'The Saudi company building GEEM' },
       { value: 'Jeddah', label: 'Where the company journey began' },
       { value: 'Madinah', label: 'Where we build and grow today' },
     ],
@@ -404,13 +406,13 @@ export const en: SiteCopy = {
         {
           place: 'Madinah',
           title: 'A home for long-term building',
-          description: 'DALSEEN made Madinah its home base and continues to develop Geem and its technology products from there.',
+          description: 'DALSEEN made Madinah its home base and continues to develop GEEM and its technology products from there.',
         },
       ],
     },
     principles: {
       eyebrow: 'How we build',
-      title: 'Three principles connect DALSEEN and Geem',
+      title: 'Three principles connect DALSEEN and GEEM',
       description: 'We measure technology by how well it helps teams do real work—not by the number of features or technical terms.',
       items: [
         { title: 'Start with real work', description: 'Design around workflows that teams actually use.' },
@@ -420,25 +422,26 @@ export const en: SiteCopy = {
     },
     geem: {
       eyebrow: 'Carrying the approach forward',
-      title: 'Geem turns operating experience into intelligence your team can use',
+      title: 'GEEM turns operating experience into intelligence your team can use',
       description:
-        'Geem is not a generic chatbot. Your organization creates Experts grounded in approved knowledge, then makes them available to teams and customers through the right channels and systems.',
+        'GEEM supports everyday writing, ideas and coding, alongside Experts connected to business knowledge and systems. Organizations can use GEEM cloud or tailored infrastructure we provide at their site.',
       points: [
         'Experts grounded in organizational knowledge and workspace permissions',
         'An Arabic-first experience with support for other languages',
         'Available in chat, WhatsApp, websites, and API integrations',
+        'Already embedded and functioning in DALSEEN ERP, DALSEEN Platform and Qaf Noon',
       ],
     },
     cta: {
-      title: 'Let’s build an Expert around how your organization works',
-      description: 'Tell us which knowledge you want to activate and which teams and systems need access to it.',
-      primaryCta: 'Talk with the Geem team',
+      title: 'Bring GEEM into the way your organization works',
+      description: 'Discuss your knowledge, channels and systems, and choose an operating environment and capacity that fit your needs.',
+      primaryCta: 'Talk with the GEEM team',
       secondaryCta: 'Explore the product',
     },
   },
   contact: {
-    title: 'Contact the Geem team',
-    lead: 'Tell us about your organization and what you need from Experts, knowledge, and channels. Reach us through the contacts below.',
+    title: 'Contact the GEEM team',
+    lead: 'Tell us about your workflow, systems and expected usage. Discuss GEEM cloud or tailored infrastructure at your site with our team.',
     salesLabel: 'Sales',
     infoLabel: 'General inquiries',
     phoneLabel: 'Phone',
@@ -447,7 +450,7 @@ export const en: SiteCopy = {
   },
   legal: {
     lastUpdatedLabel: 'Last updated',
-    lastUpdated: '18 August 2026',
+    lastUpdated: '10 September 2026',
     operatorLabel: 'Operator',
     contactLabel: 'Data contact',
     contentsLabel: 'Document contents',
@@ -507,7 +510,7 @@ export const en: SiteCopy = {
             id: 'ai-processing',
             title: 'Hosting and AI processing',
             paragraphs: [
-              'Core workspace data is stored in Saudi Arabia. Some AI features and external integrations may require the minimum necessary data to be processed by contracted service providers, as described by the applicable agreement and privacy terms.',
+              'In GEEM cloud, core workspace data is stored in Saudi Arabia. For client-site deployment, storage and processing arrangements follow the agreed deployment scope. Some AI features and external integrations may require the minimum necessary data to be processed by contracted service providers, as described by the applicable agreement and privacy terms.',
               'Your organization controls the knowledge sources and integrations it connects and should not add data it is not authorized to use.',
             ],
           },

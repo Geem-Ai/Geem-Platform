@@ -5,6 +5,7 @@ import { localizedPath } from './site';
 export const homeAnchors = {
   product: 'product',
   platform: 'platform',
+  deployment: 'deployment',
   'use-cases': 'use-cases',
   robotics: 'robotics',
   experts: 'experts',
