@@ -10,6 +10,7 @@ import {
   Building2,
   CheckCircle2,
   CircleAlert,
+  Clock3,
   Crown,
   HardDrive,
   KeyRound,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   UsersRound,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { DocumentTitle } from '@/components/shared/DocumentTitle';
@@ -50,11 +52,13 @@ import { formatAdminDate, formatAdminDateTime, formatBytes } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/services/api/errors';
 import {
+  approvePlatformWorkspace,
   disablePlatformWorkspace,
   enablePlatformWorkspace,
   fetchPlatformWorkspace,
   fetchPlatformWorkspaceMembers,
   platformQueryKeys,
+  rejectPlatformWorkspace,
 } from '@/services/api/platform';
 import type { PlatformWorkspaceMember } from '@/services/api/types';
 
@@ -64,7 +68,9 @@ export function WorkspaceDetailPage() {
   const { workspaceId = '' } = useParams();
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const [dialog, setDialog] = useState<'disable' | 'enable' | null>(null);
+  const [dialog, setDialog] = useState<'disable' | 'enable' | 'approve' | 'reject' | null>(
+    null,
+  );
   const [memberOffset, setMemberOffset] = useState(0);
 
   useEffect(() => {
@@ -112,6 +118,26 @@ export function WorkspaceDetailPage() {
     onError: (error) => toast.error(getErrorMessage(error, t)),
   });
 
+  const approveMutation = useMutation({
+    mutationFn: (reason: string) => approvePlatformWorkspace(workspaceId, reason || undefined),
+    onSuccess: async () => {
+      await invalidate();
+      setDialog(null);
+      toast.success(t('workspaces.approveSuccess'));
+    },
+    onError: (error) => toast.error(getErrorMessage(error, t)),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (reason: string) => rejectPlatformWorkspace(workspaceId, reason),
+    onSuccess: async () => {
+      await invalidate();
+      setDialog(null);
+      toast.success(t('workspaces.rejectSuccess'));
+    },
+    onError: (error) => toast.error(getErrorMessage(error, t)),
+  });
+
   if (detailQuery.isLoading) {
     return <WorkspaceDetailSkeleton />;
   }
@@ -154,7 +180,12 @@ export function WorkspaceDetailPage() {
   const isSystem = workspace.kind === 'system';
   const isSuspended = workspace.status === 'suspended';
   const isActive = workspace.status === 'active';
-  const lifecyclePending = disableMutation.isPending || enableMutation.isPending;
+  const isPendingApproval = workspace.status === 'pending';
+  const lifecyclePending =
+    disableMutation.isPending ||
+    enableMutation.isPending ||
+    approveMutation.isPending ||
+    rejectMutation.isPending;
 
   return (
     <div
@@ -204,6 +235,27 @@ export function WorkspaceDetailPage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
+            {!isSystem && isPendingApproval ? (
+              <>
+                <Button
+                  onClick={() => setDialog('approve')}
+                  disabled={lifecyclePending}
+                  data-testid="workspace-approve-button"
+                >
+                  <CheckCircle2 className="size-4" aria-hidden />
+                  {t('workspaces.approve')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDialog('reject')}
+                  disabled={lifecyclePending}
+                  data-testid="workspace-reject-button"
+                >
+                  <XCircle className="size-4" aria-hidden />
+                  {t('workspaces.reject')}
+                </Button>
+              </>
+            ) : null}
             {!isSystem && isActive ? (
               <Button
                 variant="destructive"
@@ -237,6 +289,21 @@ export function WorkspaceDetailPage() {
             <div>
               <p className="text-sm font-semibold">{t('workspaces.systemProtectedTitle')}</p>
               <p className="mt-0.5 text-xs leading-5 opacity-75">{t('workspaces.systemProtected')}</p>
+            </div>
+          </div>
+        ) : null}
+
+        {isPendingApproval ? (
+          <div
+            className="relative mt-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 text-amber-950 dark:border-amber-900 dark:bg-amber-950/45 dark:text-amber-100"
+            data-testid="workspace-access-pending"
+          >
+            <Clock3 className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <div>
+              <p className="text-sm font-semibold">{t('workspaces.accessPendingTitle')}</p>
+              <p className="mt-0.5 text-xs leading-5 opacity-75">
+                {t('workspaces.accessPendingHint')}
+              </p>
             </div>
           </div>
         ) : null}
@@ -499,6 +566,29 @@ export function WorkspaceDetailPage() {
         onConfirm={(reason) => enableMutation.mutate(reason)}
         testId="workspace-enable-dialog"
       />
+      <LifecycleDialog
+        open={dialog === 'approve'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        title={t('workspaces.approveTitle')}
+        description={t('workspaces.approveHint')}
+        reasonRequired={false}
+        confirmLabel={t('workspaces.approve')}
+        confirmVariant="primary"
+        pending={approveMutation.isPending}
+        onConfirm={(reason) => approveMutation.mutate(reason)}
+        testId="workspace-approve-dialog"
+      />
+      <LifecycleDialog
+        open={dialog === 'reject'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        title={t('workspaces.rejectTitle')}
+        description={t('workspaces.rejectHint')}
+        reasonRequired
+        confirmLabel={t('workspaces.reject')}
+        pending={rejectMutation.isPending}
+        onConfirm={(reason) => rejectMutation.mutate(reason)}
+        testId="workspace-reject-dialog"
+      />
     </div>
   );
 }
@@ -581,22 +671,33 @@ function AccessCard({ kind, status }: { kind: string; status: string }) {
   const { t } = useTranslation();
   const isSystem = kind === 'system';
   const isSuspended = status === 'suspended';
-  const Icon = isSystem ? ShieldCheck : isSuspended ? PauseCircle : CheckCircle2;
+  const isPending = status === 'pending';
+  const Icon = isSystem
+    ? ShieldCheck
+    : isPending
+      ? Clock3
+      : isSuspended
+        ? PauseCircle
+        : CheckCircle2;
   const tone = isSystem
     ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/70 dark:text-violet-300'
-    : isSuspended
+    : isPending || isSuspended
       ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'
       : 'bg-green-100 text-green-700 dark:bg-green-950/70 dark:text-green-300';
   const title = isSystem
     ? t('workspaces.accessSystemTitle')
-    : isSuspended
-      ? t('workspaces.accessSuspendedTitle')
-      : t('workspaces.accessActiveTitle');
+    : isPending
+      ? t('workspaces.accessPendingTitle')
+      : isSuspended
+        ? t('workspaces.accessSuspendedTitle')
+        : t('workspaces.accessActiveTitle');
   const description = isSystem
     ? t('workspaces.accessSystemHint')
-    : isSuspended
-      ? t('workspaces.accessSuspendedHint')
-      : t('workspaces.accessActiveHint');
+    : isPending
+      ? t('workspaces.accessPendingHint')
+      : isSuspended
+        ? t('workspaces.accessSuspendedHint')
+        : t('workspaces.accessActiveHint');
 
   return (
     <Card data-testid="workspace-access-card">

@@ -17,7 +17,12 @@ def test_require_active_workspace_passes_for_active() -> None:
 
 @pytest.mark.parametrize(
     "status",
-    [WorkspaceStatus.SUSPENDED.value, WorkspaceStatus.ARCHIVED.value, "unknown"],
+    [
+        WorkspaceStatus.PENDING.value,
+        WorkspaceStatus.SUSPENDED.value,
+        WorkspaceStatus.ARCHIVED.value,
+        "unknown",
+    ],
 )
 def test_require_active_workspace_rejects_non_active(status: str) -> None:
     with pytest.raises(AppError) as exc:

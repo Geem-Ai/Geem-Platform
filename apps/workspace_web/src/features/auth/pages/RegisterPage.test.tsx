@@ -66,6 +66,23 @@ describe('RegisterPage', () => {
     expect(screen.queryByTestId('home')).not.toBeInTheDocument();
   });
 
+  it('links back to the marketing home from the auth chrome', async () => {
+    await act(async () => {
+      render(
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter initialEntries={['/register']}>
+            <RegisterPage />
+          </MemoryRouter>
+        </I18nextProvider>,
+      );
+    });
+
+    expect(screen.getByTestId('auth-back-home')).toHaveAttribute(
+      'href',
+      'https://geem.ai',
+    );
+  });
+
   it('sends users to check-email when verification is required', async () => {
     register.mockResolvedValue({ verificationRequired: true });
     await act(async () => {

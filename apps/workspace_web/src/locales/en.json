@@ -244,6 +244,7 @@
     "forgotSubmit": "Send reset link",
     "forgotSubmitting": "Sending…",
     "backToSignIn": "Back to sign in",
+    "backToHome": "Back to home",
     "resetTitle": "Reset password",
     "resetSubtitle": "Choose a new password for your Geem account.",
     "resetSubmit": "Reset password",
@@ -290,10 +291,19 @@
     "create": "Create workspace",
     "creating": "Creating…"
   },
+  "pendingApproval": {
+    "title": "Waiting for approval",
+    "subtitle": "Your workspace is pending review.",
+    "subtitleNamed": "{{name}} is pending Geem admin approval.",
+    "body": "A Geem platform administrator must approve your workspace before you can use Chat, Experts, and other product features. Check back soon or refresh this page after approval.",
+    "refresh": "Check approval status",
+    "refreshing": "Checking…"
+  },
   "shell": {
     "workspacePlaceholder": "Workspace",
     "workspaces": "Workspaces",
     "createWorkspace": "Create workspace",
+    "workspacePending": "Pending approval",
     "workspaceSwitcherHint": "Switch between workspaces you belong to",
     "accountPlaceholder": "Account",
     "theme": "Theme",

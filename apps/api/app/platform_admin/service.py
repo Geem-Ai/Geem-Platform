@@ -224,6 +224,28 @@ class PlatformAdminService:
         )
         return self.get_workspace(actor, workspace_id)
 
+    def approve_workspace(
+        self,
+        actor: User,
+        workspace_id: uuid.UUID,
+        *,
+        reason: str | None = None,
+    ) -> PlatformWorkspaceDetailOut:
+        require_platform_admin_user(actor)
+        self.workspaces.approve_workspace(
+            workspace_id=workspace_id, actor_id=actor.id, reason=reason
+        )
+        return self.get_workspace(actor, workspace_id)
+
+    def reject_workspace(
+        self, actor: User, workspace_id: uuid.UUID, *, reason: str
+    ) -> PlatformWorkspaceDetailOut:
+        require_platform_admin_user(actor)
+        self.workspaces.reject_workspace(
+            workspace_id=workspace_id, actor_id=actor.id, reason=reason
+        )
+        return self.get_workspace(actor, workspace_id)
+
     # --- Users ---
 
     def list_users(

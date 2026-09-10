@@ -84,7 +84,7 @@ export function AccountMenu({ isCollapsed = false }: AccountMenuProps) {
   const { user, logout, logoutAll } = useAuth();
   const { availableWorkspaces, currentWorkspace, selectWorkspace } = useWorkspace();
   const navigate = useNavigate();
-  const locale = (i18n.language === 'en' ? 'en' : 'ar') as AppLocale;
+  const locale = (i18n.language === 'ar' ? 'ar' : 'en') as AppLocale;
   const currentTheme: ThemeOption = isThemeOption(theme) ? theme : 'light';
 
   const [logoutKind, setLogoutKind] = useState<LogoutKind | null>(null);

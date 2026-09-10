@@ -5,11 +5,11 @@ import en from '@/locales/en.json';
 
 export const LOCALE_STORAGE_KEY = 'geem-locale';
 export type AppLocale = 'en' | 'ar';
-export const DEFAULT_LOCALE: AppLocale = 'ar';
+export const DEFAULT_LOCALE: AppLocale = 'en';
 
 export function getStoredLocale(): AppLocale {
   const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === 'en' ? 'en' : DEFAULT_LOCALE;
+  return stored === 'ar' ? 'ar' : DEFAULT_LOCALE;
 }
 
 export function applyDocumentLocale(locale: AppLocale): void {
@@ -31,7 +31,7 @@ void i18n.use(initReactI18next).init({
 applyDocumentLocale(getStoredLocale());
 
 i18n.on('languageChanged', (lng) => {
-  applyDocumentLocale(lng === 'en' ? 'en' : DEFAULT_LOCALE);
+  applyDocumentLocale(lng === 'ar' ? 'ar' : DEFAULT_LOCALE);
 });
 
 if (import.meta.hot) {

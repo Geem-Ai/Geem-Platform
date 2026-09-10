@@ -33,7 +33,7 @@ function themeLabelKey(theme: ThemeOption): 'themeLight' | 'themeDark' | 'themeS
 export function AuthChrome() {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const locale: AppLocale = i18n.language === 'en' ? 'en' : 'ar';
+  const locale: AppLocale = i18n.language === 'ar' ? 'ar' : 'en';
   const currentTheme: ThemeOption = isThemeOption(theme) ? theme : 'light';
 
   function cycleTheme() {

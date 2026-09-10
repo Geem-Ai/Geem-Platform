@@ -66,7 +66,12 @@ class WorkspaceService:
             name=clean_name,
             slug=clean_slug,
             kind=WorkspaceKind.TENANT.value,
-            status=WorkspaceStatus.ACTIVE.value,
+            # Production/local: Platform Admin must approve. Tests stay self-serve.
+            status=(
+                WorkspaceStatus.ACTIVE.value
+                if self.settings.app_env.lower() == "test"
+                else WorkspaceStatus.PENDING.value
+            ),
             created_by=created_by,
             settings=settings or {},
         )
@@ -218,6 +223,12 @@ class WorkspaceService:
                 "Archived or deleted workspaces cannot be disabled.",
                 details={"status": workspace.status},
             )
+        if workspace.status == WorkspaceStatus.PENDING.value:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Pending workspaces must be approved or rejected, not disabled.",
+                details={"status": workspace.status},
+            )
         if workspace.status == WorkspaceStatus.SUSPENDED.value:
             return workspace
 
@@ -306,6 +317,130 @@ class WorkspaceService:
         self.db.commit()
         security_log(
             "workspace.enabled",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            before_status=before,
+            after_status=workspace.status,
+        )
+        return workspace
+
+    def approve_workspace(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        reason: str | None = None,
+    ) -> Workspace:
+        """Platform Admin: approve a pending tenant Workspace → active."""
+        clean_reason = (reason or "").strip() or None
+        if clean_reason is not None and len(clean_reason) > 500:
+            raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
+
+        acquire_workspace_runtime_mutation_fence(self.db, workspace_id)
+        workspace = self.workspaces.get_by_id(workspace_id)
+        if workspace is None:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.kind == WorkspaceKind.SYSTEM.value:
+            raise AppError(
+                ErrorCategory.SYSTEM_WORKSPACE_PROTECTED,
+                "System workspaces cannot be approved via tenant lifecycle controls.",
+            )
+        if workspace.status == WorkspaceStatus.ARCHIVED.value or workspace.deleted_at is not None:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Archived or deleted workspaces cannot be approved.",
+                details={"status": workspace.status},
+            )
+        if workspace.status == WorkspaceStatus.ACTIVE.value:
+            return workspace
+        if workspace.status != WorkspaceStatus.PENDING.value:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Only pending workspaces can be approved.",
+                details={"status": workspace.status},
+            )
+
+        before = workspace.status
+        workspace.status = WorkspaceStatus.ACTIVE.value
+        meta: dict[str, str] = {
+            "before_status": before,
+            "after_status": workspace.status,
+        }
+        allow = {"before_status", "after_status"}
+        if clean_reason:
+            meta["reason"] = clean_reason
+            allow.add("reason")
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_APPROVED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata=meta,
+            allowlist=frozenset(allow),
+        )
+        self.db.commit()
+        security_log(
+            "workspace.approved",
+            workspace_id=str(workspace.id),
+            actor_id=str(actor_id),
+            before_status=before,
+            after_status=workspace.status,
+        )
+        return workspace
+
+    def reject_workspace(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        reason: str,
+    ) -> Workspace:
+        """Platform Admin: reject a pending tenant Workspace → archived."""
+        clean_reason = (reason or "").strip()
+        if not clean_reason:
+            raise AppError(ErrorCategory.VALIDATION, "A reason is required to reject a workspace.")
+        if len(clean_reason) > 500:
+            raise AppError(ErrorCategory.VALIDATION, "Reason must be at most 500 characters.")
+
+        acquire_workspace_runtime_mutation_fence(self.db, workspace_id)
+        workspace = self.workspaces.get_by_id(workspace_id)
+        if workspace is None:
+            raise AppError(ErrorCategory.WORKSPACE_NOT_FOUND, "Workspace not found.")
+        if workspace.kind == WorkspaceKind.SYSTEM.value:
+            raise AppError(
+                ErrorCategory.SYSTEM_WORKSPACE_PROTECTED,
+                "System workspaces cannot be rejected.",
+            )
+        if workspace.status == WorkspaceStatus.ARCHIVED.value or workspace.deleted_at is not None:
+            return workspace
+        if workspace.status != WorkspaceStatus.PENDING.value:
+            raise AppError(
+                ErrorCategory.CONFLICT,
+                "Only pending workspaces can be rejected.",
+                details={"status": workspace.status},
+            )
+
+        before = workspace.status
+        workspace.status = WorkspaceStatus.ARCHIVED.value
+        record_audit(
+            self.db,
+            action=AuditAction.WORKSPACE_REJECTED,
+            entity_type=AuditEntityType.WORKSPACE,
+            entity_id=workspace.id,
+            workspace_id=workspace.id,
+            actor_user_id=actor_id,
+            metadata={
+                "before_status": before,
+                "after_status": workspace.status,
+                "reason": clean_reason,
+            },
+            allowlist=frozenset({"before_status", "after_status", "reason"}),
+        )
+        self.db.commit()
+        security_log(
+            "workspace.rejected",
             workspace_id=str(workspace.id),
             actor_id=str(actor_id),
             before_status=before,

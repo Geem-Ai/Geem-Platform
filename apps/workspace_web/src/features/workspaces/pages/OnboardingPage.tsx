@@ -10,6 +10,7 @@ import { AuthAlert } from '@/features/auth/components/AuthAlert';
 import { AuthFormHeader } from '@/features/auth/components/AuthFields';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
 import { suggestSlugFromName } from '@/features/workspaces/lib/hostname';
+import { hasActiveWorkspace } from '@/features/workspaces/lib/workspace-status';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +41,9 @@ export function OnboardingPage() {
   }
 
   if (availableWorkspaces.length > 0) {
+    if (!hasActiveWorkspace(availableWorkspaces)) {
+      return <Navigate to="/pending-approval" replace />;
+    }
     return <Navigate to={continueAfterAuth(from)} replace />;
   }
 
@@ -48,8 +52,15 @@ export function OnboardingPage() {
     setSubmitting(true);
     setErrorKey(null);
     try {
-      await createWorkspace({ name: name.trim(), slug: slug.trim() });
-      navigate(continueAfterAuth(from), { replace: true });
+      const created = await createWorkspace({
+        name: name.trim(),
+        slug: slug.trim(),
+      });
+      if (created.status === 'pending') {
+        navigate('/pending-approval', { replace: true });
+      } else {
+        navigate(continueAfterAuth(from), { replace: true });
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorKey(errorMessageKey(err.code));

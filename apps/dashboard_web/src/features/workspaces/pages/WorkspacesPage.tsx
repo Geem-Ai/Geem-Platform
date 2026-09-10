@@ -207,6 +207,7 @@ export function WorkspacesPage() {
               setOffset(0);
             }}
             statusOptions={[
+              { value: 'pending', labelKey: 'status.workspace.pending' },
               { value: 'active', labelKey: 'status.workspace.active' },
               { value: 'suspended', labelKey: 'status.workspace.suspended' },
               { value: 'archived', labelKey: 'status.workspace.archived' },

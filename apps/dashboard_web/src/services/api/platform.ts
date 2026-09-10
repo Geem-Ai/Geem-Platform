@@ -159,6 +159,26 @@ export async function enablePlatformWorkspace(
   });
 }
 
+export async function approvePlatformWorkspace(
+  workspaceId: string,
+  reason?: string,
+): Promise<PlatformWorkspaceDetail> {
+  return apiRequest<PlatformWorkspaceDetail>(`/api/platform/workspaces/${workspaceId}/approve`, {
+    method: 'POST',
+    json: { reason: reason || null },
+  });
+}
+
+export async function rejectPlatformWorkspace(
+  workspaceId: string,
+  reason: string,
+): Promise<PlatformWorkspaceDetail> {
+  return apiRequest<PlatformWorkspaceDetail>(`/api/platform/workspaces/${workspaceId}/reject`, {
+    method: 'POST',
+    json: { reason },
+  });
+}
+
 export async function fetchPlatformUsers(
   params: PlatformPageParams = {},
 ): Promise<PlatformUserListResponse> {

@@ -26,6 +26,7 @@ import { ExpertsPage } from '@/features/experts/pages/ExpertsPage';
 import { InvitationAcceptPage } from '@/features/members/pages/InvitationAcceptPage';
 import { MembersPage } from '@/features/members/pages/MembersPage';
 import { OnboardingPage } from '@/features/workspaces/pages/OnboardingPage';
+import { PendingApprovalPage } from '@/features/workspaces/pages/PendingApprovalPage';
 import { OverviewPage } from '@/features/workspaces/pages/OverviewPage';
 import { SettingsPage } from '@/features/workspaces/pages/SettingsPage';
 import { BillingHistoryPage } from '@/features/billing/pages/BillingHistoryPage';
@@ -74,6 +75,7 @@ export function AppRouter() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/pending-approval" element={<PendingApprovalPage />} />
         <Route path="/workspaces/new" element={<Navigate to="/" replace />} />
 
         <Route element={<WorkspaceShellRoute />}>

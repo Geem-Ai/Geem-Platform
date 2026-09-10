@@ -177,6 +177,9 @@ class AppStrings {
       'toolApprovalExecuting': 'Running',
       'toolApprovalCompleted': 'Completed',
       'chatUnavailable': 'Chat is not available in this workspace.',
+      'workspacePendingTitle': 'Workspace awaiting approval',
+      'workspacePendingBody':
+          'A Platform Admin must approve this workspace before you can use Geem here.',
       'noWorkspacesTitle': 'No workspace access',
       'noWorkspacesBody':
           'Ask a workspace owner to invite you, then sign in again.',
@@ -357,6 +360,9 @@ class AppStrings {
       'toolApprovalExecuting': 'جارٍ التشغيل',
       'toolApprovalCompleted': 'مكتمل',
       'chatUnavailable': 'المحادثة غير متاحة في مساحة العمل هذه.',
+      'workspacePendingTitle': 'مساحة العمل بانتظار الموافقة',
+      'workspacePendingBody':
+          'يجب أن يوافق مسؤول المنصة على مساحة العمل هذه قبل أن تتمكن من استخدام جيم هنا.',
       'noWorkspacesTitle': 'لا توجد مساحة عمل',
       'noWorkspacesBody':
           'اطلب من مالك مساحة العمل دعوتك، ثم سجّل الدخول مجددًا.',

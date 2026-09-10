@@ -18,11 +18,9 @@ void main() {
 
   final credentials = DeviceCredentialStore();
   final api = GeemApiClient(baseUrl: _apiBaseUrl, credentials: credentials);
-  final platformLocale = WidgetsBinding.instance.platformDispatcher.locale;
   final controller = AppController(
     api: api,
     credentials: credentials,
-    initialLocale: platformLocale,
   );
 
   // Subscribe before runApp so a cold-start auth link cannot be missed. Queue

@@ -81,7 +81,9 @@ class WorkspaceSummary {
   final RoleSummary role;
   final List<String> permissions;
 
-  bool get canChat => permissions.contains('chat.use');
+  bool get isActive => status == 'active';
+  bool get isPending => status == 'pending';
+  bool get canChat => isActive && permissions.contains('chat.use');
 }
 
 class AuthTokens {

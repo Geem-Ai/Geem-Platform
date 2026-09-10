@@ -3,6 +3,11 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { ForbiddenPage } from '@/features/authz/pages/ForbiddenPage';
 import { usePermissions } from '@/features/authz/usePermissions';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
+import {
+  hasActiveWorkspace,
+  isPendingWorkspace,
+  needsWorkspaceApproval,
+} from '@/features/workspaces/lib/workspace-status';
 import { ScreenLoader } from '@/components/shared/ScreenLoader';
 
 const PAYMENT_RETURN_STORAGE_KEY = 'geem.billing.paymentReturn';
@@ -75,7 +80,8 @@ export function continueAfterAuth(from: unknown): string {
     pathOnly !== '/reset-password' &&
     pathOnly !== '/check-email' &&
     pathOnly !== '/verify-email' &&
-    pathOnly !== '/onboarding'
+    pathOnly !== '/onboarding' &&
+    pathOnly !== '/pending-approval'
   ) {
     if (isBillingPaymentResultPath(pathOnly)) {
       consumePaymentReturn();
@@ -144,6 +150,29 @@ export function ProtectedRoute() {
     );
   }
   if (workspaces.length > 0 && location.pathname === '/onboarding') {
+    if (needsWorkspaceApproval(workspaces)) {
+      return <Navigate to="/pending-approval" replace />;
+    }
+    return (
+      <Navigate
+        to={continueAfterAuth(
+          (location.state as { from?: string } | null)?.from,
+        )}
+        replace
+      />
+    );
+  }
+  if (
+    needsWorkspaceApproval(workspaces) &&
+    location.pathname !== '/pending-approval' &&
+    location.pathname !== '/onboarding'
+  ) {
+    return <Navigate to="/pending-approval" replace />;
+  }
+  if (
+    location.pathname === '/pending-approval' &&
+    hasActiveWorkspace(workspaces)
+  ) {
     return (
       <Navigate
         to={continueAfterAuth(
@@ -156,13 +185,16 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
-/** Shell routes require a selected workspace. */
+/** Shell routes require a selected active workspace. */
 export function WorkspaceShellRoute() {
   const { status, me } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const location = useLocation();
 
   if (status === 'authenticated' && me && me.workspaces.length > 0 && !currentWorkspace) {
+    if (needsWorkspaceApproval(me.workspaces)) {
+      return <Navigate to="/pending-approval" replace />;
+    }
     // WorkspaceProvider hydrates one paint after `me`; do not bounce to onboarding/home.
     return <ScreenLoader />;
   }
@@ -174,6 +206,9 @@ export function WorkspaceShellRoute() {
         state={{ from: internalReturnPath(location) }}
       />
     );
+  }
+  if (isPendingWorkspace(currentWorkspace)) {
+    return <Navigate to="/pending-approval" replace />;
   }
   return <Outlet />;
 }

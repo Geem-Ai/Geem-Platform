@@ -27,7 +27,7 @@ npm run verify    # after build — SEO/RTL smoke checks on dist/
 
 | Path | Purpose |
 |------|---------|
-| `/` | Redirect to `/ar` |
+| `/` | Redirect to `/en` |
 | `/ar`, `/en` | Homepage |
 | `/agent-ai` | Redirect to the Arabic Agents AI documentation |
 | `/[locale]/agent-ai` | Agents AI Client Agent API documentation |

@@ -38,7 +38,7 @@ export function buildSeo(input: SeoInput) {
     ogImageHeight: input.ogImageHeight ?? ogImageHeight,
     alternateAr,
     alternateEn,
-    xDefault: alternateAr,
+    xDefault: alternateEn,
     locale: input.locale,
     ogLocale: input.locale === 'ar' ? 'ar_SA' : 'en_US',
     ogLocaleAlt: input.locale === 'ar' ? 'en_US' : 'ar_SA',

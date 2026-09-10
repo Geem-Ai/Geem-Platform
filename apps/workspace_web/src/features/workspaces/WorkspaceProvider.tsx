@@ -155,7 +155,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         permissions: created.permissions ?? [],
       };
       await refreshWorkspaces();
-      selectWorkspace(summary.id, summary);
+      if (summary.status === 'active') {
+        selectWorkspace(summary.id, summary);
+      }
       return summary;
     },
     [refreshWorkspaces, selectWorkspace],

@@ -18,6 +18,8 @@ class AuditAction(StrEnum):
     WORKSPACE_PURGED = "workspace.purged"
     WORKSPACE_DISABLED = "workspace.disabled"
     WORKSPACE_ENABLED = "workspace.enabled"
+    WORKSPACE_APPROVED = "workspace.approved"
+    WORKSPACE_REJECTED = "workspace.rejected"
 
     MEMBER_ROLE_CHANGED = "workspace.member_role_changed"
     MEMBER_REMOVED = "workspace.member_removed"

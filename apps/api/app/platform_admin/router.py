@@ -370,6 +370,36 @@ def enable_platform_workspace(
     )
 
 
+@router.post(
+    "/workspaces/{workspace_id}/approve",
+    response_model=PlatformWorkspaceDetailOut,
+)
+def approve_platform_workspace(
+    workspace_id: uuid.UUID,
+    body: PlatformWorkspaceEnableRequest = PlatformWorkspaceEnableRequest(),
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceDetailOut:
+    return PlatformAdminService(db).approve_workspace(
+        actor=user, workspace_id=workspace_id, reason=body.reason
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/reject",
+    response_model=PlatformWorkspaceDetailOut,
+)
+def reject_platform_workspace(
+    workspace_id: uuid.UUID,
+    body: PlatformWorkspaceLifecycleRequest,
+    user: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> PlatformWorkspaceDetailOut:
+    return PlatformAdminService(db).reject_workspace(
+        actor=user, workspace_id=workspace_id, reason=body.reason
+    )
+
+
 # --- Phase 12B: Users ---
 
 

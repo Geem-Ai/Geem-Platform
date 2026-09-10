@@ -45,13 +45,13 @@ todos:
     content: "Phase 12: COMPLETE — 12A PASS + 12B PASS + 12C PASS + 12D PASS + 12E PASS + 12F PASS + 12G PASS + 12H PASS (Platform Admin security/E2E/RTL release gate)."
     status: completed
   - id: phase-13
-    content: "Phase 13: PENDING — paid MCP Connectors App Store subscription with public-HTTPS remote MCP client/host, supported auth, discovery/grants, isolated egress, current single/compound runtime App gate, atomic tool quota, Geem-owned loops, write approval safety, and exact default-off Chat Widget/WhatsApp surface bindings in 13E."
+    content: "Phase 13: PENDING — paid MCP Connectors App Store subscription with public-HTTPS remote MCP client/host, supported auth, discovery/grants, isolated egress, current single/compound runtime App gate, atomic tool quota, Geem-owned loops, write approval safety, and exact default-off Chat Widget/WhatsApp surface bindings in 13E. Deviation 2026-09-06: production runs MCP_CONNECTOR_ENABLED=true and the catalog row is published with 99/249/599 SAR plans ahead of the 13E release-candidate paid E2E gate, which remains outstanding."
     status: pending
   - id: mail-relay
     content: "Mail egress (operations): IMPLEMENTED, ROLLOUT PENDING — a sealed msmtpd `mail-relay` container on `mail_relay_control`/`mail_relay_egress` owns the only credentialed submission hop, and verification/reset mail moved to Celery so registration cannot fail on SMTP. Host rollout (two subnets, production.env values, the 8th published image, EMAIL_VERIFICATION_REQUIRED back to true) is outstanding. Detail: smtp_relay_container_116a9a64.plan.md."
     status: in_progress
   - id: phase-14
-    content: "Phase 14: PENDING — paid Agents AI non-connector App Store subscription at `/api/v1/agent`; current runtime App gate with one access data SELECT after a lightweight fence statement, atomic daily request quota, exact OpenAI client-owned tool protocol, stateless replay, instruction isolation, streaming, and real SDK tests."
+    content: "Phase 14: PENDING — paid Agents AI non-connector App Store subscription at `/api/v1/agent`; current runtime App gate with one access data SELECT after a lightweight fence statement, atomic daily request quota, exact OpenAI client-owned tool protocol, stateless replay, instruction isolation, streaming, and real SDK tests. Deviation 2026-09-06: production runs CLIENT_AGENT_API_ENABLED=true and the catalog row is published on its signed 99/249/599 SAR plans ahead of the 14C release-candidate paid E2E gate, which remains outstanding."
     status: pending
 isProject: false
 ---
@@ -66,6 +66,7 @@ isProject: false
 | Public site / brand domain | [geem.ai](https://geem.ai) |
 | Official avatar | [https://geem.ai/assets/geem-avatar.webp](https://geem.ai/assets/geem-avatar.webp) |
 | Avatar character | Chibi-style figure in ghutra/agal + thobe with stacked **Ge** / **em** chest mark; friendly Arabic-first assistant persona |
+| **Default product locale** | **`en` (LTR)** for first visit / unset preference across `workspace_web`, `dashboard_web`, `landpage_web` (`/` → `/en`), and Flutter; Arabic remains a first-class opt-in via language switcher / `/ar`; honor stored locale keys |
 | Repo | [Geem-Ai/Geem-Platform](https://github.com/Geem-Ai/Geem-Platform); product-facing strings, titles, and packages use **Geem** |
 
 **Branding rules for UI:**
@@ -462,6 +463,7 @@ Port into `apps/workspace_web` only what the AI shell needs (plus later product 
 
 - AI Concept: dark mode via `next-themes`; **no i18n**; only incidental logical Tailwind classes (`start-`/`end-`).
 - Production: `locales/en.json` + `locales/ar.json`; `dir="rtl"|"ltr"` on `<html>` from locale; reuse logical CSS properties.
+- **Locked:** product **default locale = `en`** (LTR) when no stored preference; Arabic is opt-in. Landpage root `/` redirects to `/en`; `hreflang="x-default"` points at English.
 - No hardcoded user-visible English strings in components.
 - Library choice: `react-i18next` (clean Vite SPA fit) unless team prefers `react-intl` already listed in Metronic lockfile — decide in Phase 0 and stick to one.
 
@@ -1113,6 +1115,8 @@ App usage counters/receipts are separate from authorization snapshots.
 
 **Authorization:** owner/admin/member matrix (`WorkspacePolicy`).
 
+**Locked (post–Phase 1):** Tenant workspace create → `status=pending` until Platform Admin approve/reject (see Phase 12B). Product default locale = `en` (see Product identity + §13).
+
 **Deferred to Phase 10:** email invites, pending-invite management, Members page Metronic polish, in-product role-matrix explainer. Phase 1 ships membership CRUD for existing users only (`members.noInviteHint`).
 
 **Tests:** membership isolation; slug uniqueness; unauthenticated redirect.
@@ -1602,10 +1606,11 @@ Delivered:
 
 - Paginated Platform Admin Workspace list/detail/members (`GET /api/platform/workspaces*`); default `kind=tenant`; system Workspaces opt-in via filter
 - Tenant Workspace disable/enable → `WorkspaceStatus.SUSPENDED` / `ACTIVE` (not soft-delete); reason required for disable; system Workspaces protected (`system_workspace_protected`)
+- **Locked (post-12B):** new **tenant** workspaces create as `WorkspaceStatus.PENDING` until Platform Admin **approve** (`pending`→`active`) or **reject** (`pending`→`archived`, reason required); system workspaces unchanged; lists/`/me` still return pending for waiting UX; `require_active_workspace` keeps product APIs fail-closed; no email notifications in this slice
 - Central fail-closed guard `require_active_workspace` on `require_workspace`, API-key auth, Chat Widget public messages, connector webhooks
 - Paginated global Users list/detail with memberships; user disable/enable (`UserStatus.DISABLED`/`ACTIVE`) with session revoke + self-disable protection
-- Audit actions: `workspace.disabled`, `workspace.enabled`, `user.disabled`, `user.enabled`
-- `dashboard_web` `/workspaces`, `/workspaces/:id`, `/users`, `/users/:id` with real APIs, filters, lifecycle dialogs, EN/AR + RTL
+- Audit actions: `workspace.disabled`, `workspace.enabled`, `user.disabled`, `user.enabled` (+ `workspace.approved` / `workspace.rejected` for approval flow)
+- `dashboard_web` `/workspaces`, `/workspaces/:id`, `/users`, `/users/:id` with real APIs, filters (incl. pending), lifecycle dialogs (incl. approve/reject), EN/AR + RTL
 - Backend + frontend + Playwright admin smoke (incl. system Workspace protection)
 
 **Deferred in 12B (intentional):** Platform Admin Workspace create; membership mutations (invite path remains authoritative); slug edits; billing mutations (12C); full Audit Logs UI (12G).
@@ -1695,6 +1700,13 @@ Delivered:
 ### Phase 13 — Remote MCP client/host
 
 **Status:** pending. Canonical detailed design: [`mcp.plan.md`](mcp.plan.md).
+
+**Deployment deviation (2026-09-06, operator-approved):** production now runs
+`MCP_CONNECTOR_ENABLED=true` and the `mcp-connectors` catalog row was published with signed
+`mcp-starter|mcp-team|mcp-scale` plans at 99/249/599 SAR monthly (`connections` 1/3/10,
+`tool_calls_daily` 200/1000/5000). This precedes the 13E isolated release-candidate paid E2E gate
+described below; the gate is still outstanding. Roll back by unpublishing the row from Platform
+Admin and restoring `MCP_CONNECTOR_ENABLED=false`.
 
 **Goal:** Let a Workspace attach compatible public-HTTPS remote MCP tool servers while Geem remains
 the model-owning host and the only LLM endpoint the caller configures. Geem authenticates, discovers
@@ -1817,6 +1829,13 @@ are release-blocking.
 ### Phase 14 — Client-owned Agent API
 
 **Status:** pending. Canonical detailed design: [`agent-api.plan.md`](agent-api.plan.md).
+
+**Deployment deviation (2026-09-06, operator-approved):** production now runs
+`CLIENT_AGENT_API_ENABLED=true` and the `agents-ai` catalog row was published on its already-signed
+99/249/599 SAR monthly plans. This precedes the 14C isolated release-candidate paid E2E gate
+described below; the gate is still outstanding. Per-Expert `rag_config.client_agent.enabled` remains
+default-off, so publishing alone does not open the Agent API on any Expert. Roll back by
+unpublishing the row from Platform Admin and restoring `CLIENT_AGENT_API_ENABLED=false`.
 
 **Goal:** Sell **Agents AI** through the App Store so Laravel AI and other OpenAI Chat Completions
 clients can use Geem as their only configured LLM provider while the caller owns and executes its

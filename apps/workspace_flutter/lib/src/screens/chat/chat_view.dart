@@ -22,6 +22,9 @@ class ChatView extends StatelessWidget {
     if (controller.workspaces.isEmpty) {
       return const _NoWorkspaceState();
     }
+    if (controller.isCurrentWorkspacePending) {
+      return const _WorkspacePendingState();
+    }
     if (!controller.canUseCurrentWorkspace) {
       return const _ChatUnavailableState();
     }
@@ -104,6 +107,44 @@ class _ChatUnavailableState extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
+      ),
+    ),
+  );
+}
+
+class _WorkspacePendingState extends StatelessWidget {
+  const _WorkspacePendingState();
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.hourglass_top_rounded,
+              size: 40,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              context.strings.text('workspacePendingTitle'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.strings.text('workspacePendingBody'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );

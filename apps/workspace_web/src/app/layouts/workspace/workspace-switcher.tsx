@@ -3,6 +3,7 @@ import { Building2, Check, ChevronDown, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { roleLabel } from '@/features/authz/role-summary';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
+import { isPendingWorkspace } from '@/features/workspaces/lib/workspace-status';
 import { useWorkspace } from '@/features/workspaces/WorkspaceProvider';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,21 +45,33 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-64" align="start" side="top">
           <DropdownMenuLabel>{t('shell.workspaces')}</DropdownMenuLabel>
-          {availableWorkspaces.map((ws) => (
-            <DropdownMenuItem
-              key={ws.id}
-              onClick={() => selectWorkspace(ws.id)}
-              className="flex items-center justify-between gap-2"
-            >
-              <span className="truncate">
-                {ws.name}
-                <span className="ms-1 text-xs text-muted-foreground">
-                  ({roleLabel(ws.role, t)})
+          {availableWorkspaces.map((ws) => {
+            const pending = isPendingWorkspace(ws);
+            return (
+              <DropdownMenuItem
+                key={ws.id}
+                disabled={pending}
+                onClick={() => {
+                  if (!pending) selectWorkspace(ws.id);
+                }}
+                className="flex items-center justify-between gap-2"
+              >
+                <span className="truncate">
+                  {ws.name}
+                  <span className="ms-1 text-xs text-muted-foreground">
+                    (
+                    {pending
+                      ? t('shell.workspacePending')
+                      : roleLabel(ws.role, t)}
+                    )
+                  </span>
                 </span>
-              </span>
-              {currentWorkspace?.id === ws.id && <Check className="size-3.5 shrink-0" />}
-            </DropdownMenuItem>
-          ))}
+                {currentWorkspace?.id === ws.id && (
+                  <Check className="size-3.5 shrink-0" />
+                )}
+              </DropdownMenuItem>
+            );
+          })}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => setCreateOpen(true)}

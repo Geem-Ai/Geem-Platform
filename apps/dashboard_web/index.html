@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="h-full" lang="ar" dir="rtl">
+<html class="h-full" lang="en" dir="ltr">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/webp" href="/brand/geem-avatar.webp" />
@@ -21,10 +21,10 @@
           const isDarkMode = theme === 'dark' || (theme === 'system' && prefersDark);
           if (isDarkMode) document.documentElement.classList.add('dark');
 
-          const locale = localStorage.getItem('geem-admin-locale') === 'en' ? 'en' : 'ar';
+          const locale = localStorage.getItem('geem-admin-locale') === 'ar' ? 'ar' : 'en';
           document.documentElement.lang = locale;
           document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
-          document.title = locale === 'en' ? 'Geem Admin' : 'Geem Admin';
+          document.title = 'Geem Admin';
         } catch (e) {}
       })();
     </script>

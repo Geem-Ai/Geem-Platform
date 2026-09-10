@@ -66,22 +66,22 @@ assert(existsSync(join(dist, 'sitemap-index.xml')), 'sitemap-index.xml missing')
 assert(existsSync(join(dist, socialImageName)), `${socialImageName} missing`);
 
 const root = readFileSync(join(dist, 'index.html'), 'utf8');
-assert(root.includes('/ar'), 'root index should redirect to /ar');
+assert(root.includes('/en'), 'root index should redirect to /en');
 assert(root.includes('name="robots" content="noindex"'), 'root index should be noindex');
 assert(
-  root.includes(`<link rel="canonical" href="${siteUrl}/ar">`),
-  'root index should canonicalize to /ar',
+  root.includes(`<link rel="canonical" href="${siteUrl}/en">`),
+  'root index should canonicalize to /en',
 );
 
 const ar = readFileSync(join(dist, 'ar/index.html'), 'utf8');
 const en = readFileSync(join(dist, 'en/index.html'), 'utf8');
 const agentAiRedirect = readFileSync(join(dist, 'agent-ai/index.html'), 'utf8');
 
-assert(agentAiRedirect.includes('/ar/agent-ai'), 'root agent-ai should redirect to /ar/agent-ai');
+assert(agentAiRedirect.includes('/en/agent-ai'), 'root agent-ai should redirect to /en/agent-ai');
 assert(agentAiRedirect.includes('name="robots" content="noindex,follow"'), 'root agent-ai should be noindex');
 assert(
-  agentAiRedirect.includes(`<link rel="canonical" href="${siteUrl}/ar/agent-ai">`),
-  'root agent-ai should canonicalize to /ar/agent-ai',
+  agentAiRedirect.includes(`<link rel="canonical" href="${siteUrl}/en/agent-ai">`),
+  'root agent-ai should canonicalize to /en/agent-ai',
 );
 
 assert(ar.includes('lang="ar"'), 'Arabic lang');
@@ -121,7 +121,7 @@ for (const locale of ['ar', 'en']) {
       `${label}: English alternate`,
     );
     assert(
-      html.includes(`<link rel="alternate" hreflang="x-default" href="${alternateAr}">`),
+      html.includes(`<link rel="alternate" hreflang="x-default" href="${alternateEn}">`),
       `${label}: x-default alternate`,
     );
     assert(html.includes(`<meta property="og:url" content="${canonical}">`), `${label}: og:url`);

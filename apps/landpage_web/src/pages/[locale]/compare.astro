@@ -10,7 +10,7 @@ export function getStaticPaths() {
 }
 
 const raw = Astro.params.locale;
-if (!isLocale(raw)) return Astro.redirect('/ar/compare', 302);
+if (!isLocale(raw)) return Astro.redirect('/en/compare', 302);
 const locale = raw;
 const copy = getComparisonCopy(locale);
 ---

@@ -21,7 +21,8 @@ to overwrite the bootstrap plan name/description/entitlements from env
 (``BOOTSTRAP_PLAN_*`` / ``BOOTSTRAP_AI_TOKENS_*`` / ``BOOTSTRAP_EXPERTS_LIMIT`` /
 ``BOOTSTRAP_STORAGE_BYTES`` / ``BOOTSTRAP_API_REQUESTS_PER_MINUTE``). Local/dev
 also seeds a demo billing catalog (Starter/Pro/Business + credit packs) for
-checkout testing.
+checkout testing. Production seeds the commercial Workspace catalog
+(Starter/Pro/Business + credit packs).
 """
 
 from __future__ import annotations
@@ -121,11 +122,12 @@ def bootstrap_platform_admin(
             ensure_clickpay_from_env,
             ensure_local_checkout_gateway,
         )
-        from app.billing.seed import ensure_local_demo_catalog
+        from app.billing.seed import ensure_local_demo_catalog, ensure_production_catalog
 
         ensure_clickpay_from_env(db, settings=settings)
         ensure_local_checkout_gateway(db, settings=settings)
         ensure_local_demo_catalog(db, settings=settings)
+        ensure_production_catalog(db, settings=settings)
 
         # App Store starter catalog (Google Drive, OneDrive, WhatsApp coming soon).
         from app.apps_catalog.seed import ensure_app_catalog

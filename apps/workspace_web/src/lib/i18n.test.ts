@@ -7,10 +7,10 @@ import {
 } from '@/lib/i18n';
 
 describe('document locale direction', () => {
-  it('defaults to Arabic when nothing is stored', () => {
+  it('defaults to English when nothing is stored', () => {
     localStorage.removeItem(LOCALE_STORAGE_KEY);
-    expect(DEFAULT_LOCALE).toBe('ar');
-    expect(getStoredLocale()).toBe('ar');
+    expect(DEFAULT_LOCALE).toBe('en');
+    expect(getStoredLocale()).toBe('en');
   });
 
   it('applies LTR for English and RTL for Arabic', () => {

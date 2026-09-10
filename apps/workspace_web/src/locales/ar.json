@@ -244,6 +244,7 @@
     "forgotSubmit": "إرسال رابط إعادة التعيين",
     "forgotSubmitting": "جارٍ الإرسال…",
     "backToSignIn": "العودة لتسجيل الدخول",
+    "backToHome": "العودة للرئيسية",
     "resetTitle": "إعادة تعيين كلمة المرور",
     "resetSubtitle": "اختر كلمة مرور جديدة لحساب Geem.",
     "resetSubmit": "إعادة تعيين كلمة المرور",
@@ -290,10 +291,19 @@
     "create": "إنشاء مساحة العمل",
     "creating": "جارٍ الإنشاء…"
   },
+  "pendingApproval": {
+    "title": "بانتظار الموافقة",
+    "subtitle": "مساحة عملك قيد المراجعة.",
+    "subtitleNamed": "{{name}} بانتظار موافقة مسؤول منصة جيم.",
+    "body": "يجب أن يوافق مسؤول منصة جيم على مساحة عملك قبل استخدام المحادثة والخبراء وبقية الميزات. عد لاحقاً أو حدّث هذه الصفحة بعد الموافقة.",
+    "refresh": "تحقق من حالة الموافقة",
+    "refreshing": "جارٍ التحقق…"
+  },
   "shell": {
     "workspacePlaceholder": "مساحة العمل",
     "workspaces": "مساحات العمل",
     "createWorkspace": "إنشاء مساحة عمل",
+    "workspacePending": "بانتظار الموافقة",
     "workspaceSwitcherHint": "بدّل بين مساحات العمل التي تنتمي إليها",
     "accountPlaceholder": "الحساب",
     "theme": "المظهر",

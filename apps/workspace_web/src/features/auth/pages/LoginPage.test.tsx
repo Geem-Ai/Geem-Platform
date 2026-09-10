@@ -75,6 +75,13 @@ describe('LoginPage', () => {
     );
     expect(screen.getByTestId('auth-language-ar')).toBeInTheDocument();
     expect(screen.getByTestId('auth-theme-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('auth-back-home')).toHaveAttribute(
+      'href',
+      'https://geem.ai',
+    );
+    expect(screen.getByTestId('auth-back-home')).toHaveTextContent(
+      i18n.t('auth.backToHome'),
+    );
   });
 
   it('toggles password visibility', async () => {

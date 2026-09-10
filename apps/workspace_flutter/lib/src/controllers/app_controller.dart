@@ -17,7 +17,7 @@ class AppController extends ChangeNotifier {
   factory AppController({
     required GeemApiClient api,
     required CredentialStore credentials,
-    Locale initialLocale = const Locale('ar'),
+    Locale initialLocale = const Locale('en'),
     @visibleForTesting List<Duration>? toolApprovalPollDelays,
   }) =>
       AppController._(api, credentials, initialLocale, toolApprovalPollDelays);
@@ -119,6 +119,7 @@ class AppController extends ChangeNotifier {
   }
 
   bool get canUseCurrentWorkspace => currentWorkspace?.canChat ?? false;
+  bool get isCurrentWorkspacePending => currentWorkspace?.isPending ?? false;
   bool get hasPendingToolTurn => messages.any(_messageHasPendingToolTurn);
   bool get toolApprovalBusy => decidingToolApprovalId != null;
   bool get chatBusy =>
@@ -373,6 +374,14 @@ class AppController extends ChangeNotifier {
     WorkspaceSummary? selected;
     if (savedId != null) {
       selected = _workspaceById(savedId);
+      // Prefer an active chat-ready workspace if the saved one cannot chat.
+      if (selected != null && !selected.canChat) {
+        final active = workspaces.cast<WorkspaceSummary?>().firstWhere(
+          (item) => item?.canChat == true,
+          orElse: () => null,
+        );
+        selected = active ?? selected;
+      }
     }
     selected ??= workspaces.cast<WorkspaceSummary?>().firstWhere(
       (item) => item?.canChat == true,

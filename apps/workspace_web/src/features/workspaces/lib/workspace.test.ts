@@ -107,6 +107,14 @@ describe('pickInitialWorkspace', () => {
       'ws-a',
     );
   });
+
+  it('ignores pending workspaces when picking an initial workspace', () => {
+    const pending = { ...globex, id: 'ws-p', slug: 'pending', status: 'pending' };
+    expect(pickInitialWorkspace([pending, acme], 'u1', null, pending)?.id).toBe(
+      'ws-a',
+    );
+    expect(pickInitialWorkspace([pending], 'u1', null, null)).toBeNull();
+  });
 });
 
 describe('query keys', () => {

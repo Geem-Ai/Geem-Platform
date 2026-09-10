@@ -15,7 +15,7 @@ export default defineConfig({
     allowedHosts,
   },
   i18n: {
-    defaultLocale: 'ar',
+    defaultLocale: 'en',
     locales: ['ar', 'en'],
     routing: {
       prefixDefaultLocale: true,
@@ -30,7 +30,7 @@ export default defineConfig({
         page !== `${siteUrl}/agent-ai` &&
         page !== `${siteUrl}/agent-ai/`,
       i18n: {
-        defaultLocale: 'ar',
+        defaultLocale: 'en',
         locales: {
           ar: 'ar',
           en: 'en',

@@ -10,7 +10,7 @@ export function getStaticPaths() {
 }
 
 const raw = Astro.params.locale;
-if (!isLocale(raw)) return Astro.redirect('/ar/agent-ai', 302);
+if (!isLocale(raw)) return Astro.redirect('/en/agent-ai', 302);
 const locale = raw;
 const siteCopy = getSiteCopy(locale);
 const copy = getAgentAiCopy(locale);

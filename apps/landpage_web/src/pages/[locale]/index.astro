@@ -21,7 +21,7 @@ export function getStaticPaths() {
 
 const raw = Astro.params.locale;
 if (!isLocale(raw)) {
-  return Astro.redirect('/ar', 302);
+  return Astro.redirect('/en', 302);
 }
 const locale = raw;
 const copy = getSiteCopy(locale);

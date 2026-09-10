@@ -9,6 +9,7 @@ export type StatusBadgeSpec = {
 };
 
 const WORKSPACE_STATUS: Record<string, StatusBadgeSpec> = {
+  pending: { labelKey: 'status.workspace.pending', variant: 'warning' },
   active: { labelKey: 'status.workspace.active', variant: 'success' },
   suspended: { labelKey: 'status.workspace.suspended', variant: 'warning' },
   archived: { labelKey: 'status.workspace.archived', variant: 'secondary' },

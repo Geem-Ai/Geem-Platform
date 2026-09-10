@@ -56,9 +56,15 @@ export function CreateWorkspaceDialog({
     setSubmitting(true);
     setErrorKey(null);
     try {
-      await createWorkspace({ name: name.trim(), slug: slug.trim() });
+      const created = await createWorkspace({
+        name: name.trim(),
+        slug: slug.trim(),
+      });
       onOpenChange(false);
-      navigate('/', { replace: true });
+      navigate(
+        created.status === 'pending' ? '/pending-approval' : '/',
+        { replace: true },
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorKey(errorMessageKey(err.code));

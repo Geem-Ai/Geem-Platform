@@ -60,7 +60,7 @@ Microsoft OneDrive knowledge connector (Phase 9E / 9E.1): set `MICROSOFT_ONEDRIV
 
 WhatsApp / OpenWA channel connector (Phase 9F): set `OPENWA_BASE_URL` (default `https://whatsapp-hub.dalseen.sa`) and `OPENWA_API_KEY` to make the adapter available. Optional: `OPENWA_TIMEOUT_SECONDS` (default 30). The API key is backend-only and must never be exposed to `workspace_web`. Without an API key the adapter stays registered but `available=false`. Catalog app slug `whatsapp` is published with monthly SAR plans (`line` 79 / `desk` 199 / `ops` 449). Full A–Z setup (session lifecycle, QR/pairing, webhooks, Expert binding): [apps/whatsapp-openwa.md](./apps/whatsapp-openwa.md).
 
-Local/dev (`APP_ENV=local`/`dev`/`development`) also seeds a **demo catalog**: Starter / Pro / Business plans plus three credit packs (not commercial pricing; bootstrap plan stays unpriced and is not listed for checkout). Insert missing rows with `python -m app.billing.seed`, by re-running `python -m app.identity.bootstrap`, or by creating a Workspace. Existing demo rows are never overwritten.
+Local/dev (`APP_ENV=local`/`dev`/`development`) also seeds a **demo catalog**: Starter / Pro / Business plans plus three credit packs (not commercial pricing; bootstrap plan stays unpriced and is not listed for checkout). Production (`APP_ENV=production`) seeds the **commercial catalog**: same three plans plus credit packs `credits_1m` (1M / 69 SAR), `credits_5m` (5M / 229 SAR), and `credits_10m` (10M / 399 SAR). Insert missing rows with `python -m app.billing.seed`, by re-running `python -m app.identity.bootstrap`, or by creating a Workspace. Existing catalog rows are never overwritten.
 
 Never commit real `.env` files.
 

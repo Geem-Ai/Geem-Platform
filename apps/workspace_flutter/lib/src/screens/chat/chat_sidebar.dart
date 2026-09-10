@@ -148,7 +148,9 @@ class _WorkspaceSwitcher extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          workspace.role.name,
+                          workspace.isPending
+                              ? strings.text('workspacePendingTitle')
+                              : workspace.role.name,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Theme.of(

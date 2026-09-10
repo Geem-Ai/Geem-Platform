@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { geemAvatarUrl } from '@/lib/helpers';
+import { marketingSiteUrl } from '@/lib/marketing-url';
 import { AuthBrandPanel } from './AuthBrandPanel';
 import { AuthChrome } from './AuthChrome';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const year = new Date().getFullYear();
+  const homeUrl = marketingSiteUrl();
+  const isRtl = i18n.language === 'ar';
 
   return (
     <div
@@ -20,22 +23,27 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <AuthBrandPanel />
 
         <div className="auth-form-pane relative flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
-          <header className="relative z-20 flex items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-6 lg:justify-end lg:px-10">
-            <Link
-              to="/login"
-              className="group flex items-center gap-2.5 lg:hidden"
+          <header className="relative z-20 flex items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-6">
+            <a
+              href={homeUrl}
+              data-testid="auth-back-home"
+              className="group flex min-w-0 items-center gap-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              <span className="auth-mobile-brand-mark flex size-10 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm backdrop-blur-md transition-transform group-hover:scale-[1.03]">
+              <span className="auth-mobile-brand-mark flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm backdrop-blur-md transition-transform group-hover:scale-[1.03] lg:hidden">
                 <img
                   src={geemAvatarUrl()}
                   alt=""
                   className="size-8 object-contain"
                 />
               </span>
-              <span className="text-sm font-semibold tracking-tight">
-                {t('app.name')}
+              <span className="inline-flex items-center gap-1.5 font-medium">
+                <ArrowLeft
+                  className={`size-4 shrink-0 ${isRtl ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+                <span className="truncate">{t('auth.backToHome')}</span>
               </span>
-            </Link>
+            </a>
             <AuthChrome />
           </header>
 

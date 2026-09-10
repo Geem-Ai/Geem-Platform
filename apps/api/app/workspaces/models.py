@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 
 class WorkspaceStatus(str, enum.Enum):
+    PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
     ARCHIVED = "archived"
